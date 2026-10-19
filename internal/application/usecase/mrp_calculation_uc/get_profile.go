@@ -55,7 +55,7 @@ func (uc *GetItemProfileUseCase) Consult(ctx context.Context, itemCode, planCode
 		}
 		totals["stock_current"] = 0
 		for _, balance := range balances {
-			totals["stock_current"] += balance.Quantity
+			totals["stock_current"] += balance.Quantity.InexactFloat64()
 		}
 	}
 	return &response.MRPItemProfileConsultationResponse{Position: position, Rows: filtered, Totals: totals}, nil

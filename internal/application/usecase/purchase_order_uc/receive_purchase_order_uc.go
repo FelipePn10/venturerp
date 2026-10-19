@@ -129,15 +129,19 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			}
 			line.InternalQty, line.InternalPrice = copia.InternalQty, copia.InternalPrice
 		}
-		stockQty := item.Quantity
-		unitPrice := line.UnitPrice
+		// Conta em decimal: a quantidade convertida para a unidade interna e o
+		// valor vão para o estoque, onde a soma de várias entradas não pode derivar.
+		stockQtyExata := decimal.NewFromFloat(item.Quantity)
+		unitPrice := decimal.NewFromFloat(line.UnitPrice)
 		if line.InternalQty > 0 && line.RequestedQty > 0 {
-			stockQty = item.Quantity * (line.InternalQty / line.RequestedQty)
+			stockQtyExata = stockQtyExata.Mul(decimal.NewFromFloat(line.InternalQty)).
+				DivRound(decimal.NewFromFloat(line.RequestedQty), 6)
 		}
 		if line.InternalPrice > 0 {
-			unitPrice = line.InternalPrice
+			unitPrice = decimal.NewFromFloat(line.InternalPrice)
 		}
-		totalPrice := stockQty * unitPrice
+		totalPrice := stockQtyExata.Mul(unitPrice).Round(4)
+		stockQty := stockQtyExata.InexactFloat64()
 		notes := mergeReceiptNotes(dto.Notes, item.Notes)
 		expirationDate, err := parseReceiptDate(item.ExpirationDate)
 		if err != nil {
@@ -161,7 +165,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			Mask:           line.Mask,
 			WarehouseID:    targetWarehouse,
 			MovementType:   stockentity.MovementTypeIn,
-			Quantity:       stockQty,
+			Quantity:       stockQtyExata,
 			UnitPrice:      unitPrice,
 			TotalPrice:     totalPrice,
 			ReferenceType:  &refType,
@@ -265,9 +269,9 @@ func stockMovementReceiptResponse(m *stockentity.StockMovement) response.StockMo
 		Mask:           m.Mask,
 		WarehouseID:    m.WarehouseID,
 		MovementType:   m.MovementType,
-		Quantity:       m.Quantity,
-		UnitPrice:      m.UnitPrice,
-		TotalPrice:     m.TotalPrice,
+		Quantity:       m.Quantity.InexactFloat64(),
+		UnitPrice:      m.UnitPrice.InexactFloat64(),
+		TotalPrice:     m.TotalPrice.InexactFloat64(),
 		ReferenceType:  m.ReferenceType,
 		ReferenceCode:  m.ReferenceCode,
 		Lot:            m.Lot,

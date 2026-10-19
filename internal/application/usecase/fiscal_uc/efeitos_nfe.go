@@ -390,11 +390,9 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 			ItemCode:     *it.ItemCode,
 			WarehouseID:  depositos[*it.ItemCode],
 			MovementType: stockentity.MovementTypeOut,
-			Quantity:     qtd,
+			Quantity:     decimal.NewFromFloat(qtd),
 			// Sem preço: a saída é valorizada pelo custo médio (é o custo que sai
 			// do estoque e o CMV da venda).
-			UnitPrice:     0,
-			TotalPrice:    0,
 			ReferenceType: &refType,
 			ReferenceCode: &refCode,
 			CreatedBy:     userID,

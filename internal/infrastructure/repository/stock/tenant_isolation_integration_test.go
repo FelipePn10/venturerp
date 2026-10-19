@@ -42,8 +42,7 @@ func TestStockMovementAndBalanceAreTenantIsolated(t *testing.T) {
 		qty string
 	}{{ctx1, "1.123456"}, {ctx2, "9.654321"}} {
 		q := decimal.RequireFromString(entry.qty)
-		f, _ := q.Float64()
-		_, err := repo.CreateMovement(entry.ctx, &stockentity.StockMovement{ItemCode: item, WarehouseID: 1, MovementType: "IN", Quantity: f, ExactQuantity: q, CreatedBy: uid})
+		_, err := repo.CreateMovement(entry.ctx, &stockentity.StockMovement{ItemCode: item, WarehouseID: 1, MovementType: "IN", Quantity: q, CreatedBy: uid})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -58,7 +57,7 @@ func TestStockMovementAndBalanceAreTenantIsolated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decimal.NewFromFloat(b1.Quantity).StringFixed(6) != "1.123456" || decimal.NewFromFloat(b2.Quantity).StringFixed(6) != "9.654321" {
+	if b1.Quantity.StringFixed(6) != "1.123456" || b2.Quantity.StringFixed(6) != "9.654321" {
 		t.Fatalf("tenant balances leaked or lost precision: %v / %v", b1.Quantity, b2.Quantity)
 	}
 }

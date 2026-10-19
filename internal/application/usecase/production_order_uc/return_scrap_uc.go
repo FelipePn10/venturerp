@@ -3,6 +3,8 @@ package production_order_uc
 import (
 	"context"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -45,9 +47,9 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		Mask:          dto.Mask,
 		WarehouseID:   dto.WarehouseID,
 		MovementType:  stockentity.MovementTypeIn,
-		Quantity:      dto.Quantity,
-		UnitPrice:     dto.UnitValue,
-		TotalPrice:    dto.UnitValue * dto.Quantity,
+		Quantity:      decimal.NewFromFloat(dto.Quantity),
+		UnitPrice:     decimal.NewFromFloat(dto.UnitValue),
+		TotalPrice:    decimal.NewFromFloat(dto.UnitValue).Mul(decimal.NewFromFloat(dto.Quantity)).Round(4),
 		ReferenceType: &refType,
 		ReferenceCode: &refCode,
 		Lot:           dto.Lot,

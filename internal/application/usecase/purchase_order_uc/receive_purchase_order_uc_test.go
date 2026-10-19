@@ -139,10 +139,10 @@ func TestReceivePurchaseOrderCreatesInboundMovementAndRegistersLine(t *testing.T
 	if mov.MovementType != stockentity.MovementTypeIn {
 		t.Fatalf("movement type = %s, want IN", mov.MovementType)
 	}
-	if mov.Quantity != 8 {
+	if !mov.Quantity.Equal(decimal.NewFromFloat(8)) {
 		t.Fatalf("stock quantity = %v, want converted quantity 8", mov.Quantity)
 	}
-	if mov.UnitPrice != 3.5 || mov.TotalPrice != 28 {
+	if !mov.UnitPrice.Equal(decimal.NewFromFloat(3.5)) || !mov.TotalPrice.Equal(decimal.NewFromFloat(28)) {
 		t.Fatalf("cost values wrong: unit=%v total=%v", mov.UnitPrice, mov.TotalPrice)
 	}
 	if mov.ReferenceType == nil || *mov.ReferenceType != stockentity.ReferenceTypePurchaseOrder {

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // StockLot is the registry of a raw-material lot: its supplier lot, heat number
@@ -31,16 +32,16 @@ type StockLot struct {
 
 // StockLotBalance is the on-hand quantity of a single lot in a warehouse.
 type StockLotBalance struct {
-	ID             int64      `json:"id"`
-	ItemCode       int64      `json:"item_code"`
-	Mask           string     `json:"mask"`
-	WarehouseID    int64      `json:"warehouse_id"`
-	Lot            string     `json:"lot"`
-	Address        string     `json:"address"`
-	Quantity       float64    `json:"quantity"`
-	LastCost       float64    `json:"last_cost"`
-	LastMovementAt *time.Time `json:"last_movement_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID             int64           `json:"id"`
+	ItemCode       int64           `json:"item_code"`
+	Mask           string          `json:"mask"`
+	WarehouseID    int64           `json:"warehouse_id"`
+	Lot            string          `json:"lot"`
+	Address        string          `json:"address"`
+	Quantity       decimal.Decimal `json:"quantity"`
+	LastCost       decimal.Decimal `json:"last_cost"`
+	LastMovementAt *time.Time      `json:"last_movement_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // LotGenealogy is the full traceability of an item lot, in both directions:

@@ -3,7 +3,20 @@ package stock_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	"github.com/shopspring/decimal"
 )
+
+// num e numPtr convertem na fronteira do JSON: o domínio calcula em decimal e a
+// resposta continua número, que é o contrato que o frontend já consome.
+func num(d decimal.Decimal) float64 { return d.InexactFloat64() }
+
+func numPtr(d *decimal.Decimal) *float64 {
+	if d == nil {
+		return nil
+	}
+	f := d.InexactFloat64()
+	return &f
+}
 
 func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementResponse {
 	if m == nil {
@@ -15,9 +28,9 @@ func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementRes
 		Mask:           m.Mask,
 		WarehouseID:    m.WarehouseID,
 		MovementType:   m.MovementType,
-		Quantity:       m.Quantity,
-		UnitPrice:      m.UnitPrice,
-		TotalPrice:     m.TotalPrice,
+		Quantity:       num(m.Quantity),
+		UnitPrice:      num(m.UnitPrice),
+		TotalPrice:     num(m.TotalPrice),
 		ReferenceType:  m.ReferenceType,
 		ReferenceCode:  m.ReferenceCode,
 		Lot:            m.Lot,
@@ -54,7 +67,7 @@ func toStockReservationResponse(r *entity.StockReservation) *response.StockReser
 		ItemCode:          r.ItemCode,
 		Mask:              r.Mask,
 		WarehouseID:       r.WarehouseID,
-		Quantity:          r.Quantity,
+		Quantity:          num(r.Quantity),
 		ReferenceType:     r.ReferenceType,
 		ReferenceCode:     r.ReferenceCode,
 		ReferenceItemCode: r.ReferenceItemCode,
@@ -77,15 +90,15 @@ func toStockBalanceResponse(b *entity.StockBalance) *response.StockBalanceRespon
 		ItemCode:       b.ItemCode,
 		Mask:           b.Mask,
 		WarehouseID:    b.WarehouseID,
-		Quantity:       b.Quantity,
-		ReservedQty:    b.ReservedQty,
-		AvailableQty:   b.AvailableQty,
-		MinimumStock:   b.MinimumStock,
-		MaximumStock:   b.MaximumStock,
-		SafetyStock:    b.SafetyStock,
-		AvgCost:        b.AvgCost,
-		LastCost:       b.LastCost,
-		TotalCost:      b.TotalCost,
+		Quantity:       num(b.Quantity),
+		ReservedQty:    num(b.ReservedQty),
+		AvailableQty:   num(b.AvailableQty),
+		MinimumStock:   num(b.MinimumStock),
+		MaximumStock:   num(b.MaximumStock),
+		SafetyStock:    num(b.SafetyStock),
+		AvgCost:        num(b.AvgCost),
+		LastCost:       num(b.LastCost),
+		TotalCost:      num(b.TotalCost),
 		LastMovementAt: b.LastMovementAt,
 		UpdatedAt:      b.UpdatedAt,
 	}
@@ -118,7 +131,7 @@ func toPhysicalInventoryResponse(i *entity.PhysicalInventory) *response.Physical
 		UpdatedAt:    i.UpdatedAt,
 		CreatedBy:    i.CreatedBy,
 
-		AdjustmentValue: i.AdjustmentValue,
+		AdjustmentValue: numPtr(i.AdjustmentValue),
 	}
 }
 
@@ -140,10 +153,10 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		ItemCode:         it.ItemCode,
 		Mask:             it.Mask,
 		WarehouseID:      it.WarehouseID,
-		SystemQty:        it.SystemQty,
-		CountedQty:       it.CountedQty,
-		DifferenceQty:    it.DifferenceQty,
-		UnitCost:         it.UnitCost,
+		SystemQty:        num(it.SystemQty),
+		CountedQty:       numPtr(it.CountedQty),
+		DifferenceQty:    numPtr(it.DifferenceQty),
+		UnitCost:         numPtr(it.UnitCost),
 		AdjustmentType:   it.AdjustmentType,
 		AdjustmentReason: it.AdjustmentReason,
 		CountedBy:        it.CountedBy,
@@ -151,7 +164,7 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		IsAdjusted:       it.IsAdjusted,
 
 		CountNumber:          it.CountNumber,
-		PreviousCountedQty:   it.PreviousCountedQty,
+		PreviousCountedQty:   numPtr(it.PreviousCountedQty),
 		AdjustmentMovementID: it.AdjustmentMovementID,
 		CreatedAt:            it.CreatedAt,
 	}

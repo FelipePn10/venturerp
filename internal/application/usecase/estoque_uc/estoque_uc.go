@@ -88,14 +88,14 @@ func (uc *UseCase) Estornar(ctx context.Context, id int64, dto request.EstornoMo
 	return uc.Ops.EstornarMovimento(ctx, id, ator, dto.Reason)
 }
 
-// Kardex: período padrão = mês corrente.
+// Kardex: período padrão = mês corrente. Data em branco segue como zero: o
+// repositório resolve "hoje" e "início do mês" no fuso da empresa, não no do
+// processo (que em produção roda em UTC).
 func (uc *UseCase) Kardex(ctx context.Context, itemCode int64, almox *int64, de, ate string) (*entity.Kardex, error) {
 	if err := uc.podeConsultar(ctx); err != nil {
 		return nil, err
 	}
-	agora := time.Now()
-	inicio := time.Date(agora.Year(), agora.Month(), 1, 0, 0, 0, 0, time.Local)
-	fim := agora
+	var inicio, fim time.Time
 	if strings.TrimSpace(de) != "" {
 		t, msg := datetime.Obrigatoria("data inicial", de)
 		if msg != "" {
@@ -110,18 +110,18 @@ func (uc *UseCase) Kardex(ctx context.Context, itemCode int64, almox *int64, de,
 		}
 		fim = t
 	}
-	if fim.Before(inicio) {
+	if !inicio.IsZero() && !fim.IsZero() && fim.Before(inicio) {
 		return nil, errorsuc.NewValidationError("a data final é anterior à inicial")
 	}
-	return uc.Ops.Kardex(ctx, itemCode, almox, truncDia(inicio), truncDia(fim))
+	return uc.Ops.Kardex(ctx, itemCode, almox, inicio, fim)
 }
 
-// Posicao: saldo ao fim do dia pedido (padrão hoje).
+// Posicao: saldo ao fim do dia pedido (padrão hoje, no fuso da empresa).
 func (uc *UseCase) Posicao(ctx context.Context, data string, almox *int64) ([]entity.PosicaoItem, error) {
 	if err := uc.podeConsultar(ctx); err != nil {
 		return nil, err
 	}
-	d := time.Now()
+	var d time.Time
 	if strings.TrimSpace(data) != "" {
 		t, msg := datetime.Obrigatoria("data da posição", data)
 		if msg != "" {
@@ -129,7 +129,7 @@ func (uc *UseCase) Posicao(ctx context.Context, data string, almox *int64) ([]en
 		}
 		d = t
 	}
-	return uc.Ops.PosicaoEmData(ctx, truncDia(d), almox)
+	return uc.Ops.PosicaoEmData(ctx, d, almox)
 }
 
 // ATP com situação: só o almoxarifado disponível, que não seja de inspeção nem
@@ -143,23 +143,27 @@ func (uc *UseCase) ATP(ctx context.Context, itemCode int64, mask string) (*respo
 		return nil, err
 	}
 	out := &response.ATPResponse{ItemCode: itemCode, Mask: mask, Warehouses: []*response.StockBalanceResponse{}}
+	var noAlmox, reservado, disponivel, indisponivel decimal.Decimal
 	for _, s := range saldos {
 		if mask != "" && s.Mask != mask {
 			continue
 		}
-		out.TotalOnHand += s.Quantity
+		noAlmox = noAlmox.Add(s.Quantity)
 		if s.Prometivel {
-			out.TotalReserved += s.ReservedQty
-			out.TotalAvailable += s.AvailableQty
+			reservado = reservado.Add(s.ReservedQty)
+			disponivel = disponivel.Add(s.AvailableQty)
 		} else {
-			out.TotalNotAvailable += s.Quantity
+			indisponivel = indisponivel.Add(s.Quantity)
 		}
 		out.Warehouses = append(out.Warehouses, &response.StockBalanceResponse{
-			ID: s.ID, ItemCode: s.ItemCode, Mask: s.Mask, WarehouseID: s.WarehouseID, Quantity: s.Quantity,
-			ReservedQty: s.ReservedQty, AvailableQty: s.AvailableQty, AvgCost: s.AvgCost, TotalCost: s.TotalCost,
+			ID: s.ID, ItemCode: s.ItemCode, Mask: s.Mask, WarehouseID: s.WarehouseID, Quantity: s.Quantity.InexactFloat64(),
+			ReservedQty: s.ReservedQty.InexactFloat64(), AvailableQty: s.AvailableQty.InexactFloat64(),
+			AvgCost: s.AvgCost.InexactFloat64(), TotalCost: s.TotalCost.InexactFloat64(),
 			StockStatus: s.Situacao, AvailableToPromise: s.Prometivel,
 		})
 	}
+	out.TotalOnHand, out.TotalReserved = noAlmox.InexactFloat64(), reservado.InexactFloat64()
+	out.TotalAvailable, out.TotalNotAvailable = disponivel.InexactFloat64(), indisponivel.InexactFloat64()
 	return out, nil
 }
 
@@ -310,8 +314,4 @@ func vazioNil(s *string) *string {
 	}
 	v := strings.TrimSpace(*s)
 	return &v
-}
-
-func truncDia(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }

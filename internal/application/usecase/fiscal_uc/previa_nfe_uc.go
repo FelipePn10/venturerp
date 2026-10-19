@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -45,7 +46,7 @@ type PreviaNFeUseCase struct {
 
 // SaldoParaSaida lê o saldo do item no almoxarifado e se ele aceita negativo.
 type SaldoParaSaida interface {
-	SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (float64, bool, error)
+	SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (decimal.Decimal, bool, error)
 }
 
 func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
@@ -204,7 +205,7 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		quantidades = map[int64]float64{}
 	}
 	type chave struct{ item, almox int64 }
-	necessario := map[chave]float64{}
+	necessario := map[chave]decimal.Decimal{}
 	var ordem []chave
 	for _, it := range items {
 		if it.ItemCode == nil {
@@ -216,7 +217,7 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 			// autorização não teria de onde sair — e a nota já estaria na SEFAZ.
 			if _, ja := necessario[k]; !ja {
 				ordem = append(ordem, k)
-				necessario[k] = 0
+				necessario[k] = decimal.Zero
 			}
 			continue
 		}
@@ -227,7 +228,7 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		if _, ok := necessario[k]; !ok {
 			ordem = append(ordem, k)
 		}
-		necessario[k] += q
+		necessario[k] = necessario[k].Add(decimal.NewFromFloat(q))
 	}
 	var out []response.PreviaPendenciaNFe
 	for _, k := range ordem {
@@ -243,13 +244,13 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		if err != nil {
 			return nil, err
 		}
-		if permite || saldo+1e-9 >= necessario[k] {
+		if permite || saldo.GreaterThanOrEqual(necessario[k]) {
 			continue
 		}
 		out = append(out, response.PreviaPendenciaNFe{
 			Nivel: NivelImpede, Campo: "itens.estoque",
 			Mensagem: fmt.Sprintf("o item %d tem %s em estoque no almoxarifado %d e a nota baixa %s: a baixa seria recusada depois da autorização",
-				k.item, strconv.FormatFloat(saldo, 'f', -1, 64), k.almox, strconv.FormatFloat(necessario[k], 'f', -1, 64)),
+				k.item, saldo.String(), k.almox, necessario[k].String()),
 			ComoResolver: "lance a entrada (produção ou compra) antes de emitir, ou permita saldo negativo no cadastro do almoxarifado (VENT0800)",
 		})
 	}

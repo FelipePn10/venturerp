@@ -50,16 +50,16 @@ const (
 // the on-hand balance: positive for inbound, negative for outbound. ADJUSTMENT
 // is assumed to carry an already-signed quantity. Types that do not change the
 // on-hand quantity (e.g. reservations) return 0.
-func SignedQuantity(movementType string, quantity float64) float64 {
+func SignedQuantity(movementType string, quantity decimal.Decimal) decimal.Decimal {
 	switch movementType {
 	case MovementTypeIn, MovementTypeTransferIn, MovementTypeProductionEntry, MovementTypePlannedProductionEntry, MovementTypeProductionExcess, "ENTRADA":
 		return quantity
 	case MovementTypeOut, MovementTypeTransferOut, MovementTypePlannedRequisition, "SAIDA":
-		return -quantity
+		return quantity.Neg()
 	case MovementTypeAdjustment:
 		return quantity
 	default:
-		return 0
+		return decimal.Zero
 	}
 }
 
@@ -89,13 +89,14 @@ type StockMovement struct {
 	// Endereço de origem e, numa transferência interna, o de destino. Vazio
 	// significa almoxarifado sem endereçamento — é como fica toda a base que
 	// existia antes da migração 344.
-	Address        *string
-	AddressTo      *string
-	MovementType   string
-	Quantity       float64
-	ExactQuantity  decimal.Decimal
-	UnitPrice      float64
-	TotalPrice     float64
+	Address      *string
+	AddressTo    *string
+	MovementType string
+	// Quantidade, preço e total em decimal: o saldo e o custo médio são somas
+	// de milhares de movimentos, e float acumulava erro em cada um.
+	Quantity       decimal.Decimal
+	UnitPrice      decimal.Decimal
+	TotalPrice     decimal.Decimal
 	ReferenceType  *string
 	ReferenceCode  *int64
 	Lot            *string
@@ -127,7 +128,7 @@ type StockReservation struct {
 	ItemCode          int64
 	Mask              string
 	WarehouseID       int64
-	Quantity          float64
+	Quantity          decimal.Decimal
 	ReferenceType     string
 	ReferenceCode     int64
 	ReferenceItemCode *int64
@@ -145,15 +146,15 @@ type StockBalance struct {
 	ItemCode       int64
 	Mask           string
 	WarehouseID    int64
-	Quantity       float64
-	ReservedQty    float64
-	AvailableQty   float64
-	MinimumStock   float64
-	MaximumStock   float64
-	SafetyStock    float64
-	AvgCost        float64
-	LastCost       float64
-	TotalCost      float64
+	Quantity       decimal.Decimal
+	ReservedQty    decimal.Decimal
+	AvailableQty   decimal.Decimal
+	MinimumStock   decimal.Decimal
+	MaximumStock   decimal.Decimal
+	SafetyStock    decimal.Decimal
+	AvgCost        decimal.Decimal
+	LastCost       decimal.Decimal
+	TotalCost      decimal.Decimal
 	LastMovementAt *time.Time
 	UpdatedAt      time.Time
 }
@@ -176,15 +177,15 @@ type PhysicalInventory struct {
 	// todo o almoxarifado. Não é gravado.
 	ItemCodes       []int64
 	ClosedBy        *uuid.UUID
-	AdjustmentValue *float64
+	AdjustmentValue *decimal.Decimal
 }
 
 // ResultadoFechamentoInventario é o que o fechamento lançou.
 type ResultadoFechamentoInventario struct {
 	Ajustes            int
-	Sobras             float64 // quantidade somada das diferenças positivas
-	Faltas             float64 // quantidade somada das diferenças negativas (em módulo)
-	ValorAjustado      float64 // valor líquido dos ajustes (sobra − falta, ao custo médio)
+	Sobras             decimal.Decimal // quantidade somada das diferenças positivas
+	Faltas             decimal.Decimal // quantidade somada das diferenças negativas (em módulo)
+	ValorAjustado      decimal.Decimal // valor líquido dos ajustes (sobra − falta, ao custo médio)
 	NaoContadosZerados int
 }
 
@@ -194,10 +195,10 @@ type PhysicalInventoryItem struct {
 	ItemCode         int64
 	Mask             string
 	WarehouseID      int64
-	SystemQty        float64
-	CountedQty       *float64
-	DifferenceQty    *float64
-	UnitCost         *float64
+	SystemQty        decimal.Decimal
+	CountedQty       *decimal.Decimal
+	DifferenceQty    *decimal.Decimal
+	UnitCost         *decimal.Decimal
 	AdjustmentType   *string
 	AdjustmentReason *string
 	CountedBy        *uuid.UUID
@@ -207,6 +208,6 @@ type PhysicalInventoryItem struct {
 	// CountNumber: quantas vezes o item foi contado (recontagem sobrescreve a
 	// anterior, que fica em PreviousCountedQty).
 	CountNumber          int
-	PreviousCountedQty   *float64
+	PreviousCountedQty   *decimal.Decimal
 	AdjustmentMovementID *int64
 }

@@ -49,7 +49,7 @@ func (uc *SeparacaoUseCase) TransferirEndereco(ctx context.Context, dto request.
 	if origem == destino {
 		return nil, errorsuc.NewValidationError("origem e destino são o mesmo endereço")
 	}
-	if dto.Quantity <= 0 {
+	if !dto.Quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade da transferência precisa ser maior que zero")
 	}
 	usuario, err := uc.Auth.UserID(ctx)

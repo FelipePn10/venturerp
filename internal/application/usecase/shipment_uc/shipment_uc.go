@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -380,7 +381,7 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 		if _, err := estoque.CreateReservation(ctx, &stockentity.StockReservation{
 			ItemCode:          it.ItemCode,
 			WarehouseID:       wh,
-			Quantity:          qty,
+			Quantity:          decimal.NewFromFloat(qty),
 			ReferenceType:     reservationRefShipment,
 			ReferenceCode:     ship.Code,
 			ReferenceItemCode: it.SalesOrderItemCode,

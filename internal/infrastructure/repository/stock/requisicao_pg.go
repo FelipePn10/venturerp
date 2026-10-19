@@ -208,10 +208,9 @@ func (r *StockRepositorySQLC) AtenderRequisicaoMaterial(ctx context.Context, id 
 		if l.Quantity.GreaterThan(it.Pendente()) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("linha %d: entrega de %s passa do pendente (%s)", it.Sequence, l.Quantity, it.Pendente()))
 		}
-		f, _ := l.Quantity.Float64()
 		mov := &entity.StockMovement{
 			ItemCode: it.ItemCode, Mask: it.Mask, WarehouseID: req.WarehouseID, MovementType: entity.MovementTypeOut,
-			Quantity: f, ExactQuantity: l.Quantity, Lot: l.Lot, Address: l.Address,
+			Quantity: l.Quantity, Lot: l.Lot, Address: l.Address,
 			ReferenceType: &ref, ReferenceCode: &codigo, Notes: &nota, CreatedBy: ator, CostCenterCode: req.CostCenterCode,
 		}
 		if err := CreateMovementTx(ctx, tx, empresa, mov); err != nil {

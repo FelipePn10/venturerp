@@ -223,7 +223,7 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 		if m.MovimentaEstoque && paraEstoque.GreaterThan(epsQtd) {
 			unit := decimal.Zero
 			if m.Quantidade.IsPositive() {
-				unit = m.CustoTotal.Div(m.Quantidade)
+				unit = m.CustoTotal.DivRound(m.Quantidade, stockentity.CasasCusto)
 			}
 			total := unit.Mul(paraEstoque).Round(2)
 			nota := fmt.Sprintf("Entrada da NF %d (nota de entrada %d)", numero, a.EntryID)
@@ -231,10 +231,9 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 				ItemCode:      m.ItemCode,
 				WarehouseID:   m.WarehouseID,
 				MovementType:  stockentity.MovementTypeIn,
-				Quantity:      paraEstoque.InexactFloat64(),
-				ExactQuantity: paraEstoque,
-				UnitPrice:     unit.Round(6).InexactFloat64(),
-				TotalPrice:    total.InexactFloat64(),
+				Quantity:      paraEstoque,
+				UnitPrice:     unit,
+				TotalPrice:    total,
 				ReferenceType: &ref,
 				ReferenceCode: &a.EntryID,
 				Notes:         &nota,
@@ -451,7 +450,7 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 			nota := fmt.Sprintf("Estorno da NF %d (cancelamento da nota de entrada %d): %s", numero, c.EntryID, c.Motivo)
 			mov := &stockentity.StockMovement{
 				ItemCode: it.itemCode, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
-				Quantity: qtd.InexactFloat64(), ExactQuantity: qtd, ReferenceType: &ref, ReferenceCode: &c.EntryID,
+				Quantity: qtd, ReferenceType: &ref, ReferenceCode: &c.EntryID,
 				Notes: &nota, CreatedBy: c.UserID,
 			}
 			if err := stockrepo.CreateMovementTx(ctx, tx, empresa, mov); err != nil {

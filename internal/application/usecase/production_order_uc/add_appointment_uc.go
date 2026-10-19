@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/employeeresolution"
@@ -176,7 +178,7 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 			ItemCode:      c.code,
 			WarehouseID:   *dto.BackflushWarehouseID,
 			MovementType:  stockentity.MovementTypeOut,
-			Quantity:      consumed,
+			Quantity:      decimal.NewFromFloat(consumed),
 			ReferenceType: &refType,
 			ReferenceCode: &refCode,
 			CreatedBy:     dto.CreatedBy,

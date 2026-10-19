@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -58,7 +60,7 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 			return fmt.Errorf("lendo o saldo do item %d: %w", it.ItemCode, balErr)
 		}
 		if balErr == nil {
-			available = bal.AvailableQty
+			available = bal.AvailableQty.InexactFloat64()
 		}
 		reserveQty := wanted
 		if available < reserveQty {
@@ -73,7 +75,7 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 			ItemCode:          it.ItemCode,
 			Mask:              it.Mask,
 			WarehouseID:       *it.WarehouseCode,
-			Quantity:          reserveQty,
+			Quantity:          decimal.NewFromFloat(reserveQty),
 			ReferenceType:     stockentity.ReferenceTypeSalesOrder,
 			ReferenceCode:     code,
 			ReferenceItemCode: &itemCode,

@@ -21,7 +21,7 @@ func TestSignedQuantity(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := SignedQuantity(tc.movementType, tc.qty); got != tc.want {
+			if got := SignedQuantity(tc.movementType, d(tc.qty)); !almost(got, tc.want) {
 				t.Fatalf("SignedQuantity(%q, %v) = %v, want %v", tc.movementType, tc.qty, got, tc.want)
 			}
 		})

@@ -71,10 +71,9 @@ func (r *FiscalRepositoryPG) EstornarEstoqueDaSaida(ctx context.Context, exitID 
 			rows.Close()
 			return 0, err
 		}
-		q, _ := qtd.Abs().Float64()
-		m.Quantity, m.TotalPrice = q, total.InexactFloat64()
-		if q > 0 {
-			m.UnitPrice = total.Div(qtd.Abs()).InexactFloat64()
+		m.Quantity, m.TotalPrice = qtd.Abs(), total
+		if m.Quantity.IsPositive() {
+			m.UnitPrice = total.DivRound(m.Quantity, stockentity.CasasCusto)
 		}
 		if addr != nil && *addr != "" {
 			m.Address = addr

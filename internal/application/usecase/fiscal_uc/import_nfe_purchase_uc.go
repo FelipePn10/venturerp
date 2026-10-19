@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"time"
@@ -152,9 +153,9 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 			ItemCode:      itemCode,
 			WarehouseID:   dto.WarehouseID,
 			MovementType:  stockentity.MovementTypeIn,
-			Quantity:      item.QuantidadeComercial,
-			UnitPrice:     item.ValorUnitario,
-			TotalPrice:    item.ValorTotal,
+			Quantity:      decimal.NewFromFloat(item.QuantidadeComercial),
+			UnitPrice:     decimal.NewFromFloat(item.ValorUnitario),
+			TotalPrice:    decimal.NewFromFloat(item.ValorTotal),
 			ReferenceType: &refType,
 			ReferenceCode: &created.ID,
 			CreatedBy:     userID,

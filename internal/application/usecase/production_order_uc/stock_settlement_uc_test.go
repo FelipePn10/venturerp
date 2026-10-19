@@ -342,7 +342,7 @@ func TestAddConsumption_PostsOutMovementWhenWarehouseSet(t *testing.T) {
 	if m.MovementType != stockentity.MovementTypeOut {
 		t.Fatalf("consumption must post an OUT movement, got %s", m.MovementType)
 	}
-	if m.ItemCode != 1001 || m.Quantity != 7 || m.WarehouseID != 3 {
+	if m.ItemCode != 1001 || !m.Quantity.Equal(decimal.NewFromFloat(7)) || m.WarehouseID != 3 {
 		t.Fatalf("movement mapped wrong: %+v", m)
 	}
 	if m.ReferenceType == nil || *m.ReferenceType != stockentity.ReferenceTypeProductionOrder {
@@ -401,7 +401,7 @@ func TestCompleteProductionOrder_PostsInMovementOfProducedQty(t *testing.T) {
 	if m.MovementType != stockentity.MovementTypeProductionEntry {
 		t.Fatalf("completion must post an EP movement, got %s", m.MovementType)
 	}
-	if m.ItemCode != 2002 || m.Quantity != 12 || m.WarehouseID != 4 {
+	if m.ItemCode != 2002 || !m.Quantity.Equal(decimal.NewFromFloat(12)) || m.WarehouseID != 4 {
 		t.Fatalf("finished-goods movement mapped wrong: %+v", m)
 	}
 }
@@ -419,7 +419,7 @@ func TestCompleteProductionOrder_FallsBackToPlannedQty(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(stock.movements) != 1 || stock.movements[0].Quantity != 20 {
+	if len(stock.movements) != 1 || !stock.movements[0].Quantity.Equal(decimal.NewFromFloat(20)) {
 		t.Fatalf("expected IN movement of planned qty 20, got %+v", stock.movements)
 	}
 }
@@ -455,8 +455,8 @@ func TestCompleteProductionOrder_ClassifiesExcessAsEPE(t *testing.T) {
 		po.delivery.Lines[1].MovementClass != "EPE" || !po.delivery.Lines[1].Quantity.Equal(decimal.NewFromInt(2)) {
 		t.Fatalf("wrong EPP/EPE split: %+v", po.delivery.Lines)
 	}
-	if stock.movements[0].MovementType != "EPP" || stock.movements[0].Quantity != 1 ||
-		stock.movements[1].MovementType != "EPE" || stock.movements[1].Quantity != 2 {
+	if stock.movements[0].MovementType != "EPP" || !stock.movements[0].Quantity.Equal(decimal.NewFromFloat(1)) ||
+		stock.movements[1].MovementType != "EPE" || !stock.movements[1].Quantity.Equal(decimal.NewFromFloat(2)) {
 		t.Fatalf("wrong stock movement split: %+v", stock.movements)
 	}
 }
@@ -471,7 +471,7 @@ func TestCompleteProductionOrder_GeneratesREPForAutomaticChildren(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stock.movements) != 2 || stock.movements[1].MovementType != stockentity.MovementTypePlannedRequisition || stock.movements[1].Quantity != 8 || stock.movements[1].Notes == nil || *stock.movements[1].Notes != "REP" {
+	if len(stock.movements) != 2 || stock.movements[1].MovementType != stockentity.MovementTypePlannedRequisition || !stock.movements[1].Quantity.Equal(decimal.NewFromFloat(8)) || stock.movements[1].Notes == nil || *stock.movements[1].Notes != "REP" {
 		t.Fatalf("expected REP movement, got %+v", stock.movements)
 	}
 }
@@ -492,8 +492,8 @@ func TestOperationalConsultation_AggregatesExecution(t *testing.T) {
 	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 55, ItemCode: 100, PlannedQty: 10, ProducedQty: 7},
 		deliveries: []*poentity.ProductionDelivery{{ID: 1, ProductionOrderID: 55, Quantity: decimal.NewFromInt(6), MovementClass: "EPP", WarehouseID: 4}}}
 	stock := &fakeStockRepo{movements: []*stockentity.StockMovement{
-		{ID: 1, ItemCode: 100, MovementType: "EPP", Quantity: 6, ReferenceType: &refType, ReferenceCode: &refCode},
-		{ID: 2, ItemCode: 999, MovementType: "IN", Quantity: 1},
+		{ID: 1, ItemCode: 100, MovementType: "EPP", Quantity: decimal.NewFromFloat(6), ReferenceType: &refType, ReferenceCode: &refCode},
+		{ID: 2, ItemCode: 999, MovementType: "IN", Quantity: decimal.NewFromFloat(1)},
 	}}
 	uc := OperationalConsultationUseCase{Repo: po, Stock: stock, Auth: fakeAuth{canSales: true}}
 	result, err := uc.Execute(context.Background(), 55)

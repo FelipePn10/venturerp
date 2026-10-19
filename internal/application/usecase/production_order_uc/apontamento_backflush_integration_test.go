@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
@@ -76,7 +78,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	// negativo bloqueado), e o teste é sobre a SEGUNDA falhar.
 	for _, c := range []int64{filhoA, filhoB} {
 		if _, err := stockpg.NewStockRepositorySQLC(pool).CreateMovement(ctx, &stockentity.StockMovement{
-			ItemCode: c, WarehouseID: 3, MovementType: stockentity.MovementTypeIn, Quantity: 100, UnitPrice: 1, CreatedBy: actor,
+			ItemCode: c, WarehouseID: 3, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(100), UnitPrice: decimal.NewFromFloat(1), CreatedBy: actor,
 		}); err != nil {
 			t.Fatal(err)
 		}

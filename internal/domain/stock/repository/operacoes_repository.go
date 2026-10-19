@@ -14,6 +14,9 @@ import (
 type OperacoesEstoque interface {
 	TransferirEntreAlmoxarifados(ctx context.Context, t entity.TransferenciaEstoque) (*entity.ResultadoTransferencia, error)
 	EstornarMovimento(ctx context.Context, id int64, ator uuid.UUID, motivo string) ([]*entity.StockMovement, error)
+	// Kardex e PosicaoEmData recebem dias do calendário (vale o ano/mês/dia de
+	// cada data) e os contam no fuso da empresa; data zero = padrão (hoje e, no
+	// kardex, o início do mês corrente).
 	Kardex(ctx context.Context, itemCode int64, almox *int64, de, ate time.Time) (*entity.Kardex, error)
 	PosicaoEmData(ctx context.Context, data time.Time, almox *int64) ([]entity.PosicaoItem, error)
 	SaldosComSituacao(ctx context.Context, itemCode int64) ([]entity.SaldoComSituacao, error)

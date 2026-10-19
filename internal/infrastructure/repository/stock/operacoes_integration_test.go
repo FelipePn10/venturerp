@@ -31,7 +31,7 @@ func TestIntegration_TransferenciaEEstorno(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Saida.UnitPrice != 7 || res.Entrada.UnitPrice != 7 || *res.Entrada.ReferenceCode != res.Saida.ID {
+	if !res.Saida.UnitPrice.Equal(decimal.NewFromFloat(7)) || !res.Entrada.UnitPrice.Equal(decimal.NewFromFloat(7)) || *res.Entrada.ReferenceCode != res.Saida.ID {
 		t.Fatalf("as pernas levam o custo médio e se referenciam: %+v / %+v", res.Saida, res.Entrada)
 	}
 	if q, _ := e.saldo(t, e.item, e.almox); q != 6 {
@@ -74,7 +74,7 @@ func TestIntegration_TransferenciaEEstorno(t *testing.T) {
 // documento (nota) é recusado; estornar entrada já consumida é barrado pelo saldo.
 func TestIntegration_EstornoDeMovimentoManual(t *testing.T) {
 	e := novoAmbienteEstoque(t)
-	entrada := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "IN", Quantity: 5, UnitPrice: 3, CreatedBy: e.ator}
+	entrada := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "IN", Quantity: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(3), CreatedBy: e.ator}
 	if _, err := e.repo.CreateMovement(e.ctx, entrada); err != nil {
 		t.Fatal(err)
 	}
@@ -88,12 +88,12 @@ func TestIntegration_EstornoDeMovimentoManual(t *testing.T) {
 		t.Fatal(err)
 	}
 	rev, err := e.repo.EstornarMovimento(e.ctx, entrada.ID, e.ator, "lançada errado")
-	if err != nil || len(rev) != 1 || rev[0].MovementType != "OUT" || rev[0].TotalPrice != 15 {
+	if err != nil || len(rev) != 1 || rev[0].MovementType != "OUT" || !rev[0].TotalPrice.Equal(decimal.NewFromFloat(15)) {
 		t.Fatalf("estorno manual: saída de 5 por 15: %+v %v", rev, err)
 	}
 	ref := stockentity.ReferenceTypeNFEntry
 	code := int64(99)
-	nota := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "IN", Quantity: 1, UnitPrice: 1, CreatedBy: e.ator, ReferenceType: &ref, ReferenceCode: &code}
+	nota := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "IN", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1), CreatedBy: e.ator, ReferenceType: &ref, ReferenceCode: &code}
 	if _, err := e.repo.CreateMovement(e.ctx, nota); err != nil {
 		t.Fatal(err)
 	}
@@ -118,13 +118,13 @@ func TestIntegration_KardexEPosicaoEmData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !k.SaldoAnterior.Equal(dec("10")) || k.ValorAnterior != 20 {
+	if !k.SaldoAnterior.Equal(dec("10")) || !k.ValorAnterior.Equal(decimal.NewFromFloat(20)) {
 		t.Fatalf("saldo anterior 10 (R$ 20): %v %v", k.SaldoAnterior, k.ValorAnterior)
 	}
 	if len(k.Linhas) != 2 || !k.Linhas[0].Saldo.Equal(dec("7")) || !k.Linhas[1].Saldo.Equal(dec("12")) {
 		t.Fatalf("saldos acumulados 7 e 12: %+v", k.Linhas)
 	}
-	if !k.SaldoFinal.Equal(dec("12")) || k.ValorFinal != 34 || !k.Entradas.Equal(dec("5")) || !k.Saidas.Equal(dec("3")) {
+	if !k.SaldoFinal.Equal(dec("12")) || !k.ValorFinal.Equal(decimal.NewFromFloat(34)) || !k.Entradas.Equal(dec("5")) || !k.Saidas.Equal(dec("3")) {
 		t.Fatalf("final 12 / R$ 34, entradas 5, saídas 3: %+v", k)
 	}
 	pos, err := e.repo.PosicaoEmData(e.ctx, hoje.AddDate(0, 0, -20), nil)
@@ -253,5 +253,35 @@ func TestIntegration_RequisicaoAoAlmoxarifado(t *testing.T) {
 	lista, err := e.repo.ListarRequisicoesMaterial(e.ctx, nil)
 	if err != nil || len(lista) != 1 || lista[0].Status != stockentity.RequisicaoCancelada || !lista[0].Itens[0].IssuedQty.Equal(dec("4")) {
 		t.Fatalf("lista: cancelada com o já entregue preservado: %+v %v", lista, err)
+	}
+}
+
+// O dia do kardex e da posição é o da empresa (America/Sao_Paulo por padrão):
+// o lançamento das 21:30 de Brasília é 00:30 do dia seguinte em UTC e sumia de
+// "até hoje"; o de 00:30 do dia seguinte não pode entrar.
+func TestIntegration_KardexDiaNoFusoDaEmpresa(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	pool := testutil.Pool(t)
+	_ = e.mover(t, e.item, e.almox, "IN", 10, 2, "")
+	_ = e.mover(t, e.item, e.almox, "IN", 5, 2, "")
+	dia := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC) // só o calendário importa
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + TIME '21:30') AT TIME ZONE 'America/Sao_Paulo'
+		WHERE id = (SELECT MIN(id) FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2)`, e.empresa, e.item, dia)
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + 1 + TIME '00:30') AT TIME ZONE 'America/Sao_Paulo'
+		WHERE id = (SELECT MAX(id) FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2)`, e.empresa, e.item, dia)
+	k, err := e.repo.Kardex(e.ctx, e.item, nil, dia, dia)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(k.Linhas) != 1 || !k.SaldoFinal.Equal(dec("10")) {
+		t.Fatalf("o dia 10/03 tem só o lançamento das 21:30 (saldo 10): %d linhas, saldo %s", len(k.Linhas), k.SaldoFinal)
+	}
+	pos, err := e.repo.PosicaoEmData(e.ctx, dia, &e.almox)
+	if err != nil || len(pos) != 1 || !pos[0].Quantidade.Equal(dec("10")) {
+		t.Fatalf("posição ao fim de 10/03 tem 10: %+v %v", pos, err)
+	}
+	// Datas em branco: padrão do mês corrente até hoje, sem erro.
+	if _, err := e.repo.Kardex(e.ctx, e.item, nil, time.Time{}, time.Time{}); err != nil {
+		t.Fatalf("kardex com período padrão: %v", err)
 	}
 }

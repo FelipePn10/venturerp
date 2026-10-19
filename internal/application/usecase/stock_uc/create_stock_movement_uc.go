@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/shopspring/decimal"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -55,7 +56,7 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 	if !entity.TipoMovimentoValido(dto.MovementType) {
 		return nil, errorsuc.NewValidationError("tipo de movimento inválido: o sistema não reconhece \"" + dto.MovementType + "\" e o saldo não seria atualizado")
 	}
-	if dto.Quantity <= 0 && dto.MovementType != entity.MovementTypeAdjustment {
+	if !dto.Quantity.IsPositive() && dto.MovementType != entity.MovementTypeAdjustment {
 		return nil, errorsuc.NewValidationError("a quantidade do movimento precisa ser maior que zero")
 	}
 
@@ -103,11 +104,11 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 // totalDoMovimento devolve o valor total do movimento. A tela não envia o campo
 // e o caso de uso apenas copiava o que viesse: todo movimento ficava com valor
 // total zero, o que some nos relatórios de valorização de estoque.
-func totalDoMovimento(total, quantidade, unitario float64) float64 {
-	if total > 0 {
+func totalDoMovimento(total, quantidade, unitario decimal.Decimal) decimal.Decimal {
+	if total.IsPositive() {
 		return total
 	}
-	return quantidade * unitario
+	return quantidade.Abs().Mul(unitario).Round(4)
 }
 
 // aplicarTipoDeMovimento faz o cadastro de tipos de movimento valer no

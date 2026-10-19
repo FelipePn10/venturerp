@@ -87,13 +87,12 @@ func (r *FiscalRepositoryPG) EfetivarDevolucao(ctx context.Context, e repository
 		if !s.Quantidade.IsPositive() {
 			continue
 		}
-		q, _ := s.Quantidade.Float64()
 		m := &stockentity.StockMovement{ItemCode: s.ItemCode, WarehouseID: s.WarehouseID, MovementType: stockentity.MovementTypeOut,
-			Quantity: q, ReferenceType: &ref, ReferenceCode: &e.ExitID, Notes: &nota, CreatedBy: e.UserID}
+			Quantity: s.Quantidade, ReferenceType: &ref, ReferenceCode: &e.ExitID, Notes: &nota, CreatedBy: e.UserID}
 		if err := stockrepo.CreateMovementTx(ctx, tx, empresa, m); err != nil {
 			return nil, fmt.Errorf("baixando o estoque da devolução: %w", err)
 		}
-		custos[s.FiscalEntryItemID] = custos[s.FiscalEntryItemID].Add(decimal.NewFromFloat(m.TotalPrice))
+		custos[s.FiscalEntryItemID] = custos[s.FiscalEntryItemID].Add(m.TotalPrice)
 		res.Movimentos++
 	}
 

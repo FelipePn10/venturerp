@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -57,11 +56,10 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 	if n != 2 {
 		return nil, errorsuc.NewValidationError("almoxarifado de origem ou de destino não existe nesta empresa")
 	}
-	qtd, _ := t.Quantidade.Float64()
 	ref := entity.ReferenceTypeTransfer
 	saida := &entity.StockMovement{
 		ItemCode: t.ItemCode, Mask: t.Mask, WarehouseID: t.DeAlmox, MovementType: entity.MovementTypeTransferOut,
-		Quantity: qtd, ExactQuantity: t.Quantidade, Lot: t.Lote, Address: t.EnderecoDe,
+		Quantity: t.Quantidade, Lot: t.Lote, Address: t.EnderecoDe,
 		ReferenceType: &ref, Notes: t.Notas, CreatedBy: t.Ator,
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, saida); err != nil {
@@ -74,7 +72,7 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 	saida.ReferenceCode = &codigo
 	entrada := &entity.StockMovement{
 		ItemCode: t.ItemCode, Mask: t.Mask, WarehouseID: t.ParaAlmox, MovementType: entity.MovementTypeTransferIn,
-		Quantity: qtd, ExactQuantity: t.Quantidade, UnitPrice: saida.UnitPrice, TotalPrice: saida.TotalPrice,
+		Quantity: t.Quantidade, UnitPrice: saida.UnitPrice, TotalPrice: saida.TotalPrice,
 		Lot: t.Lote, Address: t.EnderecoPara, ReferenceType: &ref, ReferenceCode: &codigo, Notes: t.Notas, CreatedBy: t.Ator,
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, entrada); err != nil {
@@ -92,7 +90,7 @@ type movimentoOriginal struct {
 	id, item, almox     int64
 	mask, tipo          string
 	qtd                 decimal.Decimal
-	preco, total        float64
+	preco, total        decimal.Decimal
 	refTipo             *string
 	refCodigo           *int64
 	lote, endereco      *string
@@ -177,11 +175,10 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 		if p.tipo == entity.MovementTypeAdjustment {
 			qtd = p.qtd.Neg()
 		}
-		f, _ := qtd.Float64()
 		origID := p.id
 		rev := &entity.StockMovement{
 			ItemCode: p.item, Mask: p.mask, WarehouseID: p.almox, MovementType: oposto,
-			Quantity: f, ExactQuantity: qtd, UnitPrice: p.preco, TotalPrice: p.total,
+			Quantity: qtd, UnitPrice: p.preco, TotalPrice: p.total,
 			ReferenceType: &refEstorno, ReferenceCode: &origID, Lot: p.lote, Address: p.endereco,
 			Notes: &nota, CreatedBy: ator, MovementTypeCode: p.tipoCodigo, CostCenterCode: p.centro,
 			ReversesMovementID: &origID,
@@ -228,10 +225,49 @@ func lerMovimentoParaEstorno(ctx context.Context, tx pgx.Tx, empresa, id int64) 
 
 // Kardex devolve o extrato do item no período: saldo anterior, cada movimento
 // com o saldo acumulado (quantidade e valor) e o saldo final.
+// fusoDaEmpresa: o dia do estoque é o do relógio da empresa — o mesmo fuso que
+// agenda notificações e o APS. Com o limite calculado em UTC, "até hoje" acabava
+// às 21:00 de Brasília e o movimento lançado à noite sumia do kardex e da posição.
+func (r *StockRepositorySQLC) fusoDaEmpresa(ctx context.Context, empresa int64) (*time.Location, error) {
+	var tz string
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo')`,
+		empresa).Scan(&tz); err != nil {
+		return nil, fmt.Errorf("lendo o fuso da empresa: %w", err)
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, fmt.Errorf("fuso da empresa %q inválido: %w", tz, err)
+	}
+	return loc, nil
+}
+
+// diaNoFuso: o dia do calendário de t (como foi digitado) à meia-noite do fuso.
+func diaNoFuso(t time.Time, loc *time.Location) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+}
+
+// Kardex do item no período [de, ate], dias do calendário da empresa. Data zero
+// vale o padrão: até hoje e desde o primeiro dia do mês corrente.
 func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox *int64, de, ate time.Time) (*entity.Kardex, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	loc, err := r.fusoDaEmpresa(ctx, empresa)
+	if err != nil {
+		return nil, err
+	}
+	hoje := time.Now().In(loc)
+	if ate.IsZero() {
+		ate = hoje
+	}
+	if de.IsZero() {
+		de = time.Date(hoje.Year(), hoje.Month(), 1, 0, 0, 0, 0, loc)
+	}
+	de, ate = diaNoFuso(de, loc), diaNoFuso(ate, loc)
+	if ate.Before(de) {
+		return nil, errorsuc.NewValidationError("a data final é anterior à inicial")
 	}
 	k := &entity.Kardex{ItemCode: itemCode, Almoxarifado: almox, De: de, Ate: ate}
 	err = r.pool.QueryRow(ctx,
@@ -245,14 +281,14 @@ func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox 
 	}
 	fim := ate.AddDate(0, 0, 1)
 	if err := r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(`+qtdSQL+`),0), COALESCE(SUM(`+valorSQL+`),0)::float8
+		`SELECT COALESCE(SUM(`+qtdSQL+`),0), COALESCE(SUM(`+valorSQL+`),0)
 		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.created_at < $3
 		    AND ($4::bigint IS NULL OR m.warehouse_id=$4)`, empresa, itemCode, de, almox).Scan(&k.SaldoAnterior, &k.ValorAnterior); err != nil {
 		return nil, fmt.Errorf("reading kardex opening balance: %w", err)
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT m.id, m.created_at, m.movement_type, m.movement_type_code, m.reference_type, m.reference_code,
-		        m.warehouse_id, m.lot, m.address, `+qtdSQL+`, m.unit_price, `+valorSQL+`::float8,
+		        m.warehouse_id, m.lot, m.address, `+qtdSQL+`, m.unit_price, `+valorSQL+`,
 		        m.cost_center_code, m.reversed_by_movement_id IS NOT NULL, m.reverses_movement_id IS NOT NULL, m.notes
 		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.created_at >= $3 AND m.created_at < $4
 		    AND ($5::bigint IS NULL OR m.warehouse_id=$5)
@@ -278,14 +314,14 @@ func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox 
 			k.Saidas = k.Saidas.Add(q.Neg())
 		}
 		saldo = saldo.Add(q)
-		valor += l.Valor
-		l.Saldo, l.ValorSaldo = saldo, math.Round(valor*100)/100
+		valor = valor.Add(l.Valor)
+		l.Saldo, l.ValorSaldo = saldo, valor.Round(2)
 		k.Linhas = append(k.Linhas, l)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	k.SaldoFinal, k.ValorFinal = saldo, math.Round(valor*100)/100
+	k.SaldoFinal, k.ValorFinal = saldo, valor.Round(2)
 	return k, nil
 }
 
@@ -299,10 +335,18 @@ func (r *StockRepositorySQLC) PosicaoEmData(ctx context.Context, data time.Time,
 	if err != nil {
 		return nil, err
 	}
+	loc, err := r.fusoDaEmpresa(ctx, empresa)
+	if err != nil {
+		return nil, err
+	}
+	if data.IsZero() {
+		data = time.Now().In(loc)
+	}
+	data = diaNoFuso(data, loc)
 	rows, err := r.pool.Query(ctx,
 		`SELECT m.item_code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''),
 		        COALESCE(i.warehouse_unit_of_measurement::text,''), COALESCE(i.supplies_purchase_uom,''), m.warehouse_id,
-		        SUM(`+qtdSQL+`), SUM(`+valorSQL+`)::float8
+		        SUM(`+qtdSQL+`), SUM(`+valorSQL+`)
 		   FROM stock_movements m JOIN items i ON i.code = m.item_code AND i.enterprise_id = m.enterprise_id
 		  WHERE m.enterprise_id=$1 AND m.created_at < $2 AND ($3::bigint IS NULL OR m.warehouse_id=$3)
 		  GROUP BY 1,2,3,4,5,6
@@ -320,10 +364,10 @@ func (r *StockRepositorySQLC) PosicaoEmData(ctx context.Context, data time.Time,
 		if err := rows.Scan(&p.ItemCode, &p.Codigo, &p.Nome, &p.Unidade, &uc, &p.Almoxarifado, &p.Quantidade, &p.Valor); err != nil {
 			return nil, fmt.Errorf("scanning stock position: %w", err)
 		}
-		if q, _ := p.Quantidade.Float64(); q > 0 {
-			p.CustoMedio = p.Valor / q
+		if p.Quantidade.IsPositive() {
+			p.CustoMedio = p.Valor.DivRound(p.Quantidade, entity.CasasCusto)
 		}
-		p.Valor = math.Round(p.Valor*100) / 100
+		p.Valor = p.Valor.Round(2)
 		if uc != "" && !strings.EqualFold(uc, p.Unidade) {
 			compra[p.ItemCode] = strings.ToUpper(uc)
 		}
@@ -396,8 +440,8 @@ func (r *StockRepositorySQLC) SaldosComSituacao(ctx context.Context, itemCode in
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT b.id, b.item_code, b.mask, b.warehouse_id, SUM(b.quantity)::float8, SUM(b.reserved_qty)::float8,
-		        MAX(b.avg_cost)::float8, SUM(b.total_cost)::float8,
+		`SELECT b.id, b.item_code, b.mask, b.warehouse_id, SUM(b.quantity), SUM(b.reserved_qty),
+		        MAX(b.avg_cost), SUM(b.total_cost),
 		        COALESCE(BOOL_OR(`+almoxPrometivelSQL+`), TRUE),
 		        COALESCE(MAX(CASE WHEN w.location::text IN ('INSPECAO') THEN 'INSPECAO'
 		                          WHEN w.location::text = 'REJEICAO' OR NOT w.disposition THEN 'BLOQUEADO' END), 'LIVRE')
@@ -416,7 +460,7 @@ func (r *StockRepositorySQLC) SaldosComSituacao(ctx context.Context, itemCode in
 			&s.AvgCost, &s.TotalCost, &s.Prometivel, &s.Situacao); err != nil {
 			return nil, err
 		}
-		s.AvailableQty = s.Quantity - s.ReservedQty
+		s.AvailableQty = s.Quantity.Sub(s.ReservedQty)
 		out = append(out, s)
 	}
 	return out, rows.Err()
@@ -566,7 +610,7 @@ func (r *StockRepositorySQLC) AnaliseDeEstoque(ctx context.Context, meses int, d
 		     SELECT item_code, MAX(created_at) quando FROM stock_movements WHERE enterprise_id=$1 GROUP BY item_code)
 		 SELECT i.code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''),
 		        COALESCE(i.warehouse_unit_of_measurement::text,''),
-		        COALESCE(s.q,0), COALESCE(s.v,0)::float8, COALESCE(c.q,0), COALESCE(c.v,0)::float8,
+		        COALESCE(s.q,0), COALESCE(s.v,0), COALESCE(c.q,0), COALESCE(c.v,0),
 		        u.quando, NULLIF(i.planning_abc_class::text,'')
 		   FROM items i
 		   LEFT JOIN saldo s ON s.item_code=i.code
@@ -586,15 +630,14 @@ func (r *StockRepositorySQLC) AnaliseDeEstoque(ctx context.Context, meses int, d
 			&a.UltimoMovimento, &a.ClasseABC); err != nil {
 			return nil, fmt.Errorf("scanning stock analysis: %w", err)
 		}
-		a.Valor = math.Round(a.Valor*100) / 100
+		a.Valor = a.Valor.Round(2)
 		a.ConsumoMedioMensal = a.ConsumoQtd.Div(decimal.NewFromInt(int64(meses))).Round(4)
-		if cm, _ := a.ConsumoMedioMensal.Float64(); cm > 0 {
-			saldo, _ := a.Saldo.Float64()
-			cob := math.Round(saldo/cm*10) / 10
+		if a.ConsumoMedioMensal.IsPositive() {
+			cob := a.Saldo.Div(a.ConsumoMedioMensal).Round(1).InexactFloat64()
 			a.CoberturaMeses = &cob
 		}
-		if a.Valor > 0 && a.ConsumoValor > 0 {
-			giro := math.Round(a.ConsumoValor*12/float64(meses)/a.Valor*100) / 100
+		if a.Valor.IsPositive() && a.ConsumoValor.IsPositive() {
+			giro := a.ConsumoValor.Mul(decimal.NewFromInt(12)).Div(decimal.NewFromInt(int64(meses))).Div(a.Valor).Round(2).InexactFloat64()
 			a.Giro = &giro
 		}
 		if a.UltimoMovimento != nil {

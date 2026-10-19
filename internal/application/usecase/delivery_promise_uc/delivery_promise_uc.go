@@ -375,7 +375,7 @@ func (uc *DeliveryPromiseUseCase) availableStock(ctx context.Context, itemCode i
 		if mask != "" && balance.Mask != mask {
 			continue
 		}
-		total += balance.AvailableQty
+		total += balance.AvailableQty.InexactFloat64()
 	}
 	return total, nil
 }

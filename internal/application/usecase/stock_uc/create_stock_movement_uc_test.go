@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // fakeAuth embeds the interface so only the methods under test need overriding.
@@ -43,9 +44,9 @@ func sampleDTO() request.CreateStockMovementDTO {
 		Mask:         "0001",
 		WarehouseID:  7,
 		MovementType: entity.MovementTypeIn,
-		Quantity:     10,
-		UnitPrice:    5.5,
-		TotalPrice:   55,
+		Quantity:     decimal.NewFromInt(10),
+		UnitPrice:    decimal.RequireFromString("5.5"),
+		TotalPrice:   decimal.NewFromInt(55),
 	}
 }
 
@@ -92,7 +93,7 @@ func TestCreateStockMovement_MapsDTOAndStampsActor(t *testing.T) {
 	if m.ItemCode != 1001 || m.Mask != "0001" || m.WarehouseID != 7 {
 		t.Fatalf("identity mapped wrong: %+v", m)
 	}
-	if m.MovementType != entity.MovementTypeIn || m.Quantity != 10 || m.UnitPrice != 5.5 || m.TotalPrice != 55 {
+	if m.MovementType != entity.MovementTypeIn || !m.Quantity.Equal(decimal.NewFromInt(10)) || !m.UnitPrice.Equal(decimal.RequireFromString("5.5")) || !m.TotalPrice.Equal(decimal.NewFromInt(55)) {
 		t.Fatalf("movement values mapped wrong: %+v", m)
 	}
 	if m.CreatedBy != uid {
