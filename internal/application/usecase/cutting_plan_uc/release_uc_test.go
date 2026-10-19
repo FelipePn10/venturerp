@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 	cprepo "github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -112,7 +114,7 @@ func TestRelease_FullBarAutomatic_PostsBaixa(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sr.movements) != 1 || sr.movements[0].MovementType != stockentity.MovementTypeOut || sr.movements[0].Quantity != 1 {
+	if len(sr.movements) != 1 || sr.movements[0].MovementType != stockentity.MovementTypeOut || !sr.movements[0].Quantity.Equal(decimal.NewFromFloat(1)) {
 		t.Fatalf("expected one OUT movement of qty 1, got %+v", sr.movements)
 	}
 	if !cr.released || res.Status != string(entity.PlanStatusReleased) {
@@ -133,7 +135,7 @@ func TestRelease_GeneratesReusableRemnant(t *testing.T) {
 		patterns: []*entity.CuttingPattern{{StockLengthMM: 6000, RepeatCount: 1, RemnantMM: 500}}, // >= 300
 		stock:    []*entity.CuttingStockPiece{{LengthMM: 6000, Quantity: 1}},
 	}
-	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: 12}}
+	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(12)}}
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -161,7 +163,7 @@ func TestRelease_ConvertsLengthToStockUoM_Meters(t *testing.T) {
 		patterns: []*entity.CuttingPattern{{StockLengthMM: 6000, RepeatCount: 1, RemnantMM: 0}},
 		stock:    []*entity.CuttingStockPiece{{LengthMM: 6000, Quantity: 1}},
 	}
-	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: 10}} // 10 per metre
+	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(10)}} // 10 per metre
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	if _, err := uc.ReleasePlan(context.Background(), 1); err != nil {
@@ -171,10 +173,10 @@ func TestRelease_ConvertsLengthToStockUoM_Meters(t *testing.T) {
 		t.Fatalf("expected 1 movement, got %d", len(sr.movements))
 	}
 	mv := sr.movements[0]
-	if mv.Quantity < 5.999 || mv.Quantity > 6.001 {
+	if mv.Quantity.InexactFloat64() < 5.999 || mv.Quantity.InexactFloat64() > 6.001 {
 		t.Fatalf("baixa quantity = %v, want 6 metres", mv.Quantity)
 	}
-	if mv.TotalPrice < 59.99 || mv.TotalPrice > 60.01 {
+	if mv.TotalPrice.InexactFloat64() < 59.99 || mv.TotalPrice.InexactFloat64() > 60.01 {
 		t.Fatalf("baixa total = %v, want 60 (6m × 10)", mv.TotalPrice)
 	}
 }
@@ -219,7 +221,7 @@ func TestRelease_2DAreaBaixaAndRemnant(t *testing.T) {
 		}},
 		stock: []*entity.CuttingStockPiece{{WidthMM: 1000, HeightMM: 1000, Quantity: 1}},
 	}
-	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: 5}} // 5 per m²
+	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(5)}} // 5 per m²
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -230,10 +232,10 @@ func TestRelease_2DAreaBaixaAndRemnant(t *testing.T) {
 		t.Fatalf("expected 1 movement, got %d", len(sr.movements))
 	}
 	mv := sr.movements[0]
-	if mv.Quantity < 0.999 || mv.Quantity > 1.001 { // 1000mm × 1000mm = 1 m²
+	if mv.Quantity.InexactFloat64() < 0.999 || mv.Quantity.InexactFloat64() > 1.001 { // 1000mm × 1000mm = 1 m²
 		t.Fatalf("baixa quantity = %v, want 1 m²", mv.Quantity)
 	}
-	if mv.TotalPrice < 4.99 || mv.TotalPrice > 5.01 {
+	if mv.TotalPrice.InexactFloat64() < 4.99 || mv.TotalPrice.InexactFloat64() > 5.01 {
 		t.Fatalf("baixa total = %v, want 5 (1 m² × 5)", mv.TotalPrice)
 	}
 	if res.RemnantsGenerated != 1 || len(cr.committedNew) != 1 {
@@ -255,7 +257,7 @@ func TestRelease_AllocatesCostPerOrder(t *testing.T) {
 			{LengthMM: 4000, Quantity: 1, SourceRef: strPtr("OP-2")},
 		},
 	}
-	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: 10}} // 1 bar → total cost 10
+	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(10)}} // 1 bar → total cost 10
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	if _, err := uc.ReleasePlan(context.Background(), 1); err != nil {

@@ -22,6 +22,9 @@ func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateRe
 	if !uc.Auth.CanReserveStock(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if !dto.Quantity.IsPositive() {
+		return nil, errorsuc.NewValidationError("a quantidade da reserva precisa ser maior que zero")
+	}
 
 	userID, err := uc.Auth.UserID(ctx)
 	if err != nil {

@@ -861,12 +861,12 @@ func ajustarSaldoDaContagem(ctx context.Context, tx pgx.Tx, tenant int64, id, ac
 	if jaAjustada != nil {
 		return nil
 	}
-	qtd, _ := c.DivergenceQuantity.Float64()
+	qtd := *c.DivergenceQuantity
 	ref := stockentity.ReferenceTypeCycleCount
 	nota := "Ajuste da contagem cíclica " + id.String()
 	mov := &stockentity.StockMovement{
 		ItemCode: c.LegacyItemCode, Mask: c.Mask, WarehouseID: c.WarehouseID,
-		MovementType: stockentity.MovementTypeAdjustment, Quantity: qtd, ExactQuantity: *c.DivergenceQuantity,
+		MovementType: stockentity.MovementTypeAdjustment, Quantity: qtd,
 		ReferenceType: &ref, Notes: &nota, CreatedBy: actor, PermiteSaldoNegativo: true,
 	}
 	if c.Address != "" {
@@ -878,15 +878,15 @@ func ajustarSaldoDaContagem(ctx context.Context, tx pgx.Tx, tenant int64, id, ac
 		mov.Lot = &lote
 	}
 	if c.DivergenceQuantity.IsPositive() {
-		var custo *float64
+		var custo decimal.NullDecimal
 		if err := tx.QueryRow(ctx,
-			`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost)/SUM(quantity) ELSE MAX(avg_cost) END
+			`SELECT CASE WHEN SUM(quantity) > 0 THEN ROUND(SUM(total_cost)/SUM(quantity), 10) ELSE MAX(avg_cost) END
 			   FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
 			tenant, c.LegacyItemCode, c.Mask, c.WarehouseID).Scan(&custo); err != nil {
 			return fmt.Errorf("lendo o custo médio para o ajuste da contagem: %w", err)
 		}
-		if custo != nil && *custo > 0 {
-			mov.UnitPrice, mov.TotalPrice = *custo, qtd**custo
+		if custo.Valid && custo.Decimal.IsPositive() {
+			mov.UnitPrice, mov.TotalPrice = custo.Decimal, qtd.Mul(custo.Decimal).Round(4)
 		}
 	}
 	if err := stockrepo.CreateMovementTx(ctx, tx, tenant, mov); err != nil {

@@ -3,9 +3,10 @@ package production_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -136,14 +137,12 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			refType := stockentity.ReferenceTypeProductionOrder
 			refCode := order.ID
 			appendFinishedMovement := func(class string, movementQty decimal.Decimal) {
-				movementQtyFloat, _ := movementQty.Float64()
 				mov := &stockentity.StockMovement{
 					ItemCode:      order.ItemCode,
 					Mask:          order.Mask,
 					WarehouseID:   *warehouseID,
 					MovementType:  class,
-					Quantity:      movementQtyFloat,
-					ExactQuantity: movementQty,
+					Quantity:      movementQty,
 					ReferenceType: &refType,
 					ReferenceCode: &refCode,
 					Lot:           dto.Lot,
@@ -178,21 +177,17 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 							componentQtyBruta, _ := componentQty.Float64()
 							componentQty = decimal.NewFromFloat(structentity.QuantidadeComPerda(
 								componentQtyBruta, child.LossPercentage, structentity.FormulaPerdaPadrao))
-							componentQtyFloat, _ := componentQty.Float64()
 							rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
-								MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQtyFloat, ReferenceType: &refType,
-								ExactQuantity: componentQty,
+								MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
 								ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: order.CreatedBy}
 							movements = append(movements, rep)
 							continue
 						}
-						coQty, _ := decimal.NewFromFloat(child.Quantity).Mul(qty).Float64()
 						coMov := &stockentity.StockMovement{
 							ItemCode:      child.ChildCode,
 							WarehouseID:   *warehouseID,
 							MovementType:  stockentity.MovementTypeIn,
-							Quantity:      coQty,
-							ExactQuantity: decimal.NewFromFloat(child.Quantity).Mul(qty),
+							Quantity:      decimal.NewFromFloat(child.Quantity).Mul(qty),
 							ReferenceType: &refType,
 							ReferenceCode: &refCode,
 							CreatedBy:     order.CreatedBy,

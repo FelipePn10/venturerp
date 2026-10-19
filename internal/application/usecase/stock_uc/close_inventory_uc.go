@@ -45,7 +45,7 @@ func (uc *CloseInventoryUseCase) Execute(ctx context.Context, id int64, dto requ
 		return nil, err
 	}
 	return &response.InventoryCloseResponse{
-		Adjustments: res.Ajustes, SurplusQty: res.Sobras, ShortageQty: res.Faltas,
-		AdjustedValue: res.ValorAjustado, UncountedZeroed: res.NaoContadosZerados,
+		Adjustments: res.Ajustes, SurplusQty: num(res.Sobras), ShortageQty: num(res.Faltas),
+		AdjustedValue: num(res.ValorAjustado), UncountedZeroed: res.NaoContadosZerados,
 	}, nil
 }

@@ -47,20 +47,20 @@ var _ repository.StockRepository = (*StockRepositorySQLC)(nil)
 // SaldoParaSaida devolve o saldo do item no almoxarifado (todos os endereços)
 // e se o almoxarifado aceita saldo negativo — o que a prévia da NF-e precisa
 // para avisar ANTES da transmissão que a baixa não vai passar.
-func (r *StockRepositorySQLC) SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (float64, bool, error) {
+func (r *StockRepositorySQLC) SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (decimal.Decimal, bool, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
-		return 0, false, err
+		return decimal.Zero, false, err
 	}
-	var saldo float64
+	var saldo decimal.Decimal
 	var permite bool
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE((SELECT SUM(quantity) FROM public.stock_balances
-		                   WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3), 0)::float8,
+		                   WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3), 0),
 		        COALESCE((SELECT allow_negative_stock FROM warehouse WHERE id=$3 AND enterprise_id=$1), FALSE)`,
 		enterpriseID, itemCode, warehouseID).Scan(&saldo, &permite)
 	if err != nil {
-		return 0, false, fmt.Errorf("lendo o saldo do item %d: %w", itemCode, err)
+		return decimal.Zero, false, fmt.Errorf("lendo o saldo do item %d: %w", itemCode, err)
 	}
 	return saldo, permite, nil
 }
@@ -105,9 +105,8 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	// Preço sem total: o valor do movimento é quantidade × preço. Sem isto os
 	// chamadores internos que mandam só o preço gravavam valor zero — e o
 	// movimento sumia do extrato valorizado e do estorno.
-	if m.TotalPrice == 0 && m.UnitPrice != 0 {
-		q, _ := movementQuantity(m).Abs().Float64()
-		m.TotalPrice = q * m.UnitPrice
+	if m.TotalPrice.IsZero() && !m.UnitPrice.IsZero() {
+		m.TotalPrice = movementQuantity(m).Abs().Mul(m.UnitPrice).Round(4)
 	}
 	err := tx.QueryRow(ctx,
 		`INSERT INTO public.stock_movements
@@ -188,19 +187,17 @@ func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, 
 	if err != nil {
 		return fmt.Errorf("reading stock balance for update: %w", err)
 	}
-	var qtdTotal, qtdEndereco decimal.Decimal
-	var valorTotal, custoMedio float64
+	var qtdTotal, qtdEndereco, valorTotal, custoMedio decimal.Decimal
 	for rows.Next() {
 		var addr string
-		var q decimal.Decimal
-		var avg, total float64
+		var q, avg, total decimal.Decimal
 		if err := rows.Scan(&addr, &q, &avg, &total); err != nil {
 			rows.Close()
 			return fmt.Errorf("reading stock balance for update: %w", err)
 		}
 		qtdTotal = qtdTotal.Add(q)
-		valorTotal += total
-		if avg > custoMedio {
+		valorTotal = valorTotal.Add(total)
+		if avg.GreaterThan(custoMedio) {
 			custoMedio = avg
 		}
 		if addr == endereco {
@@ -211,9 +208,8 @@ func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, 
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("reading stock balance for update: %w", err)
 	}
-	qtd, _ := qtdTotal.Float64()
-	if qtd > 0 {
-		custoMedio = valorTotal / qtd
+	if qtdTotal.IsPositive() {
+		custoMedio = valorTotal.DivRound(qtdTotal, entity.CasasCusto)
 	}
 
 	if deltaExact.IsNegative() && !m.PermiteSaldoNegativo {
@@ -228,9 +224,8 @@ func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, 
 
 	// Weighted-average costing is computed by the domain (single source of truth,
 	// unit-tested); the repository only persists the result.
-	delta, _ := deltaExact.Float64()
 	next, lastCost := entity.ApplyMovementCosting(
-		entity.CostingState{Quantity: qtd, AvgCost: custoMedio, TotalCost: valorTotal}, delta, m.UnitPrice,
+		entity.CostingState{Quantity: qtdTotal, AvgCost: custoMedio, TotalCost: valorTotal}, deltaExact, m.UnitPrice,
 	)
 
 	if _, err = tx.Exec(ctx,
@@ -295,30 +290,29 @@ func barrarSaldoNegativo(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *
 func valorizarSaidaPelaMedia(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
 	entrada := signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsPositive()
 	if m.ValorizarPelaMedia && entrada {
-		m.UnitPrice, m.TotalPrice = 0, 0
+		m.UnitPrice, m.TotalPrice = decimal.Zero, decimal.Zero
 	} else {
-		if m.UnitPrice > 0 || m.TotalPrice > 0 {
+		if m.UnitPrice.IsPositive() || m.TotalPrice.IsPositive() {
 			return nil
 		}
 		if !signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
 			return nil
 		}
 	}
-	var avgCost *float64
+	var avgCost decimal.NullDecimal
 	err := tx.QueryRow(ctx,
-		`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost) / SUM(quantity) ELSE MAX(avg_cost) END
+		`SELECT CASE WHEN SUM(quantity) > 0 THEN ROUND(SUM(total_cost) / SUM(quantity), 10) ELSE MAX(avg_cost) END
 		   FROM public.stock_balances
 		  WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`,
 		m.ItemCode, m.Mask, m.WarehouseID, enterpriseID).Scan(&avgCost)
 	if err != nil {
 		return fmt.Errorf("reading average cost to value the outbound movement: %w", err)
 	}
-	if avgCost == nil || *avgCost <= 0 {
+	if !avgCost.Valid || !avgCost.Decimal.IsPositive() {
 		return nil
 	}
-	quantidade, _ := movementQuantity(m).Abs().Float64()
-	m.UnitPrice = *avgCost
-	m.TotalPrice = quantidade * *avgCost
+	m.UnitPrice = avgCost.Decimal
+	m.TotalPrice = movementQuantity(m).Abs().Mul(avgCost.Decimal).Round(4)
 	return nil
 }
 
@@ -353,21 +347,11 @@ func enderecoDoSaldo(m *entity.StockMovement) string {
 }
 
 func movementQuantity(m *entity.StockMovement) decimal.Decimal {
-	if !m.ExactQuantity.IsZero() {
-		return m.ExactQuantity
-	}
-	return decimal.NewFromFloat(m.Quantity)
+	return m.Quantity
 }
 
 func signedDecimalQuantity(movementType string, quantity decimal.Decimal) decimal.Decimal {
-	sign := entity.SignedQuantity(movementType, 1)
-	if sign < 0 {
-		return quantity.Neg()
-	}
-	if sign > 0 {
-		return quantity
-	}
-	return decimal.Zero
+	return entity.SignedQuantity(movementType, quantity)
 }
 
 func (r *StockRepositorySQLC) ListMovements(ctx context.Context) ([]*entity.StockMovement, error) {
@@ -619,7 +603,7 @@ func (r *StockRepositorySQLC) CreateReservation(ctx context.Context, res *entity
 
 // adjustReservedTx adds delta to reserved_qty of an existing balance. A
 // reservation cannot manufacture availability by creating a zero-quantity row.
-func adjustReservedTx(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64, mask string, warehouseID int64, delta float64) error {
+func adjustReservedTx(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64, mask string, warehouseID int64, delta decimal.Decimal) error {
 	command, err := tx.Exec(ctx,
 		`UPDATE public.stock_balances
 		 SET reserved_qty = GREATEST(reserved_qty + $5, 0), updated_at = NOW()
@@ -746,7 +730,7 @@ func (r *StockRepositorySQLC) closeReservation(ctx context.Context, id int64, st
 
 	var itemCode, warehouseID int64
 	var mask, prevStatus string
-	var qty float64
+	var qty decimal.Decimal
 	err = tx.QueryRow(ctx,
 		`SELECT item_code, mask, warehouse_id, quantity, status
 		 FROM public.stock_reservations WHERE id = $1 AND enterprise_id=$2 FOR UPDATE`, id, enterpriseID,
@@ -764,7 +748,7 @@ func (r *StockRepositorySQLC) closeReservation(ctx context.Context, id int64, st
 	}
 
 	if prevStatus == "ACTIVE" {
-		if err := adjustReservedTx(ctx, tx, enterpriseID, itemCode, mask, warehouseID, -qty); err != nil {
+		if err := adjustReservedTx(ctx, tx, enterpriseID, itemCode, mask, warehouseID, qty.Neg()); err != nil {
 			return err
 		}
 	}
@@ -813,7 +797,7 @@ func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, item
 		windowMonths = 6
 	}
 
-	var totalConsumed float64
+	var totalConsumed decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(ABS(m.quantity)), 0)
 		 FROM public.stock_movements m
@@ -825,7 +809,7 @@ func (r *StockRepositorySQLC) RecalcConsumptionAverage(ctx context.Context, item
 		return nil, fmt.Errorf("summing item consumption: %w", err)
 	}
 
-	avg := totalConsumed / float64(windowMonths)
+	avg := totalConsumed.DivRound(decimal.NewFromInt(int64(windowMonths)), 6)
 
 	var out entity.ItemConsumptionAverage
 	err = r.pool.QueryRow(ctx,
@@ -1324,7 +1308,7 @@ func (r *StockRepositorySQLC) FecharInventario(ctx context.Context, id int64, at
 		id, item int64
 		mask     string
 		qtd      decimal.Decimal
-		custo    float64
+		custo    decimal.Decimal
 	}
 	var difs []diferenca
 	for rows.Next() {
@@ -1343,38 +1327,37 @@ func (r *StockRepositorySQLC) FecharInventario(ctx context.Context, id int64, at
 	ref := entity.ReferenceTypeInventory
 	nota := fmt.Sprintf("Ajuste do inventário %d", codigo)
 	for _, d := range difs {
-		qtd, _ := d.qtd.Float64()
 		mov := &entity.StockMovement{
 			ItemCode: d.item, Mask: d.mask, WarehouseID: almox,
-			MovementType: entity.MovementTypeAdjustment, Quantity: qtd, ExactQuantity: d.qtd,
+			MovementType: entity.MovementTypeAdjustment, Quantity: d.qtd,
 			ReferenceType: &ref, ReferenceCode: &codigo, Notes: &nota, CreatedBy: ator,
 			PermiteSaldoNegativo: true,
 		}
 		if d.qtd.IsPositive() {
 			// Sobra entra ao custo médio atual (o da foto, se o item zerou).
 			custo := d.custo
-			var atual *float64
+			var atual decimal.NullDecimal
 			if err := tx.QueryRow(ctx,
-				`SELECT CASE WHEN SUM(quantity) > 0 THEN SUM(total_cost)/SUM(quantity) ELSE MAX(avg_cost) END
+				`SELECT CASE WHEN SUM(quantity) > 0 THEN ROUND(SUM(total_cost)/SUM(quantity), 10) ELSE MAX(avg_cost) END
 				   FROM public.stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
 				enterpriseID, d.item, d.mask, almox).Scan(&atual); err != nil {
 				return nil, fmt.Errorf("reading average cost for the inventory adjustment: %w", err)
 			}
-			if atual != nil && *atual > 0 {
-				custo = *atual
+			if atual.Valid && atual.Decimal.IsPositive() {
+				custo = atual.Decimal
 			}
-			mov.UnitPrice, mov.TotalPrice = custo, qtd*custo
-			res.Sobras += qtd
+			mov.UnitPrice, mov.TotalPrice = custo, d.qtd.Mul(custo).Round(4)
+			res.Sobras = res.Sobras.Add(d.qtd)
 		} else {
-			res.Faltas += -qtd
+			res.Faltas = res.Faltas.Add(d.qtd.Neg())
 		}
 		if err := CreateMovementTx(ctx, tx, enterpriseID, mov); err != nil {
 			return nil, fmt.Errorf("lançando o ajuste do item %d: %w", d.item, err)
 		}
 		if d.qtd.IsPositive() {
-			res.ValorAjustado += mov.TotalPrice
+			res.ValorAjustado = res.ValorAjustado.Add(mov.TotalPrice)
 		} else {
-			res.ValorAjustado -= mov.TotalPrice
+			res.ValorAjustado = res.ValorAjustado.Sub(mov.TotalPrice)
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE public.physical_inventory_items
@@ -1748,15 +1731,14 @@ func (r *StockRepositorySQLC) TransferirEntreEnderecos(
 			"o endereço %q tem %s e a transferência pede %s", origem, disponivel.String(), quantidade.String()))
 	}
 
-	var custoMedio, custoTotal float64
+	var custoMedio, custoTotal decimal.Decimal
 	if err := tx.QueryRow(ctx,
 		`SELECT avg_cost, total_cost FROM public.stock_balances
 		  WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 AND address=$5`,
 		enterpriseID, m.ItemCode, m.Mask, m.WarehouseID, origem).Scan(&custoMedio, &custoTotal); err != nil {
 		return nil, fmt.Errorf("lendo o custo do saldo de origem: %w", err)
 	}
-	valorMovido, _ := quantidade.Float64()
-	valorMovido *= custoMedio
+	valorMovido := quantidade.Mul(custoMedio).Round(4)
 
 	err = tx.QueryRow(ctx,
 		`INSERT INTO public.stock_movements
@@ -2014,7 +1996,7 @@ func (r *StockRepositorySQLC) CriarOndaDeSeparacao(
 		if necessidade.Quantity <= 0 {
 			continue
 		}
-		restante := necessidade.Quantity
+		restante := decimal.NewFromFloat(necessidade.Quantity)
 		candidatos, err := tx.Query(ctx, `
 			SELECT b.id, b.lot, b.address, GREATEST(b.quantity - b.reserved_qty, 0) AS disponivel,
 			       l.heat_number, l.expires_at,
@@ -2037,7 +2019,7 @@ func (r *StockRepositorySQLC) CriarOndaDeSeparacao(
 		type alocacao struct {
 			saldoID              int64
 			lote, endereco, zona string
-			quantidade           float64
+			quantidade           decimal.Decimal
 			corrida              *string
 			validade             *time.Time
 			sequencia            int
@@ -2045,20 +2027,17 @@ func (r *StockRepositorySQLC) CriarOndaDeSeparacao(
 		var alocacoes []alocacao
 		for candidatos.Next() {
 			var c alocacao
-			var disponivel float64
+			var disponivel decimal.Decimal
 			if err := candidatos.Scan(&c.saldoID, &c.lote, &c.endereco, &disponivel,
 				&c.corrida, &c.validade, &c.zona, &c.sequencia); err != nil {
 				candidatos.Close()
 				return nil, fmt.Errorf("lendo candidato da onda: %w", err)
 			}
-			if restante <= 0 {
+			if !restante.IsPositive() {
 				continue
 			}
-			c.quantidade = disponivel
-			if c.quantidade > restante {
-				c.quantidade = restante
-			}
-			restante -= c.quantidade
+			c.quantidade = decimal.Min(disponivel, restante)
+			restante = restante.Sub(c.quantidade)
 			alocacoes = append(alocacoes, c)
 		}
 		errCandidatos := candidatos.Err()
@@ -2099,14 +2078,14 @@ func (r *StockRepositorySQLC) CriarOndaDeSeparacao(
 			}
 			onda.Linhas = append(onda.Linhas, entity.LinhaOnda{
 				ID: linhaID, ItemCode: necessidade.ItemCode, Mask: necessidade.Mask, Lot: c.lote,
-				Address: c.endereco, Zone: c.zona, PickSequence: c.sequencia, Quantity: c.quantidade,
+				Address: c.endereco, Zone: c.zona, PickSequence: c.sequencia, Quantity: c.quantidade.InexactFloat64(),
 				HeatNumber: c.corrida, ExpiresAt: c.validade,
 				ReferenceType: necessidade.ReferenceType, ReferenceCode: necessidade.ReferenceCode,
 			})
 		}
-		if restante > 0 {
+		if restante.IsPositive() {
 			onda.EmFalta = append(onda.EmFalta, entity.FaltaNaOnda{
-				ItemCode: necessidade.ItemCode, Quantity: restante,
+				ItemCode: necessidade.ItemCode, Quantity: restante.InexactFloat64(),
 			})
 		}
 	}
@@ -2175,7 +2154,7 @@ func (r *StockRepositorySQLC) encerrarOnda(ctx context.Context, codigo int64, at
 	type linha struct {
 		id, itemCode         int64
 		mask, lote, endereco string
-		quantidade           float64
+		quantidade           decimal.Decimal
 		reservaID            *int64
 	}
 	var todas []linha

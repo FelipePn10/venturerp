@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 // ItemConsumptionAverage is the average monthly consumption of an item, derived
 // from outbound stock movements over a trailing window. It feeds the reorder
@@ -9,10 +13,10 @@ import "time"
 // e, sem elas, os campos saíam em PascalCase — renomear um campo em Go quebrava
 // o cliente sem aviso.
 type ItemConsumptionAverage struct {
-	ID                    int64     `json:"id"`
-	ItemCode              int64     `json:"item_code"`
-	AvgMonthlyConsumption float64   `json:"avg_monthly_consumption"`
-	TotalConsumed         float64   `json:"total_consumed"`
-	WindowMonths          int       `json:"window_months"`
-	CalculatedAt          time.Time `json:"calculated_at"`
+	ID                    int64           `json:"id"`
+	ItemCode              int64           `json:"item_code"`
+	AvgMonthlyConsumption decimal.Decimal `json:"avg_monthly_consumption"`
+	TotalConsumed         decimal.Decimal `json:"total_consumed"`
+	WindowMonths          int             `json:"window_months"`
+	CalculatedAt          time.Time       `json:"calculated_at"`
 }

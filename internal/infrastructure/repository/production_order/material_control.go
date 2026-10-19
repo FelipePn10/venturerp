@@ -80,12 +80,11 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 				return nil, fmt.Errorf("estoque insuficiente para a transferência automática do componente %d", material.ItemCode)
 			}
 			referenceType, referenceCode := "PRODUCTION_ORDER_TRANSFER", created.ID
-			q, _ := material.Quantity.Float64()
-			out := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: material.WarehouseID, MovementType: stockentity.MovementTypeTransferOut, Quantity: q, ExactQuantity: material.Quantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
+			out := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: material.WarehouseID, MovementType: stockentity.MovementTypeTransferOut, Quantity: material.Quantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
 			if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, out); err != nil {
 				return nil, err
 			}
-			in := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: *lineWarehouse, MovementType: stockentity.MovementTypeTransferIn, Quantity: q, ExactQuantity: material.Quantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
+			in := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: *lineWarehouse, MovementType: stockentity.MovementTypeTransferIn, Quantity: material.Quantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
 			if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, in); err != nil {
 				return nil, err
 			}
@@ -809,15 +808,13 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 	}
 	referenceType, referenceCode := "PRODUCTION_SCRAP", destination.ID
 	if destination.ScrapQuantity.IsPositive() {
-		quantityFloat, _ := convertedScrap.Float64()
-		movement := &stockentity.StockMovement{ItemCode: destination.ScrapItemCode, WarehouseID: destination.WarehouseID, MovementType: stockentity.MovementTypeIn, Quantity: quantityFloat, ExactQuantity: convertedScrap, ReferenceType: &referenceType, ReferenceCode: &referenceCode, Lot: destination.Lot, CreatedBy: destination.CreatedBy}
+		movement := &stockentity.StockMovement{ItemCode: destination.ScrapItemCode, WarehouseID: destination.WarehouseID, MovementType: stockentity.MovementTypeIn, Quantity: convertedScrap, ReferenceType: &referenceType, ReferenceCode: &referenceCode, Lot: destination.Lot, CreatedBy: destination.CreatedBy}
 		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
 			return nil, err
 		}
 	}
 	if destination.ReturnQuantity.IsPositive() {
-		quantityFloat, _ := destination.ReturnQuantity.Float64()
-		movement := &stockentity.StockMovement{ItemCode: sourceItem, WarehouseID: destination.WarehouseID, MovementType: stockentity.MovementTypeIn, Quantity: quantityFloat, ExactQuantity: destination.ReturnQuantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, Lot: destination.Lot, CreatedBy: destination.CreatedBy}
+		movement := &stockentity.StockMovement{ItemCode: sourceItem, WarehouseID: destination.WarehouseID, MovementType: stockentity.MovementTypeIn, Quantity: destination.ReturnQuantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, Lot: destination.Lot, CreatedBy: destination.CreatedBy}
 		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
 			return nil, err
 		}
@@ -859,7 +856,7 @@ func (r *ProductionOrderRepositoryPGX) removeScrapDestinationTx(ctx context.Cont
 	movements := []stockentity.StockMovement{}
 	for rows.Next() {
 		var m stockentity.StockMovement
-		if err := rows.Scan(&m.ItemCode, &m.Mask, &m.WarehouseID, &m.ExactQuantity, &m.Lot); err != nil {
+		if err := rows.Scan(&m.ItemCode, &m.Mask, &m.WarehouseID, &m.Quantity, &m.Lot); err != nil {
 			rows.Close()
 			return err
 		}
@@ -873,15 +870,13 @@ func (r *ProductionOrderRepositoryPGX) removeScrapDestinationTx(ctx context.Cont
 	for i := range movements {
 		m := &movements[i]
 		var balance decimal.Decimal
-		if err := tx.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 FOR UPDATE`, enterpriseID, m.ItemCode, m.Mask, m.WarehouseID).Scan(&balance); err != nil || balance.LessThan(m.ExactQuantity) {
-			return fmt.Errorf("o destino do refugo não pode ser removido porque deixaria o estoque negativo (saldo=%s necessário=%s: %v)", balance, m.ExactQuantity, err)
+		if err := tx.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4 FOR UPDATE`, enterpriseID, m.ItemCode, m.Mask, m.WarehouseID).Scan(&balance); err != nil || balance.LessThan(m.Quantity) {
+			return fmt.Errorf("o destino do refugo não pode ser removido porque deixaria o estoque negativo (saldo=%s necessário=%s: %v)", balance, m.Quantity, err)
 		}
 	}
 	referenceType, referenceCode := "PRODUCTION_SCRAP_REVERSAL", id
 	for i := range movements {
 		m := &movements[i]
-		q, _ := m.ExactQuantity.Float64()
-		m.Quantity = q
 		m.MovementType = stockentity.MovementTypeOut
 		m.ReferenceType = &referenceType
 		m.ReferenceCode = &referenceCode

@@ -31,7 +31,7 @@ func (uc *CountInventoryItemUseCase) Execute(ctx context.Context, dto request.Co
 	if inv.Status != "OPEN" {
 		return errorsuc.NewValidationError("somente inventário aberto pode receber contagem")
 	}
-	if dto.ItemCode <= 0 || dto.WarehouseID != inv.WarehouseID || dto.CountedQty < 0 {
+	if dto.ItemCode <= 0 || dto.WarehouseID != inv.WarehouseID || dto.CountedQty.IsNegative() {
 		return errorsuc.NewValidationError("item, almoxarifado do inventário e quantidade contada válida são obrigatórios")
 	}
 

@@ -1,22 +1,25 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreateStockMovementDTO struct {
-	ItemCode       int64   `json:"item_code"`
-	Mask           string  `json:"mask"`
-	WarehouseID    int64   `json:"warehouse_id"`
-	MovementType   string  `json:"movement_type"`
-	Quantity       float64 `json:"quantity"`
-	UnitPrice      float64 `json:"unit_price"`
-	TotalPrice     float64 `json:"total_price"`
-	ReferenceType  *string `json:"reference_type,omitempty"`
-	ReferenceCode  *int64  `json:"reference_code,omitempty"`
-	Lot            *string `json:"lot,omitempty"`
-	SerialNumber   *string `json:"serial_number,omitempty"`
-	Batch          *string `json:"batch,omitempty"`
-	ExpirationDate *string `json:"expiration_date,omitempty"`
-	Notes          *string `json:"notes,omitempty"`
+	ItemCode       int64           `json:"item_code"`
+	Mask           string          `json:"mask"`
+	WarehouseID    int64           `json:"warehouse_id"`
+	MovementType   string          `json:"movement_type"`
+	Quantity       decimal.Decimal `json:"quantity"`
+	UnitPrice      decimal.Decimal `json:"unit_price"`
+	TotalPrice     decimal.Decimal `json:"total_price"`
+	ReferenceType  *string         `json:"reference_type,omitempty"`
+	ReferenceCode  *int64          `json:"reference_code,omitempty"`
+	Lot            *string         `json:"lot,omitempty"`
+	SerialNumber   *string         `json:"serial_number,omitempty"`
+	Batch          *string         `json:"batch,omitempty"`
+	ExpirationDate *string         `json:"expiration_date,omitempty"`
+	Notes          *string         `json:"notes,omitempty"`
 	// Endereço dentro do almoxarifado. `address_to` só vale em transferência
 	// interna (TRANSFER_IN/TRANSFER_OUT) e indica para onde o material foi.
 	Address   *string `json:"address,omitempty"`
@@ -30,14 +33,14 @@ type CreateStockMovementDTO struct {
 
 // TransferenciaEnderecoDTO move material entre endereços do mesmo almoxarifado.
 type TransferenciaEnderecoDTO struct {
-	ItemCode    int64   `json:"item_code"`
-	Mask        string  `json:"mask"`
-	WarehouseID int64   `json:"warehouse_id"`
-	AddressFrom string  `json:"address_from"`
-	AddressTo   string  `json:"address_to"`
-	Quantity    float64 `json:"quantity"`
-	Lot         *string `json:"lot,omitempty"`
-	Notes       *string `json:"notes,omitempty"`
+	ItemCode    int64           `json:"item_code"`
+	Mask        string          `json:"mask"`
+	WarehouseID int64           `json:"warehouse_id"`
+	AddressFrom string          `json:"address_from"`
+	AddressTo   string          `json:"address_to"`
+	Quantity    decimal.Decimal `json:"quantity"`
+	Lot         *string         `json:"lot,omitempty"`
+	Notes       *string         `json:"notes,omitempty"`
 }
 
 // OndaDeSeparacaoDTO agrupa várias necessidades numa caminhada só.
@@ -56,16 +59,16 @@ type OndaDeSeparacaoDTO struct {
 }
 
 type CreateReservationDTO struct {
-	ItemCode          int64   `json:"item_code"`
-	Mask              string  `json:"mask"`
-	WarehouseID       int64   `json:"warehouse_id"`
-	Quantity          float64 `json:"quantity"`
-	ReferenceType     string  `json:"reference_type"`
-	ReferenceCode     int64   `json:"reference_code"`
-	ReferenceItemCode *int64  `json:"reference_item_code,omitempty"`
-	ReservationDate   *string `json:"reservation_date,omitempty"`
-	ExpirationDate    *string `json:"expiration_date,omitempty"`
-	Notes             *string `json:"notes,omitempty"`
+	ItemCode          int64           `json:"item_code"`
+	Mask              string          `json:"mask"`
+	WarehouseID       int64           `json:"warehouse_id"`
+	Quantity          decimal.Decimal `json:"quantity"`
+	ReferenceType     string          `json:"reference_type"`
+	ReferenceCode     int64           `json:"reference_code"`
+	ReferenceItemCode *int64          `json:"reference_item_code,omitempty"`
+	ReservationDate   *string         `json:"reservation_date,omitempty"`
+	ExpirationDate    *string         `json:"expiration_date,omitempty"`
+	Notes             *string         `json:"notes,omitempty"`
 }
 
 type CreateInventoryDTO struct {
@@ -86,15 +89,15 @@ type CloseInventoryDTO struct {
 }
 
 type CountInventoryItemDTO struct {
-	InventoryID      int64     `json:"inventory_id"`
-	ItemCode         int64     `json:"item_code"`
-	Mask             string    `json:"mask"`
-	WarehouseID      int64     `json:"warehouse_id"`
-	CountedQty       float64   `json:"counted_qty"`
-	UnitCost         *float64  `json:"unit_cost,omitempty"`
-	AdjustmentType   *string   `json:"adjustment_type,omitempty"`
-	AdjustmentReason *string   `json:"adjustment_reason,omitempty"`
-	CountedBy        uuid.UUID `json:"-"`
+	InventoryID      int64            `json:"inventory_id"`
+	ItemCode         int64            `json:"item_code"`
+	Mask             string           `json:"mask"`
+	WarehouseID      int64            `json:"warehouse_id"`
+	CountedQty       decimal.Decimal  `json:"counted_qty"`
+	UnitCost         *decimal.Decimal `json:"unit_cost,omitempty"`
+	AdjustmentType   *string          `json:"adjustment_type,omitempty"`
+	AdjustmentReason *string          `json:"adjustment_reason,omitempty"`
+	CountedBy        uuid.UUID        `json:"-"`
 }
 
 type AdjustInventoryItemDTO struct {

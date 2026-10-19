@@ -176,7 +176,7 @@ func TestIntegration_FreteSobreCompras(t *testing.T) {
 	// 60 das 100 caixas de luva já foram consumidas.
 	ref := stockentity.ReferenceTypeManual
 	if _, err := stockpg.NewStockRepositorySQLC(pool).CreateMovement(ctx, &stockentity.StockMovement{ItemCode: luva, WarehouseID: almox,
-		MovementType: stockentity.MovementTypeOut, Quantity: 60, ReferenceType: &ref, CreatedBy: actor}); err != nil {
+		MovementType: stockentity.MovementTypeOut, Quantity: decimal.NewFromFloat(60), ReferenceType: &ref, CreatedBy: actor}); err != nil {
 		t.Fatal(err)
 	}
 	custo := func(item int64) decimal.Decimal {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -71,7 +72,7 @@ func novoAmbienteEstoque(t *testing.T) ambienteEstoque {
 
 func (e ambienteEstoque) mover(t *testing.T, item, almox int64, tipo string, qtd, preco float64, endereco string) error {
 	t.Helper()
-	m := &stockentity.StockMovement{ItemCode: item, WarehouseID: almox, MovementType: tipo, Quantity: qtd, UnitPrice: preco, CreatedBy: e.ator}
+	m := &stockentity.StockMovement{ItemCode: item, WarehouseID: almox, MovementType: tipo, Quantity: decimal.NewFromFloat(qtd), UnitPrice: decimal.NewFromFloat(preco), CreatedBy: e.ator}
 	if endereco != "" {
 		m.Address = &endereco
 	}
@@ -152,13 +153,13 @@ func TestIntegration_CustoMedioUnicoEntreEnderecos(t *testing.T) {
 	if len(custos) != 2 || custos[0] != 15 || custos[1] != 15 {
 		t.Fatalf("os dois endereços têm de ter o custo comum 15: %v", custos)
 	}
-	saida := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "OUT", Quantity: 4, CreatedBy: e.ator}
+	saida := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "OUT", Quantity: decimal.NewFromFloat(4), CreatedBy: e.ator}
 	addr := "A-01"
 	saida.Address = &addr
 	if _, err := e.repo.CreateMovement(e.ctx, saida); err != nil {
 		t.Fatal(err)
 	}
-	if saida.UnitPrice != 15 || saida.TotalPrice != 60 {
+	if !saida.UnitPrice.Equal(decimal.NewFromFloat(15)) || !saida.TotalPrice.Equal(decimal.NewFromFloat(60)) {
 		t.Fatalf("a saída vale pelo custo comum (15): %v / %v", saida.UnitPrice, saida.TotalPrice)
 	}
 	var total float64
@@ -201,7 +202,7 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 		t.Fatalf("segundo inventário aberto no mesmo almoxarifado deveria dar conflito: %v", err)
 	}
 	itens, _ := e.repo.ListInventoryItems(e.ctx, inv.ID)
-	if len(itens) != 1 || itens[0].SystemQty != 10 || itens[0].UnitCost == nil || *itens[0].UnitCost != 8 {
+	if len(itens) != 1 || !itens[0].SystemQty.Equal(decimal.NewFromFloat(10)) || itens[0].UnitCost == nil || !itens[0].UnitCost.Equal(decimal.NewFromFloat(8)) {
 		t.Fatalf("a foto deveria ter o item com 10 a custo 8: %+v", itens)
 	}
 	// Saída depois da abertura: não pode ser desfeita pelo ajuste.
@@ -210,8 +211,9 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 	}
 	contar := func(item int64, qtd float64) {
 		t.Helper()
+		contada := decimal.NewFromFloat(qtd)
 		if err := e.repo.CountInventoryItem(e.ctx, &stockentity.PhysicalInventoryItem{
-			InventoryID: inv.ID, ItemCode: item, WarehouseID: e.almox, CountedQty: &qtd, CountedBy: &e.ator,
+			InventoryID: inv.ID, ItemCode: item, WarehouseID: e.almox, CountedQty: &contada, CountedBy: &e.ator,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -224,10 +226,10 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 		t.Fatalf("item achado fora da foto entra no inventário: %+v", itens)
 	}
 	for _, it := range itens {
-		if it.ItemCode == e.item && (it.CountNumber != 2 || *it.PreviousCountedQty != 9 || *it.DifferenceQty != -3) {
+		if it.ItemCode == e.item && (it.CountNumber != 2 || !it.PreviousCountedQty.Equal(decimal.NewFromFloat(9)) || !it.DifferenceQty.Equal(decimal.NewFromFloat(-3))) {
 			t.Fatalf("recontagem: contagem 2, anterior 9, diferença 7−10 = −3: %+v", it)
 		}
-		if it.ItemCode == e.outro && *it.DifferenceQty != 4 {
+		if it.ItemCode == e.outro && !it.DifferenceQty.Equal(decimal.NewFromFloat(4)) {
 			t.Fatalf("item fora da foto: diferença 4: %+v", it)
 		}
 	}
@@ -235,7 +237,7 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Ajustes != 2 || res.Faltas != 3 || res.Sobras != 4 {
+	if res.Ajustes != 2 || !res.Faltas.Equal(decimal.NewFromFloat(3)) || !res.Sobras.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("resultado do fechamento: %+v", res)
 	}
 	if q, _ := e.saldo(t, e.item, e.almox); q != 5 {
@@ -283,5 +285,62 @@ func TestIntegration_InventarioZeraNaoContados(t *testing.T) {
 	}
 	if q, _ := e.saldo(t, e.outro, e.almox); q != 3 {
 		t.Fatalf("item fora do inventário parcial não muda: %v", q)
+	}
+}
+
+// Precisão de ponta a ponta: quantidade e custo atravessam o repositório e o
+// banco sem passar por float. Dez entradas de 0,1 somam 1 exato e a saída do
+// saldo inteiro zera quantidade e valor; o custo por milímetro guarda as dez
+// casas de NUMERIC(24,10) e a saída é valorizada por ele.
+func TestEstoqueDecimalSemDerivaIntegration(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	pool := testutil.Pool(t)
+	for i := 0; i < 10; i++ {
+		m := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "IN",
+			Quantity: decimal.RequireFromString("0.1"), UnitPrice: decimal.NewFromInt(3), CreatedBy: e.ator}
+		if _, err := e.repo.CreateMovement(e.ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b, err := e.repo.GetBalance(e.ctx, e.item, "", e.almox)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !b.Quantity.Equal(decimal.NewFromInt(1)) || !b.TotalCost.Equal(decimal.NewFromInt(3)) {
+		t.Fatalf("10 × 0,1 deveria dar 1 (R$ 3): %s (R$ %s)", b.Quantity, b.TotalCost)
+	}
+	saida := &stockentity.StockMovement{ItemCode: e.item, WarehouseID: e.almox, MovementType: "OUT",
+		Quantity: decimal.NewFromInt(1), CreatedBy: e.ator}
+	if _, err := e.repo.CreateMovement(e.ctx, saida); err != nil {
+		t.Fatalf("a saída do saldo inteiro tem de passar (sem resíduo de float): %v", err)
+	}
+	if b, err = e.repo.GetBalance(e.ctx, e.item, "", e.almox); err != nil {
+		t.Fatal(err)
+	}
+	if !b.Quantity.IsZero() || !b.TotalCost.IsZero() {
+		t.Fatalf("saldo deveria zerar: %s / R$ %s", b.Quantity, b.TotalCost)
+	}
+
+	// Barra de 6000 mm por R$ 400: custo de R$ 0,0666666667 por milímetro.
+	entrada := &stockentity.StockMovement{ItemCode: e.outro, WarehouseID: e.almox, MovementType: "IN",
+		Quantity: decimal.NewFromInt(6000), UnitPrice: decimal.RequireFromString("0.0666666667"), CreatedBy: e.ator}
+	if _, err := e.repo.CreateMovement(e.ctx, entrada); err != nil {
+		t.Fatal(err)
+	}
+	var gravado string
+	if err := pool.QueryRow(e.ctx, `SELECT avg_cost::text FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3`,
+		e.empresa, e.outro, e.almox).Scan(&gravado); err != nil {
+		t.Fatal(err)
+	}
+	if gravado != "0.0666666667" {
+		t.Fatalf("o custo médio por mm perdeu casas no banco: %s", gravado)
+	}
+	corte := &stockentity.StockMovement{ItemCode: e.outro, WarehouseID: e.almox, MovementType: "OUT",
+		Quantity: decimal.NewFromInt(104), CreatedBy: e.ator}
+	if _, err := e.repo.CreateMovement(e.ctx, corte); err != nil {
+		t.Fatal(err)
+	}
+	if corte.TotalPrice.Round(4).String() != "6.9333" {
+		t.Fatalf("104 mm deveriam custar R$ 6,9333 (com 4 casas no custo davam 6,9368): %s", corte.TotalPrice)
 	}
 }

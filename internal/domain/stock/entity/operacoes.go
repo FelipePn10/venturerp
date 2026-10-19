@@ -43,9 +43,9 @@ type LinhaKardex struct {
 	Entrada          decimal.Decimal `json:"in_qty"`
 	Saida            decimal.Decimal `json:"out_qty"`
 	Saldo            decimal.Decimal `json:"balance_qty"`
-	CustoUnitario    float64         `json:"unit_cost"`
-	Valor            float64         `json:"value"`
-	ValorSaldo       float64         `json:"balance_value"`
+	CustoUnitario    decimal.Decimal `json:"unit_cost"`
+	Valor            decimal.Decimal `json:"value"`
+	ValorSaldo       decimal.Decimal `json:"balance_value"`
 	CentroCusto      *int32          `json:"cost_center_code,omitempty"`
 	Estornado        bool            `json:"reversed"`
 	EstornaOutro     bool            `json:"is_reversal"`
@@ -63,11 +63,11 @@ type Kardex struct {
 	De            time.Time       `json:"from"`
 	Ate           time.Time       `json:"to"`
 	SaldoAnterior decimal.Decimal `json:"opening_qty"`
-	ValorAnterior float64         `json:"opening_value"`
+	ValorAnterior decimal.Decimal `json:"opening_value"`
 	Entradas      decimal.Decimal `json:"total_in"`
 	Saidas        decimal.Decimal `json:"total_out"`
 	SaldoFinal    decimal.Decimal `json:"closing_qty"`
-	ValorFinal    float64         `json:"closing_value"`
+	ValorFinal    decimal.Decimal `json:"closing_value"`
 	Linhas        []LinhaKardex   `json:"lines"`
 }
 
@@ -80,8 +80,8 @@ type PosicaoItem struct {
 	Unidade            string           `json:"uom"`
 	Almoxarifado       int64            `json:"warehouse_id"`
 	Quantidade         decimal.Decimal  `json:"quantity"`
-	Valor              float64          `json:"value"`
-	CustoMedio         float64          `json:"avg_cost"`
+	Valor              decimal.Decimal  `json:"value"`
+	CustoMedio         decimal.Decimal  `json:"avg_cost"`
 	UnidadeAlternativa *string          `json:"alt_uom,omitempty"`
 	QuantidadeAlt      *decimal.Decimal `json:"alt_quantity,omitempty"`
 }
@@ -113,9 +113,9 @@ type AnaliseItem struct {
 	Nome               string          `json:"name"`
 	Unidade            string          `json:"uom"`
 	Saldo              decimal.Decimal `json:"quantity"`
-	Valor              float64         `json:"value"`
+	Valor              decimal.Decimal `json:"value"`
 	ConsumoQtd         decimal.Decimal `json:"consumed_qty"`
-	ConsumoValor       float64         `json:"consumed_value"`
+	ConsumoValor       decimal.Decimal `json:"consumed_value"`
 	ConsumoMedioMensal decimal.Decimal `json:"avg_monthly_consumption"`
 	CoberturaMeses     *float64        `json:"coverage_months,omitempty"`
 	Giro               *float64        `json:"turnover,omitempty"`

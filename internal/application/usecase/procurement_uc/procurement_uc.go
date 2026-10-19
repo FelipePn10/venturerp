@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -641,7 +642,7 @@ func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask strin
 		Mask:          mask,
 		WarehouseID:   from,
 		MovementType:  stockentity.MovementTypeTransferOut,
-		Quantity:      qty,
+		Quantity:      decimal.NewFromFloat(qty),
 		ReferenceType: &refType,
 		ReferenceCode: &refCode,
 		Notes:         notes,
@@ -656,7 +657,7 @@ func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask strin
 		Mask:          mask,
 		WarehouseID:   to,
 		MovementType:  stockentity.MovementTypeTransferIn,
-		Quantity:      qty,
+		Quantity:      decimal.NewFromFloat(qty),
 		ReferenceType: &refType,
 		ReferenceCode: &refCode,
 		Notes:         notes,
@@ -799,9 +800,9 @@ func stockMovementResponse(m *stockentity.StockMovement) response.StockMovementR
 		Mask:           m.Mask,
 		WarehouseID:    m.WarehouseID,
 		MovementType:   m.MovementType,
-		Quantity:       m.Quantity,
-		UnitPrice:      m.UnitPrice,
-		TotalPrice:     m.TotalPrice,
+		Quantity:       m.Quantity.InexactFloat64(),
+		UnitPrice:      m.UnitPrice.InexactFloat64(),
+		TotalPrice:     m.TotalPrice.InexactFloat64(),
 		ReferenceType:  m.ReferenceType,
 		ReferenceCode:  m.ReferenceCode,
 		Lot:            m.Lot,

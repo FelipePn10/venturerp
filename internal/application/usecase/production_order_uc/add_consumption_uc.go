@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -63,7 +65,7 @@ func (uc *AddConsumptionUseCase) Execute(
 			ItemCode:      saved.ItemCode,
 			WarehouseID:   *saved.WarehouseID,
 			MovementType:  stockentity.MovementTypeOut,
-			Quantity:      saved.ConsumedQty,
+			Quantity:      decimal.NewFromFloat(saved.ConsumedQty),
 			ReferenceType: &refType,
 			ReferenceCode: &refCode,
 			Lot:           saved.Lot,

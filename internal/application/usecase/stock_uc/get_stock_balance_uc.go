@@ -3,6 +3,8 @@ package stock_uc
 import (
 	"context"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -70,14 +72,16 @@ func (uc *GetStockBalanceUseCase) ATP(ctx context.Context, itemCode int64, mask 
 	}
 
 	out := &response.ATPResponse{ItemCode: itemCode, Mask: mask, Warehouses: []*response.StockBalanceResponse{}}
+	var onHand, reserved, available decimal.Decimal
 	for _, b := range list {
 		if mask != "" && b.Mask != mask {
 			continue
 		}
-		out.TotalOnHand += b.Quantity
-		out.TotalReserved += b.ReservedQty
-		out.TotalAvailable += b.AvailableQty
+		onHand = onHand.Add(b.Quantity)
+		reserved = reserved.Add(b.ReservedQty)
+		available = available.Add(b.AvailableQty)
 		out.Warehouses = append(out.Warehouses, toStockBalanceResponse(b))
 	}
+	out.TotalOnHand, out.TotalReserved, out.TotalAvailable = num(onHand), num(reserved), num(available)
 	return out, nil
 }

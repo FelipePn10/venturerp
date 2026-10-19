@@ -6,6 +6,15 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(estoque): quantidade e custo do estoque em decimal de ponta a ponta (antes
+  `float64`): o saldo "zerado" deixava resíduo de 0,0000000001 que o bloqueio de
+  saldo negativo acusava, e a soma de frações derivava. Migração 407: custo unitário
+  com 10 casas (R$ 0,0666666667/mm em vez de 0,0667, que encarecia o corte em 0,05%)
+- fix(estoque): kardex e posição em data contam o dia no fuso da empresa — o
+  lançamento depois das 21:00 de Brasília sumia de "até hoje"
+- fix(estoque): reserva de quantidade zero ou negativa é recusada (corrompia o
+  reservado do saldo)
+
 ## [v1.7.0] — 2026-10-17
 
 - fix(nf-e): prévia aponta item sem almoxarifado para a baixa; código sqlc regenerado com as migrações 405/406 (`f16013b3`)

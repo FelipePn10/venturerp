@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func TestReservationAndLotCreationAreTenantAware(t *testing.T) {
@@ -41,7 +42,7 @@ func TestReservationAndLotCreationAreTenantAware(t *testing.T) {
 		_, _ = pool.Exec(base, `DELETE FROM users WHERE id=$1`, actor)
 	})
 
-	reservation, err := repo.CreateReservation(ctx, &stockentity.StockReservation{ItemCode: itemCode, WarehouseID: warehouseID, Quantity: 2, ReferenceType: "TEST", ReferenceCode: code, Status: "ACTIVE", CreatedBy: actor})
+	reservation, err := repo.CreateReservation(ctx, &stockentity.StockReservation{ItemCode: itemCode, WarehouseID: warehouseID, Quantity: decimal.NewFromFloat(2), ReferenceType: "TEST", ReferenceCode: code, Status: "ACTIVE", CreatedBy: actor})
 	if err != nil || reservation.ID == 0 {
 		t.Fatalf("CreateReservation() = %+v, %v", reservation, err)
 	}

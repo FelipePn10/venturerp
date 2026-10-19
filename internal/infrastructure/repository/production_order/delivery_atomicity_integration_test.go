@@ -44,7 +44,7 @@ func TestRegisterDeliveryWithMovements_RollsBackEverythingWhenStockFails(t *test
 		Lines: []productionentity.ProductionDeliveryLine{{MovementClass: "EPP", Quantity: decimal.NewFromInt(2)}}}
 	refType, refCode := stockentity.ReferenceTypeProductionOrder, orderID
 	movements := []*stockentity.StockMovement{{ItemCode: itemCode, WarehouseID: itemCode,
-		MovementType: "EPP", Quantity: 1e20, ReferenceType: &refType, ReferenceCode: &refCode, CreatedBy: uid}}
+		MovementType: "EPP", Quantity: decimal.NewFromFloat(1e20), ReferenceType: &refType, ReferenceCode: &refCode, CreatedBy: uid}}
 
 	if _, err := productionrepo.NewProductionOrderRepositoryPGX(pool).RegisterDeliveryWithMovements(ctx, delivery, movements); err == nil {
 		t.Fatal("expected stock numeric overflow")

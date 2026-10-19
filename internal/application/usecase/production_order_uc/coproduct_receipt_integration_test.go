@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -71,13 +72,13 @@ func TestIntegration_CompleteReceivesCoproductScrap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMovementsByItem: %v", err)
 	}
-	var received float64
+	var received decimal.Decimal
 	for _, m := range movs {
 		if m.MovementType == "IN" {
-			received += m.Quantity
+			received = received.Add(m.Quantity)
 		}
 	}
-	if received != 50 {
+	if !received.Equal(decimal.NewFromInt(50)) {
 		t.Fatalf("scrap received = %v, want 50 (0.5 × 100)", received)
 	}
 }

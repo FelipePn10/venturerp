@@ -59,7 +59,7 @@ func (uc *OperationalConsultationUseCase) Execute(ctx context.Context, id int64)
 				continue
 			}
 			result.Movements = append(result.Movements, &response.ProductionMovementResponse{ID: movement.ID, ItemCode: movement.ItemCode,
-				WarehouseID: movement.WarehouseID, MovementType: movement.MovementType, Quantity: movement.Quantity, Lot: movement.Lot})
+				WarehouseID: movement.WarehouseID, MovementType: movement.MovementType, Quantity: movement.Quantity.InexactFloat64(), Lot: movement.Lot})
 		}
 	}
 	result.Totals["pending"] = decimal.NewFromFloat(order.PlannedQty).Sub(result.Totals["delivered"])

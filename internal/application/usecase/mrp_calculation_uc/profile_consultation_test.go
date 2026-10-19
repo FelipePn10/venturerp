@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -36,7 +38,7 @@ func TestProfileConsultation_FiltersAndBuildsCurrentTotals(t *testing.T) {
 	uc := GetItemProfileUseCase{Repo: profileRepo{rows: []*mrpentity.MRPItemProfile{
 		{ItemCode: 1, PlanCode: 2, NeedDate: d1, Demand: 5, StockProjected: 10},
 		{ItemCode: 1, PlanCode: 2, NeedDate: d2, Demand: 8, StockProjected: 2},
-	}}, Auth: profileAuth{}, Stock: profileStock{balances: []*stockentity.StockBalance{{Quantity: 7}, {Quantity: 3}}}}
+	}}, Auth: profileAuth{}, Stock: profileStock{balances: []*stockentity.StockBalance{{Quantity: decimal.NewFromFloat(7)}, {Quantity: decimal.NewFromFloat(3)}}}}
 	to := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
 	result, err := uc.Consult(context.Background(), 1, 2, "CURRENT", nil, &to)
 	if err != nil {

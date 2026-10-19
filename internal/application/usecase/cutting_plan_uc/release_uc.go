@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 	"math"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -123,7 +124,7 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 	}
 	avgCost := 0.0
 	if bal, berr := uc.stock.GetBalance(ctx, plan.MaterialItemCode, "", *warehouse); berr == nil && bal != nil {
-		avgCost = bal.AvgCost
+		avgCost = bal.AvgCost.InexactFloat64()
 	}
 
 	refType := stockentity.ReferenceTypeManual
@@ -190,9 +191,10 @@ func (uc *CuttingPlanUseCase) ReleasePlan(ctx context.Context, planID int64) (*r
 					return nil, rerr
 				}
 				total := cost * pieceQty
+				qtdMov, custoMov := decimal.NewFromFloat(pieceQty), decimal.NewFromFloat(cost)
 				mv := &stockentity.StockMovement{
 					ItemCode: plan.MaterialItemCode, Mask: "", WarehouseID: *warehouse,
-					MovementType: stockentity.MovementTypeOut, Quantity: pieceQty, UnitPrice: cost, TotalPrice: total,
+					MovementType: stockentity.MovementTypeOut, Quantity: qtdMov, UnitPrice: custoMov, TotalPrice: qtdMov.Mul(custoMov).Round(4),
 					ReferenceType: &refType, ReferenceCode: &refCode, Lot: lot,
 					Notes: strPtr(fmt.Sprintf("Plano de corte #%d", plan.Code)), CreatedBy: plan.CreatedBy,
 				}

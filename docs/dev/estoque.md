@@ -34,6 +34,15 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
 - **Período fechado** (`manufacturing_stock_closed_periods`) recusa qualquer lançamento
   com data dentro dele — antes só o refugo da produção respeitava.
 - Preço sem total: o total é quantidade × preço (chamadores internos gravavam zero).
+- **Precisão** (migração 407): quantidade e custo andam em `decimal` do repositório
+  ao domínio (`shopspring/decimal`), nunca em `float64` — dez entradas de 0,1 somam
+  1 e a saída do saldo inteiro zera quantidade e valor. Colunas: quantidade
+  `NUMERIC(18,6)`; custo unitário (`unit_price`, `avg_cost`, `last_cost`,
+  `unit_cost` do inventário) `NUMERIC(24,10)` — R$ 400 por barra de 6000 mm dá
+  R$ 0,0666666667/mm, que com 4 casas virava 0,0667; totais em dinheiro seguem com
+  4 casas. Custo médio = valor ÷ quantidade com 10 casas (`entity.CasasCusto`).
+  As respostas JSON continuam número (conversão só na fronteira do DTO); os
+  read models de kardex, posição e análise devolvem texto decimal.
 - **Tipo de movimento configurado** (`movement_type_code`, sigla da VEST0200): no
   lançamento manual decide a direção, exige centro de custo (`requires_cost_center`),
   recusa quando `allows_manual` é falso e, com `updates_avg_cost` falso, a entrada
@@ -69,7 +78,7 @@ mesmo custo; as pernas se referenciam (`reference_type TRANSFERENCIA`, `referenc
 
 | Método | Rota | Ação |
 |---|---|---|
-| GET | `/api/stock/kardex/{itemCode}?warehouse_id&from&to` | Saldo anterior, movimentos com saldo acumulado (qtd e valor), saldo final |
+| GET | `/api/stock/kardex/{itemCode}?warehouse_id&from&to` | Saldo anterior, movimentos com saldo acumulado (qtd e valor), saldo final. Dias contados no fuso da empresa (`enterprise_notification_settings.timezone`, padrão America/Sao_Paulo): antes o fim do dia era meia-noite UTC e o lançamento depois das 21:00 sumia de "até hoje" |
 | GET | `/api/stock/position?date&warehouse_id` | Saldo por item/almoxarifado ao fim do dia, valorizado, com a 2ª unidade (unidade de compra) quando há conversão |
 
 ## 2. Saldos (`/api/stock/balances`)

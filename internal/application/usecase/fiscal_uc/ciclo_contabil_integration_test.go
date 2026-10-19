@@ -287,7 +287,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	stock := stockpg.NewStockRepositorySQLC(pool)
 	ref := stockentity.ReferenceTypeNFExit
 	if _, err := stock.CreateMovement(ctx, &stockentity.StockMovement{ItemCode: chapa, WarehouseID: almox, MovementType: stockentity.MovementTypeOut,
-		Quantity: 500, ReferenceType: &ref, ReferenceCode: &exitID, CreatedBy: actor}); err != nil {
+		Quantity: decimal.NewFromFloat(500), ReferenceType: &ref, ReferenceCode: &exitID, CreatedBy: actor}); err != nil {
 		t.Fatal(err)
 	}
 	exit := &entity.FiscalExit{ID: exitID, NumeroNF: 9001, Serie: "1", DataEmissao: time.Now(), ValorProdutos: 5000, ValorIPI: 250, ValorICMS: 600,

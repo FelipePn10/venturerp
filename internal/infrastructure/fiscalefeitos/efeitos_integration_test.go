@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
@@ -74,7 +75,7 @@ func novaNotaAutorizada(t *testing.T) cenario {
 		VALUES ($1, $2, '5102', 3, 50, 150)`, c.nota, c.item)
 	// Saldo para a baixa: a saída sem estoque é recusada (saldo negativo bloqueado).
 	if _, err := stockRepo.NewStockRepositorySQLC(pool).CreateMovement(c.ctx, &stockentity.StockMovement{
-		ItemCode: c.item, WarehouseID: 7, MovementType: stockentity.MovementTypeIn, Quantity: 10, UnitPrice: 20, CreatedBy: c.ator,
+		ItemCode: c.item, WarehouseID: 7, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(20), CreatedBy: c.ator,
 	}); err != nil {
 		t.Fatal(err)
 	}
