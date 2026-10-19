@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrPasswordChangeForbidden = errors.New("password change operation forbidden")
+	ErrPasswordChangeForbidden = errors.New("você não tem permissão para esta operação de troca de senha")
 	ErrPasswordChangeInvalid   = errors.New("o pedido de troca de senha é inválido ou expirou")
 	ErrCurrentPasswordInvalid  = errors.New("a senha atual está incorreta")
 	ErrWeakPassword            = errors.New("a nova senha precisa de ao menos 12 caracteres, com maiúscula, minúscula, número e caractere especial")

@@ -285,3 +285,36 @@ func TestIntegration_KardexDiaNoFusoDaEmpresa(t *testing.T) {
 		t.Fatalf("kardex com período padrão: %v", err)
 	}
 }
+
+// Transferência originada de um documento (a liberação da inspeção de
+// recebimento): as duas pernas guardam a referência do documento, ficam na mesma
+// transação e a entrada vale o que saiu — antes o suprimentos gravava a entrada
+// sem preço e o valor liberado da inspeção sumia.
+func TestIntegration_TransferenciaComReferenciaDeDocumento(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	_ = e.mover(t, e.item, e.almox, "IN", 10, 4.5, "")
+	ref, codigo := "RECEIVING_INSPECTION_ORDER", int64(777)
+	r, err := e.repo.TransferirEntreAlmoxarifados(e.ctx, stockentity.TransferenciaEstoque{
+		ItemCode: e.item, DeAlmox: e.almox, ParaAlmox: e.livre, Quantidade: dec("6.185567"), Ator: e.ator,
+		ReferenciaTipo: &ref, ReferenciaCodigo: &codigo,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []*stockentity.StockMovement{r.Saida, r.Entrada} {
+		if m.ReferenceType == nil || *m.ReferenceType != ref || m.ReferenceCode == nil || *m.ReferenceCode != codigo {
+			t.Fatalf("perna %s sem a referência do documento: %v %v", m.MovementType, m.ReferenceType, m.ReferenceCode)
+		}
+	}
+	if !r.Entrada.UnitPrice.Equal(r.Saida.UnitPrice) || !r.Entrada.TotalPrice.Equal(r.Saida.TotalPrice) || !r.Saida.TotalPrice.Equal(dec("27.8351")) {
+		t.Fatalf("a entrada vale o que saiu (6,185567 × 4,50 = 27,8351): saída %s / entrada %s", r.Saida.TotalPrice, r.Entrada.TotalPrice)
+	}
+	destino, err := e.repo.GetBalance(e.ctx, e.item, "", e.livre)
+	if err != nil || !destino.Quantity.Equal(dec("6.185567")) || !destino.TotalCost.Equal(dec("27.8351")) {
+		t.Fatalf("destino com 6,185567 e R$ 27,8351: %+v %v", destino, err)
+	}
+	// Movimento de documento se desfaz pelo documento, não pelo estorno avulso.
+	if _, err := e.repo.EstornarMovimento(e.ctx, r.Saida.ID, e.ator, "x"); err == nil {
+		t.Fatal("o estorno avulso de uma transferência de documento deveria ser recusado")
+	}
+}

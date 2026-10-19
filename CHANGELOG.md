@@ -6,9 +6,32 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(suprimentos): quantidades da inspeção de recebimento com 6 casas (migração
+  409) — a ordem guardava 6,1856 de 6,185567 recebidos e liberar o exibido era
+  recusado; a análise e a disposição conferem o saldo da inspeção antes de gravar
+- fix(usuários): aprovar, rejeitar ou concluir a troca de senha com identificador
+  fora do formato respondia 500; agora 400 com a mensagem. Mensagens desse fluxo
+  em português
+- fix(suprimentos): a liberação da inspeção de recebimento transferia a quantidade
+  e perdia o valor — a entrada no estoque/refugo ia sem preço e os reais do
+  material sumiam do inventário. Agora usa a transferência transacional do estoque
+  (as duas pernas na mesma transação, entrada pelo custo da saída, referência da
+  ordem de inspeção)
+- fix(produção): a transferência automática do componente para o almoxarifado de
+  linha também levava a quantidade sem o valor
+- fix(compras): a linha comprada em outra unidade guarda a quantidade e o preço
+  internos com 6 e 10 casas (migração 408) — 100 KG × 0,15530965 entravam no
+  estoque como 15,5310 M em vez de 15,530965
+- fix(estoque): o custo médio gravado é sempre o valor (em 4 casas) ÷ quantidade;
+  antes era calculado sobre o valor ainda sem arredondar e "mudava" na sétima
+  casa quando o próximo movimento o relia pelos totais
+- docs: exemplo da NF-e de saída com `origem_mercadoria` "0" e `tipo_pessoa` "J"
+  (os valores por extenso estouravam a coluna)
+
 ## [v1.7.2] — 2026-10-19
 
-- Release v1.7.2.
+- Tag sem mudanças de código (mesmo código da v1.7.1): publicada por engano antes do
+  merge das correções; não foi implantada.
 
 ## [v1.7.1] — 2026-10-19
 

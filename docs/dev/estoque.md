@@ -40,7 +40,14 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
   `NUMERIC(18,6)`; custo unitário (`unit_price`, `avg_cost`, `last_cost`,
   `unit_cost` do inventário) `NUMERIC(24,10)` — R$ 400 por barra de 6000 mm dá
   R$ 0,0666666667/mm, que com 4 casas virava 0,0667; totais em dinheiro seguem com
-  4 casas. Custo médio = valor ÷ quantidade com 10 casas (`entity.CasasCusto`).
+  4 casas. Custo médio = valor ÷ quantidade com 10 casas (`entity.CasasCusto`),
+  sempre sobre o valor já em 4 casas (`entity.CasasValor`): o médio gravado é
+  exatamente total_cost ÷ quantity. A saída é valorizada em centavos, então o
+  médio pode variar na 7ª casa — é o custo médio móvel, como nos ERPs de mercado.
+  O pedido de compra guarda a unidade interna com as mesmas escalas (migração
+  408): 100 KG × 0,15530965 entram como 15,530965 M, não 15,5310. A inspeção de
+  recebimento (ordem, análise, disposição, registro) também (migração 409), e a
+  análise confere o saldo da inspeção antes de gravar.
   As respostas JSON continuam número (conversão só na fronteira do DTO); os
   read models de kardex, posição e análise devolvem texto decimal.
 - **Tipo de movimento configurado** (`movement_type_code`, sigla da VEST0200): no
@@ -58,6 +65,11 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
 Uma operação: `TRANSFER_OUT` na origem ao custo médio e `TRANSFER_IN` no destino pelo
 mesmo custo; as pernas se referenciam (`reference_type TRANSFERENCIA`, `reference_code`
 = id da saída). Trânsito: transfira para um almoxarifado de localização `TRANSITO`.
+Transferência originada de documento (liberação da inspeção de recebimento) usa a
+mesma operação com `ReferenciaTipo`/`ReferenciaCodigo` do documento: as pernas
+guardam a referência dele e se desfazem pelo documento, não pelo estorno avulso.
+Toda entrada de transferência vale o que saiu — inclusive a automática para o
+almoxarifado de linha da OF.
 
 ### Conversão de unidade (compras e vendas)
 

@@ -84,7 +84,9 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 			if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, out); err != nil {
 				return nil, err
 			}
-			in := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: *lineWarehouse, MovementType: stockentity.MovementTypeTransferIn, Quantity: material.Quantity, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
+			// A entrada na linha vale o que saiu da origem (a saída já foi valorizada
+			// pelo custo médio); sem preço o valor do material sumia na transferência.
+			in := &stockentity.StockMovement{ItemCode: material.ItemCode, Mask: material.Mask, WarehouseID: *lineWarehouse, MovementType: stockentity.MovementTypeTransferIn, Quantity: material.Quantity, UnitPrice: out.UnitPrice, TotalPrice: out.TotalPrice, ReferenceType: &referenceType, ReferenceCode: &referenceCode, CreatedBy: material.CreatedBy}
 			if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, in); err != nil {
 				return nil, err
 			}

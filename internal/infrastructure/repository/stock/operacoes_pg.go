@@ -57,17 +57,25 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 		return nil, errorsuc.NewValidationError("almoxarifado de origem ou de destino não existe nesta empresa")
 	}
 	ref := entity.ReferenceTypeTransfer
+	documento := t.ReferenciaTipo != nil && *t.ReferenciaTipo != "" && t.ReferenciaCodigo != nil
+	if documento {
+		ref = *t.ReferenciaTipo
+	}
 	saida := &entity.StockMovement{
 		ItemCode: t.ItemCode, Mask: t.Mask, WarehouseID: t.DeAlmox, MovementType: entity.MovementTypeTransferOut,
 		Quantity: t.Quantidade, Lot: t.Lote, Address: t.EnderecoDe,
-		ReferenceType: &ref, Notes: t.Notas, CreatedBy: t.Ator,
+		ReferenceType: &ref, ReferenceCode: t.ReferenciaCodigo, Notes: t.Notas, CreatedBy: t.Ator,
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, saida); err != nil {
 		return nil, err
 	}
 	codigo := saida.ID
-	if _, err := tx.Exec(ctx, `UPDATE stock_movements SET reference_code=$1 WHERE id=$1`, codigo); err != nil {
-		return nil, fmt.Errorf("linking transfer legs: %w", err)
+	if documento {
+		codigo = *t.ReferenciaCodigo
+	} else {
+		if _, err := tx.Exec(ctx, `UPDATE stock_movements SET reference_code=$1 WHERE id=$1`, codigo); err != nil {
+			return nil, fmt.Errorf("linking transfer legs: %w", err)
+		}
 	}
 	saida.ReferenceCode = &codigo
 	entrada := &entity.StockMovement{

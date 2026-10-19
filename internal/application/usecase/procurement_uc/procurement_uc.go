@@ -24,6 +24,15 @@ type UseCase struct {
 	Repo      procrepo.Repository
 	StockRepo stockrepo.StockRepository
 	Auth      ports.AuthService
+	// Transferencias move o material entre almoxarifados numa transação, com a
+	// entrada pelo custo da saída. Sem ela as pernas eram gravadas em chamadas
+	// separadas e a entrada ia sem preço: o valor liberado da inspeção sumia.
+	Transferencias Transferidor
+}
+
+// Transferidor é a transferência transacional do estoque.
+type Transferidor interface {
+	TransferirEntreAlmoxarifados(ctx context.Context, t stockentity.TransferenciaEstoque) (*stockentity.ResultadoTransferencia, error)
 }
 
 func (uc *UseCase) CreateRecord(ctx context.Context, dto request.CreateProcurementRecordDTO) (*response.ProcurementRecordResponse, error) {
@@ -129,8 +138,15 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 	if dto.ApprovedQty > 0 && dto.DestinationWarehouseID == nil {
 		return nil, errorsuc.NewValidationError("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
 	}
-	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+0.0001 {
+	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+toleranciaQtd {
 		return nil, errorsuc.NewValidationError("a quantidade destinada passa da quantidade inspecionada")
+	}
+	saem := dto.ApprovedQty
+	if dto.RejectedQty > 0 && dto.QuarantineWarehouseID != nil && *dto.QuarantineWarehouseID != *rec.WarehouseID {
+		saem += dto.RejectedQty
+	}
+	if err := uc.conferirSaldoDaInspecao(ctx, *rec.ItemCode, rec.Mask, *rec.WarehouseID, saem); err != nil {
+		return nil, err
 	}
 
 	disp := &entity.InspectionDisposition{
@@ -546,8 +562,17 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 		if (dto.ConformQty > 0 || dto.RestrictedQty > 0) && dto.DestinationWarehouseID == nil && dto.RestrictedWarehouseID == nil {
 			return nil, errorsuc.NewValidationError("depósito de destino é obrigatório para liberar a quantidade aprovada")
 		}
-		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+0.0001 {
+		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+toleranciaQtd {
 			return nil, errorsuc.NewValidationError("a quantidade analisada é maior que a quantidade da ordem inspecionada")
+		}
+		saem := 0.0
+		for _, l := range planInspectionStockLegs(order.WarehouseID, dto) {
+			saem += l.Qty
+		}
+		// Confere antes de gravar a análise: se a transferência fosse recusada
+		// depois, a análise ficaria registrada sem o material ter saído.
+		if err := uc.conferirSaldoDaInspecao(ctx, order.ItemCode, order.Mask, order.WarehouseID, saem); err != nil {
+			return nil, err
 		}
 	}
 	actor, errUsuario := uc.Auth.UserID(ctx)
@@ -580,10 +605,35 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 	return out, nil
 }
 
+// toleranciaQtd: meio milionésimo — quantidades têm 6 casas (migrações 407/409).
+// Com 0,0001 de folga a análise aceitava liberar mais do que a inspeção tinha e
+// a transferência era recusada depois.
+const toleranciaQtd = 0.0000005
+
+// conferirSaldoDaInspecao: o almoxarifado de inspeção tem o que a análise (ou a
+// disposição) vai tirar dele?
+func (uc *UseCase) conferirSaldoDaInspecao(ctx context.Context, item int64, mask string, almox int64, saem float64) error {
+	if saem <= 0 || uc.StockRepo == nil {
+		return nil
+	}
+	saldo := decimal.Zero
+	b, err := uc.StockRepo.GetBalance(ctx, item, mask, almox)
+	if err != nil && !errorsuc.EhNaoEncontrado(err) {
+		return err
+	}
+	if b != nil {
+		saldo = b.Quantity
+	}
+	if pedido := decimal.NewFromFloat(saem).Round(6); saldo.LessThan(pedido) {
+		return errorsuc.NewValidationError(fmt.Sprintf(
+			"o almoxarifado de inspeção tem %s do item e a análise tira %s: confira as quantidades", saldo.String(), pedido.String()))
+	}
+	return nil
+}
+
 // releaseInspectionStock moves analyzed quantities out of the inspection
 // warehouse toward available (conform + restricted), rework and rejection
-// warehouses. It mirrors the non-transactional movement pattern already used by
-// DisposeInspection so quality analysis and physical stock stay aligned.
+// warehouses — each leg in one stock transaction, priced at the source cost.
 func (uc *UseCase) releaseInspectionStock(ctx context.Context, order *entity.ReceivingInspectionOrder, dto request.AnalyzeReceivingInspectionOrderDTO, actor uuid.UUID) ([]response.StockMovementResponse, error) {
 	refType := "RECEIVING_INSPECTION_ANALYSIS"
 	refCode := order.ID
@@ -637,6 +687,16 @@ func (uc *UseCase) transfer(ctx context.Context, rec *entity.Record, from, to in
 }
 
 func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask string, from, to int64, qty float64, refType string, refCode int64, actor uuid.UUID, notes *string) (*stockentity.StockMovement, *stockentity.StockMovement, error) {
+	if uc.Transferencias != nil {
+		r, err := uc.Transferencias.TransferirEntreAlmoxarifados(ctx, stockentity.TransferenciaEstoque{
+			ItemCode: itemCode, Mask: mask, DeAlmox: from, ParaAlmox: to, Quantidade: decimal.NewFromFloat(qty),
+			Notas: notes, Ator: actor, ReferenciaTipo: &refType, ReferenciaCodigo: &refCode,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		return r.Saida, r.Entrada, nil
+	}
 	out := &stockentity.StockMovement{
 		ItemCode:      itemCode,
 		Mask:          mask,
@@ -652,12 +712,16 @@ func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask strin
 	if err != nil {
 		return nil, nil, err
 	}
+	// A entrada vale o que saiu: sem preço, o destino recebia a quantidade com
+	// valor zero e o valor do material desaparecia do inventário.
 	in := &stockentity.StockMovement{
 		ItemCode:      itemCode,
 		Mask:          mask,
 		WarehouseID:   to,
 		MovementType:  stockentity.MovementTypeTransferIn,
 		Quantity:      decimal.NewFromFloat(qty),
+		UnitPrice:     createdOut.UnitPrice,
+		TotalPrice:    createdOut.TotalPrice,
 		ReferenceType: &refType,
 		ReferenceCode: &refCode,
 		Notes:         notes,

@@ -38,8 +38,16 @@ func (h *PasswordChangeHandler) List(w http.ResponseWriter, r *http.Request) {
 	h.OK(w, requests)
 }
 
+// errIdentificadorInvalido: o id da solicitação é um UUID. Antes um id fora do
+// formato ("0", "10") caía no erro genérico e respondia 500.
+var errIdentificadorInvalido = errors.New("identificador da solicitação de troca de senha inválido")
+
 func passwordRequestID(r *http.Request) (uuid.UUID, error) {
-	return uuid.Parse(chi.URLParam(r, "requestID"))
+	id, err := uuid.Parse(chi.URLParam(r, "requestID"))
+	if err != nil {
+		return uuid.Nil, errIdentificadorInvalido
+	}
+	return id, nil
 }
 
 func (h *PasswordChangeHandler) Approve(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +67,7 @@ func (h *PasswordChangeHandler) Reject(w http.ResponseWriter, r *http.Request) {
 		Reason string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.BadRequest(w, "invalid request body")
+		h.BadRequest(w, "corpo da requisição inválido")
 		return
 	}
 	id, err := passwordRequestID(r)
@@ -80,11 +88,11 @@ func (h *PasswordChangeHandler) Complete(w http.ResponseWriter, r *http.Request)
 		ConfirmPassword string `json:"confirm_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.BadRequest(w, "invalid request body")
+		h.BadRequest(w, "corpo da requisição inválido")
 		return
 	}
 	if body.NewPassword != body.ConfirmPassword {
-		h.BadRequest(w, "password confirmation does not match")
+		h.BadRequest(w, "a confirmação não confere com a nova senha")
 		return
 	}
 	id, err := passwordRequestID(r)
@@ -95,7 +103,7 @@ func (h *PasswordChangeHandler) Complete(w http.ResponseWriter, r *http.Request)
 		h.writeError(w, r, err)
 		return
 	}
-	h.OK(w, map[string]string{"status": "PASSWORD_CHANGED"}, "password changed; authenticate again")
+	h.OK(w, map[string]string{"status": "PASSWORD_CHANGED"}, "senha alterada; entre novamente")
 }
 
 func (h *PasswordChangeHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
@@ -104,7 +112,7 @@ func (h *PasswordChangeHandler) writeError(w http.ResponseWriter, r *http.Reques
 		security.WriteError(w, http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, user_uc.ErrCurrentPasswordInvalid):
 		security.WriteError(w, http.StatusUnauthorized, "invalid_credentials", err.Error())
-	case errors.Is(err, user_uc.ErrWeakPassword), errors.Is(err, user_uc.ErrPasswordChangeInvalid):
+	case errors.Is(err, user_uc.ErrWeakPassword), errors.Is(err, user_uc.ErrPasswordChangeInvalid), errors.Is(err, errIdentificadorInvalido):
 		h.BadRequest(w, err.Error())
 	default:
 		h.InternalError(w, r, err)

@@ -134,7 +134,7 @@ func TestPhase4ManualOrderTransfersAutomaticComponentsToLineWarehouse(t *testing
 	uid := uuid.New()
 	parent, child := testutil.UniqueCode(), testutil.UniqueCode()
 	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_item_controls(enterprise_id,item_code,automatic_issue_type,inventory_group_type,line_warehouse_id) VALUES($1,$2,'TRANSFER','STANDARD',1),($1,$3,'ISSUE','STANDARD',2)`, enterpriseID, parent, child)
-	testutil.Exec(t, pool, `INSERT INTO stock_balances(item_code,mask,warehouse_id,quantity,enterprise_id) VALUES($1,'',1,10,$2)`, child, enterpriseID)
+	testutil.Exec(t, pool, `INSERT INTO stock_balances(item_code,mask,warehouse_id,quantity,avg_cost,total_cost,enterprise_id) VALUES($1,'',1,10,4.5,45,$2)`, child, enterpriseID)
 	var orderID int64
 	t.Cleanup(func() {
 		pool.Exec(ctx, "DELETE FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER_TRANSFER'", enterpriseID)
@@ -151,6 +151,14 @@ func TestPhase4ManualOrderTransfersAutomaticComponentsToLineWarehouse(t *testing
 	var lineQty decimal.Decimal
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN movement_type='TRANSFER_IN' AND warehouse_id=2 THEN quantity ELSE 0 END),0) FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER_TRANSFER' AND reference_code=$2`, enterpriseID, orderID).Scan(&movements, &lineQty); err != nil || movements != 2 || !lineQty.Equal(decimal.NewFromInt(3)) {
 		t.Fatalf("transfer movements=%d line=%s err=%v", movements, lineQty, err)
+	}
+	// O valor acompanha o material: 3 a R$ 4,50 saem da origem e entram na linha.
+	// Antes a entrada ia sem preço e os R$ 13,50 sumiam do inventário.
+	var origem, linha decimal.Decimal
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=1),0), COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=2),0)
+		FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, child).Scan(&origem, &linha); err != nil ||
+		!origem.Equal(decimal.RequireFromString("31.5")) || !linha.Equal(decimal.RequireFromString("13.5")) {
+		t.Fatalf("valor na origem %s (esperado 31,5) e na linha %s (esperado 13,5): %v", origem, linha, err)
 	}
 	var warehouse int64
 	if err := pool.QueryRow(ctx, `SELECT warehouse_id FROM production_order_materials WHERE production_order_id=$1`, orderID).Scan(&warehouse); err != nil || warehouse != 2 {

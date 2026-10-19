@@ -6,6 +6,9 @@ import "github.com/shopspring/decimal"
 // 407). Item consumido em milímetro custa frações de centavo por unidade.
 const CasasCusto = 10
 
+// CasasValor é a precisão do valor em dinheiro (total_cost, total_price).
+const CasasValor = 4
+
 // CostingState is the weighted-average-cost snapshot of an item's balance in a
 // warehouse: on-hand quantity, average unit cost, and total inventory value.
 type CostingState struct {
@@ -28,7 +31,22 @@ type CostingState struct {
 //
 // Tudo em decimal: em float, 10 entradas de 0,1 não davam 1 e o custo médio
 // derivava a cada movimento.
+//
+// Invariante: o valor sai com as 4 casas que o banco grava e o custo médio é
+// esse valor ÷ quantidade (10 casas). Sem isto o médio era calculado sobre o
+// valor ainda sem arredondar, gravado diferente do que total_cost/quantity dá,
+// e o próximo movimento — que relê o médio pelos totais — o via "mudar" na
+// sétima casa.
 func ApplyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (next CostingState, lastCost decimal.Decimal) {
+	next, lastCost = applyMovementCosting(cur, delta, unitPrice)
+	next.TotalCost = next.TotalCost.Round(CasasValor)
+	if next.Quantity.IsPositive() {
+		next.AvgCost = next.TotalCost.DivRound(next.Quantity, CasasCusto)
+	}
+	return next, lastCost
+}
+
+func applyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (next CostingState, lastCost decimal.Decimal) {
 	next = CostingState{
 		Quantity:  cur.Quantity.Add(delta),
 		AvgCost:   cur.AvgCost,
@@ -37,16 +55,16 @@ func ApplyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (n
 	lastCost = cur.AvgCost
 
 	if delta.IsPositive() {
-		next.TotalCost = cur.TotalCost.Add(delta.Mul(unitPrice))
-		if next.Quantity.IsPositive() {
-			next.AvgCost = next.TotalCost.DivRound(next.Quantity, CasasCusto)
-		}
+		// O valor da entrada é o do movimento: quantidade × preço em 4 casas.
+		next.TotalCost = cur.TotalCost.Add(delta.Mul(unitPrice).Round(CasasValor))
 		lastCost = unitPrice
 		return next, lastCost
 	}
 
 	// Outbound: consume at current average.
-	next.TotalCost = cur.TotalCost.Add(delta.Mul(cur.AvgCost)) // delta is negative
+	// Sai o valor que o movimento grava (quantidade × médio em 4 casas), para o
+	// extrato e o saldo baterem centavo a centavo.
+	next.TotalCost = cur.TotalCost.Add(delta.Mul(cur.AvgCost).Round(CasasValor)) // delta is negative
 	if next.TotalCost.IsNegative() || !next.Quantity.IsPositive() {
 		next.TotalCost = next.Quantity.Mul(next.AvgCost)
 		if next.TotalCost.IsNegative() {

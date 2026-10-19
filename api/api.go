@@ -803,9 +803,10 @@ func (app *application) mount() chi.Router {
 	stockRepository := stockRepo.NewStockRepositorySQLC(app.db.Pool)
 	procurementRepository := procurementRepo.New(app.db.Pool)
 	procurementUC := &procurement_uc.UseCase{
-		Repo:      procurementRepository,
-		StockRepo: stockRepository,
-		Auth:      authService,
+		Repo:           procurementRepository,
+		StockRepo:      stockRepository,
+		Auth:           authService,
+		Transferencias: stockRepository,
 	}
 	procurementHandler := handler.NewProcurementHandler(procurementUC)
 
