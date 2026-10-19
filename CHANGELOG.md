@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.4] — 2026-10-19
+
+- fix(fiscal): efeitos da NF-e não reaplicam; estorno da entrada soma o ajuste uma vez por item (`2b5e672c`)
+- fix(fiscal): cancelamento de nota de entrada acertada por ajuste de estoque (`2749bcc8`)
+
 - fix(fiscal): a prévia da NF-e sem pedido avisava que "o estoque não será
   baixado", mas a autorização baixa o estoque de todo item da nota; o aviso
   agora diz o que de fato fica de fora (faturamento e reservas do pedido)
