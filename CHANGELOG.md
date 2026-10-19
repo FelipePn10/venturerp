@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.7.1] — 2026-10-19
+
+- fix(estoque): quantidade e custo em decimal de ponta a ponta; kardex no fuso da empresa (`d80e7b13`)
+
 - fix(estoque): quantidade e custo do estoque em decimal de ponta a ponta (antes
   `float64`): o saldo "zerado" deixava resíduo de 0,0000000001 que o bloqueio de
   saldo negativo acusava, e a soma de frações derivava. Migração 407: custo unitário
