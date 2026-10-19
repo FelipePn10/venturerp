@@ -311,7 +311,7 @@ func conferirNota(
 		// CT-e, NFS-e e SPED levam o código direto no arquivo.
 		atencao("emitente.codigo_municipio",
 			"o código IBGE do município da empresa está zerado; a NF-e sai, mas CT-e, NFS-e e os arquivos do SPED (EFD e ECD) vão com código inválido",
-			"informe o código do município em VFIS0100 — Configuração Fiscal (Mandaguari/PR é 4114302)")
+			"informe o código IBGE do município em VFIS0100 — Configuração Fiscal (a lista oficial está em ibge.gov.br)")
 	}
 
 	// ── Destinatário
