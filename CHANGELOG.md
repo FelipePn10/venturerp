@@ -25,6 +25,11 @@ pipeline de release.
 - docs: exemplo da NF-e de saída com `origem_mercadoria` "0" e `tipo_pessoa` "J"
   (os valores por extenso estouravam a coluna)
 
+## [v1.7.2] — 2026-10-19
+
+- Tag sem mudanças de código (mesmo código da v1.7.1): publicada por engano antes do
+  merge das correções; não foi implantada.
+
 ## [v1.7.1] — 2026-10-19
 
 - fix(estoque): quantidade e custo em decimal de ponta a ponta; kardex no fuso da empresa (`d80e7b13`)
