@@ -1133,8 +1133,10 @@ lançamento volta como aviso.
 `{"motivo": "mercadoria devolvida integralmente"}` (mínimo 10 caracteres). Nota
 pendente só deixa de valer. Nota aprovada é **estornada numa transação**:
 títulos cancelados (recusado se algum tiver pagamento ou abatimento de
-adiantamento), estoque devolvido (recusado se o material já foi consumido),
-pedido de compra reaberto, créditos fiscais e contabilidade estornados,
+adiantamento), estoque devolvido (recusado se o material já foi consumido) —
+a quantidade estornada é a da entrada somada aos ajustes de estoque ligados à
+nota (`ADJUSTMENT` com referência `NF_ENTRADA`/id da nota), que corrigem uma
+entrada lançada errado —, pedido de compra reaberto, créditos fiscais e contabilidade estornados,
 `stock_status` `ESTORNADO`. A chave volta a poder ser importada.
 
 ### `GET /api/fiscal/entries/{id}/xml`

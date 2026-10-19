@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(fiscal): cancelar nota de entrada acertada por ajuste de estoque (a NF
+  78402 da Tecnofer, lançada em KG num item em M e corrigida em 17/10) era
+  recusado com "o item tem só 18 e a nota deu entrada de 115,8975". O estorno
+  agora devolve o que a nota deixou no estoque: a entrada mais os ajustes
+  ligados a ela
+
 ## [v1.7.3] — 2026-10-19
 
 - fix(suprimentos): quantidades da inspeção com 6 casas; análise confere o saldo antes de gravar (`3fb3ade1`)
