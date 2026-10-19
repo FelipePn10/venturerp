@@ -2067,7 +2067,7 @@ POST /api/fiscal/exits/create
   "razao_social_destinatario": "Comércio de Móveis Moderno Ltda",
   "ie_destinatario": "987654321098",
   "uf_destinatario": "RJ",
-  "tipo_pessoa": "JURIDICA",
+  "tipo_pessoa": "J",                -- "F" pessoa física; qualquer outro = jurídica
   "cfop": "5101",
   "natureza_operacao": "VENDA DE PRODUCAO DO ESTABELECIMENTO",
   "valor_produtos": 25000.00,
@@ -2084,7 +2084,7 @@ POST /api/fiscal/exits/create
       "quantity": 100.0,
       "unit_price": 250.00,
       "total_price": 25000.00,
-      "origem_mercadoria": "NACIONAL",
+      "origem_mercadoria": "0",         -- código da origem (1 caractere): 0 nacional, 1/2 estrangeira...
       "description": "Cadeira giratória de escritório preta"
     }
   ]

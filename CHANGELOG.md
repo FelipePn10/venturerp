@@ -6,6 +6,15 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(compras): a linha comprada em outra unidade guarda a quantidade e o preço
+  internos com 6 e 10 casas (migração 408) — 100 KG × 0,15530965 entravam no
+  estoque como 15,5310 M em vez de 15,530965
+- fix(estoque): o custo médio gravado é sempre o valor (em 4 casas) ÷ quantidade;
+  antes era calculado sobre o valor ainda sem arredondar e "mudava" na sétima
+  casa quando o próximo movimento o relia pelos totais
+- docs: exemplo da NF-e de saída com `origem_mercadoria` "0" e `tipo_pessoa` "J"
+  (os valores por extenso estouravam a coluna)
+
 ## [v1.7.1] — 2026-10-19
 
 - fix(estoque): quantidade e custo em decimal de ponta a ponta; kardex no fuso da empresa (`d80e7b13`)

@@ -143,3 +143,21 @@ func TestApplyMovementCosting_CustoUnitarioPequeno(t *testing.T) {
 		t.Fatalf("104 mm deveriam custar 6,9333, custaram %s", consumo)
 	}
 }
+
+// O médio gravado é sempre valor ÷ quantidade: relido pelos totais no próximo
+// movimento, não muda. Antes a compra de 15,531 M a R$ 40,2164 deixava o médio
+// em 40,2162449196 e o total ÷ quantidade em 40,2162446691.
+func TestApplyMovementCosting_MedioIgualValorSobreQuantidade(t *testing.T) {
+	cur := CostingState{Quantity: decimal.NewFromInt(18), TotalCost: decimal.RequireFromString("723.89")}
+	cur.AvgCost = cur.TotalCost.DivRound(cur.Quantity, CasasCusto)
+	passos := []struct{ delta, preco string }{{"15.531", "40.2164"}, {"-5.5", "0"}, {"0.35", "7.123456789"}, {"-2.25", "0"}, {"100", "0.0666666667"}}
+	for _, p := range passos {
+		cur, _ = ApplyMovementCosting(cur, decimal.RequireFromString(p.delta), decimal.RequireFromString(p.preco))
+		if !cur.TotalCost.Equal(cur.TotalCost.Round(CasasValor)) {
+			t.Fatalf("valor com mais de 4 casas: %s", cur.TotalCost)
+		}
+		if relido := cur.TotalCost.DivRound(cur.Quantity, CasasCusto); !cur.AvgCost.Equal(relido) {
+			t.Fatalf("depois de %s: médio %s, valor÷quantidade %s", p.delta, cur.AvgCost, relido)
+		}
+	}
+}
