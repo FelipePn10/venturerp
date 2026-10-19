@@ -6,6 +6,9 @@ pipeline de release.
 
 ## Unreleased
 
+- fix(usuários): aprovar, rejeitar ou concluir a troca de senha com identificador
+  fora do formato respondia 500; agora 400 com a mensagem. Mensagens desse fluxo
+  em português
 - fix(suprimentos): a liberação da inspeção de recebimento transferia a quantidade
   e perdia o valor — a entrada no estoque/refugo ia sem preço e os reais do
   material sumiam do inventário. Agora usa a transferência transacional do estoque
