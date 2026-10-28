@@ -8,56 +8,59 @@ import (
 
 // FiscalExitResponse is the API representation of an outbound fiscal document (NF-e saída).
 type FiscalExitResponse struct {
-	ID                      int64                    `json:"id"`
-	ChaveAcesso             *string                  `json:"chave_acesso,omitempty"`
-	NumeroNF                int64                    `json:"numero_nf"`
-	Serie                   string                   `json:"serie"`
-	DataEmissao             time.Time                `json:"data_emissao"`
-	DataSaida               *time.Time               `json:"data_saida,omitempty"`
-	CnpjDestinatario        *string                  `json:"cnpj_destinatario,omitempty"`
-	RazaoSocialDestinatario *string                  `json:"razao_social_destinatario,omitempty"`
-	IEDestinatario          *string                  `json:"ie_destinatario,omitempty"`
-	UFDestinatario          *string                  `json:"uf_destinatario,omitempty"`
-	DestLogradouro          *string                  `json:"dest_logradouro,omitempty"`
-	DestNumero              *string                  `json:"dest_numero,omitempty"`
-	DestComplemento         *string                  `json:"dest_complemento,omitempty"`
-	DestBairro              *string                  `json:"dest_bairro,omitempty"`
-	DestMunicipio           *string                  `json:"dest_municipio,omitempty"`
-	DestCodigoMunicipio     *string                  `json:"dest_codigo_municipio,omitempty"`
-	DestCEP                 *string                  `json:"dest_cep,omitempty"`
-	DestEmail               *string                  `json:"dest_email,omitempty"`
-	DestTelefone            *string                  `json:"dest_telefone,omitempty"`
-	CustomerCode            *int64                   `json:"customer_code,omitempty"`
-	Cfop                    string                   `json:"cfop"`
-	NaturezaOperacao        string                   `json:"natureza_operacao"`
-	ValorProdutos           float64                  `json:"valor_produtos"`
-	ValorFrete              float64                  `json:"valor_frete"`
-	ValorSeguro             float64                  `json:"valor_seguro"`
-	ValorDesconto           float64                  `json:"valor_desconto"`
-	ValorIPI                float64                  `json:"valor_ipi"`
-	ValorICMS               float64                  `json:"valor_icms"`
-	ValorPIS                float64                  `json:"valor_pis"`
-	ValorCOFINS             float64                  `json:"valor_cofins"`
-	BaseICMSST              float64                  `json:"base_icms_st"`
-	ValorICMSST             float64                  `json:"valor_icms_st"`
-	ValorTotal              float64                  `json:"valor_total"`
-	SalesOrderCode          *int64                   `json:"sales_order_code,omitempty"`
-	SourceType              *string                  `json:"source_type,omitempty"`
-	ShipmentLoadCode        *int64                   `json:"shipment_load_code,omitempty"`
-	ShipmentCode            *int64                   `json:"shipment_code,omitempty"`
-	FiscalCouponNumber      *string                  `json:"fiscal_coupon_number,omitempty"`
-	FiscalCouponDate        *time.Time               `json:"fiscal_coupon_date,omitempty"`
-	FiscalCouponECFSerial   *string                  `json:"fiscal_coupon_ecf_serial,omitempty"`
-	Status                  string                   `json:"status"`
-	Protocolo               *string                  `json:"protocolo,omitempty"`
-	XmlPath                 *string                  `json:"xml_path,omitempty"`
-	DanfePath               *string                  `json:"danfe_path,omitempty"`
-	FocusRef                *string                  `json:"focus_ref,omitempty"`
-	IsActive                bool                     `json:"is_active"`
-	CreatedAt               time.Time                `json:"created_at"`
-	UpdatedAt               time.Time                `json:"updated_at"`
-	CreatedBy               uuid.UUID                `json:"created_by"`
-	Itens                   []FiscalExitItemResponse `json:"itens,omitempty"`
+	ID                        int64                    `json:"id"`
+	ChaveAcesso               *string                  `json:"chave_acesso,omitempty"`
+	NumeroNF                  int64                    `json:"numero_nf"`
+	Serie                     string                   `json:"serie"`
+	DataEmissao               time.Time                `json:"data_emissao"`
+	DataSaida                 *time.Time               `json:"data_saida,omitempty"`
+	CnpjDestinatario          *string                  `json:"cnpj_destinatario,omitempty"`
+	RazaoSocialDestinatario   *string                  `json:"razao_social_destinatario,omitempty"`
+	IEDestinatario            *string                  `json:"ie_destinatario,omitempty"`
+	UFDestinatario            *string                  `json:"uf_destinatario,omitempty"`
+	DestLogradouro            *string                  `json:"dest_logradouro,omitempty"`
+	DestNumero                *string                  `json:"dest_numero,omitempty"`
+	DestComplemento           *string                  `json:"dest_complemento,omitempty"`
+	DestBairro                *string                  `json:"dest_bairro,omitempty"`
+	DestMunicipio             *string                  `json:"dest_municipio,omitempty"`
+	DestCodigoMunicipio       *string                  `json:"dest_codigo_municipio,omitempty"`
+	DestCEP                   *string                  `json:"dest_cep,omitempty"`
+	DestEmail                 *string                  `json:"dest_email,omitempty"`
+	DestTelefone              *string                  `json:"dest_telefone,omitempty"`
+	CustomerCode              *int64                   `json:"customer_code,omitempty"`
+	Cfop                      string                   `json:"cfop"`
+	NaturezaOperacao          string                   `json:"natureza_operacao"`
+	ValorProdutos             float64                  `json:"valor_produtos"`
+	ValorFrete                float64                  `json:"valor_frete"`
+	ValorSeguro               float64                  `json:"valor_seguro"`
+	ValorDesconto             float64                  `json:"valor_desconto"`
+	ValorIPI                  float64                  `json:"valor_ipi"`
+	ValorICMS                 float64                  `json:"valor_icms"`
+	ValorPIS                  float64                  `json:"valor_pis"`
+	ValorCOFINS               float64                  `json:"valor_cofins"`
+	BaseICMSST                float64                  `json:"base_icms_st"`
+	ValorICMSST               float64                  `json:"valor_icms_st"`
+	ValorTotal                float64                  `json:"valor_total"`
+	SalesOrderCode            *int64                   `json:"sales_order_code,omitempty"`
+	SourceType                *string                  `json:"source_type,omitempty"`
+	FinalidadeCompra          *string                  `json:"finalidade_compra,omitempty"`
+	InvoiceTypeID             *int64                   `json:"invoice_type_id,omitempty"`
+	InformacoesComplementares *string                  `json:"informacoes_complementares,omitempty"`
+	ShipmentLoadCode          *int64                   `json:"shipment_load_code,omitempty"`
+	ShipmentCode              *int64                   `json:"shipment_code,omitempty"`
+	FiscalCouponNumber        *string                  `json:"fiscal_coupon_number,omitempty"`
+	FiscalCouponDate          *time.Time               `json:"fiscal_coupon_date,omitempty"`
+	FiscalCouponECFSerial     *string                  `json:"fiscal_coupon_ecf_serial,omitempty"`
+	Status                    string                   `json:"status"`
+	Protocolo                 *string                  `json:"protocolo,omitempty"`
+	XmlPath                   *string                  `json:"xml_path,omitempty"`
+	DanfePath                 *string                  `json:"danfe_path,omitempty"`
+	FocusRef                  *string                  `json:"focus_ref,omitempty"`
+	IsActive                  bool                     `json:"is_active"`
+	CreatedAt                 time.Time                `json:"created_at"`
+	UpdatedAt                 time.Time                `json:"updated_at"`
+	CreatedBy                 uuid.UUID                `json:"created_by"`
+	Itens                     []FiscalExitItemResponse `json:"itens,omitempty"`
 	// Avisos do que aconteceu depois da SEFAZ (estoque, contabilidade).
 	Warnings []string `json:"warnings,omitempty"`
 	// Devolução de compra: finalidade 4, nota de entrada referenciada.
@@ -69,37 +72,65 @@ type FiscalExitResponse struct {
 
 // FiscalExitItemResponse is the API representation of an outbound fiscal document line.
 type FiscalExitItemResponse struct {
-	ID                int64     `json:"id"`
-	FiscalExitID      int64     `json:"fiscal_exit_id"`
-	Sequence          int       `json:"sequence"`
-	ItemCode          *int64    `json:"item_code,omitempty"`
-	Ncm               *string   `json:"ncm,omitempty"`
-	Cfop              string    `json:"cfop"`
-	Quantity          float64   `json:"quantity"`
-	UnitPrice         float64   `json:"unit_price"`
-	TotalPrice        float64   `json:"total_price"`
-	BaseICMS          float64   `json:"base_icms"`
-	AliqICMS          float64   `json:"aliq_icms"`
-	ValorICMS         float64   `json:"valor_icms"`
-	ValorICMSDiferido float64   `json:"valor_icms_diferido"`
-	BaseIPI           float64   `json:"base_ipi"`
-	AliqIPI           float64   `json:"aliq_ipi"`
-	ValorIPI          float64   `json:"valor_ipi"`
-	AliqPIS           float64   `json:"aliq_pis"`
-	ValorPIS          float64   `json:"valor_pis"`
-	AliqCOFINS        float64   `json:"aliq_cofins"`
-	ValorCOFINS       float64   `json:"valor_cofins"`
-	BaseICMSST        float64   `json:"base_icms_st"`
-	AliqICMSST        float64   `json:"aliq_icms_st"`
-	ValorICMSST       float64   `json:"valor_icms_st"`
-	MVA               float64   `json:"mva"`
-	CstICMS           *string   `json:"cst_icms,omitempty"`
-	CstIPI            *string   `json:"cst_ipi,omitempty"`
-	CstPIS            *string   `json:"cst_pis,omitempty"`
-	CstCOFINS         *string   `json:"cst_cofins,omitempty"`
-	OrigemMercadoria  string    `json:"origem_mercadoria"`
-	Description       *string   `json:"description,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                int64   `json:"id"`
+	FiscalExitID      int64   `json:"fiscal_exit_id"`
+	Sequence          int     `json:"sequence"`
+	ItemCode          *int64  `json:"item_code,omitempty"`
+	Ncm               *string `json:"ncm,omitempty"`
+	Cfop              string  `json:"cfop"`
+	Quantity          float64 `json:"quantity"`
+	UnitPrice         float64 `json:"unit_price"`
+	TotalPrice        float64 `json:"total_price"`
+	BaseICMS          float64 `json:"base_icms"`
+	AliqICMS          float64 `json:"aliq_icms"`
+	ValorICMS         float64 `json:"valor_icms"`
+	ValorICMSDiferido float64 `json:"valor_icms_diferido"`
+	BaseIPI           float64 `json:"base_ipi"`
+	AliqIPI           float64 `json:"aliq_ipi"`
+	ValorIPI          float64 `json:"valor_ipi"`
+	AliqPIS           float64 `json:"aliq_pis"`
+	ValorPIS          float64 `json:"valor_pis"`
+	AliqCOFINS        float64 `json:"aliq_cofins"`
+	ValorCOFINS       float64 `json:"valor_cofins"`
+	BaseICMSST        float64 `json:"base_icms_st"`
+	AliqICMSST        float64 `json:"aliq_icms_st"`
+	ValorICMSST       float64 `json:"valor_icms_st"`
+	MVA               float64 `json:"mva"`
+	CstICMS           *string `json:"cst_icms,omitempty"`
+	CstIPI            *string `json:"cst_ipi,omitempty"`
+	CstPIS            *string `json:"cst_pis,omitempty"`
+	CstCOFINS         *string `json:"cst_cofins,omitempty"`
+	OrigemMercadoria  string  `json:"origem_mercadoria"`
+	Description       *string `json:"description,omitempty"`
+	// Reforma tributária: cClassTrib próprio da linha e o grupo transmitido.
+	ClassTribIBSCBS *string                  `json:"cclass_trib,omitempty"`
+	IBSCBSEnviado   *FiscalExitIBSCBSEnviado `json:"ibs_cbs_enviado,omitempty"`
+	// Tributação por cenário: regra aplicada, redução de base e diferimento
+	// (%), crédito do Simples e o grupo do DIFAL (ICMSUFDest).
+	RegraICMSIPIID        *int64    `json:"regra_icms_ipi_id,omitempty"`
+	ICMSReducaoBasePct    float64   `json:"icms_reducao_base_pct"`
+	ICMSDiferimentoPct    float64   `json:"icms_diferimento_pct"`
+	AliqCreditoSimples    float64   `json:"aliq_credito_simples"`
+	ValorCreditoSimples   float64   `json:"valor_credito_simples"`
+	ICMSUFDestBase        float64   `json:"icms_uf_dest_base"`
+	ICMSUFDestAliqInterna float64   `json:"icms_uf_dest_aliq_interna"`
+	ICMSAliqInterestadual float64   `json:"icms_aliq_interestadual"`
+	ICMSUFDestValor       float64   `json:"icms_uf_dest_valor"`
+	FCPUFDestPct          float64   `json:"fcp_uf_dest_pct"`
+	FCPUFDestValor        float64   `json:"fcp_uf_dest_valor"`
+	CreatedAt             time.Time `json:"created_at"`
+}
+
+// FiscalExitIBSCBSEnviado é o grupo IBS/CBS que a linha levou à SEFAZ.
+type FiscalExitIBSCBSEnviado struct {
+	CST            string   `json:"cst"`
+	ClassTrib      string   `json:"cclass_trib"`
+	Origem         string   `json:"origem"`
+	Base           *float64 `json:"base,omitempty"`
+	IBSUF          *float64 `json:"ibs_uf,omitempty"`
+	IBSMun         *float64 `json:"ibs_mun,omitempty"`
+	CBS            *float64 `json:"cbs,omitempty"`
+	AliqEfetivaCBS *float64 `json:"aliquota_efetiva_cbs,omitempty"`
 }
 
 // FiscalEntryResponse is the API representation of an inbound fiscal document (NF-e entrada).
@@ -328,33 +359,40 @@ type FiscalEntryItemResponse struct {
 
 // FiscalConfigResponse is the API representation of the fiscal configuration.
 type FiscalConfigResponse struct {
-	ID                        int64     `json:"id"`
-	CnpjEmpresa               string    `json:"cnpj_empresa"`
-	RazaoSocial               string    `json:"razao_social"`
-	IEEmpresa                 *string   `json:"ie_empresa,omitempty"`
-	RegimeTributario          string    `json:"regime_tributario"`
-	UFEmpresa                 string    `json:"uf_empresa"`
-	IcmsInternoAliquota       float64   `json:"icms_interno_aliquota"`
-	IcmsDiferimentoPercentual float64   `json:"icms_diferimento_percentual"`
-	FocusNfeConfigured        bool      `json:"focus_nfe_configured"`
-	FocusNfeAmbiente          string    `json:"focus_nfe_ambiente"`
-	JurosMes                  float64   `json:"juros_mes"`
-	MultaAtraso               float64   `json:"multa_atraso"`
-	VencimentoIcmsDia         int       `json:"vencimento_icms_dia"`
-	VencimentoIPIDia          int       `json:"vencimento_ipi_dia"`
-	VencimentoPisCofinsDia    int       `json:"vencimento_pis_cofins_dia"`
-	Logradouro                string    `json:"logradouro"`
-	Numero                    string    `json:"numero"`
-	Complemento               *string   `json:"complemento,omitempty"`
-	Bairro                    string    `json:"bairro"`
-	Municipio                 string    `json:"municipio"`
-	CodigoMunicipio           string    `json:"codigo_municipio"`
-	CEP                       string    `json:"cep"`
-	Telefone                  *string   `json:"telefone,omitempty"`
-	BrandColor                *string   `json:"brand_color,omitempty"`
-	CreatedAt                 time.Time `json:"created_at"`
-	UpdatedAt                 time.Time `json:"updated_at"`
-	UpdatedBy                 uuid.UUID `json:"updated_by"`
+	ID                        int64   `json:"id"`
+	CnpjEmpresa               string  `json:"cnpj_empresa"`
+	RazaoSocial               string  `json:"razao_social"`
+	IEEmpresa                 *string `json:"ie_empresa,omitempty"`
+	RegimeTributario          string  `json:"regime_tributario"`
+	UFEmpresa                 string  `json:"uf_empresa"`
+	IcmsInternoAliquota       float64 `json:"icms_interno_aliquota"`
+	IcmsDiferimentoPercentual float64 `json:"icms_diferimento_percentual"`
+	ExigirRegraICMSIPI        bool    `json:"exigir_regra_icms_ipi"`
+	AliquotaCreditoSimples    float64 `json:"aliquota_credito_simples"`
+	CBenefDiferimento         *string `json:"cbenef_diferimento,omitempty"`
+	FocusNfeConfigured        bool    `json:"focus_nfe_configured"`
+	FocusNfeAmbiente          string  `json:"focus_nfe_ambiente"`
+	// FocusProducaoTravado: em produção o token e o ambiente só mudam pela
+	// Venture ERP (comando no servidor); a tela mostra só para leitura.
+	FocusProducaoTravado   bool      `json:"focus_producao_travado"`
+	NomeFantasia           string    `json:"nome_fantasia,omitempty"`
+	JurosMes               float64   `json:"juros_mes"`
+	MultaAtraso            float64   `json:"multa_atraso"`
+	VencimentoIcmsDia      int       `json:"vencimento_icms_dia"`
+	VencimentoIPIDia       int       `json:"vencimento_ipi_dia"`
+	VencimentoPisCofinsDia int       `json:"vencimento_pis_cofins_dia"`
+	Logradouro             string    `json:"logradouro"`
+	Numero                 string    `json:"numero"`
+	Complemento            *string   `json:"complemento,omitempty"`
+	Bairro                 string    `json:"bairro"`
+	Municipio              string    `json:"municipio"`
+	CodigoMunicipio        string    `json:"codigo_municipio"`
+	CEP                    string    `json:"cep"`
+	Telefone               *string   `json:"telefone,omitempty"`
+	BrandColor             *string   `json:"brand_color,omitempty"`
+	CreatedAt              time.Time `json:"created_at"`
+	UpdatedAt              time.Time `json:"updated_at"`
+	UpdatedBy              uuid.UUID `json:"updated_by"`
 }
 
 // FiscalCTeResponse is the API representation of a CT-e.
@@ -477,6 +515,8 @@ type PedidoItemParaFaturar struct {
 	DescontoPct         float64 `json:"desconto_pct"`
 	IPIPct              float64 `json:"ipi_pct"`
 	ValorPendente       float64 `json:"valor_pendente"`
+	// CfopSugerido: o CFOP da linha pela natureza do item (produção ou revenda).
+	CfopSugerido string `json:"cfop_sugerido"`
 }
 
 type NotaDoPedido struct {

@@ -46,15 +46,19 @@ type FaturarPedidoUseCase struct {
 // FaturarPedidoDTO é o pedido de faturamento. Itens vazios fatura tudo o que
 // está pendente; com itens, só as linhas e quantidades informadas.
 type FaturarPedidoDTO struct {
-	SalesOrderCode   int64               `json:"sales_order_code"`
-	DataEmissao      string              `json:"data_emissao"`
-	DataSaida        *string             `json:"data_saida,omitempty"`
-	Serie            string              `json:"serie"`
-	Cfop             string              `json:"cfop"`
-	NaturezaOperacao string              `json:"natureza_operacao"`
-	ValorFrete       *float64            `json:"valor_frete,omitempty"`
-	ValorSeguro      *float64            `json:"valor_seguro,omitempty"`
-	ValorDesconto    *float64            `json:"valor_desconto,omitempty"`
+	SalesOrderCode   int64    `json:"sales_order_code"`
+	DataEmissao      string   `json:"data_emissao"`
+	DataSaida        *string  `json:"data_saida,omitempty"`
+	Serie            string   `json:"serie"`
+	Cfop             string   `json:"cfop"`
+	NaturezaOperacao string   `json:"natureza_operacao"`
+	ValorFrete       *float64 `json:"valor_frete,omitempty"`
+	ValorSeguro      *float64 `json:"valor_seguro,omitempty"`
+	ValorDesconto    *float64 `json:"valor_desconto,omitempty"`
+	// FinalidadeCompra e InvoiceTypeID: vazios = a finalidade do pedido (ou do
+	// cliente) e nenhum tipo de nota.
+	FinalidadeCompra *string             `json:"finalidade_compra,omitempty"`
+	InvoiceTypeID    *int64              `json:"invoice_type_id,omitempty"`
 	Itens            []FaturarPedidoItem `json:"itens,omitempty"`
 }
 
@@ -92,9 +96,9 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 		CommissionPct:      pedido.CommissionPct,
 		PaymentTermCode:    pedido.PaymentTermCode,
 		FreightType:        pedido.FreightType,
-		FreightValue:       pedido.FreightValue,
-		InsuranceValue:     pedido.InsuranceValue,
-		DiscountValue:      pedido.DiscountValue,
+		FreightValue:       pedido.FreightValue.InexactFloat64(),
+		InsuranceValue:     pedido.InsuranceValue.InexactFloat64(),
+		DiscountValue:      pedido.DiscountValue.InexactFloat64(),
 		Itens:              []response.PedidoItemParaFaturar{},
 	}
 
@@ -145,6 +149,11 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 	out.CfopSugerido, out.NaturezaSugerida = "5101", "VENDA DE PRODUCAO DO ESTABELECIMENTO"
 	if cfg != nil && out.CustomerUF != "" && !strings.EqualFold(cfg.UFEmpresa, out.CustomerUF) {
 		out.CfopSugerido = "6101"
+		// Venda a consumidor final não contribuinte de outro estado tem CFOP
+		// próprio (6107): é a operação com DIFAL (EC 87/2015).
+		if tipoDestinatario(dest.IEDestinatario, dest.TipoPessoa) != "contribuinte" {
+			out.CfopSugerido, out.NaturezaSugerida = "6107", "VENDA DE PRODUCAO A NAO CONTRIBUINTE"
+		}
 	}
 
 	pendente := decimal.Zero
@@ -159,15 +168,16 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 			NCM:                 l.cadastro.NCM,
 			UOM:                 unidadeDaLinha(l),
 			Origem:              l.cadastro.Origem,
-			QuantidadePedida:    l.item.RequestedQty,
-			QuantidadeCancelada: l.item.CancelledQty,
-			QuantidadeFaturada:  l.item.AttendedQty,
+			QuantidadePedida:    l.item.RequestedQty.InexactFloat64(),
+			QuantidadeCancelada: l.item.CancelledQty.InexactFloat64(),
+			QuantidadeFaturada:  l.item.AttendedQty.InexactFloat64(),
 			QuantidadeEmNota:    l.emNota.InexactFloat64(),
 			QuantidadePendente:  l.pendente.InexactFloat64(),
 			PrecoUnitario:       l.unitario.InexactFloat64(),
 			DescontoPct:         l.item.DiscountPct,
 			IPIPct:              l.item.IPIPct,
 			ValorPendente:       valor.InexactFloat64(),
+			CfopSugerido:        cfopDaLinha(out.CfopSugerido, l.cadastro.Comprado),
 		})
 	}
 	out.ValorPendente = pendente.InexactFloat64()
@@ -233,7 +243,7 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	if len(dto.Itens) == 0 {
 		for i := range linhas {
 			if linhas[i].pendente.IsPositive() {
-				escolhidas = append(escolhidas, escolha{&linhas[i], linhas[i].pendente, cfop})
+				escolhidas = append(escolhidas, escolha{&linhas[i], linhas[i].pendente, cfopDaLinha(cfop, linhas[i].cadastro.Comprado)})
 			}
 		}
 	} else {
@@ -258,7 +268,7 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 				return nil, errorsuc.NewValidationError(fmt.Sprintf(
 					"item %s (%s): quer faturar %s, mas só faltam %s", codigoDaLinha(l), l.cadastro.Name, q.String(), l.pendente.String()))
 			}
-			c := cfop
+			c := cfopDaLinha(cfop, l.cadastro.Comprado)
 			if it.Cfop != nil && len(soDigitos(*it.Cfop)) == 4 {
 				c = soDigitos(*it.Cfop)
 			}
@@ -305,7 +315,7 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	// Frete, seguro e desconto do pedido entram na proporção do que está sendo
 	// faturado (a última nota leva o que sobrar), salvo valor informado.
 	proporcao := decimal.NewFromInt(1)
-	if totalPedido := decimal.NewFromFloat(pedido.TotalNet); totalPedido.IsPositive() && produtos.LessThan(totalPedido) {
+	if totalPedido := pedido.TotalNet; totalPedido.IsPositive() && produtos.LessThan(totalPedido) {
 		proporcao = produtos.Div(totalPedido)
 	}
 	rateado := func(informado *float64, doPedido float64) float64 {
@@ -328,11 +338,13 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 		Cfop:             cfop,
 		NaturezaOperacao: strings.ToUpper(strings.TrimSpace(dto.NaturezaOperacao)),
 		ValorProdutos:    produtos.InexactFloat64(),
-		ValorFrete:       rateado(dto.ValorFrete, pedido.FreightValue),
-		ValorSeguro:      rateado(dto.ValorSeguro, pedido.InsuranceValue),
-		ValorDesconto:    rateado(dto.ValorDesconto, pedido.DiscountValue),
+		ValorFrete:       rateado(dto.ValorFrete, pedido.FreightValue.InexactFloat64()),
+		ValorSeguro:      rateado(dto.ValorSeguro, pedido.InsuranceValue.InexactFloat64()),
+		ValorDesconto:    rateado(dto.ValorDesconto, pedido.DiscountValue.InexactFloat64()),
 		SalesOrderCode:   &pedido.Code,
 		SourceType:       &origem,
+		FinalidadeCompra: dto.FinalidadeCompra,
+		InvoiceTypeID:    dto.InvoiceTypeID,
 		Itens:            itens,
 	}
 	return uc.Create.Execute(ctx, create)
@@ -370,8 +382,8 @@ func (uc *FaturarPedidoUseCase) carregar(ctx context.Context, code int64) (*sale
 		if !it.IsActive || it.Status == salesentity.SalesOrderItemStatusCancelled {
 			continue
 		}
-		pend := decimal.NewFromFloat(it.RequestedQty).Sub(decimal.NewFromFloat(it.CancelledQty)).
-			Sub(decimal.NewFromFloat(it.AttendedQty)).Sub(emNota[it.Code])
+		pend := it.RequestedQty.Sub(it.CancelledQty).
+			Sub(it.AttendedQty).Sub(emNota[it.Code])
 		if pend.IsNegative() {
 			pend = decimal.Zero
 		}
@@ -390,11 +402,11 @@ func (uc *FaturarPedidoUseCase) carregar(ctx context.Context, code int64) (*sale
 // total líquido da linha é a fonte mais fiel (é o que o pedido somou); na
 // falta dele, aplica o percentual de desconto sobre o preço.
 func precoLiquido(it *salesentity.SalesOrderItem) decimal.Decimal {
-	qtd := decimal.NewFromFloat(it.RequestedQty)
-	if tn := decimal.NewFromFloat(it.TotalNet); tn.IsPositive() && qtd.IsPositive() {
+	qtd := it.RequestedQty
+	if tn := it.TotalNet; tn.IsPositive() && qtd.IsPositive() {
 		return tn.Div(qtd).Round(4)
 	}
-	preco := decimal.NewFromFloat(it.UnitPrice)
+	preco := it.UnitPrice
 	if it.DiscountPct > 0 {
 		preco = preco.Mul(decimal.NewFromInt(1).Sub(decimal.NewFromFloat(it.DiscountPct).Div(cemDec)))
 	}
@@ -464,4 +476,20 @@ func codigoDaLinha(l *linhaPedido) string {
 		return c
 	}
 	return strconv.FormatInt(l.item.ItemCode, 10)
+}
+
+// cfopDaLinha ajusta o CFOP de venda da nota à natureza do item (Convênio s/nº
+// de 1970, Anexo II): x101/x107/x401 é venda de produção do estabelecimento; o
+// item comprado de terceiros e revendido sem industrialização é x102/x108/x403.
+// Só nesse sentido: um item fabricado vendido com o CFOP de revenda escolhido
+// fica como veio (o cadastro pode não dizer tudo). Os demais CFOPs valem como
+// vieram.
+func cfopDaLinha(cfop string, comprado bool) string {
+	if !comprado || len(cfop) != 4 {
+		return cfop
+	}
+	if r, ok := map[string]string{"101": "102", "107": "108", "401": "403"}[cfop[1:]]; ok {
+		return cfop[:1] + r
+	}
+	return cfop
 }

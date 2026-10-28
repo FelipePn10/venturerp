@@ -15,6 +15,28 @@ import (
 type PurchaseRequisitionUseCase struct {
 	repo repository.PurchaseRequisitionRepository
 	auth ports.AuthService
+	// aprovacoes abre a aprovação do aprovador do centro de custo para os
+	// itens de centro que aprova requisições (opcional).
+	aprovacoes AprovacoesDoCentro
+}
+
+// AprovacoesDoCentro: a aprovação da requisição pelo aprovador do centro de custo.
+type AprovacoesDoCentro interface {
+	AbrirAprovacoes(ctx context.Context, requisitionCode int64) error
+	RequisicoesBloqueadas(ctx context.Context, codes []int64) (map[int64]string, error)
+}
+
+// ComAprovacoesDoCentro liga a aprovação pelo centro de custo.
+func (uc *PurchaseRequisitionUseCase) ComAprovacoesDoCentro(a AprovacoesDoCentro) *PurchaseRequisitionUseCase {
+	uc.aprovacoes = a
+	return uc
+}
+
+func (uc *PurchaseRequisitionUseCase) abrirAprovacoes(ctx context.Context, code int64) error {
+	if uc.aprovacoes == nil {
+		return nil
+	}
+	return uc.aprovacoes.AbrirAprovacoes(ctx, code)
 }
 
 func NewPurchaseRequisitionUseCase(repo repository.PurchaseRequisitionRepository, auth ...ports.AuthService) *PurchaseRequisitionUseCase {
@@ -72,6 +94,9 @@ func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.Cr
 		}
 		created.Items = append(created.Items, createdItem)
 	}
+	if err := uc.abrirAprovacoes(ctx, created.Code); err != nil {
+		return nil, err
+	}
 	return toRequisitionResponse(created), nil
 }
 
@@ -119,6 +144,9 @@ func (uc *PurchaseRequisitionUseCase) AddItem(ctx context.Context, dto request.A
 	item := buildItem(dto.RequisitionCode, int32(len(existing)+1), dto.RequisitionItemInput)
 	created, err := uc.repo.AddItem(ctx, item)
 	if err != nil {
+		return nil, err
+	}
+	if err := uc.abrirAprovacoes(ctx, dto.RequisitionCode); err != nil {
 		return nil, err
 	}
 	return toRequisitionItemResponse(created), nil

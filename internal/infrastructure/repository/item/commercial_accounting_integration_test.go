@@ -95,3 +95,50 @@ func TestItemCommercialAccountingRepositoryAndHTTPPartialUpdate(t *testing.T) {
 		t.Fatalf("rejected update changed item: %+v", afterRejected.Commercial)
 	}
 }
+
+// Item em M: lote, múltiplo e segurança fracionados chegam como número JSON do
+// desktop, gravam com 6 casas e voltam exatos (antes eram inteiros truncados).
+func TestItemPlanejamentoFracionadoIdaEVolta(t *testing.T) {
+	const enterpriseID int64 = 1
+	ctx := context.WithValue(context.Background(), contextkey.UserKey, &appsecurity.AuthUser{EnterpriseID: enterpriseID})
+	pool := testutil.Pool(t)
+	tx, err := pool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	code := testutil.UniqueCode()
+	_, err = tx.Exec(ctx, `INSERT INTO items (enterprise_id, business_code, warehouse_code, code, name, nature, engineering_weight, created_by) VALUES ($1,$2,1,$3,'Barra fracionada',2,'{"gross":1,"net":1,"unit":"KG"}'::jsonb,'00000000-0000-0000-0000-000000000001')`, enterpriseID, fmt.Sprintf("FRA-%d", code), code)
+	if err != nil {
+		t.Fatalf("create item fixture: %v", err)
+	}
+	repo := itemrepo.NewRepositoryItemSQLC(sqlc.New(tx))
+	uc := item_uc.NewUpdateItemUseCase(repo, itemUpdateAuth{})
+	h := handler.NewCreateItemHandler(nil, uc, nil, nil, nil)
+	router := chi.NewRouter()
+	router.Put("/api/items/{code}", h.UpdateItem)
+	body := `{"planning":{"minimum_lot":12.7,"multiple_lot":6.35,"safety_stock":2.5},"warehouse":{"minimum_stock":0.125}}`
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/items/FRA-%d", code), strings.NewReader(body)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	got, err := repo.FindItemByCode(ctx, valueobject.ItemCode(code))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for nome, par := range map[string][2]string{
+		"lote mínimo":          {got.Planning.MinimumLot.String(), "12.7"},
+		"lote múltiplo":        {got.Planning.MultipleLot.String(), "6.35"},
+		"estoque de segurança": {got.Planning.SafetyStock.String(), "2.5"},
+		"estoque mínimo":       {got.Warehouse.MinimumStock.String(), "0.125"},
+	} {
+		if par[0] != par[1] {
+			t.Fatalf("%s: esperado %s, veio %s", nome, par[1], par[0])
+		}
+	}
+	if !strings.Contains(rec.Body.String(), `"multiple_lot":6.35`) {
+		t.Fatalf("a resposta deveria trazer o múltiplo como número: %s", rec.Body.String())
+	}
+}

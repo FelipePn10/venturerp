@@ -3,8 +3,12 @@ package entry_operation_uc
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"strconv"
 	"strings"
+	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -15,6 +19,42 @@ import (
 
 type EntryOperationUseCase struct {
 	repo repository.EntryOperationRepository
+	// cfops confere a natureza contra a tabela oficial de CFOP (opcional).
+	cfops CatalogoCFOP
+}
+
+// CatalogoCFOP: o cadastro de CFOP com a tabela oficial.
+type CatalogoCFOP interface {
+	GetCFOPByCode(ctx context.Context, code int32) (*fiscalentity.CFOP, error)
+}
+
+// ComCFOPs liga a conferência da natureza com a tabela oficial de CFOP.
+func (uc *EntryOperationUseCase) ComCFOPs(c CatalogoCFOP) *EntryOperationUseCase {
+	uc.cfops = c
+	return uc
+}
+
+// conferirOperacao: natureza é CFOP de entrada da tabela oficial, vigente, e os
+// créditos marcados cabem nela.
+func (uc *EntryOperationUseCase) conferirOperacao(ctx context.Context, o *entity.EntryOperationType) error {
+	if err := o.ConferirCreditos(); err != nil {
+		return err
+	}
+	if uc.cfops == nil {
+		return nil
+	}
+	n, _ := strconv.Atoi(o.NatureOperation)
+	cf, err := uc.cfops.GetCFOPByCode(ctx, int32(n))
+	if err != nil && !errorsuc.EhNaoEncontrado(err) {
+		return err
+	}
+	if cf == nil {
+		return errorsuc.NewValidationError(fmt.Sprintf("a natureza %s não existe na tabela de CFOP (VFIS0300)", o.NatureOperation))
+	}
+	if !cf.IsActive || !cf.VigenteEm(time.Now()) {
+		return errorsuc.NewValidationError(fmt.Sprintf("o CFOP %s está inativo ou fora da vigência (VFIS0300)", o.NatureOperation))
+	}
+	return nil
 }
 
 func NewEntryOperationUseCase(repo repository.EntryOperationRepository) *EntryOperationUseCase {
@@ -94,6 +134,9 @@ func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto r
 	o.CreditaICMS = ptrutil.BoolOr(dto.CreditaICMS, true)
 	o.CreditaIPI = ptrutil.BoolOr(dto.CreditaIPI, true)
 	o.CreditaPISCOFINS = ptrutil.BoolOr(dto.CreditaPISCOFINS, true)
+	if err := uc.conferirOperacao(ctx, o); err != nil {
+		return nil, err
+	}
 	created, err := uc.repo.CreateEntryOperation(ctx, o)
 	if err != nil {
 		return nil, err
@@ -108,7 +151,11 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 	}
 	o.Description = dto.Description
 	if dto.NatureOperation != "" {
-		o.NatureOperation = dto.NatureOperation
+		n, err := entity.NormalizarNatureza(dto.NatureOperation)
+		if err != nil {
+			return nil, err
+		}
+		o.NatureOperation = n
 	}
 	o.InvoiceTypeCode = dto.InvoiceTypeCode
 	o.ClassificationType = dto.ClassificationType
@@ -121,6 +168,9 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 	o.CreditaICMS = ptrutil.BoolOr(dto.CreditaICMS, o.CreditaICMS)
 	o.CreditaIPI = ptrutil.BoolOr(dto.CreditaIPI, o.CreditaIPI)
 	o.CreditaPISCOFINS = ptrutil.BoolOr(dto.CreditaPISCOFINS, o.CreditaPISCOFINS)
+	if err := uc.conferirOperacao(ctx, o); err != nil {
+		return nil, err
+	}
 	updated, err := uc.repo.UpdateEntryOperation(ctx, o)
 	if err != nil {
 		return nil, err

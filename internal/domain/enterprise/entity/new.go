@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrInvalidCode      = domainerr.NewValidation("código inválido")
+	ErrInvalidName      = domainerr.NewValidation("informe o nome ou a razão social da empresa")
 	ErrInvalidCreatedBy = domainerr.NewValidation("não foi possível identificar o usuário que está criando o registro")
 )
 

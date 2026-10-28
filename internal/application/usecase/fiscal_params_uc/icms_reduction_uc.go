@@ -15,32 +15,18 @@ type ICMSReductionSubstitutionUseCase struct {
 	Repo repository.FiscalParamsRepository
 }
 
-func (uc *ICMSReductionSubstitutionUseCase) Create(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
-	if r.UF == "" {
-		return nil, errorsuc.NewValidationError("informe a UF")
-	}
-	if r.OperationType == "" {
-		r.OperationType = entity.ICMSOpAmbas
-	}
-	padraoDosAlvos(r)
-	r.IsActive = true
-	created, err := uc.Repo.CreateICMSReductionSubstitution(ctx, r)
-	if err != nil {
-		return nil, err
-	}
-	return toICMSReductionSubstitutionResponse(created), nil
+// msgCadastroUnificado: o cadastro de redução/substituição/diferimento
+// (VFIS0330) foi unificado no de parâmetros de ICMS/IPI (VFIS0320), o único que
+// entra no cálculo da nota (migração 000433 copiou as regras). Gravar aqui
+// criaria uma regra que nenhuma nota usaria.
+const msgCadastroUnificado = "o cadastro de redução, substituição e diferimento de ICMS foi unificado em VFIS0320 — Parâmetros ICMS/IPI; inclua ou altere a regra lá (as regras daqui já foram copiadas)"
+
+func (uc *ICMSReductionSubstitutionUseCase) Create(context.Context, *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
+	return nil, errorsuc.NewValidationError(msgCadastroUnificado)
 }
 
-func (uc *ICMSReductionSubstitutionUseCase) Update(ctx context.Context, r *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
-	if r.ID == 0 {
-		return nil, errorsuc.NewValidationError("informe o identificador")
-	}
-	padraoDosAlvos(r)
-	updated, err := uc.Repo.UpdateICMSReductionSubstitution(ctx, r)
-	if err != nil {
-		return nil, err
-	}
-	return toICMSReductionSubstitutionResponse(updated), nil
+func (uc *ICMSReductionSubstitutionUseCase) Update(context.Context, *entity.ICMSReductionSubstitution) (*response.ICMSReductionSubstitutionResponse, error) {
+	return nil, errorsuc.NewValidationError(msgCadastroUnificado)
 }
 
 func (uc *ICMSReductionSubstitutionUseCase) GetByID(ctx context.Context, id int64) (*response.ICMSReductionSubstitutionResponse, error) {
@@ -222,18 +208,4 @@ func (uc *SpecialAdjustmentNoteUseCase) ListItems(ctx context.Context, noteID in
 		return nil, err
 	}
 	return toSpecialAdjustmentNoteItemResponses(list), nil
-}
-
-// padraoDosAlvos: alvo da redução/diferimento não informado é a base, como o
-// padrão da coluna. Sem isto o texto vazio ia para a coluna enum e o Postgres
-// recusava a regra inteira — nenhuma regra de ICMS era gravada pela tela.
-func padraoDosAlvos(r *entity.ICMSReductionSubstitution) {
-	for _, alvo := range []*entity.ICMSReductionTarget{
-		&r.ICMSRedTargetContrib, &r.ICMSRedTargetNonContrib, &r.ICMSDeferralTarget,
-		&r.IPIRedTargetContrib, &r.IPIRedTargetNonContrib,
-	} {
-		if *alvo == "" {
-			*alvo = entity.ICMSRedBase
-		}
-	}
 }

@@ -182,6 +182,9 @@ func (uc *UpdatePlanoContasUseCase) Execute(ctx context.Context, id int64, dto r
 	if dto.IsActive != nil {
 		novo.IsActive = *dto.IsActive
 	}
+	if dto.ExigeCentroCusto != nil {
+		novo.ExigeCentroCusto = *dto.ExigeCentroCusto
+	}
 	if novo.Descricao == "" {
 		return nil, errorsuc.NewValidationError("a descrição é obrigatória")
 	}

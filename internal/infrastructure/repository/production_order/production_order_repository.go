@@ -10,6 +10,7 @@ import (
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	serierepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/serie"
 	stockrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
@@ -53,9 +54,9 @@ func (r *ProductionOrderRepositoryPGX) Create(ctx context.Context, o *entity.Pro
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
 		o.OrderNumber, o.PlannedOrderID, o.ItemCode, o.Mask,
-		pgutil.ToPgNumericFromFloat64(o.PlannedQty),
-		pgutil.ToPgNumericFromFloat64(o.ProducedQty),
-		pgutil.ToPgNumericFromFloat64(o.ScrappedQty),
+		pgutil.ToPgNumericFromDecimal(o.PlannedQty),
+		pgutil.ToPgNumericFromDecimal(o.ProducedQty),
+		pgutil.ToPgNumericFromDecimal(o.ScrappedQty),
 		string(o.Status),
 		pgDatePtr(o.StartDate), pgDatePtr(o.EndDate),
 		o.MachineID, o.CostCenterID, o.EmployeeID,
@@ -89,9 +90,9 @@ func (r *ProductionOrderRepositoryPGX) Update(ctx context.Context, o *entity.Pro
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
 		o.ID, o.PlannedOrderID, o.ItemCode, o.Mask,
-		pgutil.ToPgNumericFromFloat64(o.PlannedQty),
-		pgutil.ToPgNumericFromFloat64(o.ProducedQty),
-		pgutil.ToPgNumericFromFloat64(o.ScrappedQty),
+		pgutil.ToPgNumericFromDecimal(o.PlannedQty),
+		pgutil.ToPgNumericFromDecimal(o.ProducedQty),
+		pgutil.ToPgNumericFromDecimal(o.ScrappedQty),
 		string(o.Status),
 		pgDatePtr(o.StartDate), pgDatePtr(o.EndDate),
 		o.MachineID, o.CostCenterID, o.EmployeeID,
@@ -162,7 +163,9 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 		}
 
 		var qualityPending bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM quality_records qr JOIN production_orders ord ON ord.id=qr.production_order_id WHERE ord.id=$1 AND ord.enterprise_id=$2 AND qr.result IN('PENDENTE','REJEITADO'))`, d.ProductionOrderID, enterpriseID).Scan(&qualityPending); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM quality_inspection_lots l LEFT JOIN quality_lot_decisions d ON d.lot_id=l.id
+			 WHERE l.production_order_id=$1 AND l.enterprise_id=$2 AND l.origem IN('PROCESSO','FINAL')
+			   AND (l.status='ABERTO' OR (l.status='DECIDIDO' AND d.decisao='REJEITADO')))`, d.ProductionOrderID, enterpriseID).Scan(&qualityPending); err != nil {
 			return nil, err
 		}
 		if qualityPending {
@@ -198,6 +201,19 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
 			return nil, err
 		}
+	}
+	// Item com número de série: as séries nascem em estoque nesta transação.
+	if d.ItemCode > 0 && d.Quantity.IsPositive() {
+		var por *uuid.UUID
+		if d.CreatedBy != uuid.Nil {
+			por = &d.CreatedBy
+		}
+		gravadas, err := serierepository.EntradaPelaProducaoTx(ctx, tx, enterpriseID, d.ProductionOrderID, d.ItemCode, d.Mask,
+			d.WarehouseID, d.Lot, d.Quantity, d.NumerosSerie, por, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		d.SeriesGravadas = gravadas
 	}
 	status := "IN_PROGRESS"
 	if d.IsFinal {
@@ -536,8 +552,8 @@ func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *en
 		           created_at, updated_at, created_by`,
 		a.ProductionOrderID, a.MachineID, a.EmployeeID, a.AppointmentDate,
 		a.StartTime, a.EndTime,
-		pgutil.ToPgNumericFromFloat64(a.ProducedQty),
-		pgutil.ToPgNumericFromFloat64(a.ScrappedQty),
+		pgutil.ToPgNumericFromDecimal(a.ProducedQty),
+		pgutil.ToPgNumericFromDecimal(a.ScrappedQty),
 		a.ScrapReason, a.Notes, pgutil.ToPgUUID(a.CreatedBy),
 	)
 
@@ -545,7 +561,7 @@ func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *en
 	var machineID, employeeID *int64
 	var id, prodOrderID int64
 	var appointmentDate time.Time
-	var producedQty, scrappedQty float64
+	var producedQty, scrappedQty decimal.Decimal
 	var createdAt, updatedAt time.Time
 	var createdBy uuid.UUID
 
@@ -586,7 +602,7 @@ func (r *ProductionOrderRepositoryPGX) AddConsumption(ctx context.Context, c *en
 		 RETURNING id, production_order_id, appointment_id, item_code, consumed_qty,
 		           warehouse_id, lot, consumption_date, notes, created_at, created_by`,
 		c.ProductionOrderID, c.AppointmentID, c.ItemCode,
-		pgutil.ToPgNumericFromFloat64(c.ConsumedQty),
+		pgutil.ToPgNumericFromDecimal(c.ConsumedQty),
 		c.WarehouseID, c.Lot, c.ConsumptionDate, c.Notes,
 		pgutil.ToPgUUID(c.CreatedBy),
 	)
@@ -594,7 +610,7 @@ func (r *ProductionOrderRepositoryPGX) AddConsumption(ctx context.Context, c *en
 	var appointmentID, warehouseID *int64
 	var lot, notes *string
 	var id, prodOrderID, itemCode int64
-	var consumedQty float64
+	var consumedQty decimal.Decimal
 	var consumptionDate, createdAt time.Time
 	var createdBy uuid.UUID
 
@@ -696,7 +712,7 @@ func (r *ProductionOrderRepositoryPGX) GetAppointments(ctx context.Context, prod
 		var machineID, employeeID *int64
 		var id, prodOrderID int64
 		var appointmentDate time.Time
-		var producedQty, scrappedQty float64
+		var producedQty, scrappedQty decimal.Decimal
 		var createdAt, updatedAt time.Time
 		var createdBy uuid.UUID
 
@@ -748,7 +764,7 @@ func (r *ProductionOrderRepositoryPGX) GetConsumptions(ctx context.Context, prod
 		var appointmentID, warehouseID *int64
 		var lot, notes *string
 		var id, prodOrderID, itemCode int64
-		var consumedQty float64
+		var consumedQty decimal.Decimal
 		var consumptionDate, createdAt time.Time
 		var createdBy uuid.UUID
 
@@ -781,8 +797,8 @@ func (r *ProductionOrderRepositoryPGX) GetConsumptions(ctx context.Context, prod
 // the most recently updated balance for the item). Labor is the sum of appointed
 // durations × the cost/hour of the work center the appointment's machine belongs
 // to (a work center is a machine_type, which is what work_center_costs keys on).
-func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (float64, float64, error) {
-	var materialReal float64
+func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (decimal.Decimal, decimal.Decimal, error) {
+	var materialReal decimal.Decimal
 	err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(c.consumed_qty * COALESCE(sb.avg_cost, 0)), 0)
 		 FROM public.production_consumptions c
@@ -794,10 +810,10 @@ func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Conte
 		 ) sb ON TRUE
 		 WHERE c.production_order_id = $1`, productionOrderID).Scan(&materialReal)
 	if err != nil {
-		return 0, 0, fmt.Errorf("computing actual material cost: %w", err)
+		return decimal.Zero, decimal.Zero, fmt.Errorf("computing actual material cost: %w", err)
 	}
 
-	var laborReal float64
+	var laborReal decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(
 		     EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * wcc.cost_per_hour
@@ -809,7 +825,7 @@ func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Conte
 		 WHERE a.production_order_id = $1
 		   AND a.start_time IS NOT NULL AND a.end_time IS NOT NULL`, productionOrderID).Scan(&laborReal)
 	if err != nil {
-		return 0, 0, fmt.Errorf("computing actual labor cost: %w", err)
+		return decimal.Zero, decimal.Zero, fmt.Errorf("computing actual labor cost: %w", err)
 	}
 
 	return materialReal, laborReal, nil
@@ -844,14 +860,14 @@ func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity
 			 settled_at         = NOW(),
 			 settled_by         = EXCLUDED.settled_by
 		 RETURNING id, settled_at`,
-		c.ProductionOrderID, pgutil.ToPgNumericFromFloat64(c.ProducedQty),
-		pgutil.ToPgNumericFromFloat64(c.MaterialCostReal), pgutil.ToPgNumericFromFloat64(c.LaborCostReal),
-		pgutil.ToPgNumericFromFloat64(c.OverheadCostReal), pgutil.ToPgNumericFromFloat64(c.TotalCostReal),
-		pgutil.ToPgNumericFromFloat64(c.UnitCostReal),
-		pgutil.ToPgNumericFromFloat64(c.MaterialCostStd), pgutil.ToPgNumericFromFloat64(c.LaborCostStd),
-		pgutil.ToPgNumericFromFloat64(c.OverheadCostStd), pgutil.ToPgNumericFromFloat64(c.TotalCostStd),
-		pgutil.ToPgNumericFromFloat64(c.MaterialVariance), pgutil.ToPgNumericFromFloat64(c.LaborVariance),
-		pgutil.ToPgNumericFromFloat64(c.OverheadVariance), pgutil.ToPgNumericFromFloat64(c.TotalVariance),
+		c.ProductionOrderID, pgutil.ToPgNumericFromDecimal(c.ProducedQty),
+		pgutil.ToPgNumericFromDecimal(c.MaterialCostReal), pgutil.ToPgNumericFromDecimal(c.LaborCostReal),
+		pgutil.ToPgNumericFromDecimal(c.OverheadCostReal), pgutil.ToPgNumericFromDecimal(c.TotalCostReal),
+		pgutil.ToPgNumericFromDecimal(c.UnitCostReal),
+		pgutil.ToPgNumericFromDecimal(c.MaterialCostStd), pgutil.ToPgNumericFromDecimal(c.LaborCostStd),
+		pgutil.ToPgNumericFromDecimal(c.OverheadCostStd), pgutil.ToPgNumericFromDecimal(c.TotalCostStd),
+		pgutil.ToPgNumericFromDecimal(c.MaterialVariance), pgutil.ToPgNumericFromDecimal(c.LaborVariance),
+		pgutil.ToPgNumericFromDecimal(c.OverheadVariance), pgutil.ToPgNumericFromDecimal(c.TotalVariance),
 		c.Currency, pgutil.ToPgUUID(c.SettledBy),
 	)
 	if err := row.Scan(&c.ID, &c.SettledAt); err != nil {
@@ -913,7 +929,7 @@ func scanProductionOrderFromRows(row pgx.Row) (*entity.ProductionOrder, error) {
 	var plannedOrderID, machineID, costCenterID, employeeID, warehouseID *int64
 	var mask, status string
 	var priority, notes *string
-	var plannedQty, producedQty, scrappedQty float64
+	var plannedQty, producedQty, scrappedQty decimal.Decimal
 	var startDate, endDate *time.Time
 	var isActive bool
 	var createdAt, updatedAt time.Time

@@ -49,6 +49,30 @@ func (r *repositoryUserSQLC) ResolveAuthorization(ctx context.Context, userID st
 	return authorization, queryErr
 }
 
+// EmpresasDoUsuario: as empresas ativas a que o usuário tem acesso.
+func (r *repositoryUserSQLC) EmpresasDoUsuario(ctx context.Context, userID string) ([]repository.EmpresaDoUsuario, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT e.code::bigint, e.name FROM user_enterprises ue
+		JOIN enterprise e ON e.id=ue.enterprise_id JOIN users u ON u.id=ue.user_id
+		WHERE ue.user_id=$1 AND u.is_active ORDER BY e.name, e.code`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []repository.EmpresaDoUsuario
+	for rows.Next() {
+		var e repository.EmpresaDoUsuario
+		if err := rows.Scan(&e.Code, &e.Name); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
 func (r *repositoryUserSQLC) CurrentAuthorization(ctx context.Context, userID string, enterpriseID int64) (repository.Authorization, error) {
 	id, err := uuid.Parse(userID)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
+	"slices"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -12,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entrada"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -43,27 +45,40 @@ type EntradaServico struct {
 // contexto fiscal da empresa: UF (para o CFOP de entrada e a alíquota
 // interestadual). Sem configuração fiscal a nota segue, sem essas conferências.
 func (s *EntradaServico) ufEmpresa(ctx context.Context) (string, error) {
+	cfg, err := s.configFiscal(ctx)
+	if err != nil || cfg == nil {
+		return "", err
+	}
+	return strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa)), nil
+}
+
+// configFiscal: a configuração fiscal da empresa; nil quando não há.
+func (s *EntradaServico) configFiscal(ctx context.Context) (*entity.FiscalConfig, error) {
 	if s.Fiscal == nil {
-		return "", nil
+		return nil, nil
 	}
 	cfg, err := s.Fiscal.GetFiscalConfig(ctx)
 	var semConfig *errorsuc.NotFoundError
 	if err != nil {
 		if errors.As(err, &semConfig) {
-			return "", nil
+			return nil, nil
 		}
-		return "", err
+		return nil, err
 	}
-	return strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa)), nil
+	return cfg, nil
 }
 
 // Preparar aplica operação, pedido, almoxarifado e CFOP de entrada aos itens.
 // `manual` diz quais itens tiveram operação/almoxarifado/linha escolhidos à
 // mão (não são sobrescritos pelos padrões).
 func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) error {
-	uf, err := s.ufEmpresa(ctx)
+	cfg, err := s.configFiscal(ctx)
 	if err != nil {
 		return err
+	}
+	uf, regime := "", engine.RegimeReal
+	if cfg != nil {
+		uf, regime = strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa)), engine.RegimeDoCadastro(cfg.RegimeTributario)
 	}
 
 	// Linhas de pedido de compra candidatas: pelo pedido informado na nota,
@@ -154,7 +169,7 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 	}
 
 	for _, it := range e.Itens {
-		natureza := ""
+		natureza, finalidade := "", ""
 		if code := operacaoDoItem(e, it, linhaPorCodigo); code != nil {
 			op, ok := ops[*code]
 			if !ok {
@@ -162,6 +177,10 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 			}
 			if !op.IsActive {
 				return errorsuc.NewValidationError(fmt.Sprintf("item %d: o tipo de operação de entrada %d (%s) está inativo", it.Sequence, op.Code, op.Description))
+			}
+			if ufF := strings.ToUpper(strings.TrimSpace(derefStr(e.UFEmitente))); op.StateGroupCode != nil && ufF != "" && !slices.Contains(op.GrupoUFs, ufF) {
+				return errorsuc.NewValidationError(fmt.Sprintf("item %d: o tipo de operação de entrada %d (%s) vale só para fornecedor das UFs do grupo de estados %d (%s); o fornecedor é de %s",
+					it.Sequence, op.Code, op.Description, *op.StateGroupCode, strings.Join(op.GrupoUFs, ", "), ufF))
 			}
 			c := op.Code
 			it.EntryOperationCode = &c
@@ -174,18 +193,23 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 			it.GeraCreditoCOFINS = op.CreditaPISCOFINS && it.ValorCOFINS > 0
 		} else {
 			// Sem operação: entra no estoque, gera financeiro e toma os
-			// créditos destacados na nota.
+			// créditos destacados que a finalidade da compra admite.
 			it.MovimentaEstoque, it.GeraFinanceiro = true, true
 			it.GeraCreditoICMS = it.ValorICMS > 0
 			it.GeraCreditoIPI = it.ValorIPI > 0
 			it.GeraCreditoPIS = it.ValorPIS > 0
 			it.GeraCreditoCOFINS = it.ValorCOFINS > 0
+			finalidade = finalidadeDaCompra(it, linhaPorCodigo, cadastro)
+			entrada.CreditosDaFinalidade(finalidade, it)
 		}
+		// O regime restringe: Simples não toma crédito; Presumido não toma
+		// PIS/COFINS. A conferência explica o que ficou sem crédito.
+		entrada.CreditosDoRegime(regime, it)
 		ufForn := ""
 		if e.UFEmitente != nil {
 			ufForn = *e.UFEmitente
 		}
-		if cfop := entrada.CFOPEntrada(it.Cfop, natureza, ufForn, uf); cfop != "" {
+		if cfop := entrada.CFOPEntradaComFinalidade(it.Cfop, natureza, finalidade, ufForn, uf); cfop != "" {
 			it.CfopEntrada = &cfop
 		}
 		if it.PurchaseOrderItemCode != nil {
@@ -209,6 +233,14 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 					it.FatorConversao, it.QuantidadeEstoque = &f, &q
 				}
 			}
+		}
+		// Sem conta da linha nem do pedido, vale a conta padrão do centro de custo.
+		if it.PlanoContasID == nil && it.CentroCustoID != nil {
+			p, err := s.Docs.ContaPadraoDoCentro(ctx, *it.CentroCustoID)
+			if err != nil {
+				return err
+			}
+			it.PlanoContasID = p
 		}
 		if it.WarehouseID == nil && it.ItemCode != nil {
 			if c, ok := cadastro[*it.ItemCode]; ok && c.DefaultWarehouseID != nil {
@@ -372,6 +404,16 @@ func (s *EntradaServico) Conferir(ctx context.Context, e *entity.FiscalEntry) ([
 		return nil, nil, err
 	}
 	pend = append(pend, pendUnidade...)
+	pendTrib, err := s.pendenciasTributarias(ctx, e)
+	if err != nil {
+		return nil, nil, err
+	}
+	pend = append(pend, pendTrib...)
+	pendCentro, err := s.pendenciasDeCentro(ctx, e)
+	if err != nil {
+		return nil, nil, err
+	}
+	pend = append(pend, pendCentro...)
 	divs, err := s.Divergencias(ctx, e)
 	if err != nil {
 		return nil, nil, err
@@ -564,4 +606,132 @@ func (s *EntradaServico) Responder(ctx context.Context, e *entity.FiscalEntry) (
 		}
 	}
 	return r, nil
+}
+
+// pendenciasTributarias explica a tributação da entrada que depende da
+// empresa: os créditos que o regime não deixa aproveitar e o DIFAL que a
+// empresa recolhe na compra interestadual para uso, consumo ou ativo.
+func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.FiscalEntry) ([]entrada.Pendencia, error) {
+	cfg, err := s.configFiscal(ctx)
+	if err != nil || cfg == nil {
+		return nil, err
+	}
+	var out []entrada.Pendencia
+	regime := engine.RegimeDoCadastro(cfg.RegimeTributario)
+	destacado := false
+	for _, it := range e.Itens {
+		if it.ValorICMS > 0 || it.ValorIPI > 0 || it.ValorPIS > 0 || it.ValorCOFINS > 0 {
+			destacado = true
+		}
+	}
+	switch {
+	case regime == engine.RegimeSimples && destacado:
+		out = append(out, entrada.Pendencia{Nivel: entrada.NivelAtencao, Campo: "itens.creditos",
+			Mensagem: "empresa do Simples Nacional: o ICMS, o IPI, o PIS e a COFINS destacados pelo fornecedor não geram crédito e entram no custo"})
+	case regime == engine.RegimePresumido:
+		for _, it := range e.Itens {
+			if it.ValorPIS > 0 || it.ValorCOFINS > 0 {
+				out = append(out, entrada.Pendencia{Nivel: entrada.NivelAtencao, Campo: "itens.creditos",
+					Mensagem: "empresa do Lucro Presumido: PIS e COFINS são cumulativos e não geram crédito na entrada"})
+				break
+			}
+		}
+	}
+
+	// DIFAL de uso, consumo e ativo (base dupla), pela alíquota interna da UF
+	// da empresa na tabela de ICMS (ou a da configuração).
+	ufEmpresa := strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa))
+	aliqInterna := decimal.NewFromFloat(cfg.IcmsInternoAliquota)
+	internas, err := s.Fiscal.ListICMSInternal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := internas[ufEmpresa]; ok && v.ICMS > 0 {
+		aliqInterna = decimal.NewFromFloat(v.ICMS)
+	}
+	var inter map[string]float64
+	for _, it := range e.Itens {
+		if it.CfopEntrada == nil || !entrada.CFOPDeUsoConsumoInterestadual(*it.CfopEntrada) {
+			continue
+		}
+		icmsOrigem := decimal.NewFromFloat(it.ValorICMS)
+		if !icmsOrigem.IsPositive() && e.UFEmitente != nil {
+			// Fornecedor sem ICMS destacado (Simples): vale a alíquota
+			// interestadual entre as UFs.
+			if inter == nil {
+				if inter, err = s.Fiscal.ListICMSInterstate(ctx); err != nil {
+					return nil, err
+				}
+			}
+			if a, ok := inter[strings.ToUpper(strings.TrimSpace(*e.UFEmitente))+ufEmpresa]; ok && a > 0 {
+				icmsOrigem = it.ValorContabil.Mul(decimal.NewFromFloat(a)).Round(2)
+			}
+		}
+		base, difal := entrada.DifalUsoConsumo(it.ValorContabil, icmsOrigem, aliqInterna)
+		if !difal.IsPositive() {
+			continue
+		}
+		out = append(out, entrada.Pendencia{Nivel: entrada.NivelAtencao, Campo: fmt.Sprintf("itens[%d].difal", it.Sequence),
+			Mensagem: fmt.Sprintf("linha %d (CFOP %s, uso/consumo/ativo de outra UF): DIFAL a recolher para %s de %s (base dupla %s, interna %s%%, ICMS da origem %s)",
+				it.Sequence, *it.CfopEntrada, ufEmpresa, entrada.Moeda(difal), entrada.Moeda(base), aliqInterna.Mul(cemDec).Round(2).String(), entrada.Moeda(icmsOrigem))})
+	}
+	return out, nil
+}
+
+// finalidadeDaCompra: a da linha do pedido de compra; sem pedido, o tipo de uso
+// do cadastro do item; sem item, nenhuma (vale a troca de dígito do CFOP).
+func finalidadeDaCompra(it *entity.FiscalEntryItem, linhas map[int64]repository.PurchaseOrderLine, cadastro map[int64]repository.ItemCandidate) string {
+	if it.PurchaseOrderItemCode != nil {
+		if l, ok := linhas[*it.PurchaseOrderItemCode]; ok && l.UtilizationType != nil {
+			switch f := strings.ToUpper(strings.TrimSpace(*l.UtilizationType)); f {
+			case entrada.FinalidadeIndustrializacao, entrada.FinalidadeConsumo, entrada.FinalidadeImobilizado:
+				return f
+			}
+		}
+	}
+	if it.ItemCode != nil {
+		if c, ok := cadastro[*it.ItemCode]; ok {
+			return entrada.FinalidadeDoTipoDeUso(c.TipoUso)
+		}
+	}
+	return ""
+}
+
+// pendenciasDeCentro: a conta que exige centro de custo (VFIN0120) não aceita
+// item nem rateio de parcela da nota sem centro — o título a pagar que a
+// aprovação gera sairia sem ele.
+func (s *EntradaServico) pendenciasDeCentro(ctx context.Context, e *entity.FiscalEntry) ([]entrada.Pendencia, error) {
+	var ids []int64
+	for _, it := range e.Itens {
+		if it.GeraFinanceiro && it.PlanoContasID != nil {
+			ids = append(ids, *it.PlanoContasID)
+		}
+	}
+	for _, p := range e.Parcelas {
+		for _, d := range p.Distribuicao {
+			ids = append(ids, d.PlanoContasID)
+		}
+	}
+	exige, err := s.Docs.ContasQueExigemCentro(ctx, ids)
+	if err != nil || len(exige) == 0 {
+		return nil, err
+	}
+	var out []entrada.Pendencia
+	for _, it := range e.Itens {
+		if it.GeraFinanceiro && it.PlanoContasID != nil && it.CentroCustoID == nil {
+			if conta, ok := exige[*it.PlanoContasID]; ok {
+				out = append(out, entrada.Pendencia{Nivel: entrada.NivelImpede, Campo: fmt.Sprintf("itens[%d].centro_custo_id", it.Sequence),
+					Mensagem: fmt.Sprintf("o item %d está na conta %s, que exige centro de custo: informe o centro", it.Sequence, conta)})
+			}
+		}
+	}
+	for i, p := range e.Parcelas {
+		for _, d := range p.Distribuicao {
+			if conta, ok := exige[d.PlanoContasID]; ok && d.CentroCustoID == nil {
+				out = append(out, entrada.Pendencia{Nivel: entrada.NivelImpede, Campo: fmt.Sprintf("parcelas[%d].distribuicao", i+1),
+					Mensagem: fmt.Sprintf("a parcela %d tem rateio na conta %s, que exige centro de custo: informe o centro", i+1, conta)})
+			}
+		}
+	}
+	return out, nil
 }

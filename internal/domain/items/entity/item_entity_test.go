@@ -64,9 +64,11 @@ func TestItemValidateAcceptsNewMasterData(t *testing.T) {
 	abc := "A"
 	purchaseUOM := types.CX
 	item.Planning.ABCClass = &abc
-	item.Planning.MinimumLot = 10
-	item.Planning.MultipleLot = 5
-	item.Planning.SafetyStock = 2
+	// Item em M: lote, múltiplo (barra de 6,35 M) e segurança fracionados.
+	item.Planning.MinimumLot = decimal.RequireFromString("12.7")
+	item.Planning.MultipleLot = decimal.RequireFromString("6.35")
+	item.Planning.SafetyStock = decimal.RequireFromString("2.5")
+	item.Warehouse.MinimumStock = decimal.RequireFromString("0.125")
 	item.Supplies.PurchaseUOM = &purchaseUOM
 	item.Commercial.WarrantyDays = 365
 	if err := item.Validate(); err != nil {
@@ -78,7 +80,8 @@ func TestItemValidateRejectsInvalidEnumsAndMasterData(t *testing.T) {
 	tests := []func(*Item){
 		func(i *Item) { i.Name = " " },
 		func(i *Item) { i.Engineering.Type = types.TypeItem(99) },
-		func(i *Item) { i.Planning.MinimumLot = -1 },
+		func(i *Item) { i.Planning.MinimumLot = decimal.NewFromInt(-1) },
+		func(i *Item) { i.Warehouse.MinimumStock = decimal.RequireFromString("-0.5") },
 		func(i *Item) { invalid := "D"; i.Planning.ABCClass = &invalid },
 		func(i *Item) {
 			invalid := types.TypeUnitOfMeasurementItem("INVALID")

@@ -15,4 +15,7 @@ type PlanoContas struct {
 	// Conta contábil em que o plano gerencial é contabilizado (contabilização
 	// automática da nota de entrada).
 	AccountingAccountID *int64
+	// ExigeCentroCusto: o lançamento nesta conta (rateio do título, item da
+	// nota de entrada) precisa de centro de custo.
+	ExigeCentroCusto bool
 }

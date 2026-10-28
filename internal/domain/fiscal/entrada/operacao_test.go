@@ -243,3 +243,50 @@ func TestConferirEntrada_SemFornecedorImpede(t *testing.T) {
 		t.Fatalf("com fornecedor a nota fecha: %+v", pend)
 	}
 }
+
+// A finalidade é de quem compra: o fornecedor revendedor (5102) de aço para a
+// indústria entra como compra para industrialização (1101), não 1102.
+func TestCFOPEntradaComFinalidade(t *testing.T) {
+	casos := []struct {
+		forn, natureza, finalidade, ufForn, want string
+	}{
+		{"5102", "", FinalidadeIndustrializacao, "PR", "1101"},
+		{"6102", "", FinalidadeIndustrializacao, "SP", "2101"},
+		{"5101", "", FinalidadeConsumo, "PR", "1556"},
+		{"6102", "", FinalidadeImobilizado, "SP", "2551"},
+		{"5405", "", FinalidadeIndustrializacao, "PR", "1401"},
+		{"6403", "", FinalidadeConsumo, "SP", "2407"},
+		{"5401", "", FinalidadeImobilizado, "PR", "1406"},
+		{"5102", "", "", "PR", "1102"},                             // sem finalidade, a troca de dígito
+		{"5102", "1102", FinalidadeIndustrializacao, "PR", "1102"}, // o tipo de operação manda
+		{"5949", "", FinalidadeIndustrializacao, "PR", "1949"},     // não é venda: troca de dígito
+		{"5901", "", FinalidadeIndustrializacao, "PR", "1901"},
+		{"7101", "", FinalidadeIndustrializacao, "EX", "3101"},
+	}
+	for _, c := range casos {
+		if got := CFOPEntradaComFinalidade(c.forn, c.natureza, c.finalidade, c.ufForn, "PR"); got != c.want {
+			t.Errorf("CFOPEntradaComFinalidade(%q,%q,%q,%q) = %q, esperado %q", c.forn, c.natureza, c.finalidade, c.ufForn, got, c.want)
+		}
+	}
+	it := &entity.FiscalEntryItem{GeraCreditoICMS: true, GeraCreditoIPI: true, GeraCreditoPIS: true}
+	CreditosDaFinalidade(FinalidadeConsumo, it)
+	if it.GeraCreditoICMS || it.GeraCreditoIPI || !it.GeraCreditoPIS {
+		t.Errorf("uso e consumo: sem crédito de ICMS e IPI: %+v", it)
+	}
+}
+
+// O ICMS (e o ST) do bem do ativo não creditado na nota vai para o CIAP.
+func TestICMSDoCIAP(t *testing.T) {
+	ativo, consumo := "1551", "1556"
+	it := &entity.FiscalEntryItem{CfopEntrada: &ativo, ValorICMS: 480, ValorICMSST: decimal.RequireFromString("20")}
+	if !ICMSDoCIAP(it).Equal(decimal.NewFromInt(500)) {
+		t.Fatalf("ICMS do ativo: %s", ICMSDoCIAP(it))
+	}
+	it.GeraCreditoICMS = true
+	if !ICMSDoCIAP(it).IsZero() {
+		t.Fatal("creditado na nota não vai para o CIAP")
+	}
+	if !ICMSDoCIAP(&entity.FiscalEntryItem{CfopEntrada: &consumo, ValorICMS: 10}).IsZero() {
+		t.Fatal("uso e consumo não tem CIAP")
+	}
+}

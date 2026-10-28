@@ -165,30 +165,39 @@ type CreateFiscalExitDTO struct {
 	// Endereço do destinatário. Quando a nota nasce de um pedido de venda ou de
 	// uma carga, o que vier vazio aqui é preenchido pelo endereço de entrega do
 	// cliente (ou pelo de cobrança, quando não há um de entrega).
-	DestLogradouro        *string                   `json:"dest_logradouro,omitempty"`
-	DestNumero            *string                   `json:"dest_numero,omitempty"`
-	DestComplemento       *string                   `json:"dest_complemento,omitempty"`
-	DestBairro            *string                   `json:"dest_bairro,omitempty"`
-	DestMunicipio         *string                   `json:"dest_municipio,omitempty"`
-	DestCodigoMunicipio   *string                   `json:"dest_codigo_municipio,omitempty"`
-	DestCEP               *string                   `json:"dest_cep,omitempty"`
-	DestEmail             *string                   `json:"dest_email,omitempty"`
-	DestTelefone          *string                   `json:"dest_telefone,omitempty"`
-	CustomerCode          *int64                    `json:"customer_code,omitempty"`
-	Cfop                  string                    `json:"cfop"`
-	NaturezaOperacao      string                    `json:"natureza_operacao"`
-	ValorProdutos         float64                   `json:"valor_produtos"`
-	ValorFrete            float64                   `json:"valor_frete"`
-	ValorSeguro           float64                   `json:"valor_seguro"`
-	ValorDesconto         float64                   `json:"valor_desconto"`
-	SalesOrderCode        *int64                    `json:"sales_order_code,omitempty"`
-	SourceType            *string                   `json:"source_type,omitempty"`
-	ShipmentLoadCode      *int64                    `json:"shipment_load_code,omitempty"`
-	ShipmentCode          *int64                    `json:"shipment_code,omitempty"`
-	FiscalCouponNumber    *string                   `json:"fiscal_coupon_number,omitempty"`
-	FiscalCouponDate      *string                   `json:"fiscal_coupon_date,omitempty"`
-	FiscalCouponECFSerial *string                   `json:"fiscal_coupon_ecf_serial,omitempty"`
-	Itens                 []CreateFiscalExitItemDTO `json:"itens"`
+	DestLogradouro        *string `json:"dest_logradouro,omitempty"`
+	DestNumero            *string `json:"dest_numero,omitempty"`
+	DestComplemento       *string `json:"dest_complemento,omitempty"`
+	DestBairro            *string `json:"dest_bairro,omitempty"`
+	DestMunicipio         *string `json:"dest_municipio,omitempty"`
+	DestCodigoMunicipio   *string `json:"dest_codigo_municipio,omitempty"`
+	DestCEP               *string `json:"dest_cep,omitempty"`
+	DestEmail             *string `json:"dest_email,omitempty"`
+	DestTelefone          *string `json:"dest_telefone,omitempty"`
+	CustomerCode          *int64  `json:"customer_code,omitempty"`
+	Cfop                  string  `json:"cfop"`
+	NaturezaOperacao      string  `json:"natureza_operacao"`
+	ValorProdutos         float64 `json:"valor_produtos"`
+	ValorFrete            float64 `json:"valor_frete"`
+	ValorSeguro           float64 `json:"valor_seguro"`
+	ValorDesconto         float64 `json:"valor_desconto"`
+	SalesOrderCode        *int64  `json:"sales_order_code,omitempty"`
+	SourceType            *string `json:"source_type,omitempty"`
+	ShipmentLoadCode      *int64  `json:"shipment_load_code,omitempty"`
+	ShipmentCode          *int64  `json:"shipment_code,omitempty"`
+	FiscalCouponNumber    *string `json:"fiscal_coupon_number,omitempty"`
+	FiscalCouponDate      *string `json:"fiscal_coupon_date,omitempty"`
+	FiscalCouponECFSerial *string `json:"fiscal_coupon_ecf_serial,omitempty"`
+	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
+	// pedido e a do cliente; vazia = a deles, ou deduzida do destinatário.
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
+	// InvoiceTypeID: tipo de nota (VFIS0110) da saída; os indicadores dele
+	// (calcula ST, diferimento, PIS/COFINS, DIFAL, ICMS isento) entram no cálculo.
+	InvoiceTypeID *int64 `json:"invoice_type_id,omitempty"`
+	// InformacoesComplementares: texto livre do usuário; o sistema acrescenta o
+	// que a legislação exige (Simples Nacional, base legal dos benefícios).
+	InformacoesComplementares *string                   `json:"informacoes_complementares,omitempty"`
+	Itens                     []CreateFiscalExitItemDTO `json:"itens"`
 }
 
 type CreateFiscalExitItemDTO struct {
@@ -274,6 +283,13 @@ type UpdateFiscalConfigDTO struct {
 	CodigoMunicipio string  `json:"codigo_municipio"`
 	CEP             string  `json:"cep"`
 	Telefone        *string `json:"telefone,omitempty"`
+	// ExigirRegraICMSIPI e AliquotaCreditoSimples: ausentes (nil) mantêm o que
+	// está gravado — tela antiga não desliga a exigência nem zera o crédito.
+	ExigirRegraICMSIPI     *bool    `json:"exigir_regra_icms_ipi,omitempty"`
+	AliquotaCreditoSimples *float64 `json:"aliquota_credito_simples,omitempty"`
+	// CBenefDiferimento: cBenef do diferimento (PR830001 no PR). Ausente mantém;
+	// vazio ("") limpa.
+	CBenefDiferimento *string `json:"cbenef_diferimento,omitempty"`
 }
 
 type UpsertNcmTaxDTO struct {

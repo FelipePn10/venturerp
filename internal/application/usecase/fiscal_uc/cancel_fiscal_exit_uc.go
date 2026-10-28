@@ -35,6 +35,11 @@ type CancelFiscalExitUseCase struct {
 	Contabil SaidaContabil
 	// Devolucao desfaz a devolução de compra cancelada.
 	Devolucao *DevolucaoCompraUseCase
+	// DevolucaoVenda recusa cancelar a NF-e de entrada de devolução de venda já
+	// efetivada no estoque e no financeiro.
+	DevolucaoVenda interface {
+		PodeCancelarNF(ctx context.Context, exit *entity.FiscalExit) error
+	}
 }
 
 // EstornoDeBeneficiamento devolve ao saldo do cliente o que a nota cancelada
@@ -84,6 +89,11 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	// financeiro valendo aqui.
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.PodeDesfazer(ctx, exit); err != nil {
+			return nil, err
+		}
+	}
+	if uc.DevolucaoVenda != nil {
+		if err := uc.DevolucaoVenda.PodeCancelarNF(ctx, exit); err != nil {
 			return nil, err
 		}
 	}

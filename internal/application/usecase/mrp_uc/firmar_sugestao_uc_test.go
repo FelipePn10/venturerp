@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -77,7 +78,7 @@ func baseSuggestion() *mrpentity.PlannedOrderSuggestion {
 		Code:       42,
 		PlanCode:   100,
 		ItemCode:   2001,
-		Quantity:   150,
+		Quantity:   decimal.NewFromFloat(150),
 		OrderType:  "COMPRA", // valores internos do motor MRP (PT); mapeados p/ enum "PURCHASE"
 		DemandType: "INDEPENDENTE",
 		NeedDate:   nd,

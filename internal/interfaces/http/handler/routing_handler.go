@@ -184,7 +184,11 @@ func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request
 		jsonError(w, http.StatusBadRequest, "item_code é obrigatório")
 		return
 	}
-	result, err := h.routeUC.ListByItem(r.Context(), itemCode)
+	listar := h.routeUC.ListByItem
+	if r.URL.Query().Get("incluir_inativos") == "true" {
+		listar = h.routeUC.ListByItemWithInactive
+	}
+	result, err := listar(r.Context(), itemCode)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -203,6 +207,20 @@ func (h *RoutingHandler) DeactivateRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *RoutingHandler) ReactivateRoute(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := h.routeUC.Reactivate(r.Context(), id)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
 }
 
 // ─── route operations ─────────────────────────────────────────────────────────

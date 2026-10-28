@@ -179,7 +179,7 @@ const listAccountingAccountsByPlan = `
 SELECT id, plan_id, parent_id, account_number, description, nature_code, reduced_code, requires_cost_center, valid_from, valid_to, is_analytic, created_at
 FROM accounting_accounts WHERE plan_id = $1
   AND EXISTS (SELECT 1 FROM accounting_plans p WHERE p.id = $1 AND p.enterprise_id = $2)
-ORDER BY account_number
+ORDER BY ordem_natural(account_number)
 `
 
 func (q *Queries) ListAccountingAccountsByPlan(ctx context.Context, planID, enterpriseID int64) ([]AccountingAccountRow, error) {

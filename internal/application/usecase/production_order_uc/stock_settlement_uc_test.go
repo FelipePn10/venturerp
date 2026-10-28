@@ -201,7 +201,7 @@ func TestCreateProductionOrder_GeneratesOnlyDirectPrimaryDemands(t *testing.T) {
 		Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: structure,
 		Items: &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
 	}
-	order, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: 5, CreatedBy: uuid.New()})
+	order, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: decimal.RequireFromString("5"), CreatedBy: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestCreateProductionOrder_GeneratesOnlyDirectPrimaryDemands(t *testing.T) {
 
 func TestMaintainProductionOrder_QuantityRules(t *testing.T) {
 	quantity := decimal.RequireFromString("9.5")
-	repo := &fakePORepo{order: &poentity.ProductionOrder{ID: 1, ItemCode: 10, PlannedQty: 10, ProducedQty: 4, Status: poentity.StatusOpen}, allowQuantity: true, acceptsFraction: false}
+	repo := &fakePORepo{order: &poentity.ProductionOrder{ID: 1, ItemCode: 10, PlannedQty: decimal.RequireFromString("10"), ProducedQty: decimal.RequireFromString("4"), Status: poentity.StatusOpen}, allowQuantity: true, acceptsFraction: false}
 	uc := MaintainProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canSales: true}}
 	if _, err := uc.Execute(context.Background(), request.MaintainProductionOrderDTO{ID: 1, PlannedQty: &quantity}); err == nil {
 		t.Fatal("fractional quantity must be rejected")
@@ -327,7 +327,7 @@ func TestAddConsumption_PostsOutMovementWhenWarehouseSet(t *testing.T) {
 	_, err := uc.Execute(context.Background(), request.AddConsumptionDTO{
 		ProductionOrderID: 500,
 		ItemCode:          1001,
-		ConsumedQty:       7,
+		ConsumedQty:       decimal.RequireFromString("7"),
 		WarehouseID:       i64p(3),
 		ConsumptionDate:   "2026-04-01",
 		CreatedBy:         uuid.New(),
@@ -358,7 +358,7 @@ func TestAddConsumption_NoMovementWithoutWarehouse(t *testing.T) {
 	uc := AddConsumptionUseCase{Repo: &fakePORepo{}, Auth: fakeAuth{canPlanned: true}, StockRepo: stock}
 
 	if _, err := uc.Execute(context.Background(), request.AddConsumptionDTO{
-		ProductionOrderID: 1, ItemCode: 2, ConsumedQty: 1, ConsumptionDate: "2026-04-01",
+		ProductionOrderID: 1, ItemCode: 2, ConsumedQty: decimal.RequireFromString("1"), ConsumptionDate: "2026-04-01",
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestAddConsumption_PropagatesMovementError(t *testing.T) {
 	uc := AddConsumptionUseCase{Repo: &fakePORepo{}, Auth: fakeAuth{canPlanned: true}, StockRepo: stock}
 
 	_, err := uc.Execute(context.Background(), request.AddConsumptionDTO{
-		ProductionOrderID: 1, ItemCode: 2, ConsumedQty: 1, WarehouseID: i64p(9), ConsumptionDate: "2026-04-01",
+		ProductionOrderID: 1, ItemCode: 2, ConsumedQty: decimal.RequireFromString("1"), WarehouseID: i64p(9), ConsumptionDate: "2026-04-01",
 	})
 	if err == nil {
 		t.Fatal("stock movement failure should propagate")
@@ -383,7 +383,7 @@ func TestAddConsumption_PropagatesMovementError(t *testing.T) {
 
 func TestCompleteProductionOrder_PostsInMovementOfProducedQty(t *testing.T) {
 	po := &fakePORepo{order: &poentity.ProductionOrder{
-		ID: 88, ItemCode: 2002, Mask: "0001", ProducedQty: 12, PlannedQty: 15, CreatedBy: uuid.New(),
+		ID: 88, ItemCode: 2002, Mask: "0001", ProducedQty: decimal.RequireFromString("12"), PlannedQty: decimal.RequireFromString("15"), CreatedBy: uuid.New(),
 	}}
 	stock := &fakeStockRepo{}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock}
@@ -409,7 +409,7 @@ func TestCompleteProductionOrder_PostsInMovementOfProducedQty(t *testing.T) {
 func TestCompleteProductionOrder_FallsBackToPlannedQty(t *testing.T) {
 	// Nothing reported as produced → fall back to the planned quantity.
 	po := &fakePORepo{order: &poentity.ProductionOrder{
-		ID: 1, ItemCode: 3, ProducedQty: 0, PlannedQty: 20, CreatedBy: uuid.New(),
+		ID: 1, ItemCode: 3, ProducedQty: decimal.RequireFromString("0"), PlannedQty: decimal.RequireFromString("20"), CreatedBy: uuid.New(),
 	}}
 	stock := &fakeStockRepo{}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock}
@@ -425,7 +425,7 @@ func TestCompleteProductionOrder_FallsBackToPlannedQty(t *testing.T) {
 }
 
 func TestCompleteProductionOrder_NoMovementWhenZeroQty(t *testing.T) {
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 1, ItemCode: 3, ProducedQty: 0, PlannedQty: 0}}
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 1, ItemCode: 3, ProducedQty: decimal.RequireFromString("0"), PlannedQty: decimal.RequireFromString("0")}}
 	stock := &fakeStockRepo{}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock}
 
@@ -441,7 +441,7 @@ func TestCompleteProductionOrder_NoMovementWhenZeroQty(t *testing.T) {
 
 func TestCompleteProductionOrder_ClassifiesExcessAsEPE(t *testing.T) {
 	quantity := decimal.NewFromInt(3)
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 7, ItemCode: 3, PlannedQty: 10, CreatedBy: uuid.New()}, delivered: decimal.NewFromInt(9), treatExcess: true}
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 7, ItemCode: 3, PlannedQty: decimal.RequireFromString("10"), CreatedBy: uuid.New()}, delivered: decimal.NewFromInt(9), treatExcess: true}
 	stock := &fakeStockRepo{}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock}
 	_, err := uc.Execute(context.Background(), request.CompleteProductionOrderDTO{ID: 7, Quantity: &quantity, WarehouseID: i64p(4), IdempotencyKey: "delivery-7"})
@@ -463,7 +463,7 @@ func TestCompleteProductionOrder_ClassifiesExcessAsEPE(t *testing.T) {
 
 func TestCompleteProductionOrder_GeneratesREPForAutomaticChildren(t *testing.T) {
 	quantity := decimal.NewFromInt(4)
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 8, ItemCode: 100, PlannedQty: 4, CreatedBy: uuid.New()}, automatic: map[int64]int64{200: 9}}
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 8, ItemCode: 100, PlannedQty: decimal.RequireFromString("4"), CreatedBy: uuid.New()}, automatic: map[int64]int64{200: 9}}
 	stock := &fakeStockRepo{}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{{ChildCode: 200, Quantity: 2}}}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock, Structure: structure}
@@ -478,7 +478,7 @@ func TestCompleteProductionOrder_GeneratesREPForAutomaticChildren(t *testing.T) 
 
 func TestCompleteProductionOrder_ZeroFinalRejectsPendingOCS(t *testing.T) {
 	zero := decimal.Zero
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 9, PlannedQty: 10}, pendingOCS: true}
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 9, PlannedQty: decimal.RequireFromString("10")}, pendingOCS: true}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}}
 	_, err := uc.Execute(context.Background(), request.CompleteProductionOrderDTO{ID: 9, Quantity: &zero, Final: true, WarehouseID: i64p(4), IdempotencyKey: "delivery-9"})
 	if err == nil {
@@ -489,7 +489,7 @@ func TestCompleteProductionOrder_ZeroFinalRejectsPendingOCS(t *testing.T) {
 func TestOperationalConsultation_AggregatesExecution(t *testing.T) {
 	refType := stockentity.ReferenceTypeProductionOrder
 	refCode := int64(55)
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 55, ItemCode: 100, PlannedQty: 10, ProducedQty: 7},
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 55, ItemCode: 100, PlannedQty: decimal.RequireFromString("10"), ProducedQty: decimal.RequireFromString("7")},
 		deliveries: []*poentity.ProductionDelivery{{ID: 1, ProductionOrderID: 55, Quantity: decimal.NewFromInt(6), MovementClass: "EPP", WarehouseID: 4}}}
 	stock := &fakeStockRepo{movements: []*stockentity.StockMovement{
 		{ID: 1, ItemCode: 100, MovementType: "EPP", Quantity: decimal.NewFromFloat(6), ReferenceType: &refType, ReferenceCode: &refCode},
@@ -513,7 +513,7 @@ func TestCreateProductionOrder_UnknownItemIsValidationError(t *testing.T) {
 		Structure: &fakeDeliveryStructure{},
 		Items:     &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
 	}
-	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "NAO-EXISTE", PlannedQty: 5})
+	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "NAO-EXISTE", PlannedQty: decimal.RequireFromString("5")})
 	if _, ok := errorsuc.AsValidation(err); !ok {
 		t.Fatalf("esperado ValidationError, veio %T (%v)", err, err)
 	}
@@ -525,7 +525,7 @@ func TestCreateProductionOrder_NonPositiveQuantityIsRejectedInPortuguese(t *test
 		Structure: &fakeDeliveryStructure{},
 		Items:     &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "PROD-10"}},
 	}
-	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: 0})
+	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "PROD-10", PlannedQty: decimal.RequireFromString("0")})
 	v, ok := errorsuc.AsValidation(err)
 	if !ok {
 		t.Fatalf("esperado ValidationError, veio %T (%v)", err, err)

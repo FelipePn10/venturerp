@@ -64,7 +64,7 @@ func itemBase() []*fiscalentity.FiscalExitItem {
 // banco, então o payload saía sem logradouro/bairro/município/CEP e a SEFAZ
 // recusava a autorização.
 func TestPayloadLevaEnderecoDoDestinatario(t *testing.T) {
-	p := montarPayloadNFe(notaBase(), itemBase(), configBase(), PlanoDaNota{})
+	p, _ := montarPayloadNFe(notaBase(), itemBase(), configBase(), PlanoDaNota{}, reformaPelaLei(t, notaBase(), itemBase(), configBase()))
 	d := p.Destinatario
 	if d.Logradouro != "RUA DAS OFICINAS" || d.Numero != "450" || d.Bairro != "DISTRITO INDUSTRIAL" ||
 		d.Municipio != "CAMPINAS" || d.CEP != "13050000" {
@@ -97,7 +97,7 @@ func planoEm3Parcelas(total float64, emissao time.Time) PlanoDaNota {
 // e sem duplicata o cliente recebe a nota sem saber quanto paga em cada data.
 func TestVendaAPrazoLevaDuplicataEBoleto(t *testing.T) {
 	nota := notaBase()
-	p := montarPayloadNFe(nota, itemBase(), configBase(), planoEm3Parcelas(nota.ValorTotal, nota.DataEmissao))
+	p, _ := montarPayloadNFe(nota, itemBase(), configBase(), planoEm3Parcelas(nota.ValorTotal, nota.DataEmissao), reformaPelaLei(t, nota, itemBase(), configBase()))
 
 	if len(p.FormaPagamento) != 3 {
 		t.Fatalf("esperava 3 formas de pagamento (uma por parcela), veio %d", len(p.FormaPagamento))
@@ -129,7 +129,7 @@ func TestVendaAVistaNaoLevaDuplicata(t *testing.T) {
 		Numero: 1, Valor: decimal.NewFromFloat(nota.ValorTotal), Vencimento: nota.DataEmissao,
 		Evento: customerentity.BaseEmissao, DiasPrazo: 0,
 	}}}
-	p := montarPayloadNFe(nota, itemBase(), configBase(), plano)
+	p, _ := montarPayloadNFe(nota, itemBase(), configBase(), plano, reformaPelaLei(t, nota, itemBase(), configBase()))
 	if len(p.Duplicatas) != 0 {
 		t.Fatalf("venda à vista não tem duplicata, veio %d", len(p.Duplicatas))
 	}
@@ -353,4 +353,15 @@ func TestConferirCodigoIBGE(t *testing.T) {
 			t.Errorf("conferirCodigoIBGE(%q, %q) ok=%v, quer %v", c.codigo, c.uf, got, c.ok)
 		}
 	}
+}
+
+// reformaPelaLei resolve a reforma sem repositório: alíquotas da lei e
+// tributação integral em todas as linhas.
+func reformaPelaLei(t *testing.T, exit *fiscalentity.FiscalExit, items []*fiscalentity.FiscalExitItem, cfg *fiscalentity.FiscalConfig) TributacaoReforma {
+	t.Helper()
+	rt, err := resolverReformaDaNota(context.Background(), nil, exit, items, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rt
 }

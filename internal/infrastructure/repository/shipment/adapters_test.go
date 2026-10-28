@@ -2,6 +2,7 @@ package shipment
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -60,17 +61,17 @@ func TestSalesOrderAdapter(t *testing.T) {
 	fake := &fakeSalesOrderRepo{
 		resp: &salesentity.SalesOrder{
 			Code:             42,
-			TotalGross:       1000.00,
-			TotalNet:         850.00,
+			TotalGross:       decimal.NewFromInt(1000),
+			TotalNet:         decimal.NewFromInt(850),
 			TotalWeightGross: 120.0,
 			VolumeQuantity:   3,
 			Items: []*salesentity.SalesOrderItem{
 				{
 					ItemCode:        100,
-					RequestedQty:    10,
-					UnitPrice:       50,
-					TotalGross:      500,
-					TotalNet:        425,
+					RequestedQty:    decimal.NewFromInt(10),
+					UnitPrice:       decimal.NewFromInt(50),
+					TotalGross:      decimal.NewFromInt(500),
+					TotalNet:        decimal.NewFromInt(425),
 					IPIPct:          5,
 					ICMSPct:         18,
 					PISPct:          1.65,
@@ -198,8 +199,8 @@ func TestProductionOrderAdapter(t *testing.T) {
 		resp: &productionentity.ProductionOrder{
 			ID:          99,
 			ItemCode:    700,
-			PlannedQty:  50,
-			ProducedQty: 48,
+			PlannedQty:  decimal.RequireFromString("50"),
+			ProducedQty: decimal.RequireFromString("48"),
 		},
 	}
 	a := &ProductionOrderAdapter{Repo: fake}

@@ -280,14 +280,14 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		        i.purchase_order_code, i.purchase_order_item_code, i.qtd_recebida_antes, i.stock_movement_id, i.custo_aquisicao,
 		        i.cst_ibscbs, i.cclass_trib, i.base_ibscbs, i.aliq_ibs_uf, i.valor_ibs_uf, i.aliq_ibs_mun, i.valor_ibs_mun,
 		        i.valor_ibs, i.aliq_cbs, i.valor_cbs, i.valor_is, i.gera_credito_ibscbs,
-		        it.name, it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.descricao,
+		        it.name, it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.description,
 		        w.code || ' — ' || w.description, op.description,
 		        CASE WHEN it.code IS NULL THEN NULL ELSE `+ncmDoItemSQL+` END,
 		        po.order_number, poi.sequence
 		   FROM fiscal_entry_items i
 		   LEFT JOIN items it ON it.code = i.item_code AND it.enterprise_id = $2
 		   LEFT JOIN plano_contas pc ON pc.id = i.plano_contas_id AND pc.enterprise_id = $2
-		   LEFT JOIN centros_custo cc ON cc.id = i.centro_custo_id AND cc.enterprise_id = $2
+		   LEFT JOIN cost_centers cc ON cc.id = i.centro_custo_id AND cc.enterprise_id = $2
 		   LEFT JOIN warehouse w ON w.id = i.warehouse_id AND w.enterprise_id = $2
 		   LEFT JOIN entry_operation_types op ON op.code = i.entry_operation_code AND op.enterprise_id = $2
 		   LEFT JOIN purchase_order_items poi ON poi.code = i.purchase_order_item_code
@@ -644,7 +644,7 @@ func (r *FiscalRepositoryPG) PlanoContasByCodigo(ctx context.Context, codigo str
 const candidatoCols = `it.code, it.name, it.warehouse_unit_of_measurement::text, ` + ncmDoItemSQL + `, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 	COALESCE((SELECT w.id FROM warehouse w WHERE w.id = it.supplies_warehouse_code AND w.enterprise_id = it.enterprise_id),
 	         (SELECT w.id FROM warehouse w WHERE w.id = it.warehouse_code AND w.enterprise_id = it.enterprise_id)),
-	COALESCE(it.business_code, '')`
+	COALESCE(it.business_code, ''), COALESCE(it.engineering_type, 0) IN (1, 2), COALESCE(it.supplies_type_of_use, 0)`
 
 func (r *FiscalRepositoryPG) SearchItems(ctx context.Context, termos []string, limite int) ([]repository.ItemCandidate, error) {
 	empresa, err := tenant.ID(ctx)
@@ -733,7 +733,7 @@ func (r *FiscalRepositoryPG) queryCandidatos(ctx context.Context, q string, args
 	var out []repository.ItemCandidate
 	for rows.Next() {
 		var c repository.ItemCandidate
-		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID, &c.BusinessCode); err != nil {
+		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID, &c.BusinessCode, &c.Comprado, &c.TipoUso); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -746,7 +746,7 @@ func (r *FiscalRepositoryPG) ExistingPlanos(ctx context.Context, ids []int64) (m
 }
 
 func (r *FiscalRepositoryPG) ExistingCentros(ctx context.Context, ids []int64) (map[int64]bool, error) {
-	return r.existentes(ctx, `SELECT id FROM centros_custo WHERE enterprise_id=$1 AND is_active AND id = ANY($2)`, ids)
+	return r.existentes(ctx, `SELECT id FROM cost_centers WHERE enterprise_id=$1 AND is_active AND (end_date IS NULL OR end_date >= CURRENT_DATE) AND id = ANY($2)`, ids)
 }
 
 func (r *FiscalRepositoryPG) existentes(ctx context.Context, q string, ids []int64) (map[int64]bool, error) {
@@ -804,4 +804,44 @@ func soDigitosRepo(s string) string {
 		}
 	}
 	return b.String()
+}
+
+func (r *FiscalRepositoryPG) ContaPadraoDoCentro(ctx context.Context, centroID int64) (*int64, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var id *int64
+	err = r.db.QueryRow(ctx, `SELECT g.conta_padrao_id FROM cost_center_gestao g
+		 JOIN plano_contas p ON p.id = g.conta_padrao_id AND p.is_active
+		WHERE g.cost_center_id = $1 AND g.enterprise_id = $2`, centroID, empresa).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return id, err
+}
+
+func (r *FiscalRepositoryPG) ContasQueExigemCentro(ctx context.Context, ids []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, `SELECT id, codigo FROM plano_contas WHERE enterprise_id = $1 AND exige_centro_custo AND id = ANY($2)`, empresa, ids)
+	if err != nil {
+		return nil, fmt.Errorf("conferindo as contas que exigem centro de custo: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var codigo string
+		if err := rows.Scan(&id, &codigo); err != nil {
+			return nil, err
+		}
+		out[id] = codigo
+	}
+	return out, rows.Err()
 }

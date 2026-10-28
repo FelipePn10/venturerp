@@ -3,6 +3,7 @@ package item_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	"github.com/shopspring/decimal"
 )
 
 func toItemResponse(it *entity.Item) *response.ItemResponse {
@@ -106,8 +107,8 @@ func toItemWarehouseResponse(w entity.Warehouse) response.ItemWarehouseResponse 
 		UnitOfMeasurement:               w.UnitOfMeasurement.String(),
 		AutomaticLow:                    w.AutomaticLow,
 		CyclicalCountConfig:             cyclical,
-		MinimumStock:                    w.MinimumStock,
-		AverageMonthlyConsumptionManual: w.AverageMonthlyConsumptionManual,
+		MinimumStock:                    w.MinimumStock.InexactFloat64(),
+		AverageMonthlyConsumptionManual: decimalPtrParaFloat(w.AverageMonthlyConsumptionManual),
 	}
 }
 
@@ -139,9 +140,9 @@ func toItemPlanningResponse(p entity.Planning) response.ItemPlanningResponse {
 	if p.ReorderPoint != nil {
 		rop = &response.ItemReorderPointResponse{
 			TR: p.ReorderPoint.TR,
-			CM: p.ReorderPoint.CM,
+			CM: p.ReorderPoint.CM.InexactFloat64(),
 			CR: p.ReorderPoint.CR,
-			ES: p.ReorderPoint.ES,
+			ES: p.ReorderPoint.ES.InexactFloat64(),
 		}
 	}
 	return response.ItemPlanningResponse{
@@ -151,9 +152,9 @@ func toItemPlanningResponse(p entity.Planning) response.ItemPlanningResponse {
 		TankCode:     p.TankCode,
 		Ghost:        p.Ghost,
 		ABCClass:     p.ABCClass,
-		MinimumLot:   p.MinimumLot,
-		MultipleLot:  p.MultipleLot,
-		SafetyStock:  p.SafetyStock,
+		MinimumLot:   p.MinimumLot.InexactFloat64(),
+		MultipleLot:  p.MultipleLot.InexactFloat64(),
+		SafetyStock:  p.SafetyStock.InexactFloat64(),
 		Critical:     p.Critical,
 		Exclusive:    p.Exclusive,
 		Active:       p.Active,
@@ -199,4 +200,12 @@ func nilIfEmpty(code string) *string {
 		return nil
 	}
 	return &code
+}
+
+func decimalPtrParaFloat(v *decimal.Decimal) *float64 {
+	if v == nil {
+		return nil
+	}
+	f := v.InexactFloat64()
+	return &f
 }

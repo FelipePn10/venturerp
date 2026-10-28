@@ -29,6 +29,7 @@ type SalesOrderResponse struct {
 	SalesDivisionCode           *int64                   `json:"sales_division_code,omitempty"`
 	CommissionPct               float64                  `json:"commission_pct"`
 	TaxTypeCode                 *int64                   `json:"tax_type_code,omitempty"`
+	FinalidadeCompra            *string                  `json:"finalidade_compra,omitempty"`
 	PresenceIndicator           *string                  `json:"presence_indicator,omitempty"`
 	SalesChannel                *string                  `json:"sales_channel,omitempty"`
 	DefaultNFType               *string                  `json:"default_nf_type,omitempty"`

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // ─── Regions ─────────────────────────────────────────────────────────────────
@@ -584,19 +585,19 @@ type CommercialPolicyLineDTO struct {
 }
 
 type EvaluateCommercialPoliciesDTO struct {
-	GrossValue         float64   `json:"gross_value"`
-	Quantity           float64   `json:"quantity"`
-	CustomerCode       *int64    `json:"customer_code,omitempty"`
-	CustomerTypeID     *int64    `json:"customer_type_id,omitempty"`
-	MarketSegmentID    *int64    `json:"market_segment_id,omitempty"`
-	RegionID           *int64    `json:"region_id,omitempty"`
-	SalesTableID       *int64    `json:"sales_table_id,omitempty"`
-	PaymentConditionID *int64    `json:"payment_condition_id,omitempty"`
-	CarrierID          *int64    `json:"carrier_id,omitempty"`
-	ItemCode           *TextCode `json:"item_code,omitempty"`
-	ItemMask           *string   `json:"item_mask,omitempty"`
-	ProductLineID      *int64    `json:"product_line_id,omitempty"`
-	ItemClassification *string   `json:"item_classification,omitempty"`
+	GrossValue         decimal.Decimal `json:"gross_value"`
+	Quantity           decimal.Decimal `json:"quantity"`
+	CustomerCode       *int64          `json:"customer_code,omitempty"`
+	CustomerTypeID     *int64          `json:"customer_type_id,omitempty"`
+	MarketSegmentID    *int64          `json:"market_segment_id,omitempty"`
+	RegionID           *int64          `json:"region_id,omitempty"`
+	SalesTableID       *int64          `json:"sales_table_id,omitempty"`
+	PaymentConditionID *int64          `json:"payment_condition_id,omitempty"`
+	CarrierID          *int64          `json:"carrier_id,omitempty"`
+	ItemCode           *TextCode       `json:"item_code,omitempty"`
+	ItemMask           *string         `json:"item_mask,omitempty"`
+	ProductLineID      *int64          `json:"product_line_id,omitempty"`
+	ItemClassification *string         `json:"item_classification,omitempty"`
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────
@@ -649,10 +650,13 @@ type CreateCustomerDTO struct {
 	CarrierGroupCode      *int64     `json:"carrier_group_code,omitempty"`
 	InvoiceTypeCode       *int64     `json:"invoice_type_code,omitempty"`
 	TaxTypeCode           *int64     `json:"tax_type_code,omitempty"`
-	PaymentCondVisibility string     `json:"payment_cond_visibility"` // SOMENTE_VINCULADOS | VINCULADOS_E_NENHUM | TODOS
-	CreditLimit           float64    `json:"credit_limit"`
-	Website               *string    `json:"website,omitempty"`
-	CreatedBy             uuid.UUID  `json:"created_by"`
+	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO). Na alteração,
+	// ausente mantém a atual e vazia ("") limpa.
+	FinalidadeCompra      *string   `json:"finalidade_compra,omitempty"`
+	PaymentCondVisibility string    `json:"payment_cond_visibility"` // SOMENTE_VINCULADOS | VINCULADOS_E_NENHUM | TODOS
+	CreditLimit           float64   `json:"credit_limit"`
+	Website               *string   `json:"website,omitempty"`
+	CreatedBy             uuid.UUID `json:"created_by"`
 }
 
 type UpdateCustomerDTO struct {

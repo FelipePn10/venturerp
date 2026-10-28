@@ -15,6 +15,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
+
+	"github.com/shopspring/decimal"
 )
 
 // CustomerUseCase consolidates all customer-related operations.
@@ -1910,7 +1912,8 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 			source = "CUSTOMER_SALES_TABLE"
 		}
 		applied := price.Price
-		context := entity.CommercialPolicyContext{GrossValue: price.Price * dto.Quantity, Quantity: dto.Quantity, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
+		qtd := decimal.NewFromFloat(dto.Quantity)
+		context := entity.CommercialPolicyContext{GrossValue: decimal.NewFromFloat(price.Price).Mul(qtd), Quantity: qtd, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
 		if customer != nil {
 			context.CustomerCode = &customer.Code
 			context.CustomerTypeID = customer.CustomerTypeID
@@ -1920,7 +1923,10 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 			context.CarrierID = customer.CarrierID
 		}
 		if evaluation, evaluationErr := entity.EvaluateCommercialPolicies(policies, context); evaluationErr == nil && len(evaluation.Effects) > 0 {
-			applied = evaluation.NetValue / dto.Quantity
+			if qtd.IsPositive() {
+				// Calculado em decimal; o preço da tabela ainda é float na resposta.
+				applied = evaluation.NetValue.Div(qtd).Round(6).InexactFloat64()
+			}
 			if priority > 20 {
 				priority = 20
 			}
@@ -2309,6 +2315,13 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 	c.SuframaExpiry = dto.SuframaExpiry
 	c.CreditLimit = dto.CreditLimit
 	c.Website = dto.Website
+	if dto.FinalidadeCompra != nil {
+		f, err := finalidadeDoCliente(*dto.FinalidadeCompra)
+		if err != nil {
+			return nil, err
+		}
+		c.FinalidadeCompra = f
+	}
 	// Sem escolha, vale "todos": a coluna é enum e string vazia derrubava a
 	// gravação com o erro cru do Postgres.
 	if dto.PaymentCondVisibility == "" {
@@ -2350,6 +2363,13 @@ func (uc *CustomerUseCase) UpdateCustomer(ctx context.Context, code int64, dto r
 	existing.SuframaExpiry = dto.SuframaExpiry
 	existing.CreditLimit = dto.CreditLimit
 	existing.Website = dto.Website
+	if dto.FinalidadeCompra != nil {
+		f, err := finalidadeDoCliente(*dto.FinalidadeCompra)
+		if err != nil {
+			return nil, err
+		}
+		existing.FinalidadeCompra = f
+	}
 	if dto.PaymentCondVisibility != "" {
 		existing.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
 	}
@@ -2580,6 +2600,7 @@ func toCustomerResponse(c *entity.Customer) *response.CustomerResponse {
 		CarrierGroupID:        c.CarrierGroupID,
 		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
+		FinalidadeCompra:      c.FinalidadeCompra,
 		PaymentCondVisibility: string(c.PaymentCondVisibility),
 		CreditLimit:           c.CreditLimit,
 		Website:               c.Website,
@@ -2618,4 +2639,17 @@ func toContactResponse(c *entity.CustomerContact) response.CustomerContactRespon
 		Position:      c.Position,
 		IsPrimary:     c.IsPrimary,
 	}
+}
+
+// finalidadeDoCliente valida a finalidade da compra; vazia limpa (nil).
+func finalidadeDoCliente(v string) (*string, error) {
+	f := strings.ToUpper(strings.TrimSpace(v))
+	if f == "" {
+		return nil, nil
+	}
+	switch f {
+	case "REVENDA", "INDUSTRIALIZACAO", "USO_CONSUMO":
+		return &f, nil
+	}
+	return nil, errorsuc.NewValidationError("finalidade da compra inválida: use REVENDA, INDUSTRIALIZACAO ou USO_CONSUMO")
 }

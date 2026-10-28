@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestExplosaoRespeitaVigencia(t *testing.T) {
 	}}
 
 	got := map[int64]bool{}
-	for _, in := range explodeFromBOMWithVars(bom, 1, "", 1, 1, 1, nil, necessidade) {
+	for _, in := range explodeFromBOMWithVars(bom, 1, "", decimal.NewFromFloat(1), 1, 1, nil, necessidade) {
 		got[in.ItemCode] = true
 	}
 	for codigo, esperado := range map[int64]bool{10: true, 20: false, 30: false, 40: false, 41: true} {
@@ -36,7 +37,7 @@ func TestExplosaoRespeitaVigencia(t *testing.T) {
 
 	// Sem data de necessidade, nada é filtrado (compatibilidade das chamadas
 	// que não conhecem a data).
-	if n := len(explodeFromBOMWithVars(bom, 1, "", 1, 1, 1, nil, time.Time{})); n != 4 {
+	if n := len(explodeFromBOMWithVars(bom, 1, "", decimal.NewFromFloat(1), 1, 1, nil, time.Time{})); n != 4 {
 		t.Errorf("sem data: esperado 4 componentes (3 simples + 1 alternativo), obtido %d", n)
 	}
 }

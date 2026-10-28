@@ -1918,6 +1918,7 @@ func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.C
 		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
 		CreditLimit:           pgutil.ToPgNumericFromFloat64(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
+		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
 		CreatedBy:             pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if err != nil {
@@ -1956,6 +1957,7 @@ func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.C
 		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
 		CreditLimit:           pgutil.ToPgNumericFromFloat64(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
+		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
 		IsActive:              c.IsActive,
 	})
 	if err != nil {
@@ -2079,6 +2081,7 @@ func customerToEntity(row sqlc.Customer) *entity.Customer {
 		PaymentCondVisibility: entity.PaymentCondVisibility(row.PaymentCondVisibility),
 		CreditLimit:           pgutil.FromPgNumericToFloat64(row.CreditLimit),
 		Website:               pgutil.FromPgTextPtr(row.Website),
+		FinalidadeCompra:      pgutil.FromPgTextPtr(row.FinalidadeCompra),
 		IsActive:              row.IsActive,
 		Blocked:               row.Blocked,
 		BlockReason:           pgutil.FromPgTextPtr(row.BlockReason),

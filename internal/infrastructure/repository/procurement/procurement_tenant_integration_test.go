@@ -107,16 +107,7 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 		t.Fatalf("empresa A deveria ver a própria divergência: %d (%v)", len(l), err)
 	}
 
-	insp, err := repo.CreateReceivingInspectionOrder(a.Ctx, &entity.ReceivingInspectionOrder{Source: "MANUAL", SupplierCode: &supplier, ItemCode: supplier, WarehouseID: 1, Quantity: 5})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := repo.GetReceivingInspectionOrder(b.Ctx, insp.ID); err == nil {
-		t.Fatal("empresa B leu a ordem de inspeção da A")
-	}
-	if l, err := repo.ListReceivingInspectionOrders(b.Ctx, ""); err != nil || len(l) != 0 {
-		t.Fatalf("empresa B listou %d ordem(ns) de inspeção da A (%v)", len(l), err)
-	}
+	// O isolamento da inspeção de recebimento é do lote de inspeção (qualidade).
 
 	hoje := time.Now().UTC().Truncate(24 * time.Hour)
 	contrato, err := repo.CreateSupplierContract(a.Ctx, &entity.SupplierContract{SupplierCode: supplier, ContractNumber: "CT-A", Status: "ACTIVE", Currency: "BRL", ValidFrom: hoje,

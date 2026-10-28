@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
@@ -20,17 +21,37 @@ func NewPasswordChangeHandler(uc *user_uc.PasswordChangeUseCase) *PasswordChange
 	return &PasswordChangeHandler{BaseHandler: &security.BaseHandler{}, uc: uc}
 }
 
+// Request abre a solicitação. O corpo é opcional: {"reason": "..."}.
 func (h *PasswordChangeHandler) Request(w http.ResponseWriter, r *http.Request) {
-	request, err := h.uc.Request(r.Context())
+	var body struct {
+		Reason string `json:"reason"`
+	}
+	if r.Body != nil && r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+			h.BadRequest(w, "corpo da requisição inválido")
+			return
+		}
+	}
+	request, err := h.uc.Request(r.Context(), body.Reason)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	h.Created(w, request, "password change requested")
+	h.Created(w, request, "solicitação de troca de senha registrada")
 }
 
 func (h *PasswordChangeHandler) List(w http.ResponseWriter, r *http.Request) {
 	requests, err := h.uc.List(r.Context(), r.URL.Query().Get("status"))
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.OK(w, requests)
+}
+
+// Mine: as solicitações do usuário logado (qualquer perfil).
+func (h *PasswordChangeHandler) Mine(w http.ResponseWriter, r *http.Request) {
+	requests, err := h.uc.Mine(r.Context())
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -108,11 +129,20 @@ func (h *PasswordChangeHandler) Complete(w http.ResponseWriter, r *http.Request)
 
 func (h *PasswordChangeHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, user_uc.ErrPasswordChangeForbidden):
+	case errors.Is(err, user_uc.ErrPasswordChangeForbidden), errors.Is(err, user_uc.ErrPasswordChangeOwn):
 		security.WriteError(w, http.StatusForbidden, "forbidden", err.Error())
 	case errors.Is(err, user_uc.ErrCurrentPasswordInvalid):
-		security.WriteError(w, http.StatusUnauthorized, "invalid_credentials", err.Error())
-	case errors.Is(err, user_uc.ErrWeakPassword), errors.Is(err, user_uc.ErrPasswordChangeInvalid), errors.Is(err, errIdentificadorInvalido):
+		// 422, e não 401: a sessão continua válida; 401 faz o app encerrar a
+		// sessão de quem só digitou a senha atual errada.
+		security.WriteError(w, http.StatusUnprocessableEntity, "invalid_current_password", err.Error())
+	case errors.Is(err, user_uc.ErrPasswordChangeNotFound):
+		h.NotFound(w, err.Error())
+	case errors.Is(err, user_uc.ErrPasswordChangeActive), errors.Is(err, user_uc.ErrPasswordChangeDecided),
+		errors.Is(err, user_uc.ErrPasswordChangeExpired), errors.Is(err, user_uc.ErrPasswordChangeNotReady):
+		h.Conflict(w, err.Error())
+	case errors.Is(err, user_uc.ErrWeakPassword), errors.Is(err, user_uc.ErrSamePassword),
+		errors.Is(err, user_uc.ErrPasswordChangeInvalid), errors.Is(err, user_uc.ErrRejectionReason),
+		errors.Is(err, user_uc.ErrRequestReason), errors.Is(err, errIdentificadorInvalido):
 		h.BadRequest(w, err.Error())
 	default:
 		h.InternalError(w, r, err)

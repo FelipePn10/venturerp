@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"regexp"
 	"strings"
 )
@@ -186,37 +187,65 @@ func (c CyclicalCountConfig) IsValid() bool {
 // ReorderPoint
 //
 
+// TR (tempo de reposição) e CR (ciclo de revisão) são dias; CM (consumo
+// mensal) e ES (estoque de segurança) estão na unidade de estoque e aceitam
+// fração — item em KG ou M consome 12,5 por mês.
 type ReorderPoint struct {
-	TR int16
-	CM int16
+	TR int
+	CM decimal.Decimal
 	CR int
-	ES int16
+	ES decimal.Decimal
 }
 
-func NewReorderPoint(tr, cm int16, cr int, es int16) (*ReorderPoint, error) {
-	r := &ReorderPoint{
-		TR: tr,
-		CM: cm,
-		CR: cr,
-		ES: es,
-	}
+// reorderPointJSON grava números no JSONB (o decimal sairia como texto).
+type reorderPointJSON struct {
+	TR int             `json:"TR"`
+	CM json.RawMessage `json:"CM"`
+	CR int             `json:"CR"`
+	ES json.RawMessage `json:"ES"`
+}
 
+func (r ReorderPoint) MarshalJSON() ([]byte, error) {
+	return json.Marshal(reorderPointJSON{TR: r.TR, CM: json.RawMessage(r.CM.String()), CR: r.CR, ES: json.RawMessage(r.ES.String())})
+}
+
+// UnmarshalJSON aceita número ou texto, e o formato antigo (inteiros).
+func (r *ReorderPoint) UnmarshalJSON(b []byte) error {
+	var raw struct {
+		TR, CR int
+		CM, ES decimal.NullDecimal
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	r.TR, r.CR = raw.TR, raw.CR
+	r.CM, r.ES = raw.CM.Decimal, raw.ES.Decimal
+	return nil
+}
+
+func NewReorderPoint(tr int, cm decimal.Decimal, cr int, es decimal.Decimal) (*ReorderPoint, error) {
+	r := &ReorderPoint{TR: tr, CM: cm, CR: cr, ES: es}
 	if !r.IsValid() {
 		return nil, domainerr.NewValidation("ponto de reposição inválido")
 	}
-
 	return r, nil
 }
 
 func (r ReorderPoint) IsValid() bool {
-	return r.CR > 0
+	return r.CR > 0 && r.TR >= 0 && !r.CM.IsNegative() && !r.ES.IsNegative()
 }
 
-func (r ReorderPoint) Calculate() (int, error) {
+// Calculate é o ponto de pedido TR × CM / CR + ES, arredondado para cima (a
+// mesma conta da sugestão de reposição do estoque; antes o MRP truncava a
+// divisão inteira e as duas telas davam números diferentes).
+func (r ReorderPoint) Calculate() (decimal.Decimal, error) {
 	if r.CR == 0 {
-		return 0, domainerr.NewValidation("o CR não pode ser zero")
+		return decimal.Zero, domainerr.NewValidation("o CR não pode ser zero")
 	}
+	return PontoDePedido(r.TR, r.CM, r.CR, r.ES), nil
+}
 
-	result := (int(r.TR) * int(r.CM) / r.CR) + int(r.ES)
-	return result, nil
+// PontoDePedido é TR × CM / CR + ES arredondado para cima.
+func PontoDePedido(tr int, cm decimal.Decimal, cr int, es decimal.Decimal) decimal.Decimal {
+	return decimal.NewFromInt(int64(tr)).Mul(cm).Div(decimal.NewFromInt(int64(cr))).Add(es).Ceil()
 }

@@ -4,6 +4,7 @@ package mrp_calculation
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestPeggingGravadoPorPlanoEEmpresa(t *testing.T) {
 		recs := []entity.PeggingRecord{}
 		for i := 0; i < n; i++ {
 			recs = append(recs, entity.PeggingRecord{ItemCode: item, DemandKind: entity.PegDemandIndependent, DemandCode: &demanda, NeedDate: dia,
-				SupplyKind: entity.PegSupplySuggestion, SupplyCode: &sug, SupplyDate: &dia, Quantity: 3.5})
+				SupplyKind: entity.PegSupplySuggestion, SupplyCode: &sug, SupplyDate: &dia, Quantity: decimal.NewFromFloat(3.5)})
 		}
 		if err := repo.ReplacePegging(a.Ctx, plano, recs); err != nil {
 			t.Fatal(err)
@@ -48,14 +49,14 @@ func TestPeggingGravadoPorPlanoEEmpresa(t *testing.T) {
 	grava(3)
 	grava(2) // o segundo cálculo substitui o primeiro
 	rows, err := repo.PeggingRows(a.Ctx, plano)
-	if err != nil || len(rows) != 2 || rows[0].Quantity != 3.5 || *rows[0].SupplyCode != sug || !rows[0].NeedDate.Equal(dia) {
+	if err != nil || len(rows) != 2 || !rows[0].Quantity.Equal(decimal.NewFromFloat(3.5)) || *rows[0].SupplyCode != sug || !rows[0].NeedDate.Equal(dia) {
 		t.Fatalf("pegging lido: %+v (%v)", rows, err)
 	}
 	if outra, err := repo.PeggingRows(b.Ctx, plano); err != nil || len(outra) != 0 {
 		t.Fatalf("empresa B lê o pegging da A: %+v (%v)", outra, err)
 	}
 	labels, err := repo.PeggingLabels(a.Ctx, entity.PeggingRefs{Suggestions: []int64{sug}, Items: []int64{item}})
-	if err != nil || labels.Suggestions[sug].OrderNumber == nil || labels.Suggestions[sug].Quantity != 7 || labels.Items[item].BusinessCode == "" {
+	if err != nil || labels.Suggestions[sug].OrderNumber == nil || !labels.Suggestions[sug].Quantity.Equal(decimal.NewFromFloat(7)) || labels.Items[item].BusinessCode == "" {
 		t.Fatalf("rótulos: %+v (%v)", labels, err)
 	}
 	if outros, err := repo.PeggingLabels(b.Ctx, entity.PeggingRefs{Suggestions: []int64{sug}, Items: []int64{item}}); err != nil || len(outros.Suggestions) != 0 || len(outros.Items) != 0 {

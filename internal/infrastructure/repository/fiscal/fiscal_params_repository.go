@@ -214,6 +214,20 @@ func cfopToEntity(row sqlc.Cfop) *fiscalEntity.CFOP {
 		Doacao:          row.Doacao,
 		IsActive:        row.IsActive,
 		CreatedAt:       pgutil.FromPgTimestamptz(row.CreatedAt),
+		Oficial: fiscalEntity.CFOPOficial{
+			Oficial:         row.Oficial,
+			InicioVigencia:  pgutil.FromPgDateToPtr(row.InicioVigencia),
+			FimVigencia:     pgutil.FromPgDateToPtr(row.FimVigencia),
+			NFe:             row.IndNfe,
+			Comunicacao:     row.IndComunica,
+			Transporte:      row.IndTransp,
+			Devolucao:       row.IndDevol,
+			Retorno:         row.IndRetor,
+			Anulacao:        row.IndAnula,
+			Remessa:         row.IndRemes,
+			Combustivel:     row.IndComb,
+			ExclusivoIBSCBS: row.IndExcIbscbs,
+		},
 	}
 }
 
@@ -228,7 +242,7 @@ func (r *FiscalParamsRepositorySQLC) CreateTaxParam(ctx context.Context, p *fisc
 	arg.EnterpriseID = emp
 	row, err := r.q.CreateTaxParam(ctx, arg)
 	if err != nil {
-		return nil, semLinha(err, "item ou cliente da regra não encontrado nesta empresa")
+		return nil, semLinha(err, "item, cliente ou fornecedor da regra não encontrado nesta empresa")
 	}
 	return taxParamToEntity(row), nil
 }
@@ -238,15 +252,16 @@ func (r *FiscalParamsRepositorySQLC) UpdateTaxParam(ctx context.Context, p *fisc
 	if err != nil {
 		return nil, err
 	}
-	// Item e cliente citados na regra têm de ser da empresa.
+	// Item, cliente e fornecedor citados na regra têm de ser da empresa.
 	var ok bool
 	if err := r.pool.QueryRow(ctx, `SELECT ($1::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $1 AND i.enterprise_id = $3))
-		AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $2 AND c.enterprise_id = $3))`,
-		p.ItemCode, p.CustomerCode, emp).Scan(&ok); err != nil {
+		AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $2 AND c.enterprise_id = $3))
+		AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = $4 AND f.enterprise_id = $3))`,
+		p.ItemCode, p.CustomerCode, emp, p.SupplierCode).Scan(&ok); err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, errorsuc.NewNotFoundError("item ou cliente da regra não encontrado nesta empresa")
+		return nil, errorsuc.NewNotFoundError("item, cliente ou fornecedor da regra não encontrado nesta empresa")
 	}
 	arg := taxParamToUpdateParams(p)
 	arg.EnterpriseID = emp
@@ -463,6 +478,10 @@ func taxParamToCreateParams(p *fiscalEntity.ICMSIPITaxParam) sqlc.CreateTaxParam
 		IcmsDifalType:                    nullDifalTypeFromEntity(p.ICMSDifalType),
 		DifalPurchaseRedPct:              pgutil.ToPgNumericFromFloat64(p.DifalPurchaseRedPct),
 		DifalPurchaseRedTarget:           nullReductionTargetFromEntity(p.DifalPurchaseRedTarget),
+		FinalidadeCompra:                 pgutil.ToPgTextFromPtr(p.FinalidadeCompra),
+		MvaPct:                           pgutil.ToPgNumericFromFloat64(p.MvaPct),
+		MvaAjustarInterestadual:          p.MvaAjustarInterestadual,
+		SupplierCode:                     p.SupplierCode,
 	}
 }
 
@@ -549,6 +568,10 @@ func taxParamToUpdateParams(p *fiscalEntity.ICMSIPITaxParam) sqlc.UpdateTaxParam
 		DifalPurchaseRedPct:              cp.DifalPurchaseRedPct,
 		DifalPurchaseRedTarget:           cp.DifalPurchaseRedTarget,
 		IsActive:                         p.IsActive,
+		FinalidadeCompra:                 cp.FinalidadeCompra,
+		MvaPct:                           cp.MvaPct,
+		MvaAjustarInterestadual:          cp.MvaAjustarInterestadual,
+		SupplierCode:                     cp.SupplierCode,
 	}
 }
 
@@ -633,6 +656,11 @@ func taxParamToEntity(row sqlc.IcmsIpiTaxParam) *fiscalEntity.ICMSIPITaxParam {
 		ICMSDifalType:                    nullDifalTypeToEntity(row.IcmsDifalType),
 		DifalPurchaseRedPct:              pgutil.FromPgNumericToFloat64(row.DifalPurchaseRedPct),
 		DifalPurchaseRedTarget:           nullReductionTargetToEntity(row.DifalPurchaseRedTarget),
+		FinalidadeCompra:                 pgutil.FromPgTextPtr(row.FinalidadeCompra),
+		MvaPct:                           pgutil.FromPgNumericToFloat64(row.MvaPct),
+		MvaAjustarInterestadual:          row.MvaAjustarInterestadual,
+		SupplierCode:                     row.SupplierCode,
+		OrigemReducaoID:                  row.OrigemReducaoID,
 		IsActive:                         row.IsActive,
 		CreatedAt:                        pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:                        pgutil.FromPgTimestamptz(row.UpdatedAt),

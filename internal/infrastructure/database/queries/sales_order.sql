@@ -21,7 +21,7 @@ INSERT INTO public.sales_orders (
     collection_establishment_code, nf_type_description, carrier_code, freight_type,
     freight_value, insurance_value, volume_quantity, volume_type, net_weight,
     gross_weight, discount_value, surcharge_value, project_code, project_name,
-    created_by
+    created_by, finalidade_compra
 )
 VALUES (
     $1, $2, $3, $4,
@@ -38,7 +38,7 @@ VALUES (
     $42, $43, $44, $45,
     $46, $47, $48, $49, $50,
     $51, $52, $53, $54, $55,
-    $56
+    $56, NULLIF(sqlc.narg(finalidade_compra)::varchar, '')
 )
 RETURNING *;
 
@@ -94,6 +94,8 @@ SET
     surcharge_value      = $47,
     project_code         = $48,
     project_name         = $49,
+    -- Ausente mantém; vazia limpa.
+    finalidade_compra    = NULLIF(COALESCE(sqlc.narg(finalidade_compra)::varchar, finalidade_compra), ''),
     updated_at           = NOW()
 WHERE code = $50 AND enterprise_code = sqlc.arg(tenant_enterprise_code) AND is_active = TRUE
 RETURNING *;
@@ -356,3 +358,23 @@ WHERE sales_order_items.code = $1
       WHERE sales_order.code=sales_order_items.sales_order_code
         AND sales_order.enterprise_code=sqlc.arg(tenant_enterprise_code)
   );
+
+-- name: RecalculateSalesOrderTotals :execrows
+-- A capa fecha com a soma das linhas ativas (as canceladas não contam), na
+-- mesma definição da conversão do orçamento: bruto = líquido = produtos;
+-- "sem ST" = produtos + IPI; "com IPI e ST" = produtos + IPI + ST.
+UPDATE public.sales_orders o SET
+    total_gross = t.produtos,
+    total_net = t.produtos,
+    total_net_no_st = t.produtos + t.ipi,
+    total_with_ipi_with_st = t.produtos + t.ipi + t.st,
+    updated_at = NOW()
+FROM (
+    SELECT COALESCE(SUM(i.total_net), 0)::numeric AS produtos,
+           COALESCE(SUM(i.total_ipi), 0)::numeric AS ipi,
+           COALESCE(SUM(i.total_st), 0)::numeric  AS st
+      FROM public.sales_order_items i
+     WHERE i.sales_order_code = sqlc.arg(sales_order_code)
+       AND i.is_active AND i.status <> 'CANCELLED'
+) t
+WHERE o.code = sqlc.arg(sales_order_code) AND o.enterprise_code = sqlc.arg(tenant_enterprise_code);

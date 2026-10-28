@@ -258,7 +258,7 @@ func (r *Repository) Explosion(ctx context.Context, itemCode int64, quantity dec
 		UNION ALL SELECT shipment_item.item_code,shipment_item.quantity FROM shipment_loads load JOIN shipment_load_shipments link ON link.load_id=load.id
 		JOIN shipments shipment ON shipment.id=link.shipment_id JOIN shipment_items shipment_item ON shipment_item.shipment_id=shipment.id
 		JOIN sales_orders sale ON sale.code=shipment.sales_order_code JOIN enterprise company ON company.code=sale.enterprise_code
-		WHERE company.id=$4 AND load.code=ANY($11::bigint[]) AND load.status<>'CANCELLED'
+		WHERE company.id=$4 AND load.enterprise_id=$4 AND load.code=ANY($11::bigint[]) AND load.status<>'CANCELLED'
 	), explosion AS (
 		SELECT structure.parent_code,structure.child_code,1 level,(roots.quantity*structure.quantity*(1+structure.loss_percentage/100)) quantity,ARRAY[structure.parent_code,structure.child_code] path
 		FROM roots JOIN item_structures structure ON structure.parent_code=roots.item_code WHERE structure.is_active

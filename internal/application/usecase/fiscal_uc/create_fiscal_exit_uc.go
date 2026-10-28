@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -30,6 +32,14 @@ type CreateFiscalExitUseCase struct {
 	// Beneficios resolve o cBenef da linha pelos parâmetros de ICMS/IPI.
 	// Opcional: sem ele, só vale o código informado na linha.
 	Beneficios ResolvedorBeneficioFiscal
+	// Parametros acha a regra do cadastro de parâmetros de ICMS/IPI (VFIS0320)
+	// de cada linha: alíquota, redução, diferimento, CST, CSOSN e ST por
+	// item/NCM, UF, cliente, finalidade e tipo de nota. Opcional: sem ele vale a
+	// regra geral.
+	Parametros ResolvedorParametroICMSIPI
+	// Cadastro lê a finalidade da compra (pedido, cliente) e os indicadores do
+	// tipo de nota. Opcional: sem ele vale só o informado na nota.
+	Cadastro CadastroTributario
 }
 
 // ResolvedorBeneficioFiscal acha o código de benefício fiscal (cBenef) de um
@@ -56,105 +66,29 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		return nil, err
 	}
 
-	config, err := uc.Repo.GetFiscalConfig(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ncmTaxes, err := uc.Repo.ListNcmTaxes(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	interstateTable, err := uc.Repo.ListICMSInterstate(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	internalTable, err := uc.Repo.ListICMSInternal(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ncmMap := make(map[string]*engine.NcmTaxConfig)
-	for _, n := range ncmTaxes {
-		ncmMap[n.Ncm] = &engine.NcmTaxConfig{
-			AliqIPI:    n.AliqIPI,
-			AliqPis:    n.AliqPis,
-			AliqCofins: n.AliqCofins,
-			CstPis:     n.CstPis,
-			CstCofins:  n.CstCofins,
-			CstIPI:     n.CstIPI,
-		}
-	}
-
-	internalEngineMap := make(map[string]engine.ICMSInternalConfig)
-	for uf, v := range internalTable {
-		internalEngineMap[uf] = engine.ICMSInternalConfig{
-			ICMS: v.ICMS,
-			FCP:  v.FCP,
-		}
-	}
-
 	destUF := ""
 	if dto.UFDestinatario != nil {
 		destUF = *dto.UFDestinatario
 	}
-	origemUF := config.UFEmpresa
-
-	taxItems := make([]engine.TaxItem, 0, len(dto.Itens))
+	op := OperacaoTributavel{
+		UFDestino: destUF, IE: dto.IEDestinatario, TipoPessoa: dto.TipoPessoa,
+		Cliente: dto.CustomerCode, Pedido: dto.SalesOrderCode, TipoNotaID: dto.InvoiceTypeID, Cfop: dto.Cfop,
+		ValorFrete: dto.ValorFrete, ValorDesconto: dto.ValorDesconto,
+	}
+	if dto.FinalidadeCompra != nil {
+		op.Finalidade = *dto.FinalidadeCompra
+	}
 	for _, it := range dto.Itens {
-		ncm := ""
-		if it.Ncm != nil {
-			ncm = *it.Ncm
-		}
-		itemFrete := dto.ValorFrete
-		itemDesconto := dto.ValorDesconto
-		taxItems = append(taxItems, engine.TaxItem{
-			Ncm:                  ncm,
-			ValorUnitario:        it.UnitPrice,
-			Quantidade:           it.Quantity,
-			ValorFrete:           itemFrete,
-			ValorDesconto:        itemDesconto,
-			OrigemMercadoria:     it.OrigemMercadoria,
-			MvaPct:               it.MvaPct,
-			AliqInternaDestinoST: it.AliqInternaDestinoST,
-			RedBaseSTPct:         it.RedBaseSTPct,
+		op.Itens = append(op.Itens, LinhaTributavel{
+			ItemCode: it.ItemCode, Ncm: it.Ncm, Quantidade: it.Quantity, ValorUnitario: it.UnitPrice,
+			Origem: it.OrigemMercadoria, MvaPct: it.MvaPct, AliqInternaDestinoST: it.AliqInternaDestinoST, RedBaseSTPct: it.RedBaseSTPct,
 		})
 	}
-
-	destTipo := "contribuinte"
-	if dto.IEDestinatario == nil || *dto.IEDestinatario == "" || *dto.IEDestinatario == "ISENTO" {
-		destTipo = "nao_contribuinte"
-	} else if dto.TipoPessoa != nil && *dto.TipoPessoa == "F" {
-		destTipo = "pessoa_fisica"
-	}
-
-	params := engine.TaxCalculationParams{
-		Itens:       taxItems,
-		EmitenteUF:  origemUF,
-		DestinoUF:   destUF,
-		DestinoTipo: destTipo,
-		Cfop:        dto.Cfop,
-	}
-
-	fiscalCfg := engine.FiscalConfig{
-		UFEmpresa:                 config.UFEmpresa,
-		IcmsInternoAliquota:       config.IcmsInternoAliquota,
-		IcmsDiferimentoPercentual: config.IcmsDiferimentoPercentual,
-	}
-
-	scenario := engine.TaxScenarioConfig{
-		AliqICMS:   config.IcmsInternoAliquota,
-		DifICMSPct: config.IcmsDiferimentoPercentual,
-		CstICMS:    "00",
-		CalcDifal:  true,
-	}
-
-	taxResult, err := engine.CalcularImpostos(params, ncmMap, interstateTable, internalEngineMap, scenario, fiscalCfg)
+	trib, err := (&Tributador{Repo: uc.Repo, Parametros: uc.Parametros, Cadastro: uc.Cadastro}).Calcular(ctx, op)
 	if err != nil {
 		return nil, err
 	}
+	destTipo, regras, taxResult := trib.DestinoTipo, trib.Regras, trib.Resultado
 
 	// Numeração da nota. O número da NF-e é uma sequência fiscal: ela não pode
 	// repetir nem ser digitada a dedo. Quando a nota vem da carga, o sistema já
@@ -220,11 +154,13 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		ValorSeguro:             dto.ValorSeguro,
 		ValorDesconto:           dto.ValorDesconto,
 		ValorIPI:                taxResult.Totais.ValorIPI,
-		ValorICMS:               taxResult.Totais.ValorICMS,
-		ValorPIS:                taxResult.Totais.ValorPIS,
-		ValorCOFINS:             taxResult.Totais.ValorCOFINS,
-		BaseICMSST:              taxResult.Totais.BaseICMSST,
-		ValorICMSST:             taxResult.Totais.ValorICMSST,
+		// ICMS destacado (vICMS do XML): o da operação menos o diferido. É o que
+		// vai para o livro, a apuração e o "ICMS a recolher" da contabilização.
+		ValorICMS:   decimal.NewFromFloat(taxResult.Totais.ValorICMS).Sub(decimal.NewFromFloat(taxResult.Totais.ValorDiferido)).Round(2).InexactFloat64(),
+		ValorPIS:    taxResult.Totais.ValorPIS,
+		ValorCOFINS: taxResult.Totais.ValorCOFINS,
+		BaseICMSST:  taxResult.Totais.BaseICMSST,
+		ValorICMSST: taxResult.Totais.ValorICMSST,
 		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto
 		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário)
 		ValorTotal:            dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMSST + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
@@ -235,9 +171,23 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		FiscalCouponNumber:    dto.FiscalCouponNumber,
 		FiscalCouponDate:      fiscalCouponDate,
 		FiscalCouponECFSerial: dto.FiscalCouponECFSerial,
+		InvoiceTypeID:         dto.InvoiceTypeID,
 		Status:                entity.ExitStatusDraft,
 		CreatedBy:             userID,
 	}
+
+	if trib.Finalidade != "" {
+		f := trib.Finalidade
+		exit.FinalidadeCompra = &f
+	}
+	var legais []string
+	credito := decimal.Zero
+	for i, r := range taxResult.Itens {
+		legais = append(legais, regras[i].DispositivosAplicados(destTipo, r)...)
+		credito = credito.Add(decimal.NewFromFloat(r.ValorCreditoSimples))
+	}
+	exit.InformacoesComplementares = informacoesComplementares(dto.InformacoesComplementares, trib.Regime == engine.RegimeSimples,
+		credito, trib.Config.AliquotaCreditoSimples, semRepetir(legais))
 
 	created, err := uc.Repo.CreateExit(ctx, exit)
 	if err != nil {
@@ -283,15 +233,40 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			SalesOrderItemCode: it.SalesOrderItemCode,
 			UnidadeComercial:   it.UnidadeComercial,
 			CodigoProduto:      it.CodigoProduto,
+			// Redução de base, diferimento, crédito do Simples e grupo do DIFAL:
+			// o que o XML leva da linha.
+			ICMSReducaoBasePct:    itemTax.ReducaoBaseICMSPct,
+			ICMSDiferimentoPct:    itemTax.DiferimentoICMSPct,
+			AliqCreditoSimples:    itemTax.AliqCreditoSimplesPct,
+			ValorCreditoSimples:   itemTax.ValorCreditoSimples,
+			ICMSUFDestBase:        itemTax.BaseUFDest,
+			ICMSUFDestAliqInterna: itemTax.AliqInternaUFDestPct,
+			ICMSAliqInterestadual: itemTax.AliqInterestadualPct,
+			ICMSUFDestValor:       itemTax.ValorDIFAL,
+			FCPUFDestPct:          itemTax.FCPUFDestPct,
+			FCPUFDestValor:        itemTax.ValorFCP,
+			ICMSSTReducaoBasePct:  itemTax.ReducaoBaseSTPct,
+		}
+		if regras[i] != nil {
+			item.RegraICMSIPIID = &regras[i].ID
 		}
 		if cstComBeneficio[itemTax.CSTICMS] {
 			item.CodigoBeneficioFiscal = it.CodigoBeneficioFiscal
+			if cb := regras[i].BeneficioFiscal(destTipo); (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") && cb != "" {
+				item.CodigoBeneficioFiscal = &cb
+			}
 			if (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") && uc.Beneficios != nil {
 				cb, err := uc.Beneficios.BeneficioFiscal(ctx, it.ItemCode, it.Ncm, destUF, dto.CustomerCode)
 				if err != nil {
 					return nil, fmt.Errorf("lendo o código de benefício fiscal da linha %d: %w", it.Sequence, err)
 				}
 				item.CodigoBeneficioFiscal = cb
+			}
+			// Diferimento da configuração: o cBenef dela (PR830001 no PR).
+			if (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") && itemTax.CSTICMS == "51" &&
+				trib.Config.CBenefDiferimento != nil && strings.TrimSpace(*trib.Config.CBenefDiferimento) != "" {
+				cb := strings.TrimSpace(*trib.Config.CBenefDiferimento)
+				item.CodigoBeneficioFiscal = &cb
 			}
 		}
 		if _, err := uc.Repo.CreateExitItem(ctx, item); err != nil {

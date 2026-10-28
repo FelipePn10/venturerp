@@ -320,15 +320,16 @@ func (r *RepositoryPGX) AddCallItem(ctx context.Context, enterpriseID int64, it 
 	row := r.pool.QueryRow(ctx, `INSERT INTO technical_assistance_call_items
 		(call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code, defect_complement,
 		 purchase_invoice_number, purchase_invoice_date, warranty_days, warranty_until, in_warranty,
-		 generates_revenue, requested_action, status, notes)
-		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
+		 generates_revenue, requested_action, status, notes,
+		 serie_id, garantia_origem, garantia_inicio, cobre_pecas, cobre_mao_obra, cobre_deslocamento)
+		SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$19,$20,$21,$22,$23,$24
 		WHERE EXISTS (SELECT 1 FROM technical_assistance_calls c JOIN enterprise e ON e.code=c.enterprise_code WHERE c.code=$1 AND e.id=$18)
-		RETURNING code, call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code,
-		          defect_complement, purchase_invoice_number, purchase_invoice_date, warranty_days, warranty_until,
-		          in_warranty, generates_revenue, requested_action, status, notes, created_at, updated_at`,
+		  AND ($19::bigint IS NULL OR EXISTS (SELECT 1 FROM numeros_serie s WHERE s.id=$19 AND s.enterprise_id=$18))
+		RETURNING `+itemColunas,
 		it.CallCode, it.Sequence, it.ItemCode, it.Mask, it.SerialNumber, it.Quantity, it.DefectReasonCode,
 		it.DefectComplement, it.PurchaseInvoiceNumber, datePtr(it.PurchaseInvoiceDate), it.WarrantyDays,
-		datePtr(it.WarrantyUntil), it.InWarranty, it.GeneratesRevenue, it.RequestedAction, it.Status, it.Notes, enterpriseID)
+		datePtr(it.WarrantyUntil), it.InWarranty, it.GeneratesRevenue, it.RequestedAction, it.Status, it.Notes, enterpriseID,
+		it.SerieID, it.GarantiaOrigem, datePtr(it.GarantiaInicio), it.CobrePecas, it.CobreMaoObra, it.CobreDeslocamento)
 	return scanCallItem(row)
 }
 
@@ -493,7 +494,8 @@ func scanCallItem(row pgx.Row) (*entity.CallItem, error) {
 	err := row.Scan(&v.Code, &v.CallCode, &v.Sequence, &v.ItemCode, &v.Mask, &v.SerialNumber, &v.Quantity,
 		&v.DefectReasonCode, &v.DefectComplement, &v.PurchaseInvoiceNumber, &v.PurchaseInvoiceDate,
 		&v.WarrantyDays, &v.WarrantyUntil, &v.InWarranty, &v.GeneratesRevenue, &v.RequestedAction,
-		&v.Status, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
+		&v.Status, &v.Notes, &v.CreatedAt, &v.UpdatedAt,
+		&v.SerieID, &v.GarantiaOrigem, &v.GarantiaInicio, &v.CobrePecas, &v.CobreMaoObra, &v.CobreDeslocamento)
 	return &v, err
 }
 
@@ -519,11 +521,13 @@ func callSelect() string {
 		is_active, created_at, updated_at, created_by FROM technical_assistance_calls`
 }
 
-func itemSelect() string {
-	return `SELECT code, call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code,
+const itemColunas = `code, call_code, sequence, item_code, mask, serial_number, quantity, defect_reason_code,
 		defect_complement, purchase_invoice_number, purchase_invoice_date, warranty_days, warranty_until,
-		in_warranty, generates_revenue, requested_action, status, notes, created_at, updated_at
-		FROM technical_assistance_call_items`
+		in_warranty, generates_revenue, requested_action, status, notes, created_at, updated_at,
+		serie_id, garantia_origem, garantia_inicio, cobre_pecas, cobre_mao_obra, cobre_deslocamento`
+
+func itemSelect() string {
+	return `SELECT ` + itemColunas + ` FROM technical_assistance_call_items`
 }
 
 func returnNoteSelect() string {

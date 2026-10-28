@@ -144,7 +144,10 @@ type CreateSalesQuotationItemDTO struct {
 	DiscountPct        decimal.Decimal `json:"discount_pct"`
 	IPIPct             decimal.Decimal `json:"ipi_pct"`
 	STPct              decimal.Decimal `json:"st_pct"`
-	Notes              *string         `json:"notes,omitempty"`
+	// TributosManuais: IPI e ST digitados não são recalculados. Sem ele, linha
+	// sem IPI e sem ST é tributada pela regra de ICMS/IPI, como a nota será.
+	TributosManuais bool    `json:"tributos_manuais,omitempty"`
+	Notes           *string `json:"notes,omitempty"`
 }
 
 type UpdateSalesQuotationItemDTO struct {
@@ -159,6 +162,7 @@ type UpdateSalesQuotationItemDTO struct {
 	DiscountPct      decimal.Decimal `json:"discount_pct"`
 	IPIPct           decimal.Decimal `json:"ipi_pct"`
 	STPct            decimal.Decimal `json:"st_pct"`
+	TributosManuais  bool            `json:"tributos_manuais,omitempty"`
 	Notes            *string         `json:"notes,omitempty"`
 }
 

@@ -4,6 +4,7 @@ package production_order_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -47,7 +48,7 @@ func TestManualProductionOrderCreatesExternalServiceOrderAtomically(t *testing.T
 	})
 	start := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
 	created, err := production_order.NewProductionOrderRepositoryPGX(pool).Create(ctx, &entity.ProductionOrder{
-		OrderNumber: orderNumber, ItemCode: itemCode, PlannedQty: 12, Status: entity.StatusOpen,
+		OrderNumber: orderNumber, ItemCode: itemCode, PlannedQty: decimal.RequireFromString("12"), Status: entity.StatusOpen,
 		StartDate: &start, IsActive: true, CreatedBy: actor,
 	})
 	if err != nil {

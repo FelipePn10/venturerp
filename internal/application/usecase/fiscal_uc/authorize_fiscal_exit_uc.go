@@ -25,6 +25,10 @@ import (
 )
 
 type AuthorizeFiscalExitUseCase struct {
+	// CFOPs: a autorização recusa CFOP que a SEFAZ recusaria.
+	CFOPs CatalogoCFOP
+	// Series: números de série das linhas, impressos no infAdProd do item.
+	Series SeriesPorLinha
 	// Efeitos aplica estoque, reservas, títulos e pedido como pendência
 	// reprocessável (ver EfeitosNFe).
 	Efeitos       *EfeitosNFe
@@ -59,6 +63,14 @@ type AuthorizeFiscalExitUseCase struct {
 	// Devolucao efetiva a devolução de compra autorizada (estoque, abatimento
 	// dos títulos, apuração e contabilidade) no lugar do faturamento da venda.
 	Devolucao *DevolucaoCompraUseCase
+	// DevolucaoVenda efetiva a devolução de venda quando a NF-e de entrada
+	// emitida pela empresa é autorizada (no lugar dos efeitos da venda).
+	DevolucaoVenda interface {
+		AoAutorizar(ctx context.Context, exit *entity.FiscalExit, userID uuid.UUID) []string
+	}
+	// Reforma resolve alíquotas e cClassTrib da nota e guarda o retrato do grupo
+	// IBS/CBS transmitido. Sem ele valem a lei e a tributação integral.
+	Reforma repository.ReformaTributariaRepository
 }
 
 // BeneficiamentoBaixaGuard é a conferência da baixa de material de terceiro.
@@ -122,8 +134,12 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
 		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais para informá-lo antes de autorizar a nota")
 	}
-	if err := validarReformaNFe(exit, cfg); err != nil {
-		return nil, errorsuc.NewValidationError(err.Error())
+	if err := recusarPendenciasTributarias(exit, items, cfg); err != nil {
+		return nil, err
+	}
+	rt, err := resolverReformaDaNota(ctx, uc.Reforma, exit, items, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	focusCli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -147,11 +163,20 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if err != nil {
 		return nil, err
 	}
-	payload := montarPayloadNFe(exit, items, cfg, plano)
+	payload, retrato := montarPayloadNFe(exit, items, cfg, plano, rt)
+	if err := anexarSeries(ctx, uc.Series, id, items, &payload); err != nil {
+		return nil, err
+	}
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {
 			return nil, err
 		}
+	}
+	if err := referenciarDevolucaoDeVenda(ctx, uc.Repo, exit, items, &payload); err != nil {
+		return nil, err
+	}
+	if err := recusarCFOPs(ctx, uc.CFOPs, exit, items, &payload); err != nil {
+		return nil, err
 	}
 
 	// Depósito de saída de cada item conferido ANTES de transmitir: autorizada,
@@ -173,6 +198,15 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	envio, guardaEnvio := uc.Repo.(registroEnvioFocus)
 	if guardaEnvio {
 		if err := envio.RegistrarEnvioFocus(ctx, id, ref); err != nil {
+			return nil, err
+		}
+	}
+	// O retrato do IBS/CBS também é gravado ANTES do envio: autorizada, a nota
+	// precisa dizer o que transmitiu (apuração e conferência da CBS a partir de
+	// 2027), e falhar aqui ainda não criou nada na SEFAZ.
+	if uc.Reforma != nil && rt.Aplica {
+		ibs, cbs := totaisDoRetrato(retrato)
+		if err := uc.Reforma.GravarRetrato(ctx, id, retrato, ibs, cbs); err != nil {
 			return nil, err
 		}
 	}
@@ -228,6 +262,15 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// extrato por cliente e limite de crédito ficavam cegos.
 	// Devolução de compra: não é venda — não gera título a receber do cliente
 	// nem baixa pedido; o efeito é o inverso da nota de entrada.
+	// Devolução de venda (NF-e de entrada própria): não é venda — não baixa
+	// estoque nem gera título; efetiva a devolução.
+	if updated.DevolucaoVendaID != nil {
+		resp := toFiscalExitResponse(updated)
+		if uc.DevolucaoVenda != nil {
+			resp.Warnings = append(resp.Warnings, uc.DevolucaoVenda.AoAutorizar(ctx, updated, userID)...)
+		}
+		return resp, nil
+	}
 	if updated.FiscalEntryID != nil {
 		resp := toFiscalExitResponse(updated)
 		if uc.Devolucao != nil {
@@ -334,27 +377,46 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			CodigoSituacaoTributariaICMS:   cstICMS,
 			ModalidadeBaseCalculoICMS:      3,
 			ValorBaseCalculoICMS:           it.BaseICMS,
-			AliquotaICMS:                   it.AliqICMS * 100,
+			AliquotaICMS:                   percentualXML(it.AliqICMS),
 			ValorICMS:                      it.ValorICMS,
 			CodigoSituacaoTributariaIPI:    cstIPI,
-			AliquotaIPI:                    it.AliqIPI * 100,
+			AliquotaIPI:                    percentualXML(it.AliqIPI),
 			ValorIPI:                       it.ValorIPI,
 			BaseIPI:                        it.BaseIPI,
 			CodigoSituacaoTributariaPIS:    cstPIS,
-			AliquotaPIS:                    it.AliqPIS * 100,
+			AliquotaPIS:                    percentualXML(it.AliqPIS),
 			ValorPIS:                       it.ValorPIS,
 			CodigoSituacaoTributariaCOFINS: cstCOFINS,
-			AliquotaCOFINS:                 it.AliqCOFINS * 100,
+			AliquotaCOFINS:                 percentualXML(it.AliqCOFINS),
 			ValorCOFINS:                    it.ValorCOFINS,
 			OrigemMercadoria:               origem,
 		}
 
 		// Diferimento parcial CST 51 (a configuração guarda fração; aceita
 		// porcentagem por engano, como o motor).
+		// O percentual é o da linha (regra do cadastro); linha antiga, sem ele,
+		// usa o da configuração, como antes.
 		if cstICMS == "51" && it.ValorICMSDiferido > 0 {
-			pct, _ := engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100)).Float64()
+			pct := it.ICMSDiferimentoPct
+			if pct <= 0 {
+				pct, _ = engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100)).Float64()
+			}
 			nfeIt.PercentualDiferimento = &pct
 			nfeIt.ValorICMSDiferido = &it.ValorICMSDiferido
+		}
+		if it.ICMSReducaoBasePct > 0 {
+			red := it.ICMSReducaoBasePct
+			nfeIt.PercentualReducaoBC = &red
+		}
+		if it.AliqCreditoSimples > 0 {
+			aliq, valor := it.AliqCreditoSimples, it.ValorCreditoSimples
+			nfeIt.AliquotaCreditoSimples, nfeIt.ValorCreditoSimples = &aliq, &valor
+		}
+		if it.ICMSUFDestBase > 0 {
+			nfeIt.UFDest = &focusnfe.NFEItemUFDest{
+				Base: it.ICMSUFDestBase, AliquotaInterna: it.ICMSUFDestAliqInterna, AliquotaInterestadual: it.ICMSAliqInterestadual,
+				ValorDestino: it.ICMSUFDestValor, PercentualFCP: it.FCPUFDestPct, ValorFCP: it.FCPUFDestValor,
+			}
 		}
 		if it.CodigoBeneficioFiscal != nil {
 			nfeIt.CodigoBeneficioFiscal = *it.CodigoBeneficioFiscal
@@ -363,8 +425,8 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 		// Substituição Tributária (CST 10/70) — populated when the engine computed ST
 		if it.ValorICMSST > 0 || it.BaseICMSST > 0 {
 			modST := 4 // 4 = MVA (margem de valor agregado)
-			mvaPct := it.MVA * 100
-			aliqST := it.AliqICMSST * 100
+			mvaPct := percentualXML(it.MVA)
+			aliqST := percentualXML(it.AliqICMSST)
 			baseST := it.BaseICMSST
 			valorST := it.ValorICMSST
 			nfeIt.ModalidadeBaseCalculoICMSST = &modST
@@ -372,6 +434,10 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			nfeIt.BaseCalculoICMSST = &baseST
 			nfeIt.AliquotaICMSST = &aliqST
 			nfeIt.ValorICMSST = &valorST
+			if it.ICMSSTReducaoBasePct > 0 {
+				red := it.ICMSSTReducaoBasePct
+				nfeIt.PercentualReducaoBCST = &red
+			}
 		}
 
 		result = append(result, nfeIt)
@@ -400,4 +466,10 @@ var _ = uuid.UUID{}
 type registroEnvioFocus interface {
 	RegistrarEnvioFocus(ctx context.Context, id int64, ref string) error
 	RegistrarRejeicao(ctx context.Context, id int64, motivo string) error
+}
+
+// percentualXML: a fração gravada (0,07) em percentual para o XML (7), com
+// quatro casas. Multiplicar em float deixava 7.000000000000001 no payload.
+func percentualXML(fracao float64) float64 {
+	return decimal.NewFromFloat(fracao).Mul(decimal.NewFromInt(100)).Round(4).InexactFloat64()
 }

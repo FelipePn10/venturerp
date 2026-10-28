@@ -287,6 +287,34 @@ func (r *RoutingRepositorySQLC) ListRoutesByItem(ctx context.Context, itemCode i
 	return out, nil
 }
 
+func (r *RoutingRepositorySQLC) ListRoutesByItemWithInactive(ctx context.Context, itemCode int64) ([]*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRoutesByItemWithInactive(ctx, sqlc.ListRoutesByItemWithInactiveParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
+	if err != nil {
+		return nil, fmt.Errorf("falha ao listar os roteiros do item %d: %w", itemCode, err)
+	}
+	out := make([]*entity.ManufacturingRoute, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, routeRowToEntity(row))
+	}
+	return out, nil
+}
+
+func (r *RoutingRepositorySQLC) ReactivateRoute(ctx context.Context, id int64) (bool, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	n, err := r.q.ReactivateRoute(ctx, sqlc.ReactivateRouteParams{ID: id, EnterpriseID: enterpriseID})
+	if err != nil {
+		return false, fmt.Errorf("reativando o roteiro %d: %w", id, err)
+	}
+	return n > 0, nil
+}
+
 func (r *RoutingRepositorySQLC) DeactivateRoute(ctx context.Context, id int64) error {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {

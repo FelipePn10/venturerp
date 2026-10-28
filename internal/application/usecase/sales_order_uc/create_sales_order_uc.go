@@ -38,6 +38,11 @@ func (uc *CreateSalesOrderUseCase) Execute(
 	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
 		return nil, err
 	}
+	finalidade, errFinalidade := normalizarFinalidade(dto.FinalidadeCompra)
+	if errFinalidade != nil {
+		return nil, errFinalidade
+	}
+	dto.FinalidadeCompra = finalidade
 
 	actor, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -82,6 +87,7 @@ func (uc *CreateSalesOrderUseCase) Execute(
 		SalesDivisionCode:           dto.SalesDivisionCode,
 		CommissionPct:               dto.CommissionPct,
 		TaxTypeCode:                 dto.TaxTypeCode,
+		FinalidadeCompra:            dto.FinalidadeCompra,
 		PresenceIndicator:           dto.PresenceIndicator,
 		SalesChannel:                dto.SalesChannel,
 		DefaultNFType:               dto.DefaultNFType,

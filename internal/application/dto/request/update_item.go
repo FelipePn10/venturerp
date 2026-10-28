@@ -53,9 +53,9 @@ type UpdatePlanningDTO struct {
 	LLC         *int               `json:"llc,omitempty"`
 	Ghost       *bool              `json:"ghost,omitempty"`
 	ABCClass    **string           `json:"abc_class,omitempty"`
-	MinimumLot  *int64             `json:"minimum_lot,omitempty"`
-	MultipleLot *int64             `json:"multiple_lot,omitempty"`
-	SafetyStock *int64             `json:"safety_stock,omitempty"`
+	MinimumLot  *decimal.Decimal   `json:"minimum_lot,omitempty"`
+	MultipleLot *decimal.Decimal   `json:"multiple_lot,omitempty"`
+	SafetyStock *decimal.Decimal   `json:"safety_stock,omitempty"`
 	Critical    *bool              `json:"critical,omitempty"`
 	Exclusive   *bool              `json:"exclusive,omitempty"`
 	Active      *bool              `json:"active,omitempty"`
@@ -81,8 +81,8 @@ type UpdateWarehouseDTO struct {
 	CyclicalCountConfig             OptionalCyclicalCountConfig      `json:"cyclical_count_config,omitempty"`
 	UnitOfMeasurement               *types.TypeUnitOfMeasurementItem `json:"unit_of_measurement,omitempty"`
 	AutomaticLow                    *bool                            `json:"automatic_low,omitempty"`
-	MinimumStock                    *int32                           `json:"minimum_stock,omitempty"`
-	AverageMonthlyConsumptionManual *int                             `json:"average_monthly_consumption_manual,omitempty"`
+	MinimumStock                    *decimal.Decimal                 `json:"minimum_stock,omitempty"`
+	AverageMonthlyConsumptionManual *decimal.Decimal                 `json:"average_monthly_consumption_manual,omitempty"`
 }
 
 // OptionalCyclicalCountConfig distinguishes omission (preserve) from an

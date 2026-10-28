@@ -45,6 +45,7 @@ func toPlanoContasResponse(p *entity.PlanoContas) *response.PlanoContasResponse 
 		CreatedAt:  p.CreatedAt,
 
 		AccountingAccountID: p.AccountingAccountID,
+		ExigeCentroCusto:    p.ExigeCentroCusto,
 	}
 }
 

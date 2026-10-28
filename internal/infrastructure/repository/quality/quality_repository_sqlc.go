@@ -11,7 +11,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
@@ -39,8 +38,8 @@ func (r *QualityRepositorySQLC) CreatePlan(ctx context.Context, plan *entity.Ins
 		RouteOperationID: pgutil.ToPgInt8Ptr(plan.RouteOperationID),
 		PointType:        sqlc.InspectionPointType(plan.PointType),
 		Description:      plan.Description,
-		SampleSize:       plan.SampleSize,
-		AcceptanceLevel:  plan.AcceptanceLevel,
+		SampleSize:       pgutil.ToPgNumericFromDecimal(plan.SampleSize),
+		AcceptanceLevel:  pgutil.ToPgNumericFromDecimal(plan.AcceptanceLevel),
 		Instructions:     pgutil.ToPgTextFromPtr(plan.Instructions),
 		CreatedBy:        pgutil.ToPgUUID(plan.CreatedBy),
 	})
@@ -100,9 +99,9 @@ func (r *QualityRepositorySQLC) AddCharacteristic(ctx context.Context, c *entity
 		EnterpriseID:   e,
 		PlanID:         c.PlanID,
 		Name:           c.Name,
-		Nominal:        float64PtrToPgFloat8(c.Nominal),
-		ToleranceUpper: float64PtrToPgFloat8(c.ToleranceUpper),
-		ToleranceLower: float64PtrToPgFloat8(c.ToleranceLower),
+		Nominal:        pgutil.ToPgNumericFromDecimalPtr(c.Nominal),
+		ToleranceUpper: pgutil.ToPgNumericFromDecimalPtr(c.ToleranceUpper),
+		ToleranceLower: pgutil.ToPgNumericFromDecimalPtr(c.ToleranceLower),
 		Unit:           pgutil.ToPgTextFromPtr(c.Unit),
 		IsCritical:     c.IsCritical,
 	})
@@ -141,9 +140,9 @@ func (r *QualityRepositorySQLC) CreateRecord(ctx context.Context, rec *entity.Qu
 		ProductionOrderID: pgutil.ToPgInt8Ptr(rec.ProductionOrderID),
 		Lot:               pgutil.ToPgTextFromPtr(rec.Lot),
 		ItemCode:          rec.ItemCode,
-		InspectedQty:      rec.InspectedQty,
-		ApprovedQty:       rec.ApprovedQty,
-		RejectedQty:       rec.RejectedQty,
+		InspectedQty:      pgutil.ToPgNumericFromDecimal(rec.InspectedQty),
+		ApprovedQty:       pgutil.ToPgNumericFromDecimal(rec.ApprovedQty),
+		RejectedQty:       pgutil.ToPgNumericFromDecimal(rec.RejectedQty),
 		Result:            sqlc.InspectionResultEnum(rec.Result),
 		InspectorID:       pgutil.ToPgInt8Ptr(rec.InspectorID),
 		Notes:             pgutil.ToPgTextFromPtr(rec.Notes),
@@ -164,7 +163,7 @@ func (r *QualityRepositorySQLC) AddMeasurement(ctx context.Context, m *entity.Qu
 		EnterpriseID:     e,
 		RecordID:         m.RecordID,
 		CharacteristicID: m.CharacteristicID,
-		MeasuredValue:    m.MeasuredValue,
+		MeasuredValue:    pgutil.ToPgNumericFromDecimal(m.MeasuredValue),
 		IsConformant:     m.IsConformant,
 	})
 }
@@ -227,10 +226,11 @@ func (r *QualityRepositorySQLC) CreateNC(ctx context.Context, nc *entity.NonConf
 		ProductionOrderID: pgutil.ToPgInt8Ptr(nc.ProductionOrderID),
 		ItemCode:          nc.ItemCode,
 		Lot:               pgutil.ToPgTextFromPtr(nc.Lot),
-		NonConformQty:     nc.NonConformQty,
+		NonConformQty:     pgutil.ToPgNumericFromDecimal(nc.NonConformQty),
 		Description:       nc.Description,
 		Severity:          sqlc.NcSeverityEnum(nc.Severity),
 		CreatedBy:         pgutil.ToPgUUID(nc.CreatedBy),
+		LotID:             pgutil.ToPgInt8Ptr(nc.LotID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating non-conformance: %w", err)
@@ -312,8 +312,8 @@ func planRowToEntity(row sqlc.InspectionPlan) *entity.InspectionPlan {
 		RouteOperationID: row.RouteOperationID,
 		PointType:        entity.InspectionPointType(row.PointType),
 		Description:      row.Description,
-		SampleSize:       pgutil.FromPgNumericToFloat64(row.SampleSize),
-		AcceptanceLevel:  pgutil.FromPgNumericToFloat64(row.AcceptanceLevel),
+		SampleSize:       pgutil.FromPgNumericToDecimal(row.SampleSize),
+		AcceptanceLevel:  pgutil.FromPgNumericToDecimal(row.AcceptanceLevel),
 		IsActive:         row.IsActive,
 		CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
@@ -333,18 +333,9 @@ func charRowToEntity(row sqlc.InspectionPlanCharacteristic) *entity.InspectionCh
 		Name:       row.Name,
 		IsCritical: row.IsCritical,
 	}
-	if row.Nominal.Valid {
-		v := pgutil.FromPgNumericToFloat64(row.Nominal)
-		e.Nominal = &v
-	}
-	if row.ToleranceUpper.Valid {
-		v := pgutil.FromPgNumericToFloat64(row.ToleranceUpper)
-		e.ToleranceUpper = &v
-	}
-	if row.ToleranceLower.Valid {
-		v := pgutil.FromPgNumericToFloat64(row.ToleranceLower)
-		e.ToleranceLower = &v
-	}
+	e.Nominal = pgutil.FromPgNumericToDecimalPtr(row.Nominal)
+	e.ToleranceUpper = pgutil.FromPgNumericToDecimalPtr(row.ToleranceUpper)
+	e.ToleranceLower = pgutil.FromPgNumericToDecimalPtr(row.ToleranceLower)
 	if row.Unit.Valid {
 		v := row.Unit.String
 		e.Unit = &v
@@ -358,9 +349,9 @@ func recordRowToEntity(row sqlc.QualityRecord) *entity.QualityRecord {
 		PlanID:            row.PlanID,
 		ProductionOrderID: row.ProductionOrderID,
 		ItemCode:          row.ItemCode,
-		InspectedQty:      pgutil.FromPgNumericToFloat64(row.InspectedQty),
-		ApprovedQty:       pgutil.FromPgNumericToFloat64(row.ApprovedQty),
-		RejectedQty:       pgutil.FromPgNumericToFloat64(row.RejectedQty),
+		InspectedQty:      pgutil.FromPgNumericToDecimal(row.InspectedQty),
+		ApprovedQty:       pgutil.FromPgNumericToDecimal(row.ApprovedQty),
+		RejectedQty:       pgutil.FromPgNumericToDecimal(row.RejectedQty),
 		Result:            entity.InspectionResult(row.Result),
 		InspectorID:       row.InspectorID,
 		InspectedAt:       pgutil.FromPgTimestamptz(row.InspectedAt),
@@ -385,7 +376,7 @@ func ncRowToEntity(row sqlc.NonConformance) *entity.NonConformance {
 		QualityRecordID:   row.QualityRecordID,
 		ProductionOrderID: row.ProductionOrderID,
 		ItemCode:          row.ItemCode,
-		NonConformQty:     pgutil.FromPgNumericToFloat64(row.NonconformQty),
+		NonConformQty:     pgutil.FromPgNumericToDecimal(row.NonconformQty),
 		Description:       row.Description,
 		Severity:          entity.NCSeverity(row.Severity),
 		IsOpen:            row.IsOpen,
@@ -418,13 +409,4 @@ func ncRowToEntity(row sqlc.NonConformance) *entity.NonConformance {
 		e.DisposedBy = &uid
 	}
 	return e
-}
-
-// ─── pgtype helpers ───────────────────────────────────────────────────────────
-
-func float64PtrToPgFloat8(v *float64) pgtype.Float8 {
-	if v == nil {
-		return pgtype.Float8{}
-	}
-	return pgtype.Float8{Float64: *v, Valid: true}
 }

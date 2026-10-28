@@ -139,10 +139,12 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	}
 
 	order := &plannedentity.PlannedOrder{
-		OrderNumber:          nextNum,
-		ItemCode:             sugg.ItemCode,
-		Mask:                 stringPtrIfNotEmpty(sugg.Mask),
-		Quantity:             sugg.Quantity,
+		OrderNumber: nextNum,
+		ItemCode:    sugg.ItemCode,
+		Mask:        stringPtrIfNotEmpty(sugg.Mask),
+		// A ordem planejada ainda guarda a quantidade em float (cadastro legado);
+		// a sugestão vem do MRP em decimal NUMERIC(18,6).
+		Quantity:             sugg.Quantity.InexactFloat64(),
 		OrderType:            mapMRPOrderType(sugg.OrderType),
 		Status:               types.StatusPlanned,
 		DemandType:           mapMRPDemandType(sugg.DemandType),

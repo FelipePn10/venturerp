@@ -13,6 +13,7 @@ const (
 	banco, fornecedores, clientes, jurosPag, descObt, jurosRec, descConc                      = 1, 2, 3, 4, 5, 6, 7
 	receita, ipiRec, stRec, icmsVend, icmsRec, pisVend, pisRec, cofVend, cofRec, cmv, estoque = 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
 	despMP, despEPI                                                                           = 30, 31
+	ibsVend, ibsRec, cbsVend, cbsRec                                                          = 40, 41, 42, 43
 )
 
 func fecha(t *testing.T, ls []Lancamento) map[int64]decimal.Decimal {
@@ -92,6 +93,7 @@ func contasSaida() ContasSaida {
 		Clientes: c(clientes), Receita: c(receita), IPIRecolher: c(ipiRec), ICMSSTRecolher: c(stRec),
 		ICMSVendas: c(icmsVend), ICMSRecolher: c(icmsRec), PISVendas: c(pisVend), PISRecolher: c(pisRec),
 		COFINSVendas: c(cofVend), COFINSRec: c(cofRec), CMV: c(cmv), Estoque: c(estoque),
+		IBSVendas: c(ibsVend), IBSRecolher: c(ibsRec), CBSVendas: c(cbsVend), CBSRecolher: c(cbsRec),
 	}
 }
 
@@ -113,6 +115,37 @@ func TestNotaSaida(t *testing.T) {
 		if !s[conta].Equal(d(v)) {
 			t.Fatalf("conta %d: %s, esperado %s", conta, s[conta], v)
 		}
+	}
+}
+
+// Venda de 2027: IBS e CBS saem da receita como dedução, igual ao ICMS — o
+// total da nota (e Clientes) não muda, só aparece o passivo a recolher.
+func TestNotaSaidaComIBSCBS(t *testing.T) {
+	ls, falta := NotaSaida(Saida{
+		Total: d("1000"), ICMS: d("120"), IBS: d("1"), CBS: d("88"), CMV: d("600"), GeraReceita: true,
+	}, contasSaida())
+	if len(falta) > 0 {
+		t.Fatal(falta)
+	}
+	s := fecha(t, ls)
+	casos := map[int64]string{clientes: "1000", receita: "-1000", ibsVend: "1", ibsRec: "-1", cbsVend: "88", cbsRec: "-88"}
+	for conta, v := range casos {
+		if !s[conta].Equal(d(v)) {
+			t.Fatalf("conta %d: %s, esperado %s", conta, s[conta], v)
+		}
+	}
+}
+
+// Sem conta de CBS cadastrada, a nota com CBS não é lançada pela metade.
+func TestNotaSaidaIBSCBSSemConta(t *testing.T) {
+	cs := contasSaida()
+	cs.CBSRecolher = nil
+	if _, falta := NotaSaida(Saida{Total: d("1000"), CBS: d("88"), GeraReceita: true}, cs); len(falta) != 1 || falta[0] != "falta a conta de CBS a recolher" {
+		t.Fatalf("faltando: %v", falta)
+	}
+	// Nota sem CBS (2026, ou CST sem tributo) não exige a conta.
+	if _, falta := NotaSaida(Saida{Total: d("1000"), GeraReceita: true}, cs); len(falta) > 0 {
+		t.Fatalf("não deveria exigir conta de CBS: %v", falta)
 	}
 }
 

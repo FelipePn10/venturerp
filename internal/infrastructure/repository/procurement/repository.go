@@ -128,27 +128,6 @@ func (r *Repository) UpdateRecordStatus(ctx context.Context, id int64, status en
 	return r.GetRecord(ctx, id)
 }
 
-func (r *Repository) CreateInspectionDisposition(ctx context.Context, d *entity.InspectionDisposition) (*entity.InspectionDisposition, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = r.pool.QueryRow(ctx, `
-		INSERT INTO procurement_inspection_dispositions
-			(record_id, approved_qty, rejected_qty, quarantine_warehouse_id, destination_warehouse_id, reason, disposed_by)
-		SELECT r.id, $2,$3,$4,$5,$6,$7 FROM procurement_records r WHERE r.id=$1 AND r.enterprise_code=$8
-		RETURNING id, disposed_at`,
-		d.RecordID, d.ApprovedQty, d.RejectedQty, d.QuarantineWarehouseID, d.DestinationWarehouseID, d.Reason, d.DisposedBy, emp,
-	).Scan(&d.ID, &d.DisposedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("registro de suprimentos %d não encontrado", d.RecordID))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("creating inspection disposition: %w", err)
-	}
-	return d, nil
-}
-
 func (r *Repository) CreateSupplierScorecard(ctx context.Context, s *entity.SupplierScorecard) (*entity.SupplierScorecard, error) {
 	s.OverallScore = (s.QualityScore * 0.40) + (s.DeliveryScore * 0.30) + (s.CommercialScore * 0.20) + (s.ServiceScore * 0.10)
 	emp, err := empresa(ctx)
@@ -300,185 +279,20 @@ func (r *Repository) FindReceivingInspectionRoute(ctx context.Context, enterpris
 		LIMIT 1`, enterpriseCode, *classificationCode)
 }
 
-func (r *Repository) CreateReceivingInspectionOrder(ctx context.Context, order *entity.ReceivingInspectionOrder) (*entity.ReceivingInspectionOrder, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = r.pool.QueryRow(ctx, `
-		INSERT INTO receiving_inspection_orders
-			(route_id, procurement_record_id, source, supplier_code, purchase_order_code, purchase_order_item_code,
-			 fiscal_entry_code, receiving_notice_code, item_code, mask, lot, serial_number, warehouse_id,
-			 quantity, certificate, supplier_note, model, notes, created_by, enterprise_code)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
-		RETURNING id, order_number, status, inspected_qty, approved_qty, rejected_qty, rework_qty, restricted_qty, created_at, updated_at`,
-		order.RouteID, order.ProcurementRecordID, order.Source, order.SupplierCode, order.PurchaseOrderCode, order.PurchaseOrderItemCode,
-		order.FiscalEntryCode, order.ReceivingNoticeCode, order.ItemCode, order.Mask, order.Lot, order.SerialNumber, order.WarehouseID,
-		order.Quantity, order.Certificate, order.SupplierNote, order.Model, order.Notes, order.CreatedBy, emp,
-	).Scan(&order.ID, &order.OrderNumber, &order.Status, &order.InspectedQty, &order.ApprovedQty, &order.RejectedQty, &order.ReworkQty, &order.RestrictedQty, &order.CreatedAt, &order.UpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("creating receiving inspection order: %w", err)
-	}
-	return order, nil
-}
-
-func (r *Repository) GetReceivingInspectionOrder(ctx context.Context, id int64) (*entity.ReceivingInspectionOrder, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.pool.Query(ctx, baseInspectionOrderSelect()+` WHERE id=$1 AND enterprise_code=$2`, id, emp)
-	if err != nil {
-		return nil, fmt.Errorf("fetching receiving inspection order: %w", err)
-	}
-	defer rows.Close()
-	orders, err := scanInspectionOrders(rows)
-	if err != nil {
-		return nil, err
-	}
-	if len(orders) == 0 {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", id))
-	}
-	return orders[0], nil
-}
-
-func (r *Repository) ListReceivingInspectionOrders(ctx context.Context, status string) ([]*entity.ReceivingInspectionOrder, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	query := baseInspectionOrderSelect() + ` WHERE enterprise_code=$1`
-	args := []any{emp}
-	if status != "" {
-		query += ` AND status=$2`
-		args = append(args, status)
-	}
-	query += ` ORDER BY created_at DESC, id DESC LIMIT 200`
-	rows, err := r.pool.Query(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("listing receiving inspection orders: %w", err)
-	}
-	defer rows.Close()
-	return scanInspectionOrders(rows)
-}
-
-func (r *Repository) CreateReceivingInspectionResult(ctx context.Context, result *entity.ReceivingInspectionResult) (*entity.ReceivingInspectionResult, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("beginning inspection result tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	err = tx.QueryRow(ctx, `
-		INSERT INTO receiving_inspection_results
-			(order_id, step_id, sequence, sample_index, measured_value, min_value, max_value,
-			 attribute_description, is_approved, notes, created_by)
-		SELECT o.id,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11 FROM receiving_inspection_orders o WHERE o.id=$1 AND o.enterprise_code=$12
-		RETURNING id, created_at`,
-		result.OrderID, result.StepID, result.Sequence, result.SampleIndex, result.MeasuredValue, result.MinValue,
-		result.MaxValue, result.AttributeDescription, result.IsApproved, result.Notes, result.CreatedBy, emp,
-	).Scan(&result.ID, &result.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", result.OrderID))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("creating receiving inspection result: %w", err)
-	}
-
-	status := "PENDING_INSPECTION"
-	if !result.IsApproved {
-		status = "PENDING_ANALYSIS"
-	}
-	_, err = tx.Exec(ctx, `
-		UPDATE receiving_inspection_orders
-		SET inspected_qty = LEAST(quantity, inspected_qty + 1),
-		    approved_qty = approved_qty + CASE WHEN $2 THEN 1 ELSE 0 END,
-		    rejected_qty = rejected_qty + CASE WHEN $2 THEN 0 ELSE 1 END,
-		    status = CASE WHEN $3 = 'PENDING_ANALYSIS' THEN 'PENDING_ANALYSIS'::receiving_inspection_order_status ELSE status END,
-		    updated_at = NOW()
-		WHERE id=$1 AND enterprise_code=$4`,
-		result.OrderID, result.IsApproved, status, emp)
-	if err != nil {
-		return nil, fmt.Errorf("updating receiving inspection order from result: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("committing inspection result tx: %w", err)
-	}
-	return result, nil
-}
-
-func (r *Repository) CreateReceivingInspectionAnalysis(ctx context.Context, analysis *entity.ReceivingInspectionAnalysis) (*entity.ReceivingInspectionAnalysis, error) {
-	emp, err := empresa(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("beginning inspection analysis tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	err = tx.QueryRow(ctx, `
-		INSERT INTO receiving_inspection_analyses
-			(order_id, conform_qty, rejected_qty, rework_qty, restricted_qty, treatment, affects_supplier_score, notes, analyzed_by)
-		SELECT o.id,$2,$3,$4,$5,$6,$7,$8,$9 FROM receiving_inspection_orders o WHERE o.id=$1 AND o.enterprise_code=$10
-		RETURNING id, analyzed_at`,
-		analysis.OrderID, analysis.ConformQty, analysis.RejectedQty, analysis.ReworkQty, analysis.RestrictedQty,
-		analysis.Treatment, analysis.AffectsSupplierScore, analysis.Notes, analysis.AnalyzedBy, emp,
-	).Scan(&analysis.ID, &analysis.AnalyzedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", analysis.OrderID))
-	}
-	if err != nil {
-		return nil, fmt.Errorf("creating receiving inspection analysis: %w", err)
-	}
-
-	status := "APPROVED"
-	if analysis.RejectedQty > 0 || analysis.ReworkQty > 0 {
-		status = "REJECTED"
-	}
-	if analysis.ConformQty > 0 && (analysis.RejectedQty > 0 || analysis.ReworkQty > 0 || analysis.RestrictedQty > 0) {
-		status = "PARTIAL"
-	}
-	_, err = tx.Exec(ctx, `
-		UPDATE receiving_inspection_orders
-		SET approved_qty=$2, rejected_qty=$3, rework_qty=$4, restricted_qty=$5,
-		    status=$6::receiving_inspection_order_status, updated_at=NOW()
-		WHERE id=$1 AND enterprise_code=$7`,
-		analysis.OrderID, analysis.ConformQty, analysis.RejectedQty, analysis.ReworkQty, analysis.RestrictedQty, status, emp)
-	if err != nil {
-		return nil, fmt.Errorf("updating receiving inspection order from analysis: %w", err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("committing inspection analysis tx: %w", err)
-	}
-	order, err := r.GetReceivingInspectionOrder(ctx, analysis.OrderID)
-	if err != nil {
-		return nil, err
-	}
-	analysis.Order = order
-	return analysis, nil
-}
-
 func (r *Repository) LinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64, linkedBy uuid.UUID) (*entity.ReceivingInspectionQualityReport, error) {
 	row := r.pool.QueryRow(ctx, `
-		INSERT INTO receiving_inspection_quality_reports
-			(enterprise_id, inspection_order_id, quality_report_id, linked_by)
+		INSERT INTO quality_lot_supplier_reports
+			(enterprise_id, lot_id, quality_report_id, linked_by)
 		SELECT $1, o.id, q.id, $4
-		FROM receiving_inspection_orders o
-		JOIN items i ON i.code=o.item_code AND i.enterprise_id=$1
+		FROM quality_inspection_lots o
 		JOIN item_supplier_quality_reports q ON q.id=$3 AND q.enterprise_id=$1
 		JOIN item_preferred_suppliers s ON s.id=q.item_supplier_id
 			AND s.enterprise_id=$1 AND s.item_code=o.item_code
 			AND (o.supplier_code IS NULL OR s.supplier_code=o.supplier_code)
-		WHERE o.id=$2
-		ON CONFLICT (inspection_order_id, quality_report_id)
+		WHERE o.id=$2 AND o.enterprise_id=$1
+		ON CONFLICT (lot_id, quality_report_id)
 		DO UPDATE SET quality_report_id=EXCLUDED.quality_report_id
-		RETURNING inspection_order_id, quality_report_id, linked_at, linked_by`, enterpriseID, orderID, reportID, linkedBy)
+		RETURNING lot_id, quality_report_id, linked_at, linked_by`, enterpriseID, orderID, reportID, linkedBy)
 	link := &entity.ReceivingInspectionQualityReport{EnterpriseID: enterpriseID}
 	if err := row.Scan(&link.InspectionOrderID, &link.QualityReportID, &link.LinkedAt, &link.LinkedBy); err != nil {
 		if err == pgx.ErrNoRows {
@@ -500,13 +314,11 @@ func (r *Repository) LinkReceivingInspectionQualityReport(ctx context.Context, e
 
 func (r *Repository) ListReceivingInspectionQualityReports(ctx context.Context, enterpriseID, orderID int64) ([]*entity.ReceivingInspectionQualityReport, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT l.enterprise_id,l.inspection_order_id,l.quality_report_id,q.item_supplier_id,
+		SELECT l.enterprise_id,l.lot_id,l.quality_report_id,q.item_supplier_id,
 			q.registered_on,q.status,q.report_file_name,q.report_content_type,q.notes,l.linked_at,l.linked_by
-		FROM receiving_inspection_quality_reports l
+		FROM quality_lot_supplier_reports l
 		JOIN item_supplier_quality_reports q ON q.id=l.quality_report_id AND q.enterprise_id=l.enterprise_id
-		JOIN receiving_inspection_orders o ON o.id=l.inspection_order_id
-		JOIN items i ON i.code=o.item_code AND i.enterprise_id=l.enterprise_id
-		WHERE l.enterprise_id=$1 AND l.inspection_order_id=$2
+		WHERE l.enterprise_id=$1 AND l.lot_id=$2
 		ORDER BY q.registered_on DESC,q.id DESC`, enterpriseID, orderID)
 	if err != nil {
 		return nil, fmt.Errorf("listando laudos da inspeção: %w", err)
@@ -525,8 +337,8 @@ func (r *Repository) ListReceivingInspectionQualityReports(ctx context.Context, 
 }
 
 func (r *Repository) UnlinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM receiving_inspection_quality_reports
-		WHERE enterprise_id=$1 AND inspection_order_id=$2 AND quality_report_id=$3`, enterpriseID, orderID, reportID)
+	tag, err := r.pool.Exec(ctx, `DELETE FROM quality_lot_supplier_reports
+		WHERE enterprise_id=$1 AND lot_id=$2 AND quality_report_id=$3`, enterpriseID, orderID, reportID)
 	if err != nil {
 		return fmt.Errorf("desvinculando laudo da inspeção: %w", err)
 	}
@@ -627,31 +439,6 @@ func (r *Repository) listStepAttributes(ctx context.Context, stepID int64) ([]*e
 			return nil, fmt.Errorf("scanning receiving inspection step attribute: %w", err)
 		}
 		out = append(out, &attr)
-	}
-	return out, rows.Err()
-}
-
-func baseInspectionOrderSelect() string {
-	return `SELECT id, order_number, route_id, procurement_record_id, source, supplier_code, purchase_order_code,
-		purchase_order_item_code, fiscal_entry_code, receiving_notice_code, item_code, mask, lot, serial_number,
-		warehouse_id, quantity, inspected_qty, approved_qty, rejected_qty, rework_qty, restricted_qty, status,
-		certificate, supplier_note, model, notes, created_at, updated_at, created_by
-		FROM receiving_inspection_orders`
-}
-
-func scanInspectionOrders(rows pgx.Rows) ([]*entity.ReceivingInspectionOrder, error) {
-	var out []*entity.ReceivingInspectionOrder
-	for rows.Next() {
-		var order entity.ReceivingInspectionOrder
-		if err := rows.Scan(&order.ID, &order.OrderNumber, &order.RouteID, &order.ProcurementRecordID, &order.Source,
-			&order.SupplierCode, &order.PurchaseOrderCode, &order.PurchaseOrderItemCode, &order.FiscalEntryCode,
-			&order.ReceivingNoticeCode, &order.ItemCode, &order.Mask, &order.Lot, &order.SerialNumber, &order.WarehouseID,
-			&order.Quantity, &order.InspectedQty, &order.ApprovedQty, &order.RejectedQty, &order.ReworkQty,
-			&order.RestrictedQty, &order.Status, &order.Certificate, &order.SupplierNote, &order.Model, &order.Notes,
-			&order.CreatedAt, &order.UpdatedAt, &order.CreatedBy); err != nil {
-			return nil, fmt.Errorf("scanning receiving inspection order: %w", err)
-		}
-		out = append(out, &order)
 	}
 	return out, rows.Err()
 }
@@ -985,17 +772,24 @@ func (r *Repository) AggregateSupplierPerformance(ctx context.Context, supplierC
 		return nil, err
 	}
 	agg := &entity.SupplierPerformanceAggregate{}
-	// Quality: from receiving inspection orders/analyses in the window.
+	empresaID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Qualidade: lotes de inspeção decididos do fornecedor no período (a
+	// decisão marcada para não afetar o IQF fica de fora). Recusa é lote com
+	// parte rejeitada, sucateada ou em retrabalho, ou recusado pela amostragem.
 	err = r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
-			COUNT(*) FILTER (WHERE o.rejected_qty > 0 OR o.status = 'REJECTED'),
-			COALESCE(SUM(o.quantity), 0),
-			COALESCE(SUM(o.rejected_qty), 0)
-		FROM receiving_inspection_orders o
-		WHERE o.supplier_code = $1 AND o.enterprise_code = $4
-		  AND o.created_at >= $2 AND o.created_at < ($3::date + INTERVAL '1 day')`,
-		supplierCode, from, to, emp).Scan(&agg.TotalReceipts, &agg.RejectedReceipts, &agg.InspectedQty, &agg.RejectedQty)
+			COUNT(*) FILTER (WHERE d.qtd_rejeitada + d.qtd_sucata + d.qtd_retrabalho > 0 OR d.aceito_amostragem = FALSE),
+			COALESCE(SUM(l.quantidade), 0),
+			COALESCE(SUM(d.qtd_rejeitada + d.qtd_sucata + d.qtd_retrabalho), 0)
+		FROM quality_inspection_lots l
+		JOIN quality_lot_decisions d ON d.lot_id = l.id AND d.enterprise_id = l.enterprise_id
+		WHERE l.supplier_code = $1 AND l.enterprise_id = $4 AND d.afeta_iqf
+		  AND l.created_at >= $2 AND l.created_at < ($3::date + INTERVAL '1 day')`,
+		supplierCode, from, to, empresaID).Scan(&agg.TotalReceipts, &agg.RejectedReceipts, &agg.InspectedQty, &agg.RejectedQty)
 	if err != nil {
 		return nil, fmt.Errorf("aggregating supplier quality: %w", err)
 	}

@@ -41,16 +41,16 @@ func (r *MRPCalculationRepositorySQLC) ReplacePegging(ctx context.Context, planC
 		sKinds := make([]string, n)
 		sCodes := make([]*int64, n)
 		sDates := make([]*time.Time, n)
-		qtds := make([]float64, n)
+		qtds := make([]string, n) // decimal exato, como texto
 		for i, rec := range records {
 			items[i], dKinds[i], dCodes[i], needs[i] = rec.ItemCode, rec.DemandKind, rec.DemandCode, rec.NeedDate
-			sKinds[i], sCodes[i], sDates[i], qtds[i] = rec.SupplyKind, rec.SupplyCode, rec.SupplyDate, rec.Quantity
+			sKinds[i], sCodes[i], sDates[i], qtds[i] = rec.SupplyKind, rec.SupplyCode, rec.SupplyDate, rec.Quantity.String()
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO mrp_pegging (enterprise_id, plan_code, item_code, demand_kind, demand_code, need_date,
 			                         supply_kind, supply_code, supply_date, quantity)
-			SELECT $1, $2, u.item, u.dkind, u.dcode, u.need, u.skind, u.scode, u.sdate, u.qtd
-			  FROM unnest($3::bigint[], $4::text[], $5::bigint[], $6::date[], $7::text[], $8::bigint[], $9::date[], $10::numeric[])
+			SELECT $1, $2, u.item, u.dkind, u.dcode, u.need, u.skind, u.scode, u.sdate, u.qtd::numeric
+			  FROM unnest($3::bigint[], $4::text[], $5::bigint[], $6::date[], $7::text[], $8::bigint[], $9::date[], $10::text[])
 			       AS u(item, dkind, dcode, need, skind, scode, sdate, qtd)`,
 			e, planCode, items, dKinds, dCodes, needs, sKinds, sCodes, sDates, qtds); err != nil {
 			return fmt.Errorf("gravando o pegging do plano: %w", err)

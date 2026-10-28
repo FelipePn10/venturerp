@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -10,10 +12,10 @@ type MRPItemProfile struct {
 	ItemCode        int64
 	PlanCode        int64
 	CalculationDate time.Time
-	Demand          float64
-	OrdersPlanned   float64
-	OrdersFirm      float64
-	StockProjected  float64
+	Demand          decimal.Decimal
+	OrdersPlanned   decimal.Decimal
+	OrdersFirm      decimal.Decimal
+	StockProjected  decimal.Decimal
 	LLC             int
 	NeedDate        time.Time
 	CreatedAt       time.Time
@@ -26,7 +28,7 @@ type MRPProfileDetail struct {
 	DetailType     string
 	SourceCode     *int64
 	ParentItemCode *int64
-	Quantity       float64
+	Quantity       decimal.Decimal
 }
 
 type MRPCalculationLog struct {
@@ -44,9 +46,9 @@ type MRPCalculationLog struct {
 type StockSnapshot struct {
 	ItemCode      int64
 	WarehouseCode int64
-	Quantity      float64
-	ReservedQty   float64
-	SafetyStock   float64
+	Quantity      decimal.Decimal
+	ReservedQty   decimal.Decimal
+	SafetyStock   decimal.Decimal
 	SnapshotDate  time.Time
 	CreatedAt     time.Time
 }
@@ -56,8 +58,8 @@ type SalesOrderDemand struct {
 	SalesOrderCode int64
 	ItemCode       int64
 	Mask           *string
-	Quantity       float64
-	DeliveredQty   float64
+	Quantity       decimal.Decimal
+	DeliveredQty   decimal.Decimal
 	DeliveryDate   time.Time
 	DivisionCode   *int64
 	Status         string
@@ -85,7 +87,7 @@ type MRPInput struct {
 	PlanCode             int64
 	ItemCode             int64
 	Mask                 string
-	Quantity             float64
+	Quantity             decimal.Decimal
 	NeedDate             time.Time
 	SalesOrderCode       *int64
 	ParentItemCode       *int64
@@ -108,9 +110,9 @@ type MRPInput struct {
 type MRPOutput struct {
 	ItemCode       int64
 	LLC            int
-	Demand         float64
-	StockProjected float64
-	NetRequirement float64
+	Demand         decimal.Decimal
+	StockProjected decimal.Decimal
+	NetRequirement decimal.Decimal
 	PlannedOrders  []*PlannedOrderSuggestion
 }
 
@@ -120,35 +122,35 @@ type MRPOutput struct {
 // mostrava a chave interna (10) no lugar do código que o usuário conhece
 // (MP-CH-3MM), e o mesmo valor ia para a ordem firmada.
 type PlannedOrderSuggestion struct {
-	Code                 int64      `json:"code"`
-	OrderNumber          *int64     `json:"order_number"`
-	WarehouseCode        *int64     `json:"warehouse_code"`
-	InterFactory         bool       `json:"inter_factory"`
-	SourceEnterpriseCode *int64     `json:"source_enterprise_code"`
-	AutoRelease          bool       `json:"auto_release"`
-	PlanCode             int64      `json:"plan_code"`
-	ItemCode             int64      `json:"item_code"`
-	Mask                 string     `json:"mask"`
-	Quantity             float64    `json:"quantity"`
-	NeedDate             time.Time  `json:"need_date"`
-	StartDate            *time.Time `json:"start_date"`
-	OrderType            string     `json:"order_type"`
-	DemandType           string     `json:"demand_type"`
-	ParentItemCode       *int64     `json:"parent_item_code"`
-	LLC                  int        `json:"llc"`
-	MachineID            *int64     `json:"machine_id"`
-	MachineCode          *int64     `json:"machine_code,omitempty"`
-	EstimatedEndAt       *time.Time `json:"estimated_end_at,omitempty"`
-	RequestedStartDate   *time.Time `json:"-"`
-	CapacityLate         bool       `json:"capacity_late"`
-	ProductionTime       *float64   `json:"production_time"`
-	Priority             *string    `json:"priority"`
-	Notes                *string    `json:"notes"`
-	RouteOperationID     *int64     `json:"route_operation_id"`
-	OperationID          *int64     `json:"operation_id"`
-	SupplierCode         *int64     `json:"supplier_code"`
-	ServiceItemCode      *int64     `json:"service_item_code"`
-	RemittanceType       *string    `json:"remittance_type"`
+	Code                 int64           `json:"code"`
+	OrderNumber          *int64          `json:"order_number"`
+	WarehouseCode        *int64          `json:"warehouse_code"`
+	InterFactory         bool            `json:"inter_factory"`
+	SourceEnterpriseCode *int64          `json:"source_enterprise_code"`
+	AutoRelease          bool            `json:"auto_release"`
+	PlanCode             int64           `json:"plan_code"`
+	ItemCode             int64           `json:"item_code"`
+	Mask                 string          `json:"mask"`
+	Quantity             decimal.Decimal `json:"quantity"`
+	NeedDate             time.Time       `json:"need_date"`
+	StartDate            *time.Time      `json:"start_date"`
+	OrderType            string          `json:"order_type"`
+	DemandType           string          `json:"demand_type"`
+	ParentItemCode       *int64          `json:"parent_item_code"`
+	LLC                  int             `json:"llc"`
+	MachineID            *int64          `json:"machine_id"`
+	MachineCode          *int64          `json:"machine_code,omitempty"`
+	EstimatedEndAt       *time.Time      `json:"estimated_end_at,omitempty"`
+	RequestedStartDate   *time.Time      `json:"-"`
+	CapacityLate         bool            `json:"capacity_late"`
+	ProductionTime       *float64        `json:"production_time"`
+	Priority             *string         `json:"priority"`
+	Notes                *string         `json:"notes"`
+	RouteOperationID     *int64          `json:"route_operation_id"`
+	OperationID          *int64          `json:"operation_id"`
+	SupplierCode         *int64          `json:"supplier_code"`
+	ServiceItemCode      *int64          `json:"service_item_code"`
+	RemittanceType       *string         `json:"remittance_type"`
 	// PlannedOrderCode é a ordem planejada que a sugestão gerou ao ser firmada.
 	// Firmar de novo devolve a mesma ordem; sem este campo a tela não sabia o
 	// que já tinha sido firmado e contava tudo como pendente.
@@ -249,8 +251,8 @@ type MachineTimeInfo struct {
 type KanbanCardInfo struct {
 	CardCode        int64
 	ItemCode        int64
-	ReorderPoint    float64
-	QuantityPerCard float64
+	ReorderPoint    decimal.Decimal
+	QuantityPerCard decimal.Decimal
 	CardCount       int
 	IsActive        bool
 }
@@ -262,7 +264,7 @@ type MPSItemInfo struct {
 	PeriodType  string
 	PeriodValue int
 	Year        int
-	Quantity    float64
+	Quantity    decimal.Decimal
 	IsFirm      bool
 }
 
@@ -270,7 +272,7 @@ type MPSItemInfo struct {
 // part of the main item record (e.g. maximum stock level for MIN_MAX).
 type ItemPlanningExtra struct {
 	ItemCode     int64
-	MaximumStock float64
+	MaximumStock decimal.Decimal
 	SafetyTime   int
 	Coverage     int
 	GroupingKey  *string
@@ -320,7 +322,7 @@ type PeggingRecord struct {
 	SupplyKind string
 	SupplyCode *int64
 	SupplyDate *time.Time
-	Quantity   float64
+	Quantity   decimal.Decimal
 }
 
 // ── Cenários de simulação ───────────────────────────────────────────────────
@@ -340,7 +342,7 @@ type ScenarioDemandChange struct {
 	RefCode  *int64
 	ItemCode int64
 	Mask     string
-	Quantity *float64
+	Quantity *decimal.Decimal
 	NeedDate *time.Time
 }
 
@@ -350,7 +352,7 @@ type ScenarioDemandChange struct {
 type ScenarioAdjustments struct {
 	Demands []ScenarioDemandChange
 	// StockDelta é a entrada (+) ou baixa (−) simulada por item.
-	StockDelta map[int64]float64
+	StockDelta map[int64]decimal.Decimal
 	// LeadTimeDays substitui o prazo do item.
 	LeadTimeDays map[int64]int
 }
@@ -366,7 +368,7 @@ type PeggingRefs struct {
 type PeggingOrderLabel struct {
 	OrderNumber *int64
 	OrderType   string
-	Quantity    float64
+	Quantity    decimal.Decimal
 	ItemCode    int64
 	StartDate   *time.Time
 	NeedDate    *time.Time

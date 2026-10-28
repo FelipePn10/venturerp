@@ -76,6 +76,19 @@ func (uc *CFOPUseCase) Update(ctx context.Context, dto request.UpdateCFOPDTO) (*
 	if err := normalizaCFOP(c); err != nil {
 		return nil, err
 	}
+	// O que não veio no corpo fica como está: a nota explicativa da tabela
+	// oficial e os campos que a tela não mostra não se apagam numa edição.
+	if atual, err := uc.Repo.GetCFOPByCode(ctx, dto.Code); err == nil && atual != nil && atual.ID == dto.ID {
+		if c.DescriptionFull == nil {
+			c.DescriptionFull = atual.DescriptionFull
+		}
+		if c.OrigemClasIPI == nil {
+			c.OrigemClasIPI = atual.OrigemClasIPI
+		}
+		if c.CodigoAnexoSN == nil {
+			c.CodigoAnexoSN = atual.CodigoAnexoSN
+		}
+	}
 	updated, err := uc.Repo.UpdateCFOP(ctx, c)
 	if err != nil {
 		return nil, err

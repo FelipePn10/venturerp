@@ -70,10 +70,10 @@ func (uc *AddAppointmentUseCase) Execute(
 		return nil, err
 	}
 	dto.EmployeeID = &operador
-	if dto.ProducedQty < 0 || dto.ScrappedQty < 0 || dto.ProducedQty+dto.ScrappedQty <= 0 {
+	if dto.ProducedQty.IsNegative() || dto.ScrappedQty.IsNegative() || !dto.ProducedQty.Add(dto.ScrappedQty).IsPositive() {
 		return nil, errorsuc.NewValidationError("quantidades boas/refugadas devem ser nao negativas e possuir total maior que zero")
 	}
-	if dto.ScrappedQty > 0 && (dto.ScrapReason == nil || strings.TrimSpace(*dto.ScrapReason) == "") {
+	if dto.ScrappedQty.IsPositive() && (dto.ScrapReason == nil || strings.TrimSpace(*dto.ScrapReason) == "") {
 		return nil, errorsuc.NewValidationError("informe o motivo do refugo")
 	}
 
@@ -133,7 +133,7 @@ func (uc *AddAppointmentUseCase) Execute(
 
 func (uc *AddAppointmentUseCase) shouldBackflush(dto request.AddAppointmentDTO) bool {
 	return uc.StructureRepo != nil && uc.StockRepo != nil &&
-		dto.BackflushWarehouseID != nil && dto.ProducedQty > 0
+		dto.BackflushWarehouseID != nil && dto.ProducedQty.IsPositive()
 }
 
 // planejarBaixas calcula as saídas dos componentes (backflush) para a
@@ -166,7 +166,8 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 	for _, c := range children {
 		// A fórmula de perdas é a mesma do MRP (structentity.QuantidadeComPerda);
 		// aqui usávamos (1 + perda/100) e o consumo divergia do planejado.
-		base := dto.ProducedQty
+		// A estrutura ainda calcula em float (perda e quantidade por pai).
+		base := dto.ProducedQty.InexactFloat64()
 		if c.fixed {
 			base = 1
 		}

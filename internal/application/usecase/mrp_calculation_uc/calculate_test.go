@@ -2,6 +2,7 @@ package mrp_calculation_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func (*calculationServiceStub) CalculateItemLLC(context.Context, int64) (int, er
 func (*calculationServiceStub) CalculateNetRequirements(context.Context, *entity.MRPInput) (*entity.MRPOutput, error) {
 	return nil, nil
 }
-func (*calculationServiceStub) ExplodeStructure(context.Context, int64, string, float64, int) ([]*entity.MRPInput, error) {
+func (*calculationServiceStub) ExplodeStructure(context.Context, int64, string, decimal.Decimal, int) ([]*entity.MRPInput, error) {
 	return nil, nil
 }
 

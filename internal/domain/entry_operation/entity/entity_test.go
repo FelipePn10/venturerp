@@ -49,3 +49,41 @@ func TestEntryOperationType_ValidateUF(t *testing.T) {
 		})
 	}
 }
+
+func TestNaturezaECreditosDaOperacao(t *testing.T) {
+	if n, err := NormalizarNatureza(" 1.101 "); err != nil || n != "1101" {
+		t.Fatalf("1.101 → 1101: %q %v", n, err)
+	}
+	for _, ruim := range []string{"110", "51010", "5101", "abc"} {
+		if _, err := NormalizarNatureza(ruim); err == nil {
+			t.Errorf("natureza %q deveria ser recusada", ruim)
+		}
+	}
+	casos := []struct {
+		natureza  string
+		icms, ipi bool
+		ok        bool
+	}{
+		{"1556", true, false, false}, // uso e consumo não credita ICMS
+		{"2556", false, true, false}, // nem IPI
+		{"1556", false, false, true},
+		{"1551", false, true, false}, // ativo não credita IPI
+		{"1551", true, false, false}, // ICMS do ativo vai pelo CIAP
+		{"1551", false, false, true},
+		{"1101", true, true, true},
+	}
+	for _, c := range casos {
+		o := &EntryOperationType{NatureOperation: c.natureza, CreditaICMS: c.icms, CreditaIPI: c.ipi}
+		if err := o.ConferirCreditos(); (err == nil) != c.ok {
+			t.Errorf("%s icms=%v ipi=%v: err=%v", c.natureza, c.icms, c.ipi, err)
+		}
+	}
+	g := int64(7)
+	o := &EntryOperationType{Code: 3, Description: "Compra SP", StateGroupCode: &g}
+	if err := o.ValeParaFornecedor("PR", false); err == nil {
+		t.Error("fornecedor fora do grupo deveria ser recusado")
+	}
+	if err := o.ValeParaFornecedor("SP", true); err != nil {
+		t.Error(err)
+	}
+}

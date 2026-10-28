@@ -4,6 +4,7 @@ package mrp_calculation
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -48,7 +49,7 @@ func TestSuggestionNumberAndItemLLCArePersisted(t *testing.T) {
 	warehouseCode := int64(936001)
 	sourceEnterpriseCode := int64(935001)
 	created, err := repo.CreatePlannedOrderSuggestion(tenantCtx, &entity.PlannedOrderSuggestion{
-		OrderNumber: &number, PlanCode: planCode, ItemCode: itemID, Quantity: 2,
+		OrderNumber: &number, PlanCode: planCode, ItemCode: itemID, Quantity: decimal.NewFromFloat(2),
 		NeedDate: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), OrderType: "TECHNICAL_ASSISTANCE", DemandType: "INTER_FACTORY", LLC: 3, WarehouseCode: &warehouseCode,
 		InterFactory: true, SourceEnterpriseCode: &sourceEnterpriseCode, AutoRelease: true,
 	})
@@ -56,7 +57,7 @@ func TestSuggestionNumberAndItemLLCArePersisted(t *testing.T) {
 		t.Fatalf("unexpected numbered suggestion: %#v, %v", created, err)
 	}
 	if _, err := repo.CreatePlannedOrderSuggestion(tenantCtx, &entity.PlannedOrderSuggestion{
-		OrderNumber: &number, PlanCode: planCode, ItemCode: itemID, Quantity: 1,
+		OrderNumber: &number, PlanCode: planCode, ItemCode: itemID, Quantity: decimal.NewFromFloat(1),
 		NeedDate: time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC), OrderType: "FABRICACAO", DemandType: "INDEPENDENTE",
 	}); err == nil {
 		t.Fatal("expected duplicated suggestion order number to be rejected")

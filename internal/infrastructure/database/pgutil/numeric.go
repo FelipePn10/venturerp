@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 func ToPgNumericFromString(s string) pgtype.Numeric {
@@ -48,4 +49,35 @@ func ToPgNumericFromFloat64Ptr(v *float64) pgtype.Numeric {
 		return pgtype.Numeric{}
 	}
 	return ToPgNumericFromFloat64(*v)
+}
+
+// ToPgNumericFromDecimal grava o decimal sem passar por float64, preservando a
+// escala exata digitada.
+func ToPgNumericFromDecimal(v decimal.Decimal) pgtype.Numeric {
+	return pgtype.Numeric{Int: v.Coefficient(), Exp: v.Exponent(), Valid: true}
+}
+
+// ToPgNumericFromDecimalPtr devolve NULL para nil.
+func ToPgNumericFromDecimalPtr(v *decimal.Decimal) pgtype.Numeric {
+	if v == nil {
+		return pgtype.Numeric{}
+	}
+	return ToPgNumericFromDecimal(*v)
+}
+
+// FromPgNumericToDecimal lê o numeric exato; NULL, NaN e infinito viram zero.
+func FromPgNumericToDecimal(v pgtype.Numeric) decimal.Decimal {
+	if !v.Valid || v.Int == nil || v.NaN || v.InfinityModifier != pgtype.Finite {
+		return decimal.Zero
+	}
+	return decimal.NewFromBigInt(v.Int, v.Exp)
+}
+
+// FromPgNumericToDecimalPtr devolve nil para NULL.
+func FromPgNumericToDecimalPtr(v pgtype.Numeric) *decimal.Decimal {
+	if !v.Valid {
+		return nil
+	}
+	d := FromPgNumericToDecimal(v)
+	return &d
 }

@@ -2,6 +2,7 @@ package technical_assistance_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func (f *fakeRMARepository) TransitionRMA(_ context.Context, _ int64, _ int64, s
 func TestRMARequiresIdempotencyAndUsesAuthenticatedActor(t *testing.T) {
 	repo := &fakeRMARepository{}
 	uc := &UseCase{Repo: &fakeTARepo{}, RMAs: repo, Auth: taAllowAuth{}}
-	dto := request.CreateTechnicalAssistanceRMADTO{CallCode: 1, ReasonCode: "DEFEITO", EligibilityStatus: "ELEGIVEL", EligibilityReason: "dentro da garantia", SLADueAt: "2026-09-10T12:00:00Z", Items: []request.TechnicalAssistanceRMAItemDTO{{CallItemCode: 2, ItemCode: 3, Quantity: 1}}}
+	dto := request.CreateTechnicalAssistanceRMADTO{CallCode: 1, ReasonCode: "DEFEITO", EligibilityStatus: "ELEGIVEL", EligibilityReason: "dentro da garantia", SLADueAt: "2026-09-10T12:00:00Z", Items: []request.TechnicalAssistanceRMAItemDTO{{CallItemCode: 2, ItemCode: 3, Quantity: decimal.NewFromInt(1)}}}
 	if _, err := uc.CreateRMA(context.Background(), dto); err == nil || !strings.Contains(err.Error(), "idempotência") {
 		t.Fatalf("esperava chave obrigatória, recebeu %v", err)
 	}

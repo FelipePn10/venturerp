@@ -2,13 +2,13 @@ package fiscal_uc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	enterpriseentity "github.com/FelipePn10/panossoerp/internal/domain/enterprise/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 )
@@ -27,7 +27,27 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 	if err != nil {
 		return nil, err
 	}
-	if msg := conferirCodigoIBGE(dto.CodigoMunicipio, dto.UFEmpresa); msg != "" {
+	atual, err := uc.Repo.GetFiscalConfig(ctx)
+	if err != nil && !errorsuc.EhNaoEncontrado(err) {
+		return nil, err
+	}
+	if err := entity.ConferirTrocaDoFocus(atual, dto.FocusNfeAmbiente, dto.FocusNfeToken); err != nil {
+		return nil, err
+	}
+	// A identificação da empresa (CNPJ, razão social, IE, regime, endereço) é
+	// mantida na VEMP0100. A VFIS0100 manda só os parâmetros fiscais: sem
+	// CNPJ e razão social no corpo, vale o que está gravado. A tela antiga, que
+	// ainda manda tudo, continua aceita.
+	semIdentificacao := strings.TrimSpace(dto.CnpjEmpresa) == "" && strings.TrimSpace(dto.RazaoSocial) == ""
+	if semIdentificacao {
+		if atual == nil {
+			return nil, errorsuc.NewValidationError("a empresa ainda não tem identificação: cadastre CNPJ, razão social e endereço na VEMP0100")
+		}
+		dto.CnpjEmpresa, dto.RazaoSocial, dto.IEEmpresa = atual.CnpjEmpresa, atual.RazaoSocial, atual.IEEmpresa
+		dto.RegimeTributario, dto.UFEmpresa = atual.RegimeTributario, atual.UFEmpresa
+		dto.Logradouro, dto.Numero, dto.Complemento, dto.Bairro = atual.Logradouro, atual.Numero, atual.Complemento, atual.Bairro
+		dto.Municipio, dto.CodigoMunicipio, dto.CEP, dto.Telefone = atual.Municipio, atual.CodigoMunicipio, atual.CEP, atual.Telefone
+	} else if msg := conferirCodigoIBGE(dto.CodigoMunicipio, dto.UFEmpresa); msg != "" {
 		return nil, errorsuc.NewValidationError(msg)
 	}
 
@@ -56,6 +76,31 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 		Telefone:                  dto.Telefone,
 		UpdatedBy:                 userID,
 	}
+	if atual != nil {
+		// Nome fantasia e e-mail não vêm nesta rota: antes cada gravação os apagava.
+		cfg.TradeName, cfg.Email = atual.TradeName, atual.Email
+	}
+
+	if dto.AliquotaCreditoSimples != nil && (*dto.AliquotaCreditoSimples < 0 || *dto.AliquotaCreditoSimples > 100) {
+		return nil, errorsuc.NewValidationError("a alíquota de crédito do Simples Nacional deve estar entre 0 e 100%")
+	}
+	if atual != nil && (dto.ExigirRegraICMSIPI == nil || dto.AliquotaCreditoSimples == nil || dto.CBenefDiferimento == nil) {
+		cfg.ExigirRegraICMSIPI, cfg.AliquotaCreditoSimples = atual.ExigirRegraICMSIPI, atual.AliquotaCreditoSimples
+		cfg.CBenefDiferimento = atual.CBenefDiferimento
+	}
+	if dto.ExigirRegraICMSIPI != nil {
+		cfg.ExigirRegraICMSIPI = *dto.ExigirRegraICMSIPI
+	}
+	if dto.AliquotaCreditoSimples != nil {
+		cfg.AliquotaCreditoSimples = *dto.AliquotaCreditoSimples
+	}
+	if dto.CBenefDiferimento != nil {
+		v := strings.ToUpper(strings.TrimSpace(*dto.CBenefDiferimento))
+		if v != "" && (len(v) < 8 || len(v) > 10) {
+			return nil, errorsuc.NewValidationError("o código de benefício fiscal (cBenef) tem 8 a 10 caracteres, como PR830001")
+		}
+		cfg.CBenefDiferimento = &v
+	}
 
 	updated, err := uc.Repo.UpdateFiscalConfig(ctx, cfg)
 	if err != nil {
@@ -64,28 +109,7 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 	return toFiscalConfigResponse(updated), nil
 }
 
-// prefixoIBGEDaUF: os dois primeiros dígitos do código IBGE do município são o
-// código da UF. Código de outra UF passa na NF-e (a Focus resolve pelo nome) mas
-// sai errado no CT-e, na NFS-e e no SPED.
-var prefixoIBGEDaUF = map[string]string{
-	"RO": "11", "AC": "12", "AM": "13", "RR": "14", "PA": "15", "AP": "16", "TO": "17",
-	"MA": "21", "PI": "22", "CE": "23", "RN": "24", "PB": "25", "PE": "26", "AL": "27", "SE": "28", "BA": "29",
-	"MG": "31", "ES": "32", "RJ": "33", "SP": "35", "PR": "41", "SC": "42", "RS": "43",
-	"MS": "50", "MT": "51", "GO": "52", "DF": "53",
-}
-
-// conferirCodigoIBGE: vazio é aceito (a prévia avisa); preenchido tem de ter 7
-// dígitos e ser da UF da empresa.
+// conferirCodigoIBGE: a regra é a da identificação da empresa (domínio).
 func conferirCodigoIBGE(codigo, uf string) string {
-	codigo = strings.TrimSpace(codigo)
-	if codigo == "" || codigo == "0" || codigo == "0000000" {
-		return ""
-	}
-	if len(codigo) != 7 || strings.Trim(codigo, "0123456789") != "" {
-		return fmt.Sprintf("código IBGE do município inválido (%q): são 7 dígitos, ex.: 4106902 para Curitiba", codigo)
-	}
-	if p, ok := prefixoIBGEDaUF[strings.ToUpper(strings.TrimSpace(uf))]; ok && !strings.HasPrefix(codigo, p) {
-		return fmt.Sprintf("o código IBGE %s não é de município do %s (os do %s começam com %s)", codigo, strings.ToUpper(uf), strings.ToUpper(uf), p)
-	}
-	return ""
+	return enterpriseentity.ErroDoCodigoIBGE(codigo, uf)
 }

@@ -2,8 +2,10 @@ package cost_center
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -52,6 +54,39 @@ var usosCentroIndustrial = []referencia{
 	{"recurring_sales", "cost_center_code", "vendas recorrentes", true},
 	{"representative_accounting", "credit_cost_center_code", "contabilização de representantes (crédito)", true},
 	{"representative_accounting", "debit_cost_center_code", "contabilização de representantes (débito)", true},
+	// Desde o cadastro único (migração 447), o lado financeiro também aponta
+	// para cost_centers pelo id.
+	{"contas_pagar", "centro_custo_id", "títulos a pagar", false},
+	{"contas_receber", "centro_custo_id", "títulos a receber", false},
+	{"contas_pagar_rateios", "centro_custo_id", "rateios de títulos a pagar", false},
+	{"fiscal_entry_items", "centro_custo_id", "itens de notas de entrada", false},
+	{"fiscal_entry_installment_allocations", "centro_custo_id", "rateios de parcelas de notas de entrada", false},
+	{"fiscal_freight_allocations", "centro_custo_id", "rateios de frete", false},
+	{"cost_overhead_rules", "centro_custo_id", "regras de rateio de custos indiretos", false},
+	{"accounting_account_refs", "cost_center_id", "referências do plano contábil (ECD)", false},
+	{"requisicao_aprovacoes_centro", "cost_center_id", "aprovações de requisição de compra", false},
+}
+
+// UsosDoCentro: onde o centro (pelo id) é usado, nos dois lados — a rota
+// financeira antiga (VFIN0130) confere a mesma lista antes de excluir.
+func UsosDoCentro(ctx context.Context, pool consulta, id int64) ([]repository.UsoCentroCusto, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var code int32
+	if err := pool.QueryRow(ctx, `SELECT code FROM cost_centers WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&code); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError("centro de custo não encontrado")
+		}
+		return nil, err
+	}
+	return usos(ctx, pool, &entity.CostCenter{ID: id, Code: code})
+}
+
+// consulta: o pool ou uma transação.
+type consulta interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 const colunasCentro = `id, code, description, parent_code, type, is_ratio, start_date, end_date, is_active, created_at, updated_at, created_by, enterprise_id`
@@ -79,6 +114,10 @@ func (r *ManutencaoPG) ListarComInativos(ctx context.Context) ([]*entity.CostCen
 }
 
 func (r *ManutencaoPG) Usos(ctx context.Context, cc *entity.CostCenter) ([]repository.UsoCentroCusto, error) {
+	return usos(ctx, r.pool, cc)
+}
+
+func usos(ctx context.Context, q consulta, cc *entity.CostCenter) ([]repository.UsoCentroCusto, error) {
 	var out []repository.UsoCentroCusto
 	for _, ref := range usosCentroIndustrial {
 		var chave any = cc.ID
@@ -87,7 +126,7 @@ func (r *ManutencaoPG) Usos(ctx context.Context, cc *entity.CostCenter) ([]repos
 		}
 		var n int64
 		// Tabela e coluna vêm da lista fixa acima, nunca da requisição.
-		if err := r.pool.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM %s WHERE %s = $1`, ref.tabela, ref.coluna), chave).Scan(&n); err != nil {
+		if err := q.QueryRow(ctx, fmt.Sprintf(`SELECT count(*) FROM %s WHERE %s = $1`, ref.tabela, ref.coluna), chave).Scan(&n); err != nil {
 			return nil, fmt.Errorf("conferindo o uso em %s: %w", ref.onde, err)
 		}
 		if n > 0 {
@@ -95,7 +134,7 @@ func (r *ManutencaoPG) Usos(ctx context.Context, cc *entity.CostCenter) ([]repos
 		}
 	}
 	var filhos int64
-	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM cost_centers WHERE parent_code = $1`, cc.Code).Scan(&filhos); err != nil {
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM cost_centers WHERE parent_code = $1`, cc.Code).Scan(&filhos); err != nil {
 		return nil, fmt.Errorf("conferindo os centros filhos: %w", err)
 	}
 	if filhos > 0 {
@@ -144,4 +183,14 @@ func (r *ManutencaoPG) Excluir(ctx context.Context, id int64) error {
 		return errorsuc.NewNotFoundError("centro de custo não encontrado")
 	}
 	return nil
+}
+
+// ProximoCodigo: o próximo code numérico livre (único no banco). Dois cadastros
+// ao mesmo tempo: o segundo recebe conflito do índice único e tenta de novo.
+func (r *ManutencaoPG) ProximoCodigo(ctx context.Context) (int32, error) {
+	var c int32
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM cost_centers`).Scan(&c); err != nil {
+		return 0, fmt.Errorf("calculando o próximo código de centro de custo: %w", err)
+	}
+	return c, nil
 }

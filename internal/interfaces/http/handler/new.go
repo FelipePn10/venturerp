@@ -128,6 +128,12 @@ func NewCreateEnterpriseHandler(
 	}
 }
 
+// ComIdentificacao liga a identificação da empresa da sessão (VEMP0100).
+func (h *EnterpriseHandler) ComIdentificacao(uc *enterprise_uc.IdentificacaoUseCase) *EnterpriseHandler {
+	h.identificacaoUC = uc
+	return h
+}
+
 func NewCreateModifierHandler(
 	createModifierUc *modifier_uc.CreateModifierUseCase,
 	getModifierUc *modifier_uc.GetModifierUseCase,

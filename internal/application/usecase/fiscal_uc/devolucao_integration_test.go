@@ -177,7 +177,7 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 	// Payload para a SEFAZ: finalidade 4, nota referenciada, sem pagamento.
 	itens1, _ := fiscalRepo.GetExitItems(ctx, d1.ID)
 	cfg, _ := fiscalRepo.GetFiscalConfig(ctx)
-	payload := montarPayloadNFe(exit1, itens1, cfg, PlanoDaNota{})
+	payload, _ := montarPayloadNFe(exit1, itens1, cfg, PlanoDaNota{}, reformaPelaLei(t, exit1, itens1, cfg))
 	if payload.FinalidadeEmissao != 4 || len(payload.NotasReferenciadas) != 1 || payload.NotasReferenciadas[0].ChaveNFe != chave ||
 		len(payload.FormaPagamento) != 1 || payload.FormaPagamento[0].FormaPagamento != "90" || payload.Duplicatas != nil {
 		t.Fatalf("payload da devolução: %+v %+v %+v", payload.FinalidadeEmissao, payload.NotasReferenciadas, payload.FormaPagamento)

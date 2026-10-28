@@ -46,15 +46,17 @@ func toCallResponse(v *entity.Call) *response.TechnicalAssistanceCallResponse {
 
 func toCallItemResponse(v *entity.CallItem) *response.TechnicalAssistanceCallItemResponse {
 	return &response.TechnicalAssistanceCallItemResponse{
-		Code: v.Code, Sequence: v.Sequence, ItemCode: v.ItemCode, Mask: v.Mask, Quantity: v.Quantity,
+		Code: v.Code, Sequence: v.Sequence, ItemCode: v.ItemCode, Mask: v.Mask, Quantity: v.Quantity.InexactFloat64(),
 		DefectReasonCode: v.DefectReasonCode, WarrantyUntil: v.WarrantyUntil, InWarranty: v.InWarranty,
 		GeneratesRevenue: v.GeneratesRevenue, RequestedAction: v.RequestedAction, Status: v.Status,
+		SerialNumber: v.SerialNumber, SerieID: v.SerieID, GarantiaOrigem: v.GarantiaOrigem, GarantiaInicio: v.GarantiaInicio,
+		CobrePecas: v.CobrePecas, CobreMaoObra: v.CobreMaoObra, CobreDeslocamento: v.CobreDeslocamento,
 	}
 }
 
 func toReturnNoteResponse(v *entity.ReturnNote) *response.TechnicalAssistanceReturnNoteResponse {
 	return &response.TechnicalAssistanceReturnNoteResponse{
 		Code: v.Code, CallCode: v.CallCode, NoteNumber: v.NoteNumber,
-		EmissionDate: v.EmissionDate, OperationType: v.OperationType, TotalValue: v.TotalValue,
+		EmissionDate: v.EmissionDate, OperationType: v.OperationType, TotalValue: v.TotalValue.InexactFloat64(),
 	}
 }

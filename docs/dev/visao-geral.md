@@ -907,7 +907,21 @@ Pedido de Compra (`000092`), Estoque (`000093`), Produção (`000094`), Fiscal
 
 ### 9.1 Autenticação JWT
 
-- **Login:** `POST /users/login` — retorna token JWT
+- **Login:** `POST /users/login` — retorna token JWT. Usuário com acesso a mais
+  de uma empresa no mesmo servidor (filiais) precisa mandar `enterprise_code`.
+  Sem ele, e com a senha certa, a resposta é **409 `EMPRESA_OBRIGATORIA`** com
+  `empresas: [{code, name}]`, e a tela de login pergunta em qual entrar. Antes era
+  401 "invalid credentials" e esse usuário não entrava. Senha errada continua
+  401, sem revelar a lista.
+- **Cadastro de empresa:** `POST /api/enterprise/create` (ADMIN) cria numa
+  transação a empresa (código livre quando `code` = 0), o vínculo de **quem
+  criou** como ADMIN (usuário da sessão; o `created_by` do corpo é ignorado) e,
+  com `cnpj`, a identidade fiscal em `fiscal_configs` (razão social, fantasia, IE,
+  regime 1/2/3, UF e endereço). O resto da configuração fiscal é feito depois,
+  já dentro da empresa (VFIS0100). A identificação é mantida só na VEMP0100
+  (`GET`/`PUT /api/enterprise/identificacao`); a VFIS0100 só lê. O token Focus
+  NF-e de produção é gravado pela Venture ERP no servidor (`cmd/venture-admin`,
+  ver `docs/dev/fiscal-financeiro.md` §2).
 - **Registro:** `POST /users/register` — cria usuário
 - **Algoritmo:** HMAC-SHA256 com secret configurável
 - **Expiração:** definida pelo servidor
@@ -933,7 +947,30 @@ Todos os endpoints sob `/api/*` exigem:
    - Aplicado às rotas sensíveis novas (pipeline, fiscal manifestação/inutilização/
      IBPT, CNAB, prontidão de item)
 
-4. **AuthService (porta):**
+4. **Perfis de acesso por empresa (migration 000412):**
+   - `ControleDeAcesso.Middleware` roda logo depois do JWT, em todo o grupo
+     autenticado. Usuário com perfil ATIVO na empresa só faz o que a união dos
+     seus perfis permite; sem perfil segue só com o papel; `ADMIN` nunca é
+     restringido. O acesso de cada usuário fica 15 s em cache e é descartado a
+     cada gravação de perfil ou vínculo.
+   - Módulos (`internal/domain/acesso`): comercial, suprimentos, qualidade,
+     estoque, engenharia, planejamento, producao, manutencao, assistencia,
+     fiscal, financeiro, contabilidade, custos, cadastros, administracao. Ações:
+     `LER`, `INCLUIR_ALTERAR`, `EXCLUIR`, `APROVAR`, `AUTORIZAR`, `EXECUTAR`
+     (quem tem qualquer ação no módulo ganha `LER`).
+   - Catálogo rota → módulo em `internal/interfaces/middleware/catalogo_rotas.go`
+     (prefixo mais longo vence; GET=LER, DELETE=EXCLUIR, demais=INCLUIR_ALTERAR;
+     aprovar/autorizar/executar por lista explícita). Leituras de cadastros de
+     apoio (itens, clientes, fornecedores, almoxarifados, CFOP…) são livres para
+     qualquer perfil. `TestToRotaTemModuloDePermissao` percorre o roteador e falha
+     em rota sem módulo — rota nova tem de entrar no catálogo.
+   - Rotas `/api/acesso`: `GET /minhas-permissoes` (qualquer usuário — o desktop
+     filtra o menu), e para `ADMIN` `GET /catalogo`, `GET|POST /perfis`,
+     `PUT|DELETE /perfis/{id}`, `GET /usuarios`, `PUT /usuarios/{userId}/perfis`.
+     Tela **VADM0200 — Perfis de Acesso**.
+   - Recusa: HTTP 403 `ACESSO_NEGADO` com o perfil, a ação e o módulo.
+
+5. **AuthService (porta):**
    - `CanCreate()` — verifica permissão de criação
    - `CanBaixarContaPagar()` / `CanBaixarContaReceber()` — permissões financeiras
    - `CanApurarImpostos()` — permissão fiscal

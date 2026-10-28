@@ -72,6 +72,9 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	}
 	item.UnitPrice = decimal.NewFromFloat(pricing.AppliedPrice)
 	item.PriceTableCode = tableCode
+	if err := uc.preencherTributos(ctx, quotation, itemCode, item, dto.TributosManuais); err != nil {
+		return nil, err
+	}
 	if quotation.IsNFCe && quotation.DeliveryWithReceipt {
 		item.IPIPct = decimal.Zero
 	}
@@ -151,6 +154,9 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 		IPIPct:           dto.IPIPct,
 		STPct:            dto.STPct,
 		Notes:            dto.Notes,
+	}
+	if err := uc.preencherTributos(ctx, quotation, current.ItemCode, item, dto.TributosManuais); err != nil {
+		return nil, err
 	}
 	if quotation.IsNFCe && quotation.DeliveryWithReceipt {
 		item.IPIPct = decimal.Zero

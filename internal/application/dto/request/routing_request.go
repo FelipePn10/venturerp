@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 // ─── operations ──────────────────────────────────────────────────────────────
 
 type CreateOperationDTO struct {
@@ -199,10 +201,10 @@ type UpdateOperationDocumentDTO struct {
 // CreateRouteInspectionDTO cria o plano de inspeção já amarrado a uma etapa do
 // roteiro, para quem desenha o processo não precisar sair da tela.
 type CreateRouteInspectionDTO struct {
-	RouteOperationID int64   `json:"route_operation_id"`
-	PointType        string  `json:"point_type"` // RECEBIMENTO | PROCESSO | EXPEDICAO
-	Description      string  `json:"description"`
-	SampleSize       float64 `json:"sample_size"`
-	AcceptanceLevel  float64 `json:"acceptance_level"`
-	Instructions     *string `json:"instructions,omitempty"`
+	RouteOperationID int64           `json:"route_operation_id"`
+	PointType        string          `json:"point_type"` // RECEBIMENTO | PROCESSO | EXPEDICAO
+	Description      string          `json:"description"`
+	SampleSize       decimal.Decimal `json:"sample_size"`
+	AcceptanceLevel  decimal.Decimal `json:"acceptance_level"`
+	Instructions     *string         `json:"instructions,omitempty"`
 }

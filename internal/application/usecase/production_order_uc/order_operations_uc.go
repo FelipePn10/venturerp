@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"github.com/shopspring/decimal"
 	"math"
 	"strings"
 
@@ -33,6 +34,8 @@ type OrderOperationsUseCase struct {
 	MachinePlanning   interface {
 		ApplyMachinePlanToProduction(context.Context, int64) error
 	}
+	// Lotes calcula a amostragem do lote de inspeção de processo (opcional).
+	Lotes AmostragemDeProcesso
 }
 
 // ExplodeRoute creates production_order_operations from a manufacturing route.
@@ -174,7 +177,7 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 
 	// A inspeção é um controle SOBRE a ordem, não um pré-requisito dela: falta de
 	// plano vira aviso na etapa, não recusa da ordem.
-	avisos, err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops)
+	avisos, err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops, entraPorEtapa)
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +233,24 @@ func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 	return routingentity.QuantidadePorOperacao(etapas, arestas, boas), nil
 }
 
-// abrirInspecoesDaOrdem cria um registro de inspeção PENDENTE para cada etapa
-// marcada no roteiro que tenha plano ativo, e devolve um AVISO por etapa marcada
-// que não tenha.
+// AmostragemDeProcesso calcula o plano de amostragem do lote de processo pelo
+// procedimento do plano de inspeção; nil quando o plano não tem procedimento.
+type AmostragemDeProcesso interface {
+	AmostragemDoProcesso(ctx context.Context, planoID, item, operacao int64, quantidade decimal.Decimal) (*AmostragemDoLote, error)
+}
+
+// AmostragemDoLote é o que vai gravado no lote de processo.
+type AmostragemDoLote struct {
+	ProcedimentoID int64
+	Chave          string
+	Plano          []byte
+	Pulado         bool
+}
+
+// abrirInspecoesDaOrdem abre um lote de inspeção de processo (módulo de
+// qualidade) para cada etapa marcada no roteiro que tenha plano ativo, com a
+// quantidade que entra na etapa e a amostragem do plano, e devolve um AVISO por
+// etapa marcada que não tenha plano.
 //
 // Nem recusar nem esquecer. A versão anterior recusava a ordem inteira: uma
 // lacuna de cadastro no módulo de qualidade parava a fábrica, e o operador via
@@ -244,7 +262,7 @@ func (uc *OrderOperationsUseCase) quantidadePorEtapa(
 // tem a conferência de prontidão do roteiro (`/api/routing/routes/{id}/readiness`),
 // que acusa a mesma falta enquanto o roteiro está sendo montado.
 func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
-	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode,
+	ctx context.Context, orderID, routeID int64, ops []sqlc.DBRouteOpForExplode, qtdPorEtapa map[int64]float64,
 ) (map[int16]string, error) {
 	temInspecao := false
 	for _, op := range ops {
@@ -281,19 +299,27 @@ func (uc *OrderOperationsUseCase) abrirInspecoesDaOrdem(
 				etapa.Sequence)
 			continue
 		}
-		_, err = uc.Q.CreateQualityRecord(ctx, sqlc.CreateQualityRecordParams{
-			PlanID:            etapa.PlanID.Int64,
-			CreatedBy:         pgutil.ToPgUUID(actor),
-			ProductionOrderID: pgutil.ToPgInt8Ptr(&orderID),
-			ItemCode:          *etapa.ItemCode,
-			// Quantidade zerada e resultado PENDENTE: o registro nasce aberto,
-			// esperando o inspetor. Quem preenche é a tela de qualidade.
-			InspectedQty: 0,
-			Result:       sqlc.InspectionResultEnum("PENDENTE"),
-			EnterpriseID: empresa,
-		})
-		if err != nil {
-			return nil, err
+		qtd := decimal.NewFromFloat(qtdPorEtapa[etapa.RouteOperationID]).Round(6)
+		if !qtd.IsPositive() {
+			qtd = decimal.NewFromInt(1)
+		}
+		params := sqlc.AbrirLoteDeProcessoParams{
+			EnterpriseID: empresa, ItemCode: *etapa.ItemCode, Quantidade: pgutil.ToPgNumericFromDecimal(qtd),
+			ProductionOrderID: orderID, RouteOperationID: etapa.RouteOperationID, InspectionPlanID: etapa.PlanID.Int64,
+			CreatedBy: pgutil.ToPgUUID(actor),
+		}
+		// Amostragem do plano pela severidade corrente do item × operação.
+		if uc.Lotes != nil {
+			am, err := uc.Lotes.AmostragemDoProcesso(ctx, etapa.PlanID.Int64, *etapa.ItemCode, etapa.RouteOperationID, qtd)
+			if err != nil {
+				return nil, err
+			}
+			if am != nil {
+				params.ProcedimentoID, params.Chave, params.Plano, params.Pulado = &am.ProcedimentoID, &am.Chave, am.Plano, am.Pulado
+			}
+		}
+		if _, err = uc.Q.AbrirLoteDeProcesso(ctx, params); err != nil {
+			return nil, fmt.Errorf("abrindo o lote de inspeção da etapa %d: %w", etapa.Sequence, err)
 		}
 	}
 	return avisos, nil

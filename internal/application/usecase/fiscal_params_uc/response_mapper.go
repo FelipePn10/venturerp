@@ -1,6 +1,8 @@
 package fiscal_params_uc
 
 import (
+	"time"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 )
@@ -51,7 +53,27 @@ func toCFOPResponse(c *entity.CFOP) *response.CFOPResponse {
 		Doacao:          c.Doacao,
 		IsActive:        c.IsActive,
 		CreatedAt:       c.CreatedAt,
+		Oficial:         c.Oficial.Oficial,
+		InicioVigencia:  diaISO(c.Oficial.InicioVigencia),
+		FimVigencia:     diaISO(c.Oficial.FimVigencia),
+		IndNFe:          c.Oficial.NFe,
+		IndComunica:     c.Oficial.Comunicacao,
+		IndTransp:       c.Oficial.Transporte,
+		IndDevol:        c.Oficial.Devolucao,
+		IndRetor:        c.Oficial.Retorno,
+		IndAnula:        c.Oficial.Anulacao,
+		IndRemes:        c.Oficial.Remessa,
+		IndComb:         c.Oficial.Combustivel,
+		IndExcIBSCBS:    c.Oficial.ExclusivoIBSCBS,
 	}
+}
+
+func diaISO(t *time.Time) *string {
+	if t == nil {
+		return nil
+	}
+	s := t.Format("2006-01-02")
+	return &s
 }
 
 func toCFOPResponses(list []*entity.CFOP) []*response.CFOPResponse {
@@ -173,6 +195,11 @@ func toTaxParamResponse(t *entity.ICMSIPITaxParam) *response.TaxParamResponse {
 		ICMSDifalType:                    difalTypePtr(t.ICMSDifalType),
 		DifalPurchaseRedPct:              t.DifalPurchaseRedPct,
 		DifalPurchaseRedTarget:           redTargetPtr(t.DifalPurchaseRedTarget),
+		FinalidadeCompra:                 t.FinalidadeCompra,
+		MvaPct:                           t.MvaPct,
+		MvaAjustarInterestadual:          t.MvaAjustarInterestadual,
+		SupplierCode:                     t.SupplierCode,
+		OrigemReducaoID:                  t.OrigemReducaoID,
 		CreatedAt:                        t.CreatedAt,
 	}
 }

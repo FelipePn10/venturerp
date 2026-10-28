@@ -35,3 +35,13 @@ func Code(ctx context.Context) (int64, error) {
 	}
 	return user.EnterpriseCode, nil
 }
+
+// Ator: o id do usuário da sessão ("" sem sessão), para a auditoria feita pelo
+// banco (parâmetro de transação).
+func Ator(ctx context.Context) string {
+	user, ok := ctx.Value(contextkey.UserKey).(*security.AuthUser)
+	if !ok || user == nil {
+		return ""
+	}
+	return user.ID
+}

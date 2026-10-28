@@ -40,7 +40,7 @@ func (a *PlannedOrderSupplyAdapter) ListFirmSupplyForItems(
 	for _, row := range rows {
 		result[row.ItemCode] = append(result[row.ItemCode], ports.SupplyEntry{
 			ItemCode:    row.ItemCode,
-			Quantity:    pgutil.FromPgNumericToFloat64(row.Quantity),
+			Quantity:    pgutil.FromPgNumericToDecimal(row.Quantity),
 			ArrivalDate: pgutil.FromPgDate(row.NeedDate),
 			SourceType:  ports.SupplySourcePlannedOrder,
 			SourceCode:  row.Code,

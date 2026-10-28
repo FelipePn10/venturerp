@@ -46,8 +46,8 @@ type WarehouseDTO struct {
 	UnitOfMeasurement               types.TypeUnitOfMeasurementItem  `json:"unit_of_measurement"`
 	AutomaticLow                    bool                             `json:"automatic_low"`
 	CyclicalCountConfig             *valueobject.CyclicalCountConfig `json:"cyclical_count_config,omitempty"`
-	MinimumStock                    int32                            `json:"minimum_stock"`
-	AverageMonthlyConsumptionManual *int                             `json:"average_monthly_consumption_manual,omitempty"`
+	MinimumStock                    decimal.Decimal                  `json:"minimum_stock"`
+	AverageMonthlyConsumptionManual *decimal.Decimal                 `json:"average_monthly_consumption_manual,omitempty"`
 }
 
 type EngineeringDTO struct {
@@ -67,9 +67,9 @@ type PlanningDTO struct {
 	TankCode     *int                      `json:"tank_code,omitempty"`
 	Ghost        bool                      `json:"ghost"`
 	ABCClass     *string                   `json:"abc_class,omitempty"`
-	MinimumLot   int64                     `json:"minimum_lot"`
-	MultipleLot  int64                     `json:"multiple_lot"`
-	SafetyStock  int64                     `json:"safety_stock"`
+	MinimumLot   decimal.Decimal           `json:"minimum_lot"`
+	MultipleLot  decimal.Decimal           `json:"multiple_lot"`
+	SafetyStock  decimal.Decimal           `json:"safety_stock"`
 	Critical     bool                      `json:"critical"`
 	Exclusive    bool                      `json:"exclusive"`
 	Active       bool                      `json:"active"`

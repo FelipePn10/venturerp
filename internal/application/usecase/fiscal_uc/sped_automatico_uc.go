@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/ciap"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/sped"
@@ -22,6 +23,50 @@ type SpedAutomaticoUseCase struct {
 	Config  interface {
 		GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error)
 	}
+	// CIAP: a apuração do CIAP do mês (Bloco G e o crédito no E111).
+	CIAP ciap.Repository
+}
+
+// carregarCIAP: a apuração gravada do mês e o que falta para o PVA aceitar.
+func (uc *SpedAutomaticoUseCase) carregarCIAP(ctx context.Context, ano, mes int) (*sped.DadosCIAP, []string, error) {
+	if uc.CIAP == nil {
+		return nil, nil, nil
+	}
+	if err := uc.CIAP.Sincronizar(ctx); err != nil {
+		return nil, nil, err
+	}
+	a, err := uc.CIAP.Apuracao(ctx, ano, mes)
+	if err != nil {
+		return nil, nil, err
+	}
+	if a == nil {
+		bens, err := uc.CIAP.Bens(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, b := range bens {
+			if !b.Baixado && b.Parcela(ano, mes) > 0 {
+				return nil, []string{fmt.Sprintf("Há bens no CIAP com parcela em %02d/%d e o mês não foi apurado: apure o CIAP na VFIS0345 para o Bloco G e o crédito do E111.", mes, ano)}, nil
+			}
+		}
+		return nil, nil, nil
+	}
+	p, err := uc.CIAP.Parametros(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	var avisos []string
+	if p.CodigoAjuste == "" && a.ICMSApropriado.IsPositive() {
+		avisos = append(avisos, "O crédito do CIAP do mês ficou fora do E111: informe o código de ajuste da apuração (tabela 5.1.1) nos parâmetros do CIAP (VFIS0345).")
+	}
+	sem := map[string]bool{}
+	for _, m := range a.Movimentos {
+		if m.Bem.ContaCodigo == "" && !sem[m.Bem.Codigo] {
+			sem[m.Bem.Codigo] = true
+			avisos = append(avisos, fmt.Sprintf("Bem %s do CIAP sem conta contábil do ativo (0300/COD_CTA): informe na VFIS0345.", m.Bem.Codigo))
+		}
+	}
+	return &sped.DadosCIAP{Apuracao: a.Apuracao, CodigoAjuste: p.CodigoAjuste}, avisos, nil
 }
 
 type SpedAutomaticoRequest struct {
@@ -164,6 +209,12 @@ func (uc *SpedAutomaticoUseCase) Gerar(ctx context.Context, req SpedAutomaticoRe
 		}
 	}
 
+	dadosCIAP, avisosCIAP, err := uc.carregarCIAP(ctx, req.Ano, req.Mes)
+	if err != nil {
+		return nil, err
+	}
+	d.CIAP = dadosCIAP
+
 	params := sped.Montar(*d)
 	arquivo := sped.Generate(params)
 
@@ -192,6 +243,18 @@ func (uc *SpedAutomaticoUseCase) Gerar(ctx context.Context, req SpedAutomaticoRe
 		r.ValorInventario = r.ValorInventario.Add(decimal.NewFromFloat(inv.VlItem))
 	}
 	res.Avisos = append(avisosEFD(params, d.CodReceitaICMS), avisosInventario...)
+	res.Avisos = append(res.Avisos, avisosCIAP...)
+	if g := params.CIAP; g != nil {
+		partes := map[string]bool{}
+		for _, pt := range params.Participantes {
+			partes[pt.CodPart] = true
+		}
+		for _, m := range g.Movimentos {
+			if m.Documento != nil && !partes[m.Documento.CodPart] {
+				res.Avisos = append(res.Avisos, fmt.Sprintf("Bem %s do CIAP: a nota de entrada não está nas entradas do mês, e o fornecedor (G130/COD_PART) ficou sem 0150.", m.CodBem))
+			}
+		}
+	}
 	for _, aj := range d.AjustesApuracao {
 		if _, ok := sped.TipoAjuste(aj.Codigo); !ok {
 			res.Avisos = append(res.Avisos, fmt.Sprintf("Nota de ajuste \"%s\" (%s) ficou fora do E111: o código de ajuste %q não é da apuração do ICMS próprio (tabela 5.1.1, 8 caracteres).",

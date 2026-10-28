@@ -123,3 +123,75 @@ func TestNFEItemCST51ComDiferimentoEBeneficio(t *testing.T) {
 		t.Fatal("cBenef vazio não pode ir no payload")
 	}
 }
+
+// CST sem tributação leva só CST e cClassTrib; CST com redução leva o
+// percentual de redução e a alíquota efetiva de cada tributo (nomes da
+// referência de campos da Focus: pRedAliq e pAliqEfet).
+func TestGrupoIBSCBSSemValoresEComReducao(t *testing.T) {
+	sem := itemParaMapa(NFEItem{NumeroItem: 1, IBSCBS: &NFEItemIBSCBS{CST: "410", ClassTrib: "410004", SemValores: true}})
+	if sem["ibs_cbs_situacao_tributaria"] != "410" || sem["ibs_cbs_classificacao_tributaria"] != "410004" {
+		t.Fatalf("códigos: %v", sem)
+	}
+	for _, k := range []string{"ibs_cbs_base_calculo", "ibs_uf_aliquota", "cbs_valor", "cbs_aliquota"} {
+		if _, ok := sem[k]; ok {
+			t.Fatalf("CST 410 não leva %q", k)
+		}
+	}
+	red := itemParaMapa(NFEItem{NumeroItem: 1, IBSCBS: &NFEItemIBSCBS{CST: "200", ClassTrib: "200030", Base: 1000,
+		AliqCBS: 8.7, ValorCBS: 34.8, ComReducao: true, RedCBS: 60, EfetCBS: 3.48, RedIBSUF: 60, EfetIBSUF: 0.02, RedIBSMun: 60, EfetIBSMun: 0.02}})
+	for k, want := range map[string]any{"cbs_percentual_reducao_aliquota": 60.0, "cbs_aliquota_efetiva": 3.48, "cbs_aliquota": 8.7,
+		"ibs_uf_percentual_reducao_aliquota": 60.0, "ibs_uf_aliquota_efetiva": 0.02, "ibs_mun_aliquota_efetiva": 0.02, "ibs_cbs_base_calculo": 1000.0} {
+		if red[k] != want {
+			t.Errorf("%s = %v, want %v", k, red[k], want)
+		}
+	}
+}
+
+func itemParaMapa(it NFEItem) map[string]any {
+	b, _ := json.Marshal(NFEPayload{Items: []NFEItem{it}})
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	return m["items"].([]any)[0].(map[string]any)
+}
+
+// pRedBC só nos CSTs que o aceitam; crédito do Simples só em 101/201/900;
+// grupo ICMSUFDest com partilha 100% e FCP quando há.
+func TestNFEItemTributacaoPorCenario(t *testing.T) {
+	red, aliq, valor := 33.33, 2.56, 25.6
+	m := itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "20", PercentualReducaoBC: &red})
+	if m["icms_reducao_base_calculo"] != 33.33 {
+		t.Fatalf("CST 20 sem pRedBC: %v", m)
+	}
+	if m := itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "00", PercentualReducaoBC: &red}); m["icms_reducao_base_calculo"] != nil {
+		t.Fatalf("CST 00 não leva pRedBC: %v", m)
+	}
+	m = itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "101", AliquotaCreditoSimples: &aliq, ValorCreditoSimples: &valor})
+	if m["icms_aliquota_credito_simples"] != 2.56 || m["icms_valor_credito_simples"] != 25.6 || m["icms_base_calculo"] != nil {
+		t.Fatalf("CSOSN 101: %v", m)
+	}
+	if m := itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "102", AliquotaCreditoSimples: &aliq, ValorCreditoSimples: &valor}); m["icms_aliquota_credito_simples"] != nil {
+		t.Fatalf("CSOSN 102 não leva crédito: %v", m)
+	}
+	m = itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "00", UFDest: &NFEItemUFDest{Base: 1050, AliquotaInterna: 17, AliquotaInterestadual: 7, ValorDestino: 105, PercentualFCP: 2, ValorFCP: 21}})
+	if m["icms_base_calculo_uf_destino"] != 1050.0 || m["icms_percentual_partilha"] != 100.0 || m["icms_valor_uf_remetente"] != 0.0 || m["fcp_valor_uf_destino"] != 21.0 || m["fcp_base_calculo_uf_destino"] != 1050.0 {
+		t.Fatalf("ICMSUFDest: %v", m)
+	}
+	if m := itemParaMapa(NFEItem{CodigoSituacaoTributariaICMS: "00", UFDest: &NFEItemUFDest{Base: 1000, AliquotaInterna: 18, AliquotaInterestadual: 12, ValorDestino: 60}}); m["fcp_valor_uf_destino"] != nil {
+		t.Fatalf("sem FCP não leva o FCP: %v", m)
+	}
+}
+
+// pRedBCST só vai quando a base da ST foi reduzida.
+func TestNFEItemReducaoBaseST(t *testing.T) {
+	base, aliq, valor, red := 1176.0, 12.0, 21.12, 20.0
+	com := itemParaMapa(NFEItem{NumeroItem: 1, CodigoSituacaoTributariaICMS: "10", BaseCalculoICMSST: &base,
+		AliquotaICMSST: &aliq, ValorICMSST: &valor, PercentualReducaoBCST: &red})
+	if com["icms_reducao_base_calculo_st"] != 20.0 {
+		t.Fatalf("icms_reducao_base_calculo_st = %v, quer 20", com["icms_reducao_base_calculo_st"])
+	}
+	sem := itemParaMapa(NFEItem{NumeroItem: 1, CodigoSituacaoTributariaICMS: "10", BaseCalculoICMSST: &base,
+		AliquotaICMSST: &aliq, ValorICMSST: &valor})
+	if _, ok := sem["icms_reducao_base_calculo_st"]; ok {
+		t.Fatal("sem redução não leva pRedBCST")
+	}
+}

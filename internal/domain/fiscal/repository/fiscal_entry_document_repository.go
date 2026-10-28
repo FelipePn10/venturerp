@@ -52,6 +52,11 @@ type FiscalEntryDocumentRepository interface {
 	ResolveByEAN(ctx context.Context, supplierCode *int64, ean string) (*ItemMatch, error)
 	LastAccountForItem(ctx context.Context, itemCode int64) (*ItemAccount, error)
 	PlanoContasByCodigo(ctx context.Context, codigo string) (*int64, error)
+	// ContaPadraoDoCentro: a conta contábil padrão do centro de custo (gestão).
+	// ContasQueExigemCentro: das contas do plano, as que exigem centro de custo
+	// no lançamento (id → código).
+	ContasQueExigemCentro(ctx context.Context, ids []int64) (map[int64]string, error)
+	ContaPadraoDoCentro(ctx context.Context, centroID int64) (*int64, error)
 	SearchItems(ctx context.Context, termos []string, limite int) ([]ItemCandidate, error)
 	ItemsByCode(ctx context.Context, codes []int64) (map[int64]ItemCandidate, error)
 	// FatorDeConversao: quanto 1 unidade `de` vale na unidade `para` para o
@@ -251,6 +256,13 @@ type ItemCandidate struct {
 	IsActive           bool
 	Origem             string // origem da mercadoria (0 nacional, 1 importação direta…)
 	DefaultWarehouseID *int64
+	// TipoUso: o tipo de uso do cadastro (supplies_type_of_use: 0
+	// industrialização, 1 consumo, 2 imobilizado).
+	TipoUso int
+	// Comprado: item comprado ou de terceiro (engineering_type 1 ou 2) — a venda
+	// dele é de revenda
+	// (CFOP x102/x108/x403), não de produção do estabelecimento.
+	Comprado bool
 	// Do vínculo produto × fornecedor (quando a busca parte dele).
 	SupplierDescription string
 	XMLUOM              *string
@@ -269,6 +281,10 @@ type EntryOperation struct {
 	CreditaIPI       bool
 	CreditaPISCOFINS bool
 	IsActive         bool
+	// StateGroupCode e GrupoUFs: com grupo de estados, a operação vale só para
+	// fornecedor dessas UFs.
+	StateGroupCode *int64
+	GrupoUFs       []string
 }
 
 // PurchaseOrderLine é a linha do pedido de compra vista pela nota de entrada.
@@ -292,6 +308,9 @@ type PurchaseOrderLine struct {
 	OperationCode     *int64
 	// OrderStatus é a situação da capa: só pedido aprovado recebe material.
 	OrderStatus string
+	// UtilizationType: a finalidade da compra na linha (INDUSTRIALIZACAO,
+	// CONSUMO ou IMOBILIZADO) — decide o CFOP de entrada.
+	UtilizationType *string
 }
 
 // FatorEstoque é quantas unidades de estoque há em uma unidade do pedido.
@@ -338,5 +357,9 @@ type AccountingPostingParams struct {
 	COFINSRecolherAccountID      *int64     `json:"cofins_recolher_account_id,omitempty"`
 	CMVAccountID                 *int64     `json:"cmv_account_id,omitempty"`
 	EstoqueAccountID             *int64     `json:"estoque_account_id,omitempty"`
+	IBSVendasAccountID           *int64     `json:"ibs_vendas_account_id,omitempty"`
+	IBSRecolherAccountID         *int64     `json:"ibs_recolher_account_id,omitempty"`
+	CBSVendasAccountID           *int64     `json:"cbs_vendas_account_id,omitempty"`
+	CBSRecolherAccountID         *int64     `json:"cbs_recolher_account_id,omitempty"`
 	UpdatedBy                    *uuid.UUID `json:"-"`
 }

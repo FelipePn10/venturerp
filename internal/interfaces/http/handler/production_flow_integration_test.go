@@ -6,6 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/lote_uc"
+	amostragempg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/amostragem"
+	lotepg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/lote"
+	"github.com/shopspring/decimal"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,7 +72,7 @@ func TestProductionHTTPFlowAtomicCreationAndStock(t *testing.T) {
 		for _, query := range []string{
 			"DELETE FROM stock_movements WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[])",
 			"DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[])",
-			"DELETE FROM quality_records WHERE production_order_id IN(SELECT id FROM production_orders WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[]))",
+			"DELETE FROM quality_inspection_lots WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[])",
 			"DELETE FROM inspection_plans WHERE item_code=ANY($2::bigint[]) AND $1::bigint>0",
 			"DELETE FROM production_deliveries WHERE production_order_id IN(SELECT id FROM production_orders WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[]))",
 			"DELETE FROM production_orders WHERE enterprise_id=$1 AND item_code=ANY($2::bigint[])",
@@ -195,10 +199,17 @@ func TestProductionHTTPFlowAtomicCreationAndStock(t *testing.T) {
 	if status, body := call("POST", path+"/complete", delivery, false); status != 422 {
 		t.Fatalf("quality gate: %d %s", status, body)
 	}
-	if err := pool.QueryRow(ctx, "SELECT count(*) FROM quality_records WHERE production_order_id=$1 AND result='PENDENTE' AND created_by=$2", order.ID, actor).Scan(&count); err != nil || count != 1 {
-		t.Fatalf("inspection not created with actor: %d %v", count, err)
+	// A etapa inspecionada abriu um lote de inspeção de processo; a entrega
+	// final espera a decisão de uso.
+	var loteID int64
+	var loteQtd decimal.Decimal
+	if err := pool.QueryRow(ctx, "SELECT id, quantidade FROM quality_inspection_lots WHERE production_order_id=$1 AND origem='PROCESSO' AND status='ABERTO' AND created_by=$2", order.ID, actor).Scan(&loteID, &loteQtd); err != nil {
+		t.Fatalf("inspection lot not created with actor: %v", err)
 	}
-	exec("UPDATE quality_records SET result='APROVADO',inspected_qty=2,approved_qty=2 WHERE production_order_id=$1", order.ID)
+	lotes := &lote_uc.UseCase{Repo: lotepg.New(pool), Fontes: lotepg.NewFontes(pool), Amostragem: amostragempg.New(pool), Auth: authorization}
+	if _, err := lotes.Decidir(ctx, loteID, lote_uc.DecisaoDTO{Aceita: loteQtd}); err != nil {
+		t.Fatalf("usage decision: %v", err)
+	}
 	for i := 0; i < 2; i++ {
 		status, body = call("POST", path+"/complete", delivery, false)
 		if status != 200 {

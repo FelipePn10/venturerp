@@ -8,12 +8,16 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/lote_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/quality/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/quality/repository"
+	"github.com/shopspring/decimal"
 )
 
 type QualityUseCase struct {
 	repo repository.QualityRepository
+	// Lotes: o registro de qualidade é o lote de inspeção (lote_compat.go).
+	Lotes *lote_uc.UseCase
 }
 
 func New(repo repository.QualityRepository) *QualityUseCase {
@@ -85,7 +89,7 @@ func (uc *QualityUseCase) AddCharacteristic(ctx context.Context, dto request.Add
 	if strings.TrimSpace(dto.Name) == "" {
 		return nil, errorsuc.NewValidationError("informe o nome da característica")
 	}
-	if dto.ToleranceLower != nil && dto.ToleranceUpper != nil && *dto.ToleranceLower > *dto.ToleranceUpper {
+	if dto.ToleranceLower != nil && dto.ToleranceUpper != nil && dto.ToleranceLower.GreaterThan(*dto.ToleranceUpper) {
 		return nil, errorsuc.NewValidationError("a tolerância inferior não pode ser maior que a superior")
 	}
 	// Antes o plano inexistente (ou de outra empresa) só era recusado pela
@@ -111,66 +115,6 @@ func (uc *QualityUseCase) AddCharacteristic(ctx context.Context, dto request.Add
 
 // ─── quality records ──────────────────────────────────────────────────────────
 
-func (uc *QualityUseCase) CreateRecord(ctx context.Context, dto request.CreateQualityRecordDTO) (*response.QualityRecordResponse, error) {
-	if dto.InspectedQty <= 0 {
-		return nil, errorsuc.NewValidationError("a quantidade inspecionada deve ser maior que zero")
-	}
-	rec := &entity.QualityRecord{
-		PlanID:            dto.PlanID,
-		ProductionOrderID: dto.ProductionOrderID,
-		Lot:               dto.Lot,
-		ItemCode:          dto.ItemCode,
-		InspectedQty:      dto.InspectedQty,
-		ApprovedQty:       dto.ApprovedQty,
-		RejectedQty:       dto.RejectedQty,
-		Result:            entity.InspectionResult(dto.Result),
-		InspectorID:       dto.InspectorID,
-		Notes:             dto.Notes,
-		CreatedBy:         dto.CreatedBy,
-	}
-	created, err := uc.repo.CreateRecord(ctx, rec)
-	if err != nil {
-		return nil, fmt.Errorf("creating quality record: %w", err)
-	}
-
-	for _, m := range dto.Measurements {
-		if err := uc.repo.AddMeasurement(ctx, &entity.QualityMeasurement{
-			RecordID:         created.ID,
-			CharacteristicID: m.CharacteristicID,
-			MeasuredValue:    m.MeasuredValue,
-			IsConformant:     m.IsConformant,
-		}); err != nil {
-			return nil, fmt.Errorf("gravando a medição: %w", err)
-		}
-	}
-
-	return toRecordResponse(created), nil
-}
-
-func (uc *QualityUseCase) GetRecord(ctx context.Context, id int64) (*response.QualityRecordResponse, error) {
-	rec, err := uc.repo.GetRecordByID(ctx, id)
-	if err != nil {
-		return nil, errorsuc.NewNotFoundError("registro de qualidade não encontrado")
-	}
-	return toRecordResponse(rec), nil
-}
-
-func (uc *QualityUseCase) ListRecordsByOrder(ctx context.Context, orderID int64) ([]*response.QualityRecordResponse, error) {
-	recs, err := uc.repo.ListRecordsByOrder(ctx, orderID)
-	if err != nil {
-		return nil, err
-	}
-	return toRecordSlice(recs), nil
-}
-
-func (uc *QualityUseCase) ListRecordsByItem(ctx context.Context, itemCode int64) ([]*response.QualityRecordResponse, error) {
-	recs, err := uc.repo.ListRecordsByItem(ctx, itemCode)
-	if err != nil {
-		return nil, err
-	}
-	return toRecordSlice(recs), nil
-}
-
 // ─── non-conformances ─────────────────────────────────────────────────────────
 
 func (uc *QualityUseCase) CreateNC(ctx context.Context, dto request.CreateNCDTO) (*response.NonConformanceResponse, error) {
@@ -183,7 +127,7 @@ func (uc *QualityUseCase) CreateNC(ctx context.Context, dto request.CreateNCDTO)
 	if err != nil {
 		return nil, err
 	}
-	nc.QualityRecordID = dto.QualityRecordID
+	nc.QualityRecordID, nc.LotID = uc.loteDaNC(ctx, dto.QualityRecordID)
 	nc.ProductionOrderID = dto.ProductionOrderID
 	nc.Lot = dto.Lot
 
@@ -231,8 +175,8 @@ func toPlanResponse(p *entity.InspectionPlan, chars []*entity.InspectionCharacte
 		RouteOperationID: p.RouteOperationID,
 		PointType:        string(p.PointType),
 		Description:      p.Description,
-		SampleSize:       p.SampleSize,
-		AcceptanceLevel:  p.AcceptanceLevel,
+		SampleSize:       p.SampleSize.InexactFloat64(),
+		AcceptanceLevel:  p.AcceptanceLevel.InexactFloat64(),
 		Instructions:     p.Instructions,
 		IsActive:         p.IsActive,
 		CreatedAt:        p.CreatedAt,
@@ -249,39 +193,12 @@ func toCharResponse(c *entity.InspectionCharacteristic) *response.Characteristic
 		ID:             c.ID,
 		PlanID:         c.PlanID,
 		Name:           c.Name,
-		Nominal:        c.Nominal,
-		ToleranceUpper: c.ToleranceUpper,
-		ToleranceLower: c.ToleranceLower,
+		Nominal:        decimalPtrToFloat(c.Nominal),
+		ToleranceUpper: decimalPtrToFloat(c.ToleranceUpper),
+		ToleranceLower: decimalPtrToFloat(c.ToleranceLower),
 		Unit:           c.Unit,
 		IsCritical:     c.IsCritical,
 	}
-}
-
-func toRecordResponse(r *entity.QualityRecord) *response.QualityRecordResponse {
-	return &response.QualityRecordResponse{
-		ID:                r.ID,
-		PlanID:            r.PlanID,
-		ProductionOrderID: r.ProductionOrderID,
-		Lot:               r.Lot,
-		ItemCode:          r.ItemCode,
-		InspectedQty:      r.InspectedQty,
-		ApprovedQty:       r.ApprovedQty,
-		RejectedQty:       r.RejectedQty,
-		Result:            string(r.Result),
-		InspectorID:       r.InspectorID,
-		InspectedAt:       r.InspectedAt,
-		Notes:             r.Notes,
-		CreatedAt:         r.CreatedAt,
-		CreatedBy:         r.CreatedBy,
-	}
-}
-
-func toRecordSlice(recs []*entity.QualityRecord) []*response.QualityRecordResponse {
-	out := make([]*response.QualityRecordResponse, 0, len(recs))
-	for _, r := range recs {
-		out = append(out, toRecordResponse(r))
-	}
-	return out
 }
 
 func toNCResponse(nc *entity.NonConformance) *response.NonConformanceResponse {
@@ -292,7 +209,7 @@ func toNCResponse(nc *entity.NonConformance) *response.NonConformanceResponse {
 		ProductionOrderID: nc.ProductionOrderID,
 		ItemCode:          nc.ItemCode,
 		Lot:               nc.Lot,
-		NonConformQty:     nc.NonConformQty,
+		NonConformQty:     nc.NonConformQty.InexactFloat64(),
 		Description:       nc.Description,
 		Severity:          string(nc.Severity),
 		RootCause:         nc.RootCause,
@@ -316,4 +233,14 @@ func toNCSlice(ncs []*entity.NonConformance) []*response.NonConformanceResponse 
 		out = append(out, toNCResponse(nc))
 	}
 	return out
+}
+
+// decimalPtrToFloat converte só na fronteira JSON: a resposta segue numérica,
+// como no estoque, enquanto domínio e banco guardam o valor exato.
+func decimalPtrToFloat(v *decimal.Decimal) *float64 {
+	if v == nil {
+		return nil
+	}
+	f := v.InexactFloat64()
+	return &f
 }

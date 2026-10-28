@@ -65,9 +65,22 @@ Regras do lançamento (todas em `CreateMovementTx`, o único ponto que grava mov
 Uma operação: `TRANSFER_OUT` na origem ao custo médio e `TRANSFER_IN` no destino pelo
 mesmo custo; as pernas se referenciam (`reference_type TRANSFERENCIA`, `reference_code`
 = id da saída). Trânsito: transfira para um almoxarifado de localização `TRANSITO`.
-Transferência originada de documento (liberação da inspeção de recebimento) usa a
-mesma operação com `ReferenciaTipo`/`ReferenciaCodigo` do documento: as pernas
-guardam a referência dele e se desfazem pelo documento, não pelo estorno avulso.
+Transferência originada de documento usa a mesma operação com
+`ReferenciaTipo`/`ReferenciaCodigo` do documento: as pernas guardam a referência
+dele e se desfazem pelo documento, não pelo estorno avulso.
+
+**Bloqueio do almoxarifado de inspeção (migração 418).** Material num
+almoxarifado de localização `INSPECAO` só sai pela decisão de uso do lote de
+inspeção (`reference_type QUALITY_LOT`, VINS0300). `CreateMovementTx` recusa
+qualquer saída (`OUT`, `TRANSFER_OUT`, `REP`, ajuste negativo) dele com outra
+referência: requisição, apontamento/consumo de OF, separação, faturamento,
+transferência e movimento manual. Continuam passando:
+- o estorno ou cancelamento da entrada (`NF_ENTRADA`, `PURCHASE_ORDER`) — o cancelamento da entrada também cancela os títulos a pagar da nota e os tira da lista (`is_active=false`; migração 000422 corrige os que ficaram visíveis);
+- o estorno de movimento (`ESTORNO`);
+- o inventário (`INVENTORY`, `CONTAGEM_CICLICA`);
+- as referências antigas da inspeção de recebimento.
+
+Antes, o almoxarifado de inspeção só ficava fora do ATP e da reposição.
 Toda entrada de transferência vale o que saiu — inclusive a automática para o
 almoxarifado de linha da OF.
 
@@ -180,7 +193,7 @@ meses). Transferência deixou de contar como consumo (vale também para a curva 
 
 | Método | Rota | Ação |
 |---|---|---|
-| GET | `/api/stock/replenishment` | Itens com projeção (disponível − reservado + pedido de compra aberto + requisição de compra aberta) ≤ ponto de pedido. PP = TR×CM/CR+ES do cadastro; sem CM, o consumo médio apurado; sem fórmula, o estoque mínimo. Sugerido = PP + segurança − projeção, ≥ lote mínimo, no múltiplo |
+| GET | `/api/stock/replenishment` | Itens com projeção (disponível − reservado + pedido de compra aberto + requisição de compra aberta) ≤ ponto de pedido. PP = TR×CM/CR+ES do cadastro; sem CM, o consumo médio apurado; sem fórmula, o estoque mínimo. Sugerido = PP + segurança − projeção, ≥ lote mínimo, no múltiplo (múltiplo fracionado fica exato: barra de 6,35 M sugere 12,7 M; sem múltiplo, sobe ao inteiro) |
 | POST | `/api/stock/replenishment/purchase-requisition` | `{items:[{item_code, quantity}]}` → requisição de compra (VSUP0300) |
 | GET | `/api/stock/analysis?months&idle_days` | Valor, consumo, consumo médio, cobertura (meses), giro anualizado, dias sem movimento, parado, ABC |
 | GET | `/api/stock/lots/expiring?days` | Saldo em lote vencido ou a vencer |

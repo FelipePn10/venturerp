@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"time"
 )
 
@@ -19,7 +20,7 @@ const (
 // Only entries whose ArrivalDate <= need_date reduce the net requirement.
 type SupplyEntry struct {
 	ItemCode    int64
-	Quantity    float64
+	Quantity    decimal.Decimal
 	ArrivalDate time.Time        // expected date the supply will be available
 	SourceType  SupplySourceType // what kind of order generated this supply
 	SourceCode  int64            // PK of the originating order record

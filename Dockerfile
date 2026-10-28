@@ -16,7 +16,9 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=vendor \
     go build -trimpath \
       -ldflags="-s -w -X github.com/FelipePn10/panossoerp/internal/version.Version=${VERSION} -X github.com/FelipePn10/panossoerp/internal/version.MinClient=${MIN_CLIENT_VERSION}" \
-      -o /out/erp ./api
+      -o /out/erp ./api \
+ && CGO_ENABLED=0 GOOS=linux GOFLAGS=-mod=vendor \
+    go build -trimpath -ldflags="-s -w" -o /out/venture-admin ./cmd/venture-admin
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 # Alpine gives us a shell + wget (for the container HEALTHCHECK), ca-certificates
@@ -29,6 +31,8 @@ ENV TZ=America/Sao_Paulo
 
 WORKDIR /app
 COPY --from=build /out/erp /app/erp
+# Gestos que só a Venture ERP faz na base do cliente (token Focus de produção).
+COPY --from=build /out/venture-admin /app/venture-admin
 # Migrations ship with the image so the migrate sidecar (or a manual run) can
 # apply them from the same source of truth.
 COPY --from=build /src/migrations /app/migrations

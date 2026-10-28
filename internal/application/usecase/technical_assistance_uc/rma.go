@@ -164,12 +164,12 @@ func (uc *UseCase) CreateRMA(ctx context.Context, dto request.CreateTechnicalAss
 		return nil, errorsuc.NewValidationError("informe ao menos um item para o RMA")
 	}
 	rma := &entity.RMA{CallCode: dto.CallCode, Status: "SOLICITADO", ReasonCode: dto.ReasonCode, ReasonDescription: dto.ReasonDescription, EligibilityStatus: dto.EligibilityStatus, EligibilityReason: dto.EligibilityReason, SLADueAt: sla, ProductCost: dto.ProductCost, FreightCost: dto.FreightCost, ServiceCost: dto.ServiceCost, IdempotencyKey: dto.IdempotencyKey, CreatedBy: actor, Items: make([]*entity.RMAItem, 0, len(dto.Items))}
-	if rma.ProductCost < 0 || rma.FreightCost < 0 || rma.ServiceCost < 0 {
+	if rma.ProductCost.IsNegative() || rma.FreightCost.IsNegative() || rma.ServiceCost.IsNegative() {
 		return nil, errorsuc.NewValidationError("os custos do RMA não podem ser negativos")
 	}
 	seen := map[int64]bool{}
 	for _, item := range dto.Items {
-		if item.CallItemCode <= 0 || item.ItemCode <= 0 || item.Quantity <= 0 {
+		if item.CallItemCode <= 0 || item.ItemCode <= 0 || !item.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError("item, linha do chamado e quantidade positiva são obrigatórios")
 		}
 		if seen[item.CallItemCode] {
@@ -297,7 +297,7 @@ func (uc *UseCase) TransitionRMA(ctx context.Context, code int64, dto request.Tr
 	if dto.ServiceCost != nil {
 		current.ServiceCost = *dto.ServiceCost
 	}
-	if current.ProductCost < 0 || current.FreightCost < 0 || current.ServiceCost < 0 {
+	if current.ProductCost.IsNegative() || current.FreightCost.IsNegative() || current.ServiceCost.IsNegative() {
 		return nil, errorsuc.NewValidationError("os custos do RMA não podem ser negativos")
 	}
 	updated, err := repo.TransitionRMA(ctx, tenantID, code, next, dto.Reason, dto.CorrelationID, actor, current)
@@ -308,9 +308,9 @@ func (uc *UseCase) TransitionRMA(ctx context.Context, code int64, dto request.Tr
 }
 
 func rmaResponse(v *entity.RMA) *response.TechnicalAssistanceRMAResponse {
-	out := &response.TechnicalAssistanceRMAResponse{Code: v.Code, CallCode: v.CallCode, Status: v.Status, ReasonCode: v.ReasonCode, ReasonDescription: v.ReasonDescription, EligibilityStatus: v.EligibilityStatus, EligibilityReason: v.EligibilityReason, AuthorizationNumber: v.AuthorizationNumber, AuthorizedAt: v.AuthorizedAt, ReverseCarrierCode: v.ReverseCarrierCode, ReverseTrackingCode: v.ReverseTrackingCode, ReceivedAt: v.ReceivedAt, InspectionNotes: v.InspectionNotes, InspectedAt: v.InspectedAt, Destination: v.Destination, SLADueAt: v.SLADueAt, ProductCost: v.ProductCost, FreightCost: v.FreightCost, ServiceCost: v.ServiceCost, TotalCost: v.ProductCost + v.FreightCost + v.ServiceCost, FiscalDocumentKey: v.FiscalDocumentKey, StockMovementCode: v.StockMovementCode, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, AllowedActions: append([]string(nil), rmaTransitions[v.Status]...), Items: make([]response.TechnicalAssistanceRMAItemResponse, 0, len(v.Items)), Events: make([]response.TechnicalAssistanceRMAEventResponse, 0, len(v.Events)), Evidences: make([]response.TechnicalAssistanceRMAEvidenceResponse, 0, len(v.Evidences))}
+	out := &response.TechnicalAssistanceRMAResponse{Code: v.Code, CallCode: v.CallCode, Status: v.Status, ReasonCode: v.ReasonCode, ReasonDescription: v.ReasonDescription, EligibilityStatus: v.EligibilityStatus, EligibilityReason: v.EligibilityReason, AuthorizationNumber: v.AuthorizationNumber, AuthorizedAt: v.AuthorizedAt, ReverseCarrierCode: v.ReverseCarrierCode, ReverseTrackingCode: v.ReverseTrackingCode, ReceivedAt: v.ReceivedAt, InspectionNotes: v.InspectionNotes, InspectedAt: v.InspectedAt, Destination: v.Destination, SLADueAt: v.SLADueAt, ProductCost: v.ProductCost.InexactFloat64(), FreightCost: v.FreightCost.InexactFloat64(), ServiceCost: v.ServiceCost.InexactFloat64(), TotalCost: v.ProductCost.Add(v.FreightCost).Add(v.ServiceCost).InexactFloat64(), FiscalDocumentKey: v.FiscalDocumentKey, StockMovementCode: v.StockMovementCode, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, AllowedActions: append([]string(nil), rmaTransitions[v.Status]...), Items: make([]response.TechnicalAssistanceRMAItemResponse, 0, len(v.Items)), Events: make([]response.TechnicalAssistanceRMAEventResponse, 0, len(v.Events)), Evidences: make([]response.TechnicalAssistanceRMAEvidenceResponse, 0, len(v.Evidences))}
 	for _, i := range v.Items {
-		out.Items = append(out.Items, response.TechnicalAssistanceRMAItemResponse{Code: i.Code, CallItemCode: i.CallItemCode, ItemCode: i.ItemCode, Quantity: i.Quantity, SerialNumber: i.SerialNumber, LotNumber: i.LotNumber, RequestedDestination: i.RequestedDestination, InspectionResult: i.InspectionResult})
+		out.Items = append(out.Items, response.TechnicalAssistanceRMAItemResponse{Code: i.Code, CallItemCode: i.CallItemCode, ItemCode: i.ItemCode, Quantity: i.Quantity.InexactFloat64(), SerialNumber: i.SerialNumber, LotNumber: i.LotNumber, RequestedDestination: i.RequestedDestination, InspectionResult: i.InspectionResult})
 	}
 	for _, e := range v.Events {
 		out.Events = append(out.Events, response.TechnicalAssistanceRMAEventResponse{Code: e.Code, EventType: e.EventType, BeforeState: json.RawMessage(e.BeforeState), AfterState: json.RawMessage(e.AfterState), Reason: e.Reason, CorrelationID: e.CorrelationID, OccurredAt: e.OccurredAt, ActorID: e.ActorID})

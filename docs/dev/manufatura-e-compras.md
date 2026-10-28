@@ -228,6 +228,12 @@ Operações criadas uma única vez e reutilizadas em múltiplos roteiros.
 
 ---
 
+**Desativar e reativar.** `DELETE /api/routing/routes/{id}` desativa (o
+roteiro sai do MRP/CRP); `POST /api/routing/routes/{id}/reativar` devolve. Se
+outro roteiro ativo do item já é o padrão, o reativado volta como alternativo.
+`GET /api/routing/routes?item_code=X&incluir_inativos=true` lista também os
+desativados — é o que a VENT0202 usa para oferecer o botão Reativar.
+
 **Passo 2 — Criar o roteiro do item**
 
 ```http
@@ -1255,7 +1261,11 @@ solicitante, contrato, cotação e tipo de utilização
 - `POST /api/purchase-order/{code}/receipts` — registrar recebimento físico por
   linha do pedido, gerar movimento `IN` no estoque e atualizar saldos/status do
   pedido.
-- Demais: `GET /list`, `GET /{code}`, `PUT /{code}`, `DELETE /{code}/cancel`,
+- `DELETE /{code}/cancel` — cancela o pedido, as linhas e, na mesma transação,
+  os títulos a pagar ligados ao pedido (adiantamento, título lançado com o
+  pedido), que saem da lista. Título pago/abatido, ou que veio da nota de
+  entrada (esse cai com o cancelamento da entrada), impede o cancelamento.
+- Demais: `GET /list`, `GET /{code}`, `PUT /{code}`,
   `GET /supplier/{supplierCode}`, `GET /status/{status}`, e o fluxo de sugestões
   (`/suggestions...`).
 

@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -11,7 +12,7 @@ type IndependentDemand struct {
 	ItemCode       int64
 	Mask           *string
 	CostCenterCode *int64
-	Quantity       float64
+	Quantity       decimal.Decimal
 	DemandDate     time.Time
 	IsActive       bool
 	CreatedAt      time.Time

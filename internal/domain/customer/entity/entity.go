@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
@@ -618,9 +619,11 @@ type CommercialPolicySpecificItem struct {
 	CreatedAt          time.Time
 }
 
+// CommercialPolicyContext: valor e quantidade em decimal — o cálculo da
+// política é dinheiro e não pode acumular erro de ponto flutuante.
 type CommercialPolicyContext struct {
-	GrossValue         float64
-	Quantity           float64
+	GrossValue         decimal.Decimal
+	Quantity           decimal.Decimal
 	CustomerCode       *int64
 	CustomerTypeID     *int64
 	MarketSegmentID    *int64
@@ -640,20 +643,20 @@ type CommercialPolicyEffect struct {
 	Description      string
 	Kind             CommercialPolicyKind
 	CalcType         CommercialPolicyCalcType
-	PercentValue     float64
-	FixedValue       float64
-	AppliedValue     float64
+	PercentValue     decimal.Decimal
+	FixedValue       decimal.Decimal
+	AppliedValue     decimal.Decimal
 	RequiresApproval bool
 	Stackable        bool
 }
 
 type CommercialPolicyEvaluation struct {
-	GrossValue       float64
-	DiscountValue    float64
-	SurchargeValue   float64
-	FreightValue     float64
-	CommissionValue  float64
-	NetValue         float64
+	GrossValue       decimal.Decimal
+	DiscountValue    decimal.Decimal
+	SurchargeValue   decimal.Decimal
+	FreightValue     decimal.Decimal
+	CommissionValue  decimal.Decimal
+	NetValue         decimal.Decimal
 	RequiresApproval bool
 	Effects          []CommercialPolicyEffect
 }
@@ -715,10 +718,10 @@ func ValidCommercialPolicyChoiceType(choice CommercialPolicyChoiceType) bool {
 }
 
 func EvaluateCommercialPolicies(policies []*CommercialPolicy, ctx CommercialPolicyContext) (*CommercialPolicyEvaluation, error) {
-	if ctx.GrossValue < 0 {
+	if ctx.GrossValue.IsNegative() {
 		return nil, domainerr.NewValidation("o valor bruto deve ser maior ou igual a zero")
 	}
-	if ctx.Quantity < 0 {
+	if ctx.Quantity.IsNegative() {
 		return nil, domainerr.NewValidation("a quantidade deve ser maior ou igual a zero")
 	}
 	result := &CommercialPolicyEvaluation{GrossValue: ctx.GrossValue, NetValue: ctx.GrossValue}
@@ -748,19 +751,19 @@ func EvaluateCommercialPolicies(policies []*CommercialPolicy, ctx CommercialPoli
 		}
 		switch p.Kind {
 		case CommercialPolicyDiscount:
-			result.DiscountValue = roundMoney(result.DiscountValue+value, 2)
-			result.NetValue = roundMoney(result.NetValue-value, 2)
+			result.DiscountValue = result.DiscountValue.Add(value)
+			result.NetValue = result.NetValue.Sub(value)
 		case CommercialPolicySurcharge:
-			result.SurchargeValue = roundMoney(result.SurchargeValue+value, 2)
-			result.NetValue = roundMoney(result.NetValue+value, 2)
+			result.SurchargeValue = result.SurchargeValue.Add(value)
+			result.NetValue = result.NetValue.Add(value)
 		case CommercialPolicyFreight:
-			result.FreightValue = roundMoney(result.FreightValue+value, 2)
-			result.NetValue = roundMoney(result.NetValue+value, 2)
+			result.FreightValue = result.FreightValue.Add(value)
+			result.NetValue = result.NetValue.Add(value)
 		case CommercialPolicyCommission:
-			result.CommissionValue = roundMoney(result.CommissionValue+value, 2)
+			result.CommissionValue = result.CommissionValue.Add(value)
 		}
-		if result.NetValue < 0 {
-			result.NetValue = 0
+		if result.NetValue.IsNegative() {
+			result.NetValue = decimal.Zero
 		}
 		if p.RequiresApproval {
 			result.RequiresApproval = true
@@ -783,16 +786,16 @@ func (p *CommercialPolicy) CommercialPolicyMatches(ctx CommercialPolicyContext, 
 	if p.ValidityEnd != nil && now.After(p.ValidityEnd.Add(24*time.Hour)) {
 		return false
 	}
-	if p.MinGrossValue > 0 && ctx.GrossValue < p.MinGrossValue {
+	if p.MinGrossValue > 0 && ctx.GrossValue.LessThan(dec(p.MinGrossValue)) {
 		return false
 	}
-	if p.MaxGrossValue > 0 && ctx.GrossValue > p.MaxGrossValue {
+	if p.MaxGrossValue > 0 && ctx.GrossValue.GreaterThan(dec(p.MaxGrossValue)) {
 		return false
 	}
-	if p.MinQuantity > 0 && ctx.Quantity < p.MinQuantity {
+	if p.MinQuantity > 0 && ctx.Quantity.LessThan(dec(p.MinQuantity)) {
 		return false
 	}
-	if p.MaxQuantity > 0 && ctx.Quantity > p.MaxQuantity {
+	if p.MaxQuantity > 0 && ctx.Quantity.GreaterThan(dec(p.MaxQuantity)) {
 		return false
 	}
 	return matchInt64Ptr(p.CustomerCode, ctx.CustomerCode) &&
@@ -808,7 +811,13 @@ func (p *CommercialPolicy) CommercialPolicyMatches(ctx CommercialPolicyContext, 
 		matchStringPtr(p.ItemClassification, ctx.ItemClassification)
 }
 
-func (p *CommercialPolicy) CommercialPolicyValue(baseValue float64, now time.Time) (float64, CommercialPolicyCalcType, float64, float64, error) {
+// dec: a configuração da política vem do banco (numeric) como float64; o
+// decimal pelo menor texto que a representa devolve o valor digitado.
+func dec(f float64) decimal.Decimal { return decimal.NewFromFloat(f) }
+
+// CommercialPolicyValue: o valor da política sobre baseValue, em decimal,
+// arredondado a centavos. Devolve também o tipo, o percentual e o valor fixo usados.
+func (p *CommercialPolicy) CommercialPolicyValue(baseValue decimal.Decimal, now time.Time) (decimal.Decimal, CommercialPolicyCalcType, decimal.Decimal, decimal.Decimal, error) {
 	calcType := p.CalcType
 	percentValue := p.PercentValue
 	fixedValue := p.FixedValue
@@ -819,24 +828,25 @@ func (p *CommercialPolicy) CommercialPolicyValue(baseValue float64, now time.Tim
 		fixedValue = line.FixedValue
 		maxValue = line.MaxValue
 	}
+	pctD, fixedD, maxD, maxPctD := dec(percentValue), dec(fixedValue), dec(maxValue), dec(p.MaxPercent)
 	if !ValidCommercialPolicyCalcType(calcType) {
-		return 0, calcType, percentValue, fixedValue, domainerr.NewValidation("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
+		return decimal.Zero, calcType, pctD, fixedD, domainerr.NewValidation("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
 	}
-	if percentValue < 0 || fixedValue < 0 || p.MaxPercent < 0 || maxValue < 0 {
-		return 0, calcType, percentValue, fixedValue, domainerr.NewValidation("os valores da política comercial devem ser maiores ou iguais a zero")
+	if pctD.IsNegative() || fixedD.IsNegative() || maxPctD.IsNegative() || maxD.IsNegative() {
+		return decimal.Zero, calcType, pctD, fixedD, domainerr.NewValidation("os valores da política comercial devem ser maiores ou iguais a zero")
 	}
-	value := fixedValue
+	value := fixedD
 	if calcType == CommercialPolicyPercent {
-		pct := percentValue
-		if p.MaxPercent > 0 && pct > p.MaxPercent {
-			pct = p.MaxPercent
+		pct := pctD
+		if maxPctD.IsPositive() && pct.GreaterThan(maxPctD) {
+			pct = maxPctD
 		}
-		value = baseValue * pct / 100
+		value = baseValue.Mul(pct).Div(decimal.NewFromInt(100))
 	}
-	if maxValue > 0 && value > maxValue {
-		value = maxValue
+	if maxD.IsPositive() && value.GreaterThan(maxD) {
+		value = maxD
 	}
-	return roundMoney(value, 2), calcType, percentValue, fixedValue, nil
+	return value.Round(2), calcType, pctD, fixedD, nil
 }
 
 func (p *CommercialPolicy) firstValidLine(now time.Time) *CommercialPolicyLine {
@@ -1185,6 +1195,9 @@ type Customer struct {
 	CarrierGroupID        *int64
 	InvoiceTypeID         *int64
 	TaxTypeID             *int64
+	// FinalidadeCompra: REVENDA, INDUSTRIALIZACAO ou USO_CONSUMO — o que o
+	// cliente costuma fazer com a mercadoria; nil = deduzir pela IE.
+	FinalidadeCompra      *string
 	PaymentCondVisibility PaymentCondVisibility
 	CreditLimit           float64
 	Website               *string

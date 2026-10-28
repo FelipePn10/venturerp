@@ -14,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
 	"github.com/shopspring/decimal"
 )
 
@@ -47,10 +48,27 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 		return nil, err
 	}
 
-	impostos := []string{"ICMS", "IPI", "PIS", "COFINS"}
-	var results []*entity.TaxAssessment
+	type aApurar struct {
+		imposto         string
+		debito, credito decimal.Decimal
+	}
+	var lista []aApurar
+	for _, imposto := range impostosDaCompetencia(dto.Competencia) {
+		lista = append(lista, aApurar{imposto, debits[imposto], credits[imposto]})
+	}
+	// ICMS-ST, DIFAL e FCP devidos a cada estado de destino: um registro e um
+	// título por UF (é o que vira a guia — GNRE — de cada estado).
+	porUF, err := uc.Repo.GetDebitosPorUF(ctx, dto.Competencia)
+	if err != nil {
+		return nil, err
+	}
+	for _, d := range porUF {
+		lista = append(lista, aApurar{d.Imposto + "-" + d.UF, d.Valor, decimal.Zero})
+	}
 
-	for _, imposto := range impostos {
+	var results []*entity.TaxAssessment
+	for _, ap := range lista {
+		imposto := ap.imposto
 		existing, errApuracao := uc.Repo.GetTaxAssessment(ctx, imposto, dto.Competencia)
 		if errApuracao != nil && !errorsuc.EhNaoEncontrado(errApuracao) {
 			return nil, fmt.Errorf("lendo a apuração existente: %w", errApuracao)
@@ -60,8 +78,8 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 			continue
 		}
 
-		debito := debits[imposto]
-		credito := credits[imposto]
+		debito := ap.debito
+		credito := ap.credito
 		saldo := debito.Sub(credito)
 
 		var saldoDevedor, saldoCredor decimal.Decimal
@@ -91,10 +109,13 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 				IsActive:        true,
 				CriadoPor:       userID,
 			}
+			// Sem o título a apuração não pode ficar gravada como apurada: o
+			// imposto sumiria do contas a pagar. Antes o erro era ignorado.
 			created, err := uc.Repo.CreateContaPagar(ctx, cp)
-			if err == nil && created != nil {
-				cpID = &created.ID
+			if err != nil {
+				return nil, fmt.Errorf("criando o título do %s da competência %s: %w", imposto, dto.Competencia, err)
 			}
+			cpID = &created.ID
 		} else {
 			saldoCredor = saldo.Neg()
 		}
@@ -121,6 +142,16 @@ func (uc *ApurarImpostosUseCase) Execute(ctx context.Context, dto request.Apurar
 	return toTaxAssessmentResponses(results), nil
 }
 
+// impostosDaCompetencia lista o que se apura no mês. IBS e CBS entram a partir
+// de 2027: em 2026 o destaque é informativo e não há saldo a recolher.
+func impostosDaCompetencia(competencia string) []string {
+	impostos := []string{"ICMS", "IPI", "PIS", "COFINS"}
+	if reforma.RecolhivelNaCompetencia(competencia) {
+		impostos = append(impostos, "IBS", "CBS")
+	}
+	return impostos
+}
+
 func calculateVencimento(competencia, imposto string, config *fiscalEntity.FiscalConfig) time.Time {
 	parts := strings.Split(competencia, "/")
 	if len(parts) != 2 {
@@ -130,10 +161,10 @@ func calculateVencimento(competencia, imposto string, config *fiscalEntity.Fisca
 	year, _ := strconv.Atoi(parts[1])
 
 	var day int
-	switch imposto {
-	case "ICMS":
+	switch {
+	case imposto == "ICMS" || strings.HasPrefix(imposto, "ST-") || strings.HasPrefix(imposto, "DIFAL-") || strings.HasPrefix(imposto, "FCP-"):
 		day = config.VencimentoIcmsDia
-	case "IPI":
+	case imposto == "IPI":
 		day = config.VencimentoIPIDia
 	default:
 		day = config.VencimentoPisCofinsDia

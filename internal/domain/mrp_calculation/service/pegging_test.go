@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -17,17 +18,17 @@ func ptrI(v int64) *int64 { return &v }
 // necessidade seguinte.
 func TestPeggingNaOrdemDoNetting(t *testing.T) {
 	b := newExceptionBasis(
-		map[int64]*entity.StockSnapshot{1: {Quantity: 10}},
+		map[int64]*entity.StockSnapshot{1: {Quantity: decimal.NewFromFloat(10)}},
 		map[int64][]ports.SupplyEntry{1: {firme(500, 8, diaOut(20))}},
 	)
-	b.addRequirement(1, diaOut(5), 15, entity.PegDemandSalesOrder, ptrI(71))
-	b.addRequirement(1, diaOut(20), 12, entity.PegDemandSuggestion, ptrI(900))
-	b.addRequirement(1, diaOut(25), 6, entity.PegDemandIndependent, ptrI(3))
+	b.addRequirement(1, diaOut(5), decimal.NewFromFloat(15), entity.PegDemandSalesOrder, ptrI(71))
+	b.addRequirement(1, diaOut(20), decimal.NewFromFloat(12), entity.PegDemandSuggestion, ptrI(900))
+	b.addRequirement(1, diaOut(25), decimal.NewFromFloat(6), entity.PegDemandIndependent, ptrI(3))
 	// Sugestão do dia 5 com lote mínimo 10 (precisava 5): sobra 5 para depois.
-	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 77, ItemCode: 1, Quantity: 10, NeedDate: diaOut(5), OrderType: "COMPRA"})
-	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 78, ItemCode: 1, Quantity: 3, NeedDate: diaOut(25), OrderType: "COMPRA"})
+	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 77, ItemCode: 1, Quantity: decimal.NewFromFloat(10), NeedDate: diaOut(5), OrderType: "COMPRA"})
+	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 78, ItemCode: 1, Quantity: decimal.NewFromFloat(3), NeedDate: diaOut(25), OrderType: "COMPRA"})
 	// Ordem de serviço não é suprimento.
-	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 79, ItemCode: 1, Quantity: 99, NeedDate: diaOut(5), OrderType: "SERVICO"})
+	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 79, ItemCode: 1, Quantity: decimal.NewFromFloat(99), NeedDate: diaOut(5), OrderType: "SERVICO"})
 
 	type linha struct {
 		demanda string
@@ -38,7 +39,7 @@ func TestPeggingNaOrdemDoNetting(t *testing.T) {
 	}
 	var got []linha
 	for _, r := range b.pegging() {
-		l := linha{demanda: r.DemandKind, supply: r.SupplyKind, qtd: r.Quantity}
+		l := linha{demanda: r.DemandKind, supply: r.SupplyKind, qtd: r.Quantity.InexactFloat64()}
 		if r.DemandCode != nil {
 			l.cod = *r.DemandCode
 		}
@@ -70,9 +71,9 @@ func TestPeggingNaOrdemDoNetting(t *testing.T) {
 // outra); ela fica para a necessidade seguinte.
 func TestPeggingFirmeAtrasadaNaoCobre(t *testing.T) {
 	b := newExceptionBasis(nil, map[int64][]ports.SupplyEntry{2: {firme(600, 5, diaOut(15))}})
-	b.addRequirement(2, diaOut(10), 5, entity.PegDemandForecast, nil)
-	b.addRequirement(2, diaOut(20), 5, entity.PegDemandForecast, nil)
-	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 1, ItemCode: 2, Quantity: 5, NeedDate: diaOut(10), OrderType: "FABRICACAO"})
+	b.addRequirement(2, diaOut(10), decimal.NewFromFloat(5), entity.PegDemandForecast, nil)
+	b.addRequirement(2, diaOut(20), decimal.NewFromFloat(5), entity.PegDemandForecast, nil)
+	b.addSuggestion(&entity.PlannedOrderSuggestion{Code: 1, ItemCode: 2, Quantity: decimal.NewFromFloat(5), NeedDate: diaOut(10), OrderType: "FABRICACAO"})
 	r := b.pegging()
 	if len(r) != 2 || r[0].SupplyKind != entity.PegSupplySuggestion || r[1].SupplyKind != entity.PegSupplyFirmOrder || !r[1].NeedDate.Equal(diaOut(20)) {
 		t.Fatalf("pegging = %+v", r)
@@ -100,7 +101,7 @@ func TestOrigemDaNecessidade(t *testing.T) {
 // Ajustes do cenário: altera e retira demanda e pedido, cria demanda nova,
 // soma estoque e troca o prazo — sem alterar os registros lidos do banco.
 func TestAjustesDoCenario(t *testing.T) {
-	q := func(v float64) *float64 { return &v }
+	q := func(v float64) *decimal.Decimal { x := dq(v); return &x }
 	d := func(v time.Time) *time.Time { return &v }
 	adj := &entity.ScenarioAdjustments{
 		Demands: []entity.ScenarioDemandChange{
@@ -109,28 +110,28 @@ func TestAjustesDoCenario(t *testing.T) {
 			{ID: 3, RefKind: entity.ScenarioDemandSalesOrder, RefCode: ptrI(70), Quantity: q(40)},
 			{ID: 4, RefKind: entity.ScenarioDemandNew, ItemCode: 8, Quantity: q(12), NeedDate: d(diaOut(30))},
 		},
-		StockDelta:   map[int64]float64{5: 30, 6: -100},
+		StockDelta:   map[int64]decimal.Decimal{5: dq(30), 6: dq(-100)},
 		LeadTimeDays: map[int64]int{5: 12},
 	}
-	original := &inddemandentity.IndependentDemand{CodeDemand: 10, ItemCode: 1, Quantity: 5, DemandDate: diaOut(1)}
-	demands := []*inddemandentity.IndependentDemand{original, {CodeDemand: 11, ItemCode: 2, Quantity: 7}, {CodeDemand: 12, ItemCode: 3, Quantity: 1}}
-	pedido := &entity.MRPInput{ItemCode: 4, Quantity: 9, DemandType: "SALES_ORDER", SourceCode: ptrI(70)}
-	inputs := []*entity.MRPInput{pedido, {ItemCode: 4, Quantity: 1, DemandType: "SALES_ORDER", SourceCode: ptrI(71)}}
+	original := &inddemandentity.IndependentDemand{CodeDemand: 10, ItemCode: 1, Quantity: decimal.NewFromFloat(5), DemandDate: diaOut(1)}
+	demands := []*inddemandentity.IndependentDemand{original, {CodeDemand: 11, ItemCode: 2, Quantity: decimal.NewFromFloat(7)}, {CodeDemand: 12, ItemCode: 3, Quantity: decimal.NewFromFloat(1)}}
+	pedido := &entity.MRPInput{ItemCode: 4, Quantity: decimal.NewFromFloat(9), DemandType: "SALES_ORDER", SourceCode: ptrI(70)}
+	inputs := []*entity.MRPInput{pedido, {ItemCode: 4, Quantity: decimal.NewFromFloat(1), DemandType: "SALES_ORDER", SourceCode: ptrI(71)}}
 
 	gotD, gotI := applyScenarioDemands(adj, demands, inputs, 99)
-	if len(gotD) != 2 || gotD[0].Quantity != 50 || !gotD[0].DemandDate.Equal(diaOut(9)) || gotD[1].CodeDemand != 12 {
+	if len(gotD) != 2 || !gotD[0].Quantity.Equal(decimal.NewFromFloat(50)) || !gotD[0].DemandDate.Equal(diaOut(9)) || gotD[1].CodeDemand != 12 {
 		t.Fatalf("demandas: %+v", gotD)
 	}
-	if original.Quantity != 5 || pedido.Quantity != 9 {
+	if !original.Quantity.Equal(decimal.NewFromFloat(5)) || !pedido.Quantity.Equal(decimal.NewFromFloat(9)) {
 		t.Fatal("o ajuste alterou o registro lido do banco")
 	}
-	if len(gotI) != 3 || gotI[0].Quantity != 40 || gotI[1].Quantity != 1 || gotI[2].ItemCode != 8 || gotI[2].PegKind != entity.PegDemandSimulated || *gotI[2].PegCode != 4 || gotI[2].PlanCode != 99 {
+	if len(gotI) != 3 || !gotI[0].Quantity.Equal(decimal.NewFromFloat(40)) || !gotI[1].Quantity.Equal(decimal.NewFromFloat(1)) || gotI[2].ItemCode != 8 || gotI[2].PegKind != entity.PegDemandSimulated || *gotI[2].PegCode != 4 || gotI[2].PlanCode != 99 {
 		t.Fatalf("entradas: %+v %+v", gotI, gotI[2])
 	}
 
-	snaps := map[int64]*entity.StockSnapshot{6: {ItemCode: 6, Quantity: 40}}
+	snaps := map[int64]*entity.StockSnapshot{6: {ItemCode: 6, Quantity: decimal.NewFromFloat(40)}}
 	applyScenarioStock(adj, snaps)
-	if snaps[5].Quantity != 30 || snaps[6].Quantity != 0 {
+	if !snaps[5].Quantity.Equal(decimal.NewFromFloat(30)) || !snaps[6].Quantity.Equal(decimal.NewFromFloat(0)) {
 		t.Fatalf("estoque: %+v %+v", snaps[5], snaps[6])
 	}
 	regras := map[int64][]*entity.ConfiguredItemRule{5: {{FieldName: "lead_time", RuleValue: "3"}}}

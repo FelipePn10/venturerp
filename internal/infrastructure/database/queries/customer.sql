@@ -402,7 +402,7 @@ INSERT INTO customers (
     region_id, market_segment_id, customer_type_id,
     payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
     invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by, enterprise_id
+    credit_limit, website, created_by, enterprise_id, finalidade_compra
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
@@ -410,7 +410,7 @@ INSERT INTO customers (
     $12, $13, $14,
     $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24, $25
+    $22, $23, $24, $25, sqlc.narg(finalidade_compra)::varchar
 ) RETURNING *;
 
 -- name: UpdateCustomer :one
@@ -421,7 +421,7 @@ SET name = $2, trade_name = $3, state_registration = $4, municipal_registration 
     payment_condition_id = $11, sales_table_id = $12, carrier_id = $13,
     carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
     payment_cond_visibility = $17, credit_limit = $18, website = $19,
-    is_active = $20, updated_at = NOW()
+    is_active = $20, finalidade_compra = sqlc.narg(finalidade_compra)::varchar, updated_at = NOW()
 WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
 

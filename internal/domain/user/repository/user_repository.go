@@ -8,6 +8,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// EmpresaDoUsuario: empresa a que o usuário tem acesso (para escolher no login).
+type EmpresaDoUsuario struct {
+	Code int64  `json:"code"`
+	Name string `json:"name"`
+}
+
 type Authorization struct {
 	EnterpriseID   int64
 	EnterpriseCode int64
@@ -20,8 +26,10 @@ type UserRepository interface {
 	FindByEmail(ctx context.Context, email string) (*user.User, error)
 	ResolveAuthorization(ctx context.Context, userID string, enterpriseCode *int64) (Authorization, error)
 	CurrentAuthorization(ctx context.Context, userID string, enterpriseID int64) (Authorization, error)
-	CreatePasswordChangeRequest(ctx context.Context, userID uuid.UUID, enterpriseID int64) (*user.PasswordChangeRequest, error)
+	CreatePasswordChangeRequest(ctx context.Context, userID uuid.UUID, enterpriseID int64, reason string) (*user.PasswordChangeRequest, error)
 	ListPasswordChangeRequests(ctx context.Context, enterpriseID int64, status string) ([]user.PasswordChangeRequest, error)
+	ListUserPasswordChangeRequests(ctx context.Context, userID uuid.UUID, enterpriseID int64) ([]user.PasswordChangeRequest, error)
+	GetPasswordChangeRequest(ctx context.Context, requestID uuid.UUID, enterpriseID int64) (*user.PasswordChangeRequest, error)
 	ApprovePasswordChangeRequest(ctx context.Context, requestID uuid.UUID, enterpriseID int64, adminID uuid.UUID, expiresAt time.Time) error
 	RejectPasswordChangeRequest(ctx context.Context, requestID uuid.UUID, enterpriseID int64, adminID uuid.UUID, reason string) error
 	PasswordHash(ctx context.Context, userID uuid.UUID, enterpriseID int64) (string, error)

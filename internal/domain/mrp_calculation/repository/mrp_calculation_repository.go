@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
@@ -33,7 +34,7 @@ type MRPCalculationRepository interface {
 	CreateSalesOrderDemand(ctx context.Context, d *entity.SalesOrderDemand) (*entity.SalesOrderDemand, error)
 	GetSalesOrderDemand(ctx context.Context, code int64) (*entity.SalesOrderDemand, error)
 	ListSalesOrderDemandsByItem(ctx context.Context, itemCode int64) ([]*entity.SalesOrderDemand, error)
-	UpdateSalesOrderDemandStatus(ctx context.Context, code int64, status string, deliveredQty float64) (*entity.SalesOrderDemand, error)
+	UpdateSalesOrderDemandStatus(ctx context.Context, code int64, status string, deliveredQty decimal.Decimal) (*entity.SalesOrderDemand, error)
 
 	CreateConfiguredItemRule(ctx context.Context, r *entity.ConfiguredItemRule) (*entity.ConfiguredItemRule, error)
 	GetConfiguredItemRules(ctx context.Context, itemCode int64) ([]*entity.ConfiguredItemRule, error)

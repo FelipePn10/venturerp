@@ -3,8 +3,6 @@ package production_order_uc
 import (
 	"context"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -58,7 +56,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 		if !allowed {
 			return nil, errorsuc.NewValidationError("o parâmetro de produção 10 não permite alterar a quantidade")
 		}
-		if !dto.PlannedQty.IsPositive() || dto.PlannedQty.LessThan(decimal.NewFromFloat(order.ProducedQty)) {
+		if !dto.PlannedQty.IsPositive() || dto.PlannedQty.LessThan(order.ProducedQty) {
 			return nil, errorsuc.NewValidationError("a quantidade planejada deve ser maior que zero e não pode ser menor que a produzida")
 		}
 		fractional, err := uc.Repo.AcceptsFractionalQuantity(ctx, order.ItemCode)
@@ -68,7 +66,7 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 		if !fractional && !dto.PlannedQty.Equal(dto.PlannedQty.Truncate(0)) {
 			return nil, errorsuc.NewValidationError("este item não aceita quantidade fracionada")
 		}
-		order.PlannedQty, _ = dto.PlannedQty.Float64()
+		order.PlannedQty = *dto.PlannedQty
 	}
 	if dto.StartDate != nil || dto.EndDate != nil {
 		allowed, err := uc.Repo.CanChangeOrderDates(ctx, dto.ID)

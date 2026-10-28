@@ -301,7 +301,8 @@ func trocaSegmento(caminho, de, para string) string {
 
 func isStaticItemsPath(segment string) bool {
 	switch segment {
-	case "create", "with-masks", "classifications":
+	// governanca: as rotas da Fase 4 resolvem o código de negócio no caso de uso.
+	case "create", "with-masks", "classifications", "governanca":
 		return true
 	default:
 		return false

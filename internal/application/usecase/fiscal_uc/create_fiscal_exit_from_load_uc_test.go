@@ -2,6 +2,7 @@ package fiscal_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -118,7 +119,7 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 		},
 	}
 	sales := loadSalesRepo{items: []*salesentity.SalesOrderItem{
-		{Code: 1, ItemCode: 1001, UnitPrice: 50},
+		{Code: 1, ItemCode: 1001, UnitPrice: decimal.NewFromInt(50)},
 	}}
 	uc := &CreateFiscalExitFromLoadUseCase{
 		CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}},

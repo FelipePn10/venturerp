@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"log/slog"
 	"strings"
 	"time"
@@ -137,7 +138,7 @@ func (uc *UseCase) GenerateSalesOrder(ctx context.Context, code int64, dto reque
 		DeliveryDateFirm: true, CustomerCode: &rec.CustomerCode, RepresentativeCode: &primary.RepresentativeCode,
 		// SalesPlanCode é uma regra/carteira comercial da recorrência e não o
 		// production_plans.code usado pelo campo PlanCode do pedido.
-		SalesDivisionCode: dto.SalesDivisionCode, CommissionPct: primary.CommissionPercent,
+		SalesDivisionCode: dto.SalesDivisionCode, CommissionPct: primary.CommissionPercent.InexactFloat64(), // capa do pedido ainda é float (legado)
 		PriceTableCode: dto.PriceTableCode, CurrencyCode: "BRL", PaymentTermCode: dto.PaymentTermCode,
 		SaleDate: stringPtr(rec.SaleDate.Format("2006-01-02")), Notes: &notes,
 	})
@@ -169,8 +170,8 @@ func (uc *UseCase) GenerateSalesOrder(ctx context.Context, code int64, dto reque
 type orderLine struct {
 	sequence     int
 	deliveryDate string
-	quantity     float64
-	unitValue    float64
+	quantity     decimal.Decimal
+	unitValue    decimal.Decimal
 	notes        string
 }
 
@@ -192,7 +193,7 @@ func buildIndefiniteLines(rec *entity.RecurringSale, params *entity.Parameters) 
 	for m := start; m.Before(end); m = m.AddDate(0, 1, 0) {
 		qty, unit := rec.Quantity, rec.UnitValue
 		if params.GroupOrderItemTotal {
-			qty = 1
+			qty = decimal.NewFromInt(1)
 			unit = monthlyValue(rec)
 		}
 		out = append(out, orderLine{
@@ -218,7 +219,7 @@ func buildFixedLines(rec *entity.RecurringSale, params *entity.Parameters) ([]or
 		m := start.AddDate(0, i, 0)
 		out = append(out, orderLine{
 			sequence: i + 1, deliveryDate: dateWithDay(m, params.FixedTermDeliveryDay).Format("2006-01-02"),
-			quantity: 1, unitValue: *rec.PaymentValue, notes: fmt.Sprintf("Recorrencia %d - parcela %d/%d", rec.Code, i+1, payments),
+			quantity: decimal.NewFromInt(1), unitValue: *rec.PaymentValue, notes: fmt.Sprintf("Recorrencia %d - parcela %d/%d", rec.Code, i+1, payments),
 		})
 	}
 	return out, nil

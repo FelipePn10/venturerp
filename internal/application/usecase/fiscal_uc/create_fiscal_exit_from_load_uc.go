@@ -206,7 +206,7 @@ func fiscalItemFromShipmentItem(
 
 	unitPrice := 0.0
 	if orderItem != nil {
-		unitPrice = orderItem.UnitPrice
+		unitPrice = orderItem.UnitPrice.InexactFloat64()
 	}
 	if ov.UnitPrice != nil {
 		unitPrice = *ov.UnitPrice

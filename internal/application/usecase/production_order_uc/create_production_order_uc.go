@@ -73,7 +73,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		return nil, err
 	}
 	itemCode := int64(item.Code)
-	if dto.PlannedQty <= 0 {
+	if !dto.PlannedQty.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade planejada deve ser maior que zero")
 	}
 
@@ -160,7 +160,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		}
 		quantity := decimal.NewFromFloat(perUnit)
 		if !child.IsFixedQty {
-			quantity = quantity.Mul(decimal.NewFromFloat(dto.PlannedQty))
+			quantity = quantity.Mul(dto.PlannedQty)
 		}
 		quantityFloat, _ := quantity.Float64()
 		quantity = decimal.NewFromFloat(structentity.QuantidadeComPerda(

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	seriedom "github.com/FelipePn10/panossoerp/internal/domain/posvenda/serie"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -28,6 +29,8 @@ const (
 // Não chama a SEFAZ, não muda o status e não grava nada: é seguro rodar quantas
 // vezes o time quiser, antes de cada emissão.
 type PreviaNFeUseCase struct {
+	// CFOPs confere o CFOP de cada linha contra a tabela oficial.
+	CFOPs     CatalogoCFOP
 	Repo      repository.FiscalRepository
 	Auth      ports.AuthService
 	Customers customerrepo.CustomerRepository
@@ -42,6 +45,15 @@ type PreviaNFeUseCase struct {
 	// Saldos: com o saldo negativo bloqueado, a prévia avisa a falta de estoque
 	// antes da transmissão (depois de autorizada, a nota não volta).
 	Saldos SaldoParaSaida
+	// Reforma resolve alíquotas e cClassTrib como a transmissão resolve.
+	Reforma repository.ReformaTributariaRepository
+	// Series: linhas de item que controla número de série (pós-venda 3.1).
+	Series SeriesDaNota
+}
+
+// SeriesDaNota lê as linhas da nota de item com série e as séries escolhidas.
+type SeriesDaNota interface {
+	LinhasComSerie(ctx context.Context, fiscalExitID int64) ([]seriedom.LinhaNota, error)
 }
 
 // SaldoParaSaida lê o saldo do item no almoxarifado e se ele aceita negativo.
@@ -70,11 +82,25 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	if err != nil {
 		return nil, err
 	}
-	payload := montarPayloadNFe(exit, items, cfg, plano)
+	rt, errReforma := resolverReformaDaNota(ctx, uc.Reforma, exit, items, cfg)
+	if errReforma != nil {
+		if _, ok := errorsuc.AsValidation(errReforma); !ok {
+			return nil, errReforma
+		}
+	}
+	payload, retrato := montarPayloadNFe(exit, items, cfg, plano, rt)
+	if fonte, ok := uc.Series.(SeriesPorLinha); ok && uc.Series != nil {
+		if err := anexarSeries(ctx, fonte, exit.ID, items, &payload); err != nil {
+			return nil, err
+		}
+	}
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {
 			return nil, err
 		}
+	}
+	if err := referenciarDevolucaoDeVenda(ctx, uc.Repo, exit, items, &payload); err != nil {
+		return nil, err
 	}
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
 
@@ -86,6 +112,7 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		DataEmissao:      exit.DataEmissao.Format("2006-01-02"),
 		NaturezaOperacao: exit.NaturezaOperacao,
 		Cfop:             exit.Cfop,
+		FinalidadeCompra: exit.FinalidadeCompra,
 		Ambiente:         cfg.FocusNfeAmbiente,
 		ConsumidorFinal:  payload.ConsumidorFinal == 1,
 		SalesOrderCode:   exit.SalesOrderCode,
@@ -123,16 +150,27 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 			unidade = strings.ToUpper(strings.TrimSpace(*it.UnidadeComercial))
 		}
 		out.Itens = append(out.Itens, response.PreviaItemNFe{
-			Sequence: it.Sequence, ItemCode: it.ItemCode, Descricao: derefStr(it.Description),
+			ID: it.ID, Sequence: it.Sequence, ItemCode: it.ItemCode, Descricao: derefStr(it.Description),
 			Ncm: derefStr(it.Ncm), Cfop: it.Cfop, UM: unidade,
 			Quantidade: it.Quantity, ValorUnit: it.UnitPrice, ValorTotal: it.TotalPrice,
 			Origem:  it.OrigemMercadoria,
-			CstICMS: derefStr(it.CstICMS), BaseICMS: it.BaseICMS, AliqICMS: it.AliqICMS, ValorICMS: it.ValorICMS,
+			CstICMS: derefStr(it.CstICMS), RegraICMSIPI: it.RegraICMSIPIID,
+			ReducaoBaseICMSPct: it.ICMSReducaoBasePct, ValorCreditoSimples: it.ValorCreditoSimples,
+			ValorDIFAL: it.ICMSUFDestValor, ValorFCPUFDest: it.FCPUFDestValor, BaseICMS: it.BaseICMS, AliqICMS: it.AliqICMS, ValorICMS: it.ValorICMS,
 			CstIPI: derefStr(it.CstIPI), AliqIPI: it.AliqIPI, ValorIPI: it.ValorIPI,
 			CstPIS: derefStr(it.CstPIS), ValorPIS: it.ValorPIS,
 			CstCOFINS: derefStr(it.CstCOFINS), ValorCOFINS: it.ValorCOFINS,
 			BaseICMSST: it.BaseICMSST, ValorICMSST: it.ValorICMSST, MVA: it.MVA,
 		})
+		for _, r := range retrato {
+			if r.ItemID != it.ID {
+				continue
+			}
+			linha := &out.Itens[len(out.Itens)-1]
+			linha.CSTIBSCBS, linha.ClassTrib, linha.OrigemClassTrib = r.Grupo.CST, r.Grupo.ClassTrib, r.Origem
+			linha.BaseIBSCBS, linha.ValorIBS = r.Grupo.Base.InexactFloat64(), r.Grupo.IBS.InexactFloat64()
+			linha.ValorCBS, linha.AliqEfetivaCBS = r.Grupo.CBS.Valor.InexactFloat64(), r.Grupo.CBS.AliquotaEfetiva.InexactFloat64()
+		}
 	}
 
 	out.Totais = response.PreviaTotaisNFe{
@@ -161,6 +199,46 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	out.Pendencias = conferirNota(exit, items, cfg, plano)
+	out.Pendencias = append(out.Pendencias, conferirTributacao(exit, items, cfg)...)
+	pendCFOP, err := conferirCFOPs(ctx, uc.CFOPs, exit, items, &payload)
+	if err != nil {
+		return nil, err
+	}
+	out.Pendencias = append(out.Pendencias, pendCFOP...)
+	divPedido, err := divergenciasDoPedido(ctx, uc.Orders, exit, items)
+	if err != nil {
+		return nil, err
+	}
+	out.Pendencias = append(out.Pendencias, divPedido...)
+	if errReforma != nil {
+		out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+			Nivel: NivelImpede, Campo: "itens.ibs_cbs", Mensagem: errReforma.Error(),
+			ComoResolver: "ajuste em VFIS0670 — Reforma Tributária (alíquotas do ano, cClassTrib do CFOP) ou o cClassTrib da classificação fiscal/linha da nota",
+		})
+	}
+	out.Pendencias = append(out.Pendencias, avisoPISCOFINSExtintos(exit, items)...)
+	if rt.SomenteAtual {
+		out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+			Nivel: NivelAtencao, Campo: "itens.ibs_cbs",
+			Mensagem:     "a empresa está emitindo só com o modelo atual: a nota sai sem o grupo IBS/CBS, obrigatório no regime normal desde 2026",
+			ComoResolver: "volte o modo para Automático em VFIS0670 — Reforma Tributária assim que o motivo do desligamento for resolvido",
+		})
+	}
+	if uc.Series != nil {
+		linhas, err := uc.Series.LinhasComSerie(ctx, exit.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, msg := range seriedom.PendenciasDaNota(linhas) {
+			out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{Nivel: NivelImpede, Campo: "itens.numero_serie", Mensagem: msg,
+				ComoResolver: "escolha as séries da linha na prévia (em estoque); para cadastrar séries, use VATC0100 — Base Instalada"})
+		}
+		if len(linhas) > 0 && exit.CustomerCode == nil {
+			out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{Nivel: NivelImpede, Campo: "customer_code",
+				Mensagem:     "a nota tem item com número de série e não está ligada a um cliente do cadastro: a série não tem a quem ser vinculada",
+				ComoResolver: "gere a nota a partir do pedido de venda ou informe o cliente do cadastro"})
+		}
+	}
 	if uc.Efeitos != nil && uc.Saldos != nil {
 		faltas, err := uc.faltasDeEstoque(ctx, exit, items)
 		if err != nil {

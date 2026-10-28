@@ -108,7 +108,7 @@ func TestCenarioIsoladoDoPlanoReal(t *testing.T) {
 		}
 	}
 	adj, err := repo.ScenarioAdjustments(a.Ctx, cen.ScenarioPlanCode)
-	if err != nil || adj.StockDelta[item] != 100 || adj.LeadTimeDays[item] != 7 || len(adj.Demands) != 1 {
+	if err != nil || !adj.StockDelta[item].Equal(decimal.NewFromFloat(100)) || adj.LeadTimeDays[item] != 7 || len(adj.Demands) != 1 {
 		t.Fatalf("ajustes do cenário: %+v (%v)", adj, err)
 	}
 	if real, err := repo.ScenarioAdjustments(a.Ctx, plano); err != nil || len(real.Demands) != 0 || len(real.StockDelta) != 0 {

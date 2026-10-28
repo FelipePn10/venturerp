@@ -17,6 +17,8 @@ type PreviaNFeResponse struct {
 	DataSaida        string `json:"data_saida,omitempty"`
 	NaturezaOperacao string `json:"natureza_operacao"`
 	Cfop             string `json:"cfop"`
+	// FinalidadeCompra que tributou a nota; ausente = deduzida do destinatário.
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
 	// Ambiente é "producao" ou "homologacao": em homologação a nota é um teste
 	// sem valor fiscal, e quem confere precisa saber disso antes de assinar.
 	Ambiente         string `json:"ambiente"`
@@ -57,30 +59,49 @@ type PreviaParteNFe struct {
 }
 
 type PreviaItemNFe struct {
-	Sequence    int     `json:"sequence"`
-	ItemCode    *int64  `json:"item_code,omitempty"`
-	Descricao   string  `json:"descricao"`
-	Ncm         string  `json:"ncm"`
-	Cfop        string  `json:"cfop"`
-	UM          string  `json:"um"`
-	Quantidade  float64 `json:"quantidade"`
-	ValorUnit   float64 `json:"valor_unitario"`
-	ValorTotal  float64 `json:"valor_total"`
-	Origem      string  `json:"origem_mercadoria"`
-	CstICMS     string  `json:"cst_icms"`
-	BaseICMS    float64 `json:"base_icms"`
-	AliqICMS    float64 `json:"aliq_icms"`
-	ValorICMS   float64 `json:"valor_icms"`
-	CstIPI      string  `json:"cst_ipi"`
-	AliqIPI     float64 `json:"aliq_ipi"`
-	ValorIPI    float64 `json:"valor_ipi"`
-	CstPIS      string  `json:"cst_pis"`
-	ValorPIS    float64 `json:"valor_pis"`
-	CstCOFINS   string  `json:"cst_cofins"`
-	ValorCOFINS float64 `json:"valor_cofins"`
-	BaseICMSST  float64 `json:"base_icms_st"`
-	ValorICMSST float64 `json:"valor_icms_st"`
-	MVA         float64 `json:"mva"`
+	// ID é a linha da nota (para corrigir a linha a partir da prévia).
+	ID         int64   `json:"id"`
+	Sequence   int     `json:"sequence"`
+	ItemCode   *int64  `json:"item_code,omitempty"`
+	Descricao  string  `json:"descricao"`
+	Ncm        string  `json:"ncm"`
+	Cfop       string  `json:"cfop"`
+	UM         string  `json:"um"`
+	Quantidade float64 `json:"quantidade"`
+	ValorUnit  float64 `json:"valor_unitario"`
+	ValorTotal float64 `json:"valor_total"`
+	Origem     string  `json:"origem_mercadoria"`
+	CstICMS    string  `json:"cst_icms"`
+	// RegraICMSIPI é a regra do cadastro de parâmetros de ICMS/IPI (VFIS0320)
+	// que tributou a linha; ausente = regra geral da empresa.
+	RegraICMSIPI *int64 `json:"regra_icms_ipi_id,omitempty"`
+	// Redução de base (%), crédito do Simples e DIFAL (ICMS e FCP da UF de destino).
+	ReducaoBaseICMSPct  float64 `json:"icms_reducao_base_pct,omitempty"`
+	ValorCreditoSimples float64 `json:"valor_credito_simples,omitempty"`
+	ValorDIFAL          float64 `json:"valor_difal,omitempty"`
+	ValorFCPUFDest      float64 `json:"valor_fcp_uf_dest,omitempty"`
+	BaseICMS            float64 `json:"base_icms"`
+	AliqICMS            float64 `json:"aliq_icms"`
+	ValorICMS           float64 `json:"valor_icms"`
+	CstIPI              string  `json:"cst_ipi"`
+	AliqIPI             float64 `json:"aliq_ipi"`
+	ValorIPI            float64 `json:"valor_ipi"`
+	CstPIS              string  `json:"cst_pis"`
+	ValorPIS            float64 `json:"valor_pis"`
+	CstCOFINS           string  `json:"cst_cofins"`
+	ValorCOFINS         float64 `json:"valor_cofins"`
+	BaseICMSST          float64 `json:"base_icms_st"`
+	ValorICMSST         float64 `json:"valor_icms_st"`
+	MVA                 float64 `json:"mva"`
+	// Reforma tributária: o grupo IBS/CBS que vai na linha e de onde veio o
+	// cClassTrib (ITEM_DA_NOTA, CFOP, CLASSIFICACAO_FISCAL ou PADRAO).
+	CSTIBSCBS       string  `json:"cst_ibs_cbs,omitempty"`
+	ClassTrib       string  `json:"cclass_trib,omitempty"`
+	OrigemClassTrib string  `json:"cclass_trib_origem,omitempty"`
+	BaseIBSCBS      float64 `json:"base_ibs_cbs"`
+	ValorIBS        float64 `json:"valor_ibs"`
+	ValorCBS        float64 `json:"valor_cbs"`
+	AliqEfetivaCBS  float64 `json:"aliquota_efetiva_cbs"`
 }
 
 type PreviaTotaisNFe struct {

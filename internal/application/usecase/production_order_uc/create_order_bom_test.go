@@ -55,7 +55,7 @@ func TestCriarOFRespeitaMascaraVigenciaEFormula(t *testing.T) {
 	}
 	inicio := "2026-09-15"
 	if _, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{
-		ItemCode: "MOVEL-10", Mask: "2000#600", PlannedQty: 5, StartDate: &inicio, CreatedBy: uuid.New(),
+		ItemCode: "MOVEL-10", Mask: "2000#600", PlannedQty: decimal.RequireFromString("5"), StartDate: &inicio, CreatedBy: uuid.New(),
 	}); err != nil {
 		t.Fatal(err)
 	}

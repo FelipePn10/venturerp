@@ -34,7 +34,7 @@ func (r *MRPCalculationRepositorySQLC) ListOpenSalesOrderDemands(ctx context.Con
 		}
 		result = append(result, &entity.MRPInput{
 			ItemCode: row.ItemCode, Mask: row.Mask,
-			Quantity: pgutil.FromPgNumericToFloat64(row.Quantity),
+			Quantity: pgutil.FromPgNumericToDecimal(row.Quantity),
 			NeedDate: row.NeedDate.Time, DemandType: "SALES_ORDER", SourceCode: &sourceCode,
 			WarehouseCode: row.WarehouseCode, TechnicalAssistance: row.TechnicalAssistance,
 			InterFactory: row.InterFactory, SourceEnterpriseCode: sourceEnterpriseCode, AutoRelease: row.AutoRelease,

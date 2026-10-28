@@ -55,8 +55,8 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 		CASE WHEN $2::bigint IS NULL THEN 'MANUAL' WHEN EXISTS(SELECT 1 FROM kanban_cards k WHERE k.item_code=$3 AND k.enterprise_id=$19) THEN 'KANBAN' ELSE 'MRP' END)
 		RETURNING id,order_number,planned_order_id,item_code,mask,planned_qty,produced_qty,scrapped_qty,status,
 		start_date,end_date,machine_id,cost_center_id,employee_id,priority,notes,is_active,created_at,updated_at,created_by,warehouse_id`,
-		order.OrderNumber, order.PlannedOrderID, order.ItemCode, order.Mask, pgutil.ToPgNumericFromFloat64(order.PlannedQty),
-		pgutil.ToPgNumericFromFloat64(order.ProducedQty), pgutil.ToPgNumericFromFloat64(order.ScrappedQty), string(order.Status),
+		order.OrderNumber, order.PlannedOrderID, order.ItemCode, order.Mask, pgutil.ToPgNumericFromDecimal(order.PlannedQty),
+		pgutil.ToPgNumericFromDecimal(order.ProducedQty), pgutil.ToPgNumericFromDecimal(order.ScrappedQty), string(order.Status),
 		pgDatePtr(order.StartDate), pgDatePtr(order.EndDate), order.MachineID, order.CostCenterID, order.EmployeeID, order.Priority,
 		order.Notes, order.IsActive, pgutil.ToPgUUID(order.CreatedBy), order.WarehouseID, enterpriseID))
 	if err != nil {

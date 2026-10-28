@@ -28,6 +28,16 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 			h.InternalError(w, r, err)
 			return
 		}
+		var escolha *user_uc.ErrEmpresaObrigatoria
+		if errors.As(err, &escolha) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": "EMPRESA_OBRIGATORIA", "error": "Você tem acesso a mais de uma empresa: escolha em qual entrar.",
+				"empresas": escolha.Empresas,
+			})
+			return
+		}
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}

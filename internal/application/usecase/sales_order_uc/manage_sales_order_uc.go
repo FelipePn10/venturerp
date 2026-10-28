@@ -3,6 +3,7 @@ package sales_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	"strings"
 	"time"
 
@@ -20,6 +21,15 @@ import (
 type CancelSalesOrderUseCase struct {
 	Repo repository.SalesOrderRepository
 	Auth ports.AuthService
+	// Titulos: os títulos a receber ligados ao pedido (adiantamento, sinal,
+	// título lançado à mão) caem junto com o pedido.
+	Titulos RecebiveisDoPedido
+}
+
+// RecebiveisDoPedido confere (cancelar=false) ou cancela os títulos a receber
+// do pedido; recusa se algum já teve recebimento.
+type RecebiveisDoPedido interface {
+	RecebiveisDoPedidoDeVenda(ctx context.Context, pedido int64, cancelar bool) (int, error)
 }
 
 func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, dto request.CancelSalesOrderDTO) error {
@@ -29,7 +39,22 @@ func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, dto request.Canc
 	if strings.TrimSpace(dto.Reason) == "" {
 		return errorsuc.NewValidationError("o motivo do cancelamento é obrigatório")
 	}
-	return uc.Repo.Cancel(ctx, dto.Code, dto.Reason, dto.Complement)
+	// Confere antes: título recebido impede o cancelamento, e o pedido não
+	// pode ficar cancelado com o título dele em aberto.
+	if uc.Titulos != nil {
+		if _, err := uc.Titulos.RecebiveisDoPedidoDeVenda(ctx, dto.Code, false); err != nil {
+			return err
+		}
+	}
+	if err := uc.Repo.Cancel(ctx, dto.Code, dto.Reason, dto.Complement); err != nil {
+		return err
+	}
+	if uc.Titulos != nil {
+		if _, err := uc.Titulos.RecebiveisDoPedidoDeVenda(ctx, dto.Code, true); err != nil {
+			return fmt.Errorf("o pedido %d foi cancelado, mas os títulos a receber dele não: %w", dto.Code, err)
+		}
+	}
+	return nil
 }
 
 type BlockSalesOrderUseCase struct {
@@ -47,11 +72,37 @@ func (uc *BlockSalesOrderUseCase) Execute(ctx context.Context, dto request.Block
 type UnblockSalesOrderUseCase struct {
 	Repo repository.SalesOrderRepository
 	Auth ports.AuthService
+	// Aprovacoes: com aprovação de crédito ou de política comercial pendente,
+	// o desbloqueio manual é recusado — a liberação passa pela alçada.
+	Aprovacoes Aprovacoes
+	// Conclusao termina a confirmação interrompida pelo bloqueio (demanda do
+	// MRP e reserva). Sem ela, só limpa o bloqueio, como antes.
+	Conclusao *ConclusaoDoDesbloqueio
 }
 
 func (uc *UnblockSalesOrderUseCase) Execute(ctx context.Context, code int64) error {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
+	}
+	if uc.Aprovacoes != nil {
+		// Crédito ou política comercial/alçada de desconto pendente: a liberação
+		// é da alçada — o desbloqueio manual contornaria a aprovação.
+		pendente, err := outraPendente(ctx, uc.Aprovacoes, code, "")
+		if err != nil {
+			return err
+		}
+		if pendente != nil {
+			oQue := "de crédito"
+			if pendente.Tipo == aprovacao.PedidoPoliticaComercial {
+				oQue = "da política comercial/desconto"
+			}
+			return errorsuc.NewValidationError(fmt.Sprintf(
+				"o pedido %d aguarda a aprovação %s nº %d (nível %d de %d): a liberação é feita pelos aprovadores em Aprovações",
+				code, oQue, pendente.ID, pendente.NivelAtual, pendente.NiveisExigidos))
+		}
+	}
+	if uc.Conclusao != nil {
+		return uc.Conclusao.Concluir(ctx, code)
 	}
 	return uc.Repo.Unblock(ctx, code)
 }
@@ -74,6 +125,9 @@ type ChangeStatusSalesOrderUseCase struct {
 	// Reserver is optional. When set, confirming an order reserves available
 	// stock per line (ATP) so the promise is backed by real availability.
 	Reserver *OrderStockReserver
+	// Aprovacoes é opcional: com política de LIBERACAO_CREDITO ativa, o pedido
+	// bloqueado pelo crédito abre a solicitação de aprovação.
+	Aprovacoes Aprovacoes
 }
 
 func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto request.ChangeStatusDTO) error {
@@ -95,7 +149,8 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 			return fn(r)
 		}
 	}
-	return emTransacao(ctx, func(r ConfirmacaoRepos) error {
+	bloqueadoPorCredito := false
+	err := emTransacao(ctx, func(r ConfirmacaoRepos) error {
 		if err := r.Pedidos.ChangeStatus(ctx, dto.Code, newStatus); err != nil {
 			return err
 		}
@@ -106,6 +161,7 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 				return errorsuc.NewValidationError("não foi possível conferir o crédito do cliente agora — o pedido não foi confirmado; tente de novo (" + err.Error() + ")")
 			}
 			if !aprovado {
+				bloqueadoPorCredito = true
 				return nil
 			}
 		}
@@ -121,6 +177,12 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 		}
 		return nil
 	})
+	if err != nil || !bloqueadoPorCredito || uc.Aprovacoes == nil {
+		return err
+	}
+	// Depois do commit: a solicitação aponta para um pedido que já está gravado
+	// como bloqueado.
+	return solicitarLiberacao(ctx, uc.Aprovacoes, uc.Repo, dto.Code)
 }
 
 // ConfirmacaoRepos são os repositórios ligados à transação da confirmação.
@@ -273,7 +335,7 @@ func generateDemands(ctx context.Context, code int64, pedidos repository.SalesOr
 			continue
 		}
 		qty := it.RequestedQty
-		if qty <= 0 {
+		if !qty.IsPositive() {
 			continue
 		}
 

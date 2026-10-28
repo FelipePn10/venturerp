@@ -6,7 +6,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	routing "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
-	"math"
 	"sort"
 	"time"
 )
@@ -41,13 +40,16 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 			return nil, err
 		}
 	}
+	// A quantidade é decimal no MRP; o tempo de máquina (minutos) é que é
+	// calculado em float, na fronteira.
+	qtdOrdem := sug.Quantity.InexactFloat64()
 	if len(ops) == 0 {
 		mt := selectMachineTime(profiles, sug.Mask)
 		if mt == nil {
 			return nil, nil
 		}
-		minutes, err := machineMinutes(mt, sug.Quantity)
-		step := measuredMachineStep(mt, sug.Quantity, minutes)
+		minutes, err := machineMinutes(mt, qtdOrdem)
+		step := measuredMachineStep(mt, qtdOrdem, minutes)
 		step.alternativas = equivalentes(profiles, mt)
 		return []machineStep{step}, err
 	}
@@ -61,12 +63,12 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 	// última. Reservar a capacidade pela quantidade do pedido subestimaria
 	// justamente o começo do roteiro — e a máquina apareceria livre num horário
 	// em que estará ocupada. É a mesma conta que o roteiro mostra na tela.
-	entraPorEtapa := routing.QuantidadePorOperacao(ops, edges, sug.Quantity)
+	entraPorEtapa := routing.QuantidadePorOperacao(ops, edges, qtdOrdem)
 	quantidadeDa := func(op *routing.RouteOperation) float64 {
 		if q, ok := entraPorEtapa[op.ID]; ok && q > 0 {
 			return q
 		}
-		return sug.Quantity
+		return qtdOrdem
 	}
 
 	out := []machineStep{}
@@ -176,7 +178,7 @@ func orderMachineRoute(ops []*routing.RouteOperation, edges []*routing.NetworkEd
 func measuredMachineStep(mt *entity.MachineTimeInfo, qty, minutes float64) machineStep {
 	step := machineStep{profile: mt, minutes: minutes}
 	if mt.TimeBasis != "PROPORTIONAL" && mt.ProductionBaseQty > 0 {
-		step.cycles = math.Ceil(qty / float64(mt.ProductionBaseQty))
+		step.cycles = divisoesParaCima(qty, float64(mt.ProductionBaseQty))
 		step.setupMinutes = mt.SetupTime
 		if step.cycles > 0 {
 			step.cycleMinutes = (minutes - mt.SetupTime) / step.cycles

@@ -2,6 +2,7 @@ package mrp_calculation_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -35,15 +36,15 @@ func (uc *GetItemProfileUseCase) Consult(ctx context.Context, itemCode, planCode
 		return nil, errorsuc.NewValidationError("a posição deve ser cálculo ou atual")
 	}
 	filtered := make([]*response.MRPItemProfileResponse, 0, len(rows))
-	totals := map[string]float64{}
+	totals := map[string]decimal.Decimal{}
 	for _, row := range rows {
 		if from != nil && row.NeedDate.Before(*from) || to != nil && row.NeedDate.After(*to) {
 			continue
 		}
 		filtered = append(filtered, row)
-		totals["demand"] += row.Demand
-		totals["orders_planned"] += row.OrdersPlanned
-		totals["orders_firm"] += row.OrdersFirm
+		totals["demand"] = totals["demand"].Add(row.Demand)
+		totals["orders_planned"] = totals["orders_planned"].Add(row.OrdersPlanned)
+		totals["orders_firm"] = totals["orders_firm"].Add(row.OrdersFirm)
 	}
 	if len(filtered) > 0 {
 		totals["stock_projected"] = filtered[len(filtered)-1].StockProjected
@@ -53,9 +54,9 @@ func (uc *GetItemProfileUseCase) Consult(ctx context.Context, itemCode, planCode
 		if err != nil {
 			return nil, err
 		}
-		totals["stock_current"] = 0
+		totals["stock_current"] = decimal.Zero
 		for _, balance := range balances {
-			totals["stock_current"] += balance.Quantity.InexactFloat64()
+			totals["stock_current"] = totals["stock_current"].Add(balance.Quantity)
 		}
 	}
 	return &response.MRPItemProfileConsultationResponse{Position: position, Rows: filtered, Totals: totals}, nil

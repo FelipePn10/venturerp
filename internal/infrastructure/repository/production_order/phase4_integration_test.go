@@ -142,7 +142,7 @@ func TestPhase4ManualOrderTransfersAutomaticComponentsToLineWarehouse(t *testing
 		pool.Exec(ctx, "DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2", enterpriseID, child)
 		pool.Exec(ctx, "DELETE FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=ANY($2)", enterpriseID, []int64{parent, child})
 	})
-	created, err := repo.CreateWithMaterials(ctx, &entity.ProductionOrder{OrderNumber: testutil.UniqueCode(), ItemCode: parent, PlannedQty: 2, Status: entity.StatusOpen, IsActive: true, CreatedBy: uid}, []*entity.ProductionOrderMaterial{{Kind: entity.MaterialDemand, ItemCode: child, Quantity: decimal.NewFromInt(3), WarehouseID: 1, AutomaticIssue: true, CreatedBy: uid}})
+	created, err := repo.CreateWithMaterials(ctx, &entity.ProductionOrder{OrderNumber: testutil.UniqueCode(), ItemCode: parent, PlannedQty: decimal.RequireFromString("2"), Status: entity.StatusOpen, IsActive: true, CreatedBy: uid}, []*entity.ProductionOrderMaterial{{Kind: entity.MaterialDemand, ItemCode: child, Quantity: decimal.NewFromInt(3), WarehouseID: 1, AutomaticIssue: true, CreatedBy: uid}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"math"
 	"sort"
 	"strconv"
@@ -135,8 +136,8 @@ type cachedItemMRP struct {
 	// Política de lote do próprio cadastro do item. Eram gravados na VENT0200 e
 	// o MRP nunca os lia: só uma "regra configurada" separada aplicava lote
 	// mínimo, então os campos da tela não mudavam o planejamento.
-	minimumLot  float64
-	multipleLot float64
+	minimumLot  decimal.Decimal
+	multipleLot decimal.Decimal
 }
 
 // =============================================================================
@@ -449,7 +450,7 @@ func (s *MRPServiceImpl) CalculateNetRequirements(ctx context.Context, input *en
 	return s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, nil, make(map[int64]*cachedItemMRP), params)
 }
 
-func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64, mask string, quantity float64, level int) ([]*entity.MRPInput, error) {
+func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64, mask string, quantity decimal.Decimal, level int) ([]*entity.MRPInput, error) {
 	if level > 20 {
 		return nil, nil
 	}
@@ -560,7 +561,7 @@ func (s *MRPServiceImpl) calculateMRP(
 			merged := false
 			for _, fi := range forecastInputs {
 				if fi.ItemCode == si.ItemCode && fi.Mask == si.Mask && !fi.TechnicalAssistance {
-					fi.Quantity += si.Quantity
+					fi.Quantity = fi.Quantity.Add(si.Quantity)
 					if si.NeedDate.Before(fi.NeedDate) {
 						fi.NeedDate = si.NeedDate
 					}
@@ -680,7 +681,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				// Necessidade líquida negativa = o estoque/firmes sobram: não há
 				// ordem planejada. Antes o perfil gravava o negativo e o
 				// "planejado" do item aparecia como −400.
-				OrdersPlanned:  math.Max(0, output.NetRequirement),
+				OrdersPlanned:  decimal.Max(decimal.Zero, output.NetRequirement),
 				OrdersFirm:     firmSupplyUsed,
 				StockProjected: output.StockProjected,
 				LLC:            level,
@@ -781,30 +782,27 @@ func (s *MRPServiceImpl) calculateMinMax(
 
 		// LMI = estoque mínimo do snapshot
 		lmi := snapshot.SafetyStock
-		if lmi <= 0 {
+		if !lmi.IsPositive() {
 			continue
 		}
 
 		// LMA = maximum_stock (ou minimum_stock * 3 como default)
-		lma := lmi * 3
-		if extra, ok := planningExtras[itemCode]; ok && extra.MaximumStock > 0 {
+		lma := lmi.Mul(decimal.NewFromInt(3))
+		if extra, ok := planningExtras[itemCode]; ok && extra.MaximumStock.IsPositive() {
 			lma = extra.MaximumStock
 		}
 
 		// QTDE = stock disponível (quantity - reserved)
-		qtde := snapshot.Quantity - snapshot.ReservedQty
-		if qtde < 0 {
-			qtde = 0
-		}
+		qtde := decimal.Max(decimal.Zero, snapshot.Quantity.Sub(snapshot.ReservedQty))
 
 		// QTDP = firm supply (ordens firmes de compra)
 		qtdp := firmSupplyForItem(supplyMap, itemCode, maxTime())
 
-		qtdeTotal := qtde + qtdp
+		qtdeTotal := qtde.Add(qtdp)
 
-		if qtdeTotal <= lmi {
-			qtc := lma - qtdeTotal
-			if qtc <= 0 {
+		if qtdeTotal.LessThanOrEqual(lmi) {
+			qtc := lma.Sub(qtdeTotal)
+			if !qtc.IsPositive() {
 				continue
 			}
 
@@ -847,7 +845,7 @@ func (s *MRPServiceImpl) calculateMinMax(
 				Demand:          qtc,
 				OrdersPlanned:   qtc,
 				OrdersFirm:      qtdp,
-				StockProjected:  qtdeTotal - qtc,
+				StockProjected:  qtdeTotal.Sub(qtc),
 				LLC:             llc,
 				NeedDate:        needDate,
 			}); errPerfil != nil {
@@ -896,17 +894,14 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 		}
 
 		pr, err := cached.reorderPoint.Calculate()
-		if err != nil || pr <= 0 {
+		if err != nil || !pr.IsPositive() {
 			continue
 		}
 
-		qtde := snapshot.Quantity - snapshot.ReservedQty
-		if qtde < 0 {
-			qtde = 0
-		}
+		qtde := decimal.Max(decimal.Zero, snapshot.Quantity.Sub(snapshot.ReservedQty))
 
-		if qtde <= float64(pr) {
-			loteEconomico := float64(pr * 2)
+		if qtde.LessThanOrEqual(pr) {
+			loteEconomico := pr.Mul(decimal.NewFromInt(2))
 			leadTimeDays, errPrazo := s.getLeadTimeDays(ctx, rulesMap, itemCode)
 			registrarErro(errs, "prazo", errPrazo)
 			needDate := today().AddDate(0, 0, leadTimeDays)
@@ -939,8 +934,8 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 				CalculationDate: today(),
 				Demand:          loteEconomico,
 				OrdersPlanned:   loteEconomico,
-				OrdersFirm:      0,
-				StockProjected:  qtde - loteEconomico,
+				OrdersFirm:      decimal.Zero,
+				StockProjected:  qtde.Sub(loteEconomico),
 				LLC:             llc,
 				NeedDate:        needDate,
 			}); errPerfil != nil {
@@ -996,16 +991,13 @@ func (s *MRPServiceImpl) calculateKanban(
 			continue
 		}
 
-		qtde := 0.0
+		qtde := decimal.Zero
 		if snapshot, ok := snapshotMap[itemCode]; ok && snapshot != nil {
-			qtde = snapshot.Quantity - snapshot.ReservedQty
-			if qtde < 0 {
-				qtde = 0
-			}
+			qtde = decimal.Max(decimal.Zero, snapshot.Quantity.Sub(snapshot.ReservedQty))
 		}
 
 		for _, card := range group.cards {
-			if qtde > card.ReorderPoint {
+			if qtde.GreaterThan(card.ReorderPoint) {
 				continue
 			}
 
@@ -1015,7 +1007,7 @@ func (s *MRPServiceImpl) calculateKanban(
 				continue
 			}
 
-			qtc := card.QuantityPerCard * float64(card.CardCount)
+			qtc := card.QuantityPerCard.Mul(decimal.NewFromInt(int64(card.CardCount)))
 			leadTimeDays, errPrazo := s.getLeadTimeDays(ctx, nil, itemCode)
 			registrarErro(errs, "prazo", errPrazo)
 			needDate := today().AddDate(0, 0, leadTimeDays)
@@ -1048,15 +1040,15 @@ func (s *MRPServiceImpl) calculateKanban(
 				CalculationDate: today(),
 				Demand:          qtc,
 				OrdersPlanned:   qtc,
-				OrdersFirm:      0,
-				StockProjected:  qtde - qtc,
+				OrdersFirm:      decimal.Zero,
+				StockProjected:  qtde.Sub(qtc),
 				LLC:             llc,
 				NeedDate:        needDate,
 			}); errPerfil != nil {
 				registrarErro(errs, "perfil", errPerfil)
 			}
 			totalItems++
-			qtde -= qtc
+			qtde = qtde.Sub(qtc)
 		}
 	}
 
@@ -1127,27 +1119,23 @@ func (s *MRPServiceImpl) calcNetReqFast(
 ) (*entity.MRPOutput, error) {
 
 	// 1. Available stock from snapshot.
-	availableStock := 0.0
+	availableStock := decimal.Zero
 	if snapshot, ok := snapshotMap[input.ItemCode]; ok && snapshot != nil {
-		avail := snapshot.Quantity - snapshot.ReservedQty - snapshot.SafetyStock
-		if avail > 0 {
+		avail := snapshot.Quantity.Sub(snapshot.ReservedQty).Sub(snapshot.SafetyStock)
+		if avail.IsPositive() {
 			availableStock = avail
 		}
 	}
 
 	// 2. Time-phased netting.
-	firmSupply := 0.0
+	firmSupply := decimal.Zero
 	if supplyMap != nil {
-		for _, entry := range supplyMap[input.ItemCode] {
-			if !entry.ArrivalDate.After(input.NeedDate) {
-				firmSupply += entry.Quantity
-			}
-		}
+		firmSupply = firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate)
 	}
 
 	// 3. Configured rules (lead time, minimum lot) — suporta EQUAL, DIFFERENT, RANGE.
 	leadTimeDays := 0
-	minLot := 0.0
+	minLot := decimal.Zero
 	for _, rule := range rulesMap[input.ItemCode] {
 		if !s.ruleMatchesMask(rule, input.Mask) {
 			continue
@@ -1158,16 +1146,16 @@ func (s *MRPServiceImpl) calcNetReqFast(
 				leadTimeDays = v
 			}
 		case "lote_minimo":
-			if v, err := strconv.ParseFloat(rule.RuleValue, 64); err == nil {
+			if v, err := decimal.NewFromString(strings.ReplaceAll(strings.TrimSpace(rule.RuleValue), ",", ".")); err == nil {
 				minLot = v
 			}
 		}
 	}
 
 	// 4. Net requirement.
-	totalCoverage := availableStock + firmSupply
-	netReq := input.Quantity - totalCoverage
-	stockProjected := totalCoverage - input.Quantity
+	totalCoverage := availableStock.Add(firmSupply)
+	netReq := input.Quantity.Sub(totalCoverage)
+	stockProjected := totalCoverage.Sub(input.Quantity)
 
 	output := &entity.MRPOutput{
 		ItemCode:       input.ItemCode,
@@ -1177,7 +1165,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		NetRequirement: netReq,
 	}
 
-	if netReq <= 0 {
+	if !netReq.IsPositive() {
 		return output, nil
 	}
 
@@ -1192,7 +1180,7 @@ func (s *MRPServiceImpl) calcNetReqFast(
 
 	// Política de lote: a regra configurada tem precedência sobre o cadastro do
 	// item, porque é o ajuste fino por item/máscara.
-	if minLot <= 0 {
+	if !minLot.IsPositive() {
 		minLot = cachedItem.minimumLot
 	}
 	netReq = aplicaPoliticaDeLote(netReq, minLot, cachedItem.multipleLot)
@@ -1365,9 +1353,9 @@ func (s *MRPServiceImpl) processAutoPriority(ctx context.Context, planCode int64
 	return nil
 }
 
-func findPriorityForQuantity(priorities []*orderpriority.OrderPriority, quantity float64) string {
+func findPriorityForQuantity(priorities []*orderpriority.OrderPriority, quantity decimal.Decimal) string {
 	for _, p := range priorities {
-		if quantity >= p.IntervalStart && quantity <= p.IntervalEnd {
+		if quantity.GreaterThanOrEqual(dq(p.IntervalStart)) && quantity.LessThanOrEqual(dq(p.IntervalEnd)) {
 			return p.Priority
 		}
 	}
@@ -1485,7 +1473,7 @@ func (s *MRPServiceImpl) generateSafetyStockDemands(
 		if _, blocked := restrictedItems[itemCode]; blocked {
 			continue
 		}
-		if snapshot.SafetyStock <= 0 {
+		if !snapshot.SafetyStock.IsPositive() {
 			continue
 		}
 
@@ -1554,8 +1542,8 @@ func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int6
 		cached.typeMRP = int(item.Planning.TypeMRP)
 		cached.ghost = item.Planning.Ghost
 		cached.reorderPoint = item.Planning.ReorderPoint
-		cached.minimumLot = float64(item.Planning.MinimumLot)
-		cached.multipleLot = float64(item.Planning.MultipleLot)
+		cached.minimumLot = item.Planning.MinimumLot
+		cached.multipleLot = item.Planning.MultipleLot
 	}
 	itemCache[itemCode] = cached
 	return cached, nil
@@ -1622,7 +1610,7 @@ func explodeFromBOM(
 	bomMap map[int64][]*structentity.ItemStructure,
 	parentCode int64,
 	mask string,
-	quantity float64,
+	quantity decimal.Decimal,
 	level int,
 ) []*entity.MRPInput {
 	return explodeFromBOMWithFormula(bomMap, parentCode, mask, quantity, level, 1)
@@ -1634,7 +1622,7 @@ func explodeFromBOMWithVars(
 	bomMap map[int64][]*structentity.ItemStructure,
 	parentCode int64,
 	mask string,
-	quantity float64,
+	quantity decimal.Decimal,
 	level int,
 	formula int,
 	vars map[string]float64,
@@ -1648,7 +1636,7 @@ func explodeFromBOMWithFormula(
 	bomMap map[int64][]*structentity.ItemStructure,
 	parentCode int64,
 	mask string,
-	quantity float64,
+	quantity decimal.Decimal,
 	level int,
 	formula int,
 ) []*entity.MRPInput {
@@ -1659,7 +1647,7 @@ func explode(
 	bomMap map[int64][]*structentity.ItemStructure,
 	parentCode int64,
 	mask string,
-	quantity float64,
+	quantity decimal.Decimal,
 	level int,
 	formula int,
 	vars map[string]float64,
@@ -1695,7 +1683,7 @@ func explode(
 		// by the parent quantity; run the loss formula against a base of 1.
 		base := quantity
 		if child.IsFixedQty {
-			base = 1
+			base = decimal.NewFromInt(1)
 		}
 		// A quantidade por unidade do pai pode vir de fórmula (ex.:
 		// "2*(COMPRIMENTO/1000)"); sem fórmula avaliável vale a quantidade fixa.
@@ -1714,8 +1702,8 @@ func explode(
 // Fórmula 1: Qty = QtdPai * QtdComponente * (1 + %Perda/100)
 // Fórmula 2: Qty = QtdPai * QtdComponente / (1 - %Perda/100)
 // Fórmula 3: Qty = QtdPai * QtdComponente (ignora perda)
-func applyLossFormula(parentQty, childQtyPer, lossPercentage float64, formula int) float64 {
-	return structentity.QuantidadeComPerda(parentQty*childQtyPer, lossPercentage, formula)
+func applyLossFormula(parentQty decimal.Decimal, childQtyPer, lossPercentage float64, formula int) decimal.Decimal {
+	return quantidadeComPerda(parentQty.Mul(dq(childQtyPer)), lossPercentage, formula)
 }
 
 func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots []int64) []int64 {
@@ -1736,11 +1724,11 @@ func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots [
 	return codes
 }
 
-func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, needDate time.Time) float64 {
-	total := 0.0
+func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, needDate time.Time) decimal.Decimal {
+	total := decimal.Zero
 	for _, entry := range supplyMap[itemCode] {
 		if !entry.ArrivalDate.After(needDate) {
-			total += entry.Quantity
+			total = total.Add(entry.Quantity)
 		}
 	}
 	return total
@@ -1795,14 +1783,14 @@ func suppliesItem(s *entity.PlannedOrderSuggestion) bool {
 // advanceNettingState prevents stock and firm receipts already consumed by an
 // earlier demand from being reused by the next demand of the same item.
 func advanceNettingState(input *entity.MRPInput, output *entity.MRPOutput, snapshotMap map[int64]*entity.StockSnapshot, supplyMap map[int64][]ports.SupplyEntry) {
-	planned := 0.0
+	planned := decimal.Zero
 	for _, order := range output.PlannedOrders {
 		if suppliesItem(order) {
-			planned += order.Quantity
+			planned = planned.Add(order.Quantity)
 		}
 	}
 	snapshotMap[input.ItemCode] = &entity.StockSnapshot{
-		ItemCode: input.ItemCode, Quantity: math.Max(0, output.StockProjected+planned), SnapshotDate: input.NeedDate,
+		ItemCode: input.ItemCode, Quantity: decimal.Max(decimal.Zero, output.StockProjected.Add(planned)), SnapshotDate: input.NeedDate,
 	}
 	remaining := supplyMap[input.ItemCode][:0]
 	for _, supply := range supplyMap[input.ItemCode] {
@@ -1859,7 +1847,7 @@ func aggregateInputs(inputs []*entity.MRPInput, groupSameDate bool) []*entity.MR
 		}
 		k := key{inp.ItemCode, inp.Mask, inp.NeedDate.Format("2006-01-02"), warehouseCode, inp.TechnicalAssistance, sourceEnterpriseCode}
 		if existing, ok := agg[k]; ok {
-			existing.Quantity += inp.Quantity
+			existing.Quantity = existing.Quantity.Add(inp.Quantity)
 		} else {
 			cp := *inp
 			agg[k] = &cp
@@ -1957,7 +1945,7 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 			PlanCode:   planCode,
 			ItemCode:   f.ItemCode,
 			Mask:       mask,
-			Quantity:   f.Quantity,
+			Quantity:   dq(f.Quantity),
 			NeedDate:   needDate,
 			DemandType: "FORECAST",
 		})
@@ -1992,15 +1980,15 @@ func mpsPeriodToDate(periodType string, periodValue, year int) time.Time {
 // É a ordem que SAP e FoccoERP usam — primeiro o mínimo, depois o múltiplo —
 // porque arredondar para o múltiplo antes poderia devolver uma quantidade
 // abaixo do mínimo.
-func aplicaPoliticaDeLote(necessidade, loteMinimo, loteMultiplo float64) float64 {
-	if necessidade <= 0 {
+func aplicaPoliticaDeLote(necessidade, loteMinimo, loteMultiplo decimal.Decimal) decimal.Decimal {
+	if !necessidade.IsPositive() {
 		return necessidade
 	}
-	if loteMinimo > 0 && necessidade < loteMinimo {
+	if loteMinimo.IsPositive() && necessidade.LessThan(loteMinimo) {
 		necessidade = loteMinimo
 	}
-	if loteMultiplo > 0 {
-		necessidade = math.Ceil(necessidade/loteMultiplo) * loteMultiplo
+	if loteMultiplo.IsPositive() {
+		necessidade = necessidade.Div(loteMultiplo).Ceil().Mul(loteMultiplo)
 	}
 	return necessidade
 }

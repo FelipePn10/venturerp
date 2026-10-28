@@ -9,44 +9,110 @@ import (
 	userentity "github.com/FelipePn10/panossoerp/internal/domain/user/entity"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var errPasswordChangeNotAllowed = errors.New("este pedido de troca de senha não pode ser usado")
 
-func (r *repositoryUserSQLC) CreatePasswordChangeRequest(ctx context.Context, userID uuid.UUID, enterpriseID int64) (*userentity.PasswordChangeRequest, error) {
-	const query = `INSERT INTO password_change_requests (enterprise_id, user_id, requested_by)
-		SELECT $1, $2, $2 WHERE EXISTS (
-			SELECT 1 FROM user_enterprises WHERE enterprise_id = $1 AND user_id = $2
-		) RETURNING id, user_id, enterprise_id, status, expires_at, rejection_reason, created_at`
-	var request userentity.PasswordChangeRequest
-	err := r.pool.QueryRow(ctx, query, enterpriseID, userID).Scan(
-		&request.ID, &request.UserID, &request.EnterpriseID, &request.Status,
-		&request.ExpiresAt, &request.RejectionReason, &request.CreatedAt,
-	)
-	return &request, err
+// passwordChangeSelect lê a solicitação com a situação efetiva: aprovação
+// vencida e não usada aparece como EXPIRED mesmo antes de alguém tentar usá-la.
+const passwordChangeSelect = `SELECT p.id, p.user_id, p.enterprise_id, u.name, u.email,
+		CASE WHEN p.status = 'APPROVED' AND p.expires_at <= now() THEN 'EXPIRED' ELSE p.status END,
+		p.reason, p.expires_at, ap.name, p.approved_at, rj.name, p.rejected_at, p.rejection_reason,
+		p.used_at, p.created_at
+	FROM password_change_requests p
+	JOIN users u ON u.id = p.user_id
+	LEFT JOIN users ap ON ap.id = p.approved_by
+	LEFT JOIN users rj ON rj.id = p.rejected_by`
+
+func scanPasswordChange(row pgx.Row) (userentity.PasswordChangeRequest, error) {
+	var p userentity.PasswordChangeRequest
+	err := row.Scan(&p.ID, &p.UserID, &p.EnterpriseID, &p.UserName, &p.UserEmail, &p.Status,
+		&p.Reason, &p.ExpiresAt, &p.ApprovedByName, &p.ApprovedAt, &p.RejectedByName, &p.RejectedAt,
+		&p.RejectionReason, &p.UsedAt, &p.CreatedAt)
+	return p, err
 }
 
-func (r *repositoryUserSQLC) ListPasswordChangeRequests(ctx context.Context, enterpriseID int64, status string) ([]userentity.PasswordChangeRequest, error) {
-	const query = `SELECT p.id, p.user_id, p.enterprise_id, u.name, u.email, p.status,
-		p.expires_at, p.rejection_reason, p.created_at
-		FROM password_change_requests p JOIN users u ON u.id = p.user_id
-		WHERE p.enterprise_id = $1 AND ($2 = '' OR p.status = $2)
-		ORDER BY p.created_at DESC LIMIT 200`
-	rows, err := r.pool.Query(ctx, query, enterpriseID, status)
+func (r *repositoryUserSQLC) queryPasswordChanges(ctx context.Context, where string, args ...any) ([]userentity.PasswordChangeRequest, error) {
+	rows, err := r.pool.Query(ctx, passwordChangeSelect+" "+where, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	requests := make([]userentity.PasswordChangeRequest, 0)
 	for rows.Next() {
-		var request userentity.PasswordChangeRequest
-		if err := rows.Scan(&request.ID, &request.UserID, &request.EnterpriseID, &request.UserName,
-			&request.UserEmail, &request.Status, &request.ExpiresAt, &request.RejectionReason, &request.CreatedAt); err != nil {
+		request, err := scanPasswordChange(rows)
+		if err != nil {
 			return nil, err
 		}
 		requests = append(requests, request)
 	}
 	return requests, rows.Err()
+}
+
+// CreatePasswordChangeRequest abre a solicitação. Antes encerra a aprovação
+// vencida do próprio usuário, que de outro modo bloquearia o pedido novo pelo
+// índice de uma solicitação ativa por usuário.
+func (r *repositoryUserSQLC) CreatePasswordChangeRequest(ctx context.Context, userID uuid.UUID, enterpriseID int64, reason string) (*userentity.PasswordChangeRequest, error) {
+	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var member bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_enterprises WHERE enterprise_id = $1 AND user_id = $2)`,
+		enterpriseID, userID).Scan(&member); err != nil {
+		return nil, err
+	}
+	if !member {
+		return nil, userentity.ErrPasswordChangeNotMember
+	}
+	if _, err := tx.Exec(ctx, `UPDATE password_change_requests SET status = 'EXPIRED', updated_at = now()
+		WHERE enterprise_id = $1 AND user_id = $2 AND status = 'APPROVED' AND expires_at <= now()`, enterpriseID, userID); err != nil {
+		return nil, err
+	}
+	var id uuid.UUID
+	err = tx.QueryRow(ctx, `INSERT INTO password_change_requests (enterprise_id, user_id, requested_by, reason)
+		VALUES ($1, $2, $2, NULLIF($3, '')) RETURNING id`, enterpriseID, userID, reason).Scan(&id)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return nil, userentity.ErrPasswordChangeActive
+	}
+	if err != nil {
+		return nil, err
+	}
+	request, err := scanPasswordChange(tx.QueryRow(ctx, passwordChangeSelect+" WHERE p.id = $1", id))
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return &request, nil
+}
+
+func (r *repositoryUserSQLC) ListPasswordChangeRequests(ctx context.Context, enterpriseID int64, status string) ([]userentity.PasswordChangeRequest, error) {
+	return r.queryPasswordChanges(ctx, `WHERE p.enterprise_id = $1
+		AND ($2 = '' OR (CASE WHEN p.status = 'APPROVED' AND p.expires_at <= now() THEN 'EXPIRED' ELSE p.status END) = $2)
+		ORDER BY p.created_at DESC LIMIT 200`, enterpriseID, status)
+}
+
+// ListUserPasswordChangeRequests: as solicitações do próprio usuário, da mais
+// recente para a mais antiga.
+func (r *repositoryUserSQLC) ListUserPasswordChangeRequests(ctx context.Context, userID uuid.UUID, enterpriseID int64) ([]userentity.PasswordChangeRequest, error) {
+	return r.queryPasswordChanges(ctx, `WHERE p.enterprise_id = $1 AND p.user_id = $2
+		ORDER BY p.created_at DESC LIMIT 20`, enterpriseID, userID)
+}
+
+func (r *repositoryUserSQLC) GetPasswordChangeRequest(ctx context.Context, requestID uuid.UUID, enterpriseID int64) (*userentity.PasswordChangeRequest, error) {
+	request, err := scanPasswordChange(r.pool.QueryRow(ctx, passwordChangeSelect+" WHERE p.id = $1 AND p.enterprise_id = $2", requestID, enterpriseID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, userentity.ErrPasswordChangeNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &request, nil
 }
 
 func (r *repositoryUserSQLC) ApprovePasswordChangeRequest(ctx context.Context, requestID uuid.UUID, enterpriseID int64, adminID uuid.UUID, expiresAt time.Time) error {
@@ -101,11 +167,12 @@ func (r *repositoryUserSQLC) CompletePasswordChange(ctx context.Context, request
 	}
 	if result.RowsAffected() != 1 {
 		expired, expireErr := tx.Exec(ctx, `UPDATE password_change_requests SET status='EXPIRED', updated_at=now()
-			WHERE id=$1 AND enterprise_id=$2 AND status='APPROVED' AND expires_at<=now()`, requestID, enterpriseID)
+			WHERE id=$1 AND user_id=$2 AND enterprise_id=$3 AND status='APPROVED' AND expires_at<=now()`, requestID, userID, enterpriseID)
 		if expireErr == nil && expired.RowsAffected() == 1 {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
 				return commitErr
 			}
+			return userentity.ErrPasswordChangeExpired
 		}
 		return errPasswordChangeNotAllowed
 	}

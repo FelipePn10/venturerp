@@ -3,10 +3,8 @@ package procurement_uc
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"github.com/shopspring/decimal"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/lote_uc"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -17,7 +15,6 @@ import (
 	procrepo "github.com/FelipePn10/panossoerp/internal/domain/procurement/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
-	"github.com/google/uuid"
 )
 
 type UseCase struct {
@@ -28,6 +25,9 @@ type UseCase struct {
 	// entrada pelo custo da saída. Sem ela as pernas eram gravadas em chamadas
 	// separadas e a entrada ia sem preço: o valor liberado da inspeção sumia.
 	Transferencias Transferidor
+	// Lotes é o lote de inspeção da qualidade: as rotas antigas de inspeção de
+	// recebimento são adaptadores sobre ele (lote_compat.go).
+	Lotes *lote_uc.UseCase
 }
 
 // Transferidor é a transferência transacional do estoque.
@@ -112,98 +112,6 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, id int64, dto request.Updat
 		return nil, err
 	}
 	return toRecordResponse(rec), nil
-}
-
-func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.DisposeReceivingInspectionDTO) (*response.ReceivingInspectionDispositionResponse, error) {
-	if !uc.Auth.CanUpdatePurchaseOrder(ctx) || !uc.Auth.CanCreateStockMovement(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	if dto.ApprovedQty < 0 || dto.RejectedQty < 0 || dto.ApprovedQty+dto.RejectedQty <= 0 {
-		return nil, errorsuc.NewValidationError("informe a quantidade aprovada ou a rejeitada, maior que zero")
-	}
-	actor, errUsuario := uc.Auth.UserID(ctx)
-	if errUsuario != nil {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	rec, err := uc.Repo.GetRecord(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if rec.RecordType != entity.RecordReceivingInspection {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("o registro %d não é uma inspeção de recebimento", id))
-	}
-	if rec.ItemCode == nil || rec.WarehouseID == nil {
-		return nil, errorsuc.NewValidationError("inspeção exige código do item e depósito")
-	}
-	if dto.ApprovedQty > 0 && dto.DestinationWarehouseID == nil {
-		return nil, errorsuc.NewValidationError("depósito de destino é obrigatório quando a quantidade aprovada for positiva")
-	}
-	if dto.ApprovedQty+dto.RejectedQty > rec.Quantity+toleranciaQtd {
-		return nil, errorsuc.NewValidationError("a quantidade destinada passa da quantidade inspecionada")
-	}
-	saem := dto.ApprovedQty
-	if dto.RejectedQty > 0 && dto.QuarantineWarehouseID != nil && *dto.QuarantineWarehouseID != *rec.WarehouseID {
-		saem += dto.RejectedQty
-	}
-	if err := uc.conferirSaldoDaInspecao(ctx, *rec.ItemCode, rec.Mask, *rec.WarehouseID, saem); err != nil {
-		return nil, err
-	}
-
-	disp := &entity.InspectionDisposition{
-		RecordID:               id,
-		ApprovedQty:            dto.ApprovedQty,
-		RejectedQty:            dto.RejectedQty,
-		QuarantineWarehouseID:  dto.QuarantineWarehouseID,
-		DestinationWarehouseID: dto.DestinationWarehouseID,
-		Reason:                 dto.Reason,
-		DisposedBy:             &actor,
-	}
-	created, err := uc.Repo.CreateInspectionDisposition(ctx, disp)
-	if err != nil {
-		return nil, err
-	}
-
-	movements := make([]response.StockMovementResponse, 0, 2)
-	refType := "RECEIVING_INSPECTION"
-	refCode := id
-	if dto.ApprovedQty > 0 {
-		out, in, err := uc.transfer(ctx, rec, *rec.WarehouseID, *dto.DestinationWarehouseID, dto.ApprovedQty, refType, refCode, actor, dto.Reason)
-		if err != nil {
-			return nil, err
-		}
-		movements = append(movements, stockMovementResponse(out), stockMovementResponse(in))
-	}
-	if dto.RejectedQty > 0 && dto.QuarantineWarehouseID != nil && *dto.QuarantineWarehouseID != *rec.WarehouseID {
-		out, in, err := uc.transfer(ctx, rec, *rec.WarehouseID, *dto.QuarantineWarehouseID, dto.RejectedQty, refType, refCode, actor, dto.Reason)
-		if err != nil {
-			return nil, err
-		}
-		movements = append(movements, stockMovementResponse(out), stockMovementResponse(in))
-	}
-
-	nextStatus := entity.StatusApproved
-	if dto.ApprovedQty == 0 {
-		nextStatus = entity.StatusRejected
-	} else if dto.RejectedQty > 0 {
-		nextStatus = entity.StatusPartial
-	}
-	updated, err := uc.Repo.UpdateRecordStatus(ctx, id, nextStatus)
-	if err != nil {
-		return nil, err
-	}
-	return &response.ReceivingInspectionDispositionResponse{
-		ID:                     created.ID,
-		RecordID:               created.RecordID,
-		ApprovedQty:            created.ApprovedQty,
-		RejectedQty:            created.RejectedQty,
-		QuarantineWarehouseID:  created.QuarantineWarehouseID,
-		DestinationWarehouseID: created.DestinationWarehouseID,
-		Reason:                 created.Reason,
-		DisposedAt:             created.DisposedAt,
-		DisposedBy:             created.DisposedBy,
-		Inspection:             toRecordResponse(updated),
-		Movements:              movements,
-	}, nil
 }
 
 func (uc *UseCase) CreateSupplierScorecard(ctx context.Context, dto request.CreateSupplierScorecardDTO) (*response.SupplierScorecardResponse, error) {
@@ -373,77 +281,6 @@ func (uc *UseCase) GetReceivingInspectionRoute(ctx context.Context, id int64) (*
 	return toReceivingInspectionRouteResponse(route), nil
 }
 
-func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto request.GenerateReceivingInspectionOrderDTO) (*response.ReceivingInspectionOrderResponse, error) {
-	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 || dto.Quantity <= 0 {
-		return nil, errorsuc.NewValidationError("código do item, depósito e quantidade são obrigatórios")
-	}
-	if dto.Source == "" {
-		dto.Source = "MANUAL"
-	}
-	if !validInspectionSource(dto.Source) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("origem %q inválida", dto.Source))
-	}
-	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, 1, dto.ItemCode, dto.Mask, dto.ClassificationCode)
-	var routeID *int64
-	if err == nil {
-		routeID = &route.ID
-	}
-	actor, errUsuario := uc.Auth.UserID(ctx)
-	if errUsuario != nil {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	order := &entity.ReceivingInspectionOrder{
-		RouteID:               routeID,
-		Source:                dto.Source,
-		SupplierCode:          dto.SupplierCode,
-		PurchaseOrderCode:     dto.PurchaseOrderCode,
-		PurchaseOrderItemCode: dto.PurchaseOrderItemCode,
-		FiscalEntryCode:       dto.FiscalEntryCode,
-		ReceivingNoticeCode:   dto.ReceivingNoticeCode,
-		ItemCode:              dto.ItemCode,
-		Mask:                  dto.Mask,
-		Lot:                   dto.Lot,
-		SerialNumber:          dto.SerialNumber,
-		WarehouseID:           dto.WarehouseID,
-		Quantity:              dto.Quantity,
-		Certificate:           dto.Certificate,
-		SupplierNote:          dto.SupplierNote,
-		Model:                 dto.Model,
-		Notes:                 dto.Notes,
-		CreatedBy:             &actor,
-	}
-	created, err := uc.Repo.CreateReceivingInspectionOrder(ctx, order)
-	if err != nil {
-		return nil, err
-	}
-	return toReceivingInspectionOrderResponse(created), nil
-}
-
-// GetReceivingInspectionOrder abre uma ordem de inspeção da empresa da sessão
-// (VINS0400). A tela chamava esta rota, que não existia, e recebia 404.
-func (uc *UseCase) GetReceivingInspectionOrder(ctx context.Context, id int64) (*response.ReceivingInspectionOrderResponse, error) {
-	order, err := uc.Repo.GetReceivingInspectionOrder(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return toReceivingInspectionOrderResponse(order), nil
-}
-
-func (uc *UseCase) ListReceivingInspectionOrders(ctx context.Context, status string) ([]*response.ReceivingInspectionOrderResponse, error) {
-	orders, err := uc.Repo.ListReceivingInspectionOrders(ctx, status)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]*response.ReceivingInspectionOrderResponse, 0, len(orders))
-	for _, order := range orders {
-		out = append(out, toReceivingInspectionOrderResponse(order))
-	}
-	return out, nil
-}
-
 func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, orderID int64, dto request.LinkReceivingInspectionQualityReportDTO) (*response.ReceivingInspectionQualityReportResponse, error) {
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -497,241 +334,6 @@ func (uc *UseCase) UnlinkReceivingInspectionQualityReport(ctx context.Context, o
 		return err
 	}
 	return uc.Repo.UnlinkReceivingInspectionQualityReport(ctx, enterpriseID, orderID, reportID)
-}
-
-func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID int64, dto request.RecordReceivingInspectionResultDTO) (*response.ReceivingInspectionResultResponse, error) {
-	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	if orderID <= 0 || dto.Sequence <= 0 {
-		return nil, errorsuc.NewValidationError("informe a ordem e a sequência")
-	}
-	if dto.SampleIndex <= 0 {
-		dto.SampleIndex = 1
-	}
-	actor, errUsuario := uc.Auth.UserID(ctx)
-	if errUsuario != nil {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	result := &entity.ReceivingInspectionResult{
-		OrderID:              orderID,
-		StepID:               dto.StepID,
-		Sequence:             dto.Sequence,
-		SampleIndex:          dto.SampleIndex,
-		MeasuredValue:        dto.MeasuredValue,
-		MinValue:             dto.MinValue,
-		MaxValue:             dto.MaxValue,
-		AttributeDescription: dto.AttributeDescription,
-		IsApproved:           dto.IsApproved,
-		Notes:                dto.Notes,
-		CreatedBy:            &actor,
-	}
-	created, err := uc.Repo.CreateReceivingInspectionResult(ctx, result)
-	if err != nil {
-		return nil, err
-	}
-	return toReceivingInspectionResultResponse(created), nil
-}
-
-func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID int64, dto request.AnalyzeReceivingInspectionOrderDTO) (*response.ReceivingInspectionAnalysisResponse, error) {
-	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	if orderID <= 0 {
-		return nil, errorsuc.NewValidationError("informe a ordem")
-	}
-	if !validInspectionTreatment(dto.Treatment) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("tratamento %q inválido", dto.Treatment))
-	}
-	if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty <= 0 {
-		return nil, errorsuc.NewValidationError("as quantidades da análise devem ser maiores que zero")
-	}
-	if dto.MoveStock && !uc.Auth.CanCreateStockMovement(ctx) {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	order, err := uc.Repo.GetReceivingInspectionOrder(ctx, orderID)
-	if err != nil {
-		// pgx.ErrNoRows vazava como "no rows in result set" — em inglês e com
-		// status de validação, quando o caso é simplesmente não existir.
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de inspeção %d não encontrada", orderID))
-		}
-		return nil, err
-	}
-	if dto.MoveStock {
-		if (dto.ConformQty > 0 || dto.RestrictedQty > 0) && dto.DestinationWarehouseID == nil && dto.RestrictedWarehouseID == nil {
-			return nil, errorsuc.NewValidationError("depósito de destino é obrigatório para liberar a quantidade aprovada")
-		}
-		if dto.ConformQty+dto.RejectedQty+dto.ReworkQty+dto.RestrictedQty > order.Quantity+toleranciaQtd {
-			return nil, errorsuc.NewValidationError("a quantidade analisada é maior que a quantidade da ordem inspecionada")
-		}
-		saem := 0.0
-		for _, l := range planInspectionStockLegs(order.WarehouseID, dto) {
-			saem += l.Qty
-		}
-		// Confere antes de gravar a análise: se a transferência fosse recusada
-		// depois, a análise ficaria registrada sem o material ter saído.
-		if err := uc.conferirSaldoDaInspecao(ctx, order.ItemCode, order.Mask, order.WarehouseID, saem); err != nil {
-			return nil, err
-		}
-	}
-	actor, errUsuario := uc.Auth.UserID(ctx)
-	if errUsuario != nil {
-		return nil, errorsuc.ErrUnauthorized
-	}
-	analysis := &entity.ReceivingInspectionAnalysis{
-		OrderID:              orderID,
-		ConformQty:           dto.ConformQty,
-		RejectedQty:          dto.RejectedQty,
-		ReworkQty:            dto.ReworkQty,
-		RestrictedQty:        dto.RestrictedQty,
-		Treatment:            dto.Treatment,
-		AffectsSupplierScore: dto.AffectsSupplierScore,
-		Notes:                dto.Notes,
-		AnalyzedBy:           &actor,
-	}
-	created, err := uc.Repo.CreateReceivingInspectionAnalysis(ctx, analysis)
-	if err != nil {
-		return nil, err
-	}
-	out := toReceivingInspectionAnalysisResponse(created)
-	if dto.MoveStock {
-		movements, err := uc.releaseInspectionStock(ctx, order, dto, actor)
-		if err != nil {
-			return nil, err
-		}
-		out.Movements = movements
-	}
-	return out, nil
-}
-
-// toleranciaQtd: meio milionésimo — quantidades têm 6 casas (migrações 407/409).
-// Com 0,0001 de folga a análise aceitava liberar mais do que a inspeção tinha e
-// a transferência era recusada depois.
-const toleranciaQtd = 0.0000005
-
-// conferirSaldoDaInspecao: o almoxarifado de inspeção tem o que a análise (ou a
-// disposição) vai tirar dele?
-func (uc *UseCase) conferirSaldoDaInspecao(ctx context.Context, item int64, mask string, almox int64, saem float64) error {
-	if saem <= 0 || uc.StockRepo == nil {
-		return nil
-	}
-	saldo := decimal.Zero
-	b, err := uc.StockRepo.GetBalance(ctx, item, mask, almox)
-	if err != nil && !errorsuc.EhNaoEncontrado(err) {
-		return err
-	}
-	if b != nil {
-		saldo = b.Quantity
-	}
-	if pedido := decimal.NewFromFloat(saem).Round(6); saldo.LessThan(pedido) {
-		return errorsuc.NewValidationError(fmt.Sprintf(
-			"o almoxarifado de inspeção tem %s do item e a análise tira %s: confira as quantidades", saldo.String(), pedido.String()))
-	}
-	return nil
-}
-
-// releaseInspectionStock moves analyzed quantities out of the inspection
-// warehouse toward available (conform + restricted), rework and rejection
-// warehouses — each leg in one stock transaction, priced at the source cost.
-func (uc *UseCase) releaseInspectionStock(ctx context.Context, order *entity.ReceivingInspectionOrder, dto request.AnalyzeReceivingInspectionOrderDTO, actor uuid.UUID) ([]response.StockMovementResponse, error) {
-	refType := "RECEIVING_INSPECTION_ANALYSIS"
-	refCode := order.ID
-	movements := make([]response.StockMovementResponse, 0, 8)
-	for _, l := range planInspectionStockLegs(order.WarehouseID, dto) {
-		out, in, err := uc.transferStock(ctx, order.ItemCode, order.Mask, order.WarehouseID, l.To, l.Qty, refType, refCode, actor, dto.Notes)
-		if err != nil {
-			return nil, err
-		}
-		movements = append(movements, stockMovementResponse(out), stockMovementResponse(in))
-	}
-	return movements, nil
-}
-
-// inspectionStockLeg is a single quarantine-out transfer computed from an analysis.
-type inspectionStockLeg struct {
-	Qty float64
-	To  int64
-}
-
-// planInspectionStockLegs resolves which analyzed quantities move out of the
-// inspection warehouse and to where. Restricted (accept-with-restriction) falls
-// back to the available destination when no dedicated restricted warehouse is
-// given. Zero quantities, missing targets and self-transfers are skipped.
-func planInspectionStockLegs(fromWarehouse int64, dto request.AnalyzeReceivingInspectionOrderDTO) []inspectionStockLeg {
-	restrictedTo := dto.RestrictedWarehouseID
-	if restrictedTo == nil {
-		restrictedTo = dto.DestinationWarehouseID
-	}
-	candidates := []struct {
-		qty float64
-		to  *int64
-	}{
-		{dto.ConformQty, dto.DestinationWarehouseID},
-		{dto.RestrictedQty, restrictedTo},
-		{dto.ReworkQty, dto.ReworkWarehouseID},
-		{dto.RejectedQty, dto.RejectionWarehouseID},
-	}
-	legs := make([]inspectionStockLeg, 0, len(candidates))
-	for _, c := range candidates {
-		if c.qty <= 0 || c.to == nil || *c.to == fromWarehouse {
-			continue
-		}
-		legs = append(legs, inspectionStockLeg{Qty: c.qty, To: *c.to})
-	}
-	return legs
-}
-
-func (uc *UseCase) transfer(ctx context.Context, rec *entity.Record, from, to int64, qty float64, refType string, refCode int64, actor uuid.UUID, notes *string) (*stockentity.StockMovement, *stockentity.StockMovement, error) {
-	return uc.transferStock(ctx, *rec.ItemCode, rec.Mask, from, to, qty, refType, refCode, actor, notes)
-}
-
-func (uc *UseCase) transferStock(ctx context.Context, itemCode int64, mask string, from, to int64, qty float64, refType string, refCode int64, actor uuid.UUID, notes *string) (*stockentity.StockMovement, *stockentity.StockMovement, error) {
-	if uc.Transferencias != nil {
-		r, err := uc.Transferencias.TransferirEntreAlmoxarifados(ctx, stockentity.TransferenciaEstoque{
-			ItemCode: itemCode, Mask: mask, DeAlmox: from, ParaAlmox: to, Quantidade: decimal.NewFromFloat(qty),
-			Notas: notes, Ator: actor, ReferenciaTipo: &refType, ReferenciaCodigo: &refCode,
-		})
-		if err != nil {
-			return nil, nil, err
-		}
-		return r.Saida, r.Entrada, nil
-	}
-	out := &stockentity.StockMovement{
-		ItemCode:      itemCode,
-		Mask:          mask,
-		WarehouseID:   from,
-		MovementType:  stockentity.MovementTypeTransferOut,
-		Quantity:      decimal.NewFromFloat(qty),
-		ReferenceType: &refType,
-		ReferenceCode: &refCode,
-		Notes:         notes,
-		CreatedBy:     actor,
-	}
-	createdOut, err := uc.StockRepo.CreateMovement(ctx, out)
-	if err != nil {
-		return nil, nil, err
-	}
-	// A entrada vale o que saiu: sem preço, o destino recebia a quantidade com
-	// valor zero e o valor do material desaparecia do inventário.
-	in := &stockentity.StockMovement{
-		ItemCode:      itemCode,
-		Mask:          mask,
-		WarehouseID:   to,
-		MovementType:  stockentity.MovementTypeTransferIn,
-		Quantity:      decimal.NewFromFloat(qty),
-		UnitPrice:     createdOut.UnitPrice,
-		TotalPrice:    createdOut.TotalPrice,
-		ReferenceType: &refType,
-		ReferenceCode: &refCode,
-		Notes:         notes,
-		CreatedBy:     actor,
-	}
-	createdIn, err := uc.StockRepo.CreateMovement(ctx, in)
-	if err != nil {
-		return nil, nil, err
-	}
-	return createdOut, createdIn, nil
 }
 
 func validRecordType(t entity.RecordType) bool {

@@ -68,6 +68,19 @@ type FiscalExit struct {
 	NFeReferenciada *string
 	// FiscalEntryID: a nota de entrada devolvida (devolução de compra).
 	FiscalEntryID *int64
+	// TipoDocumento da NF-e: 0 entrada (devolução de venda emitida pela
+	// empresa), 1 saída. nil = saída.
+	TipoDocumento *int
+	// DevolucaoVendaID: a devolução de venda que a NF-e de entrada efetiva.
+	DevolucaoVendaID *int64
+	// FinalidadeCompra que valeu no cálculo (REVENDA, INDUSTRIALIZACAO,
+	// USO_CONSUMO); nil = deduzida do destinatário.
+	FinalidadeCompra *string
+	// InvoiceTypeID: tipo de nota (VFIS0110) cujos indicadores tributaram a saída.
+	InvoiceTypeID *int64
+	// InformacoesComplementares (infCpl): o texto do usuário mais o que a lei
+	// manda constar (Simples Nacional, base legal dos benefícios).
+	InformacoesComplementares *string
 	// SupplierCode: o fornecedor destinatário da devolução.
 	SupplierCode          *int64
 	ShipmentLoadCode      *int64
@@ -131,8 +144,41 @@ type FiscalExitItem struct {
 	SalesOrderItemCode *int64
 	// FiscalEntryItemID: a linha da nota de entrada devolvida por esta linha.
 	FiscalEntryItemID *int64
+	// FiscalExitItemOrigemID: a linha da NF de saída devolvida (devolução de venda).
+	FiscalExitItemOrigemID *int64
 	// CodigoBeneficioFiscal é o cBenef da linha (exigido pela SEFAZ de algumas
 	// UFs para CST com benefício: diferimento, isenção, redução…).
 	CodigoBeneficioFiscal *string
-	CreatedAt             time.Time
+	// RegraICMSIPIID é a regra do cadastro de parâmetros de ICMS/IPI (VFIS0320)
+	// que tributou a linha; nil = regra geral da empresa.
+	RegraICMSIPIID *int64
+	// ICMSReducaoBasePct (pRedBC) e ICMSDiferimentoPct (pDif) da linha, em %.
+	// Zero no diferimento = linha antiga: vale o da configuração fiscal.
+	ICMSReducaoBasePct float64
+	ICMSDiferimentoPct float64
+	// ICMSSTReducaoBasePct: pRedBCST (%) da linha.
+	ICMSSTReducaoBasePct float64
+	// Simples Nacional: pCredSN (%) e vCredICMSSN.
+	AliqCreditoSimples  float64
+	ValorCreditoSimples float64
+	// Grupo ICMSUFDest (DIFAL a não contribuinte): base, alíquotas em % e valores.
+	ICMSUFDestBase        float64
+	ICMSUFDestAliqInterna float64
+	ICMSAliqInterestadual float64
+	ICMSUFDestValor       float64
+	FCPUFDestPct          float64
+	FCPUFDestValor        float64
+	// ClassTribIBSCBS é o cClassTrib próprio da linha (sobrescreve o do CFOP e
+	// o da classificação fiscal). ReformaEnviada é o grupo IBS/CBS transmitido.
+	ClassTribIBSCBS *string
+	ReformaEnviada  *ReformaEnviada
+	CreatedAt       time.Time
+}
+
+// ReformaEnviada é o retrato do grupo IBS/CBS que a linha levou à SEFAZ.
+type ReformaEnviada struct {
+	CST, ClassTrib, Origem string
+	Base, IBSUF, IBSMun    *float64
+	CBS                    *float64
+	AliqEfetivaCBS         *float64
 }

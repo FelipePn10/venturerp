@@ -3,6 +3,7 @@ package sales_order_uc
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -73,7 +74,7 @@ func (f *fakeDemandRepo) GetByCode(_ context.Context, code int64) (*demandentity
 
 func activeItem(seq int, item int64, qty float64) *entity.SalesOrderItem {
 	return &entity.SalesOrderItem{
-		Sequence: seq, ItemCode: item, RequestedQty: qty,
+		Sequence: seq, ItemCode: item, RequestedQty: decimal.NewFromFloat(qty),
 		Status: "OPEN", IsActive: true,
 	}
 }
@@ -173,7 +174,7 @@ func TestChangeStatus_GeneratesDeterministicDemandPerActiveLine(t *testing.T) {
 	if d0.CodeDemand != 4200002 {
 		t.Fatalf("demand code = %d, want 4200002 (idempotent per line)", d0.CodeDemand)
 	}
-	if d0.ItemCode != 1001 || d0.Quantity != 5 {
+	if d0.ItemCode != 1001 || !d0.Quantity.Equal(decimal.NewFromFloat(5)) {
 		t.Fatalf("demand item/qty wrong: %+v", d0)
 	}
 	if d0.Mask == nil || *d0.Mask != "0007" {

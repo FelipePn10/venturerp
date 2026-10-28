@@ -11,6 +11,7 @@ import (
 
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -175,7 +176,8 @@ func montarPayloadNFe(
 	items []*entity.FiscalExitItem,
 	cfg *entity.FiscalConfig,
 	plano PlanoDaNota,
-) focusnfe.NFEPayload {
+	rt TributacaoReforma,
+) (focusnfe.NFEPayload, []reforma.RetratoItem) {
 	ufDest := "PR"
 	if exit.UFDestinatario != nil && strings.TrimSpace(*exit.UFDestinatario) != "" {
 		ufDest = *exit.UFDestinatario
@@ -193,10 +195,7 @@ func montarPayloadNFe(
 	if ufDest != cfg.UFEmpresa {
 		localDestino = 2
 	}
-	consumidorFinal, indicadorIE := 0, 1
-	if exit.IEDestinatario == nil || *exit.IEDestinatario == "" || *exit.IEDestinatario == "ISENTO" {
-		consumidorFinal, indicadorIE = 1, 9
-	}
+	consumidorFinal, indicadorIE := indicadoresDestinatario(exit)
 
 	formas := make([]focusnfe.NFEFormaPagamento, 0, len(plano.Parcelas))
 	duplicatas := make([]focusnfe.NFEDuplicata, 0, len(plano.Parcelas))
@@ -236,27 +235,13 @@ func montarPayloadNFe(
 
 	itens := buildFocusItems(items, cfg)
 	ratearAcessoriasNFe(itens, exit)
-	if !regimeSimples(cfg) {
-		ano := exit.DataEmissao.Year()
-		for i := range itens {
-			it := &itens[i]
-			op := decimal.NewFromFloat(it.ValorBruto).Add(decimal.NewFromFloat(it.ValorFrete)).Add(decimal.NewFromFloat(it.ValorSeguro)).
-				Sub(decimal.NewFromFloat(it.ValorDesconto))
-			g, err := reforma.Calcular(ano, op, decimal.NewFromFloat(it.ValorICMS), decimal.NewFromFloat(it.ValorPIS), decimal.NewFromFloat(it.ValorCOFINS))
-			if err != nil {
-				continue // validarReformaNFe recusa a autorização antes de chegar aqui
-			}
-			it.IBSCBS = &focusnfe.NFEItemIBSCBS{CST: g.CST, ClassTrib: g.ClassTrib, Base: g.Base.InexactFloat64(),
-				AliqIBSUF: g.Aliq.IBSUF.InexactFloat64(), ValorIBSUF: g.IBSUF.InexactFloat64(), AliqIBSMun: g.Aliq.IBSMun.InexactFloat64(),
-				ValorIBSMun: g.IBSMun.InexactFloat64(), ValorIBS: g.IBS.InexactFloat64(), AliqCBS: g.Aliq.CBS.InexactFloat64(), ValorCBS: g.CBS.InexactFloat64()}
-		}
-	}
+	retrato := aplicarReforma(rt, items, itens)
 	modFrete := 9
 	if exit.ValorFrete > 0 {
 		modFrete = 0 // por conta do emitente (CIF)
 	}
 
-	return focusnfe.NFEPayload{
+	payload := focusnfe.NFEPayload{
 		ModalidadeFrete:   modFrete,
 		ValorProdutos:     exit.ValorProdutos,
 		ValorTotal:        exit.ValorTotal,
@@ -265,7 +250,7 @@ func montarPayloadNFe(
 		ValorDesc:         exit.ValorDesconto,
 		NaturezaOperacao:  exit.NaturezaOperacao,
 		DataEmissao:       dataHoraEmissao(exit.DataEmissao, time.Now()),
-		TipoDocumento:     1,
+		TipoDocumento:     tipoOuSaida(exit.TipoDocumento),
 		LocalDestino:      localDestino,
 		FinalidadeEmissao: finalidade,
 		ConsumidorFinal:   consumidorFinal,
@@ -280,7 +265,7 @@ func montarPayloadNFe(
 			UF:               cfg.UFEmpresa,
 			CEP:              cfg.CEP,
 			Telefone:         derefStr(cfg.Telefone),
-			RegimeTributario: 3,
+			RegimeTributario: crtDoRegime(cfg),
 		},
 		Destinatario: focusnfe.NFEDestinatario{
 			CNPJCPF:     cnpjDest,
@@ -295,11 +280,43 @@ func montarPayloadNFe(
 			IndicadorIE: indicadorIE,
 			IE:          exit.IEDestinatario,
 		},
-		Items:              itens,
-		FormaPagamento:     formas,
-		Duplicatas:         duplicatas,
-		NotasReferenciadas: refs,
+		Items:                 itens,
+		InformacoesAdicionais: derefStr(exit.InformacoesComplementares),
+		FormaPagamento:        formas,
+		Duplicatas:            duplicatas,
+		NotasReferenciadas:    refs,
 	}
+	return payload, retrato
+}
+
+// indicadoresDestinatario: indFinal e indIEDest. Com IE é contribuinte (1);
+// "ISENTO" é contribuinte isento (2) e sem IE, não contribuinte (9) — os dois
+// são consumidor final. Contribuinte comprando para uso, consumo ou ativo
+// também é consumidor final.
+func indicadoresDestinatario(exit *entity.FiscalExit) (consumidorFinal, indicadorIE int) {
+	ie := ""
+	if exit.IEDestinatario != nil {
+		ie = strings.TrimSpace(*exit.IEDestinatario)
+	}
+	switch {
+	case ie == "":
+		return 1, 9
+	case strings.EqualFold(ie, "ISENTO"):
+		return 1, 2
+	case exit.FinalidadeCompra != nil && *exit.FinalidadeCompra == engine.FinalidadeUsoConsumo:
+		return 1, 1
+	default:
+		return 0, 1
+	}
+}
+
+// crtDoRegime: o CRT da NF-e (1 Simples, 3 regime normal). A Focus usa o do
+// cadastro da empresa no painel; este fica coerente com o do ERP.
+func crtDoRegime(cfg *entity.FiscalConfig) int {
+	if regimeSimples(cfg) {
+		return 1
+	}
+	return 3
 }
 
 // regimeSimples: optante do Simples Nacional ("1" no cadastro fiscal). No
@@ -307,16 +324,6 @@ func montarPayloadNFe(
 func regimeSimples(cfg *entity.FiscalConfig) bool {
 	r := strings.ToLower(strings.TrimSpace(cfg.RegimeTributario))
 	return r == "1" || strings.Contains(r, "simples")
-}
-
-// validarReformaNFe recusa, antes da SEFAZ, a nota do regime normal num ano
-// sem alíquotas de IBS/CBS cadastradas (a SEFAZ rejeitaria pelo grupo).
-func validarReformaNFe(exit *entity.FiscalExit, cfg *entity.FiscalConfig) error {
-	if regimeSimples(cfg) {
-		return nil
-	}
-	_, err := reforma.AliquotasDoAno(exit.DataEmissao.Year())
-	return err
 }
 
 // ratearAcessoriasNFe distribui frete, seguro e desconto da nota pelos itens,
@@ -376,4 +383,43 @@ func presencaComprador(finalidade int) int {
 		return 0
 	}
 	return 9
+}
+
+// SeriesPorLinha lê os números de série escolhidos em cada linha da nota.
+type SeriesPorLinha interface {
+	SeriesPorLinha(ctx context.Context, fiscalExitID int64) (map[int64][]string, error)
+}
+
+// anexarSeries põe os números de série de cada linha no infAdProd do item
+// (até 500 caracteres, o limite do campo).
+func anexarSeries(ctx context.Context, fonte SeriesPorLinha, exitID int64, items []*entity.FiscalExitItem, payload *focusnfe.NFEPayload) error {
+	if fonte == nil {
+		return nil
+	}
+	series, err := fonte.SeriesPorLinha(ctx, exitID)
+	if err != nil {
+		return fmt.Errorf("lendo os números de série da nota: %w", err)
+	}
+	if len(series) == 0 || len(payload.Items) != len(items) {
+		return nil
+	}
+	for i, it := range items {
+		if ns := series[it.ID]; len(ns) > 0 {
+			txt := "Nº de série: " + strings.Join(ns, ", ")
+			if r := []rune(txt); len(r) > 500 {
+				txt = string(r[:497]) + "..."
+			}
+			payload.Items[i].InformacoesAdicionaisItem = txt
+		}
+	}
+	return nil
+}
+
+// tipoOuSaida: o tipo da NF-e (0 entrada, 1 saída). A devolução de venda
+// emitida pela empresa é NF-e de entrada; o resto é saída.
+func tipoOuSaida(t *int) int {
+	if t != nil && *t == 0 {
+		return 0
+	}
+	return 1
 }

@@ -23,7 +23,9 @@ import (
 // de inspeção, em vez de ir direto para o estoque disponível.
 type InspecaoDeRecebimento interface {
 	ResolveInspectionRoute(ctx context.Context, itemCode int64, mask string) (inspectionWarehouseID int64, matched bool)
-	OpenInspectionOrderFromReceipt(ctx context.Context, itemCode int64, mask string, quantity float64, inspectionWarehouseID int64, supplierCode, purchaseOrderCode, purchaseOrderItemCode *int64, lot *string) (int64, int64, error)
+	// AbrirDoRecebimento abre o lote de inspeção (id e número).
+	AbrirDoRecebimento(ctx context.Context, item int64, mask string, quantidade decimal.Decimal, almoxInspecao int64,
+		fornecedor, pedido, linha *int64, lote *string, notaEntrada *int64) (int64, int64, error)
 }
 
 // ApproveFiscalEntryUseCase efetiva a nota de entrada. Conferida (itens
@@ -44,6 +46,16 @@ type ApproveFiscalEntryUseCase struct {
 	Tolerancias   ports.PurchaseToleranceEvaluator
 	Inspecao      InspecaoDeRecebimento
 	Auth          ports.AuthService
+}
+
+// ciapAtivo: a empresa toma crédito de ICMS (fora do Simples), então o ICMS do
+// bem do ativo entra no CIAP em vez do custo.
+func (uc *ApproveFiscalEntryUseCase) ciapAtivo(ctx context.Context) bool {
+	if uc.FiscalRepo == nil {
+		return false
+	}
+	cfg, err := uc.FiscalRepo.GetFiscalConfig(ctx)
+	return err == nil && cfg != nil && !regimeSimples(cfg)
 }
 
 func (uc *ApproveFiscalEntryUseCase) servico() *EntradaServico {
@@ -155,9 +167,10 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		}
 		for _, mg := range res.Movimentados {
 			if wh, ok := inspecao[mg.ItemID]; ok {
-				if _, numero, err := uc.Inspecao.OpenInspectionOrderFromReceipt(ctx, mg.ItemCode, "", mg.Quantidade.InexactFloat64(), wh,
-					doc.SupplierCode, mg.PurchaseOrderCode, mg.PurchaseOrderItemCode, nil); err != nil {
-					avisos = append(avisos, fmt.Sprintf("o item %d entrou no almoxarifado de inspeção, mas a ordem de inspeção não foi aberta: %v", mg.ItemCode, err))
+				entrada := doc.ID
+				if _, numero, err := uc.Inspecao.AbrirDoRecebimento(ctx, mg.ItemCode, "", mg.Quantidade, wh,
+					doc.SupplierCode, mg.PurchaseOrderCode, mg.PurchaseOrderItemCode, nil, &entrada); err != nil {
+					avisos = append(avisos, fmt.Sprintf("o item %d entrou no almoxarifado de inspeção, mas o lote de inspeção não foi aberto: %v", mg.ItemCode, err))
 				} else {
 					avisos = append(avisos, fmt.Sprintf("item %d aguardando inspeção (ordem %d)", mg.ItemCode, numero))
 				}
@@ -209,8 +222,13 @@ func (uc *ApproveFiscalEntryUseCase) montarMovimentos(ctx context.Context, doc *
 	}
 	custos := map[int64]decimal.Decimal{}
 	var out []repository.MovimentoEntrada
+	ciapAtivo := uc.ciapAtivo(ctx)
 	for _, it := range doc.Itens {
 		custo := entrada.CustoAquisicao(it)
+		if ciapAtivo {
+			// O ICMS do bem do ativo vai para o CIAP: não é custo.
+			custo = decimal.Max(custo.Sub(entrada.ICMSDoCIAP(it)), decimal.Zero)
+		}
 		custos[it.ID] = custo
 		if it.ItemCode == nil {
 			continue
@@ -250,6 +268,7 @@ func (uc *ApproveFiscalEntryUseCase) montarMovimentos(ctx context.Context, doc *
 // crédito em fornecedores; e a transferência de fornecedores para as
 // retenções a recolher. Sem parâmetros contábeis, a nota não é contabilizada.
 func (uc *ApproveFiscalEntryUseCase) montarContabilizacao(ctx context.Context, doc *entity.FiscalEntry, custos map[int64]decimal.Decimal) ([]repository.LancamentoContabil, error) {
+	ciapAtivo := uc.ciapAtivo(ctx)
 	p, err := uc.Docs.AccountingParams(ctx)
 	if err != nil {
 		return nil, err
@@ -312,6 +331,9 @@ func (uc *ApproveFiscalEntryUseCase) montarContabilizacao(ctx context.Context, d
 		recuperar(it.GeraCreditoCOFINS, decimal.NewFromFloat(it.ValorCOFINS), p.COFINSRecuperarAccountID, "COFINS")
 		recuperar(it.GeraCreditoIBSCBS, it.ValorIBS, p.IBSRecuperarAccountID, "IBS")
 		recuperar(it.GeraCreditoIBSCBS, it.ValorCBS, p.CBSRecuperarAccountID, "CBS")
+		if ciapAtivo {
+			recuperar(true, entrada.ICMSDoCIAP(it), p.ICMSRecuperarAccountID, "ICMS do CIAP")
+		}
 		add(conta, p.FornecedoresAccountID, it.CentroCustoID, custo, hist(fmt.Sprintf("item %d %s", it.Sequence, deref(it.Description))))
 	}
 	contaRet := map[string]*int64{

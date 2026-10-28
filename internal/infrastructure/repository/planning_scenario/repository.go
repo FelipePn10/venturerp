@@ -40,7 +40,7 @@ func (r *Repository) ScenarioAdjustments(ctx context.Context, planCode int64) (*
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT c.id, c.kind, c.item_code, c.mask, c.demand_ref_kind, c.demand_ref_code,
-		       c.quantity::float8, c.need_date, c.lead_time_days
+		       c.quantity, c.need_date, c.lead_time_days
 		  FROM planning_scenario_changes c
 		  JOIN planning_scenarios s ON s.id = c.scenario_id
 		 WHERE s.scenario_plan_code = $1 AND s.enterprise_id = $2 AND c.enterprise_id = $2
@@ -50,14 +50,14 @@ func (r *Repository) ScenarioAdjustments(ctx context.Context, planCode int64) (*
 		return nil, err
 	}
 	defer rows.Close()
-	out := &mrpentity.ScenarioAdjustments{StockDelta: map[int64]float64{}, LeadTimeDays: map[int64]int{}}
+	out := &mrpentity.ScenarioAdjustments{StockDelta: map[int64]decimal.Decimal{}, LeadTimeDays: map[int64]int{}}
 	for rows.Next() {
 		var (
 			id            int64
 			kind, mask    string
 			item, refCode *int64
 			refKind       *string
-			qtd           *float64
+			qtd           *decimal.Decimal
 			need          *time.Time
 			lead          *int
 		)
@@ -76,7 +76,7 @@ func (r *Repository) ScenarioAdjustments(ctx context.Context, planCode int64) (*
 			out.Demands = append(out.Demands, c)
 		case planning_uc.ChangeStock:
 			if item != nil && qtd != nil {
-				out.StockDelta[*item] += *qtd
+				out.StockDelta[*item] = out.StockDelta[*item].Add(*qtd)
 			}
 		case planning_uc.ChangeLeadTime:
 			// O ajuste mais recente do item vale.

@@ -443,6 +443,36 @@ Uma sugestão do MRP é apenas uma proposta. Quando o planejador "firma" (aprova
 
 ---
 
+## Saldo que o MRP conta
+
+O MRP soma o saldo dos almoxarifados com disposição. Desde a migração 418, o
+saldo em `REJEICAO` e em almoxarifado sem disposição (sucata, avaria) não conta.
+O saldo em `INSPECAO` conta, como no SAP: a decisão de uso libera o aceito e
+manda o recusado para a rejeição, que aí sai da conta.
+
+## Arredondamentos exatos
+
+Desde 2026-10-26 as **quantidades** do motor são `decimal.Decimal`. Isso vale
+para estoque, demanda (independente, pedido, previsão, MPS), necessidade
+líquida, suprimento firme, sugestões, perfil, pegging, kanban, mín./máx.,
+ponto de pedido e cenários.
+- A política de lote (`aplicaPoliticaDeLote`), a perda da estrutura
+  (`quantidadeComPerda`, as fórmulas 1/2/3 de `structentity`) e a repartição do
+  pegging calculam em decimal. Divisões são arredondadas a 6 casas, a escala
+  `NUMERIC(18,6)` das colunas.
+- O que ainda chega em float (quantidade por unidade da estrutura, previsão de
+  vendas, faixas de prioridade) entra por `dq()`: o decimal do menor texto
+  que representa o float, em 6 casas.
+- Os **tempos** de máquina (minutos, eficiência, consumíveis) seguem em float,
+  com os arredondamentos para cima em decimal (`divisoesParaCima`). A
+  quantidade da ordem vira float só nessa fronteira.
+- A ordem planejada firmada (`planned_order`) ainda guarda a quantidade em float:
+  a sugestão é convertida ao firmar.
+
+Em float, a necessidade `0,1 + 0,2` com múltiplo 0,1 virava **0,4**, um lote a
+mais. Em decimal a conta é exata.
+O ponto de pedido usa `valueobject.PontoDePedido` (decimal), o mesmo do estoque.
+
 ## Módulos que o MRP Depende
 
 ```

@@ -17,7 +17,65 @@ import (
 // primeiro dígito ajustado à localização do fornecedor. Sem ela, o CFOP do
 // fornecedor é convertido pela regra usual (5→1, 6→2, 7→3), com as
 // equivalências que não são só a troca do dígito (revenda com ST).
+//
+// Esta versão não conhece a finalidade da compra: é a troca de dígito. Quem
+// sabe a finalidade usa CFOPEntradaComFinalidade.
 func CFOPEntrada(cfopFornecedor, natureza, ufFornecedor, ufEmpresa string) string {
+	return CFOPEntradaComFinalidade(cfopFornecedor, natureza, "", ufFornecedor, ufEmpresa)
+}
+
+// Finalidades da compra (linha do pedido de compra ou tipo de uso do item).
+const (
+	FinalidadeIndustrializacao = "INDUSTRIALIZACAO"
+	FinalidadeConsumo          = "CONSUMO"
+	FinalidadeImobilizado      = "IMOBILIZADO"
+)
+
+// FinalidadeDoTipoDeUso: supplies_type_of_use do item (0, 1, 2).
+func FinalidadeDoTipoDeUso(t int) string {
+	switch t {
+	case 1:
+		return FinalidadeConsumo
+	case 2:
+		return FinalidadeImobilizado
+	}
+	return FinalidadeIndustrializacao
+}
+
+// destinoDaCompra: a finalidade é de quem compra, não de quem vende. A venda
+// do fornecedor (x101/x102, ou x401/x403/x405 com ST) entra como compra para
+// industrialização, para uso e consumo ou para o ativo imobilizado (Convênio
+// s/nº de 1970, Anexo II). "Compra para comercialização" (x102/x403) só por
+// tipo de operação de entrada (VFIS0360).
+func destinoDaCompra(resto, finalidade string) string {
+	venda := resto == "101" || resto == "102"
+	comST := resto == "401" || resto == "403" || resto == "405"
+	if !venda && !comST {
+		return ""
+	}
+	switch finalidade {
+	case FinalidadeIndustrializacao:
+		if comST {
+			return "401"
+		}
+		return "101"
+	case FinalidadeConsumo:
+		if comST {
+			return "407"
+		}
+		return "556"
+	case FinalidadeImobilizado:
+		if comST {
+			return "406"
+		}
+		return "551"
+	}
+	return ""
+}
+
+// CFOPEntradaComFinalidade: como CFOPEntrada, e, sem tipo de operação, a
+// finalidade da compra decide o código da compra.
+func CFOPEntradaComFinalidade(cfopFornecedor, natureza, finalidade, ufFornecedor, ufEmpresa string) string {
 	digitoLocal := func(padrao byte) byte {
 		uf := strings.ToUpper(strings.TrimSpace(ufFornecedor))
 		switch {
@@ -57,6 +115,9 @@ func CFOPEntrada(cfopFornecedor, natureza, ufFornecedor, ufEmpresa string) strin
 	// (nota com 6xxx entre empresas do mesmo estado é erro do emitente).
 	d = digitoLocal(d)
 	resto := c[1:]
+	if r := destinoDaCompra(resto, finalidade); r != "" {
+		return string(d) + r
+	}
 	switch resto {
 	case "401", "403", "405": // venda com ST → compra com ST
 		resto = "403"
@@ -64,6 +125,29 @@ func CFOPEntrada(cfopFornecedor, natureza, ufFornecedor, ufEmpresa string) strin
 		resto = "652"
 	}
 	return string(d) + resto
+}
+
+// ICMSDoCIAP: o ICMS (próprio e ST) do bem do ativo imobilizado (CFOP x551 ou
+// x406) que não foi creditado na nota — ele é apropriado em parcelas no CIAP
+// (VFIS0345), então também não é custo. Zero para os demais itens. Só vale para
+// quem toma crédito (o Simples Nacional não tem CIAP: quem chama confere).
+func ICMSDoCIAP(it *entity.FiscalEntryItem) decimal.Decimal {
+	c := soNumeros(deref(it.CfopEntrada))
+	if len(c) != 4 || (c[1:] != "551" && c[1:] != "406") || it.GeraCreditoICMS {
+		return decimal.Zero
+	}
+	v := decimal.NewFromFloat(it.ValorICMS).Add(it.ValorICMSST)
+	if !v.IsPositive() {
+		return decimal.Zero
+	}
+	return v.Round(2)
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // CustoAquisicao é o valor que entra no estoque/custo: o valor contábil menos
@@ -211,4 +295,15 @@ func soNumeros(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// CreditosDaFinalidade: sem tipo de operação, a finalidade restringe o crédito
+// destacado. Uso e consumo não dá crédito de ICMS nem de IPI; bem do ativo não
+// dá crédito de IPI, e o de ICMS é apropriado à parte, em parcelas (CIAP) — não
+// entra de uma vez na nota. O que não é crédito vai para o custo.
+func CreditosDaFinalidade(finalidade string, it *entity.FiscalEntryItem) {
+	switch finalidade {
+	case FinalidadeConsumo, FinalidadeImobilizado:
+		it.GeraCreditoICMS, it.GeraCreditoIPI = false, false
+	}
 }

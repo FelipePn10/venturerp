@@ -3,6 +3,7 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"time"
@@ -68,14 +69,17 @@ type FirmPlannedOrderUseCase struct {
 	// Subcontracting hook (R4) — all optional. When set, firming a production order
 	// whose item has external/third-party operations raises a service purchase
 	// requisition (one item per external op with a service item).
-	ReqRepo          reqrepo.PurchaseRequisitionRepository
-	ExternalOps      externalOpsReader
-	ServiceLinker    ports.ProductionServiceLinker
-	ReleaseValidator ports.ManufacturingReleaseValidator
-	ServiceOrders    serviceOrderGenerator
-	Routing          productionRouteReader
-	OrderOps         productionRouteExploder
-	Structure        productionStructureReader
+	ReqRepo reqrepo.PurchaseRequisitionRepository
+	// AprovacoesDoCentro abre, na requisição de serviço gerada, a aprovação do
+	// aprovador do centro de custo da ordem (o mesmo fluxo da requisição manual).
+	AprovacoesDoCentro aprovacoesDoCentro
+	ExternalOps        externalOpsReader
+	ServiceLinker      ports.ProductionServiceLinker
+	ReleaseValidator   ports.ManufacturingReleaseValidator
+	ServiceOrders      serviceOrderGenerator
+	Routing            productionRouteReader
+	OrderOps           productionRouteExploder
+	Structure          productionStructureReader
 	// Items resolve o código de negócio do item para a criação da OF.
 	Items any
 }
@@ -306,6 +310,8 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 			UOM:             &serv,
 			SuggestedPrice:  op.CostPerUnit,
 			Application:     &app,
+			// O serviço é gasto do centro de custo da ordem.
+			CostCenterCode: order.CostCenterCode,
 		}
 		if op.LeadTimeDays > 0 {
 			d := time.Now().AddDate(0, 0, int(op.LeadTimeDays))
@@ -315,7 +321,17 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 			return created.Code, err
 		}
 	}
+	if uc.AprovacoesDoCentro != nil {
+		if err := uc.AprovacoesDoCentro.AbrirAprovacoes(ctx, created.Code); err != nil {
+			return created.Code, err
+		}
+	}
 	return created.Code, nil
+}
+
+// aprovacoesDoCentro: a aprovação da requisição pelo aprovador do centro.
+type aprovacoesDoCentro interface {
+	AbrirAprovacoes(ctx context.Context, requisitionCode int64) error
 }
 
 // createProductionOrder builds the OF from the firmed planned order, mirroring
@@ -362,7 +378,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		// A marca no contexto diz à resolução que o valor JÁ é a chave interna.
 		ctx = context.WithValue(ctx, contextkey.ItemCodeTranslatedKey, true)
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{
-			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: order.Quantity,
+			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: decimal.NewFromFloat(order.Quantity),
 			StartDate: startDate, EndDate: endDate, CostCenterID: order.CostCenterCode,
 			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: machineID,
 			Priority: order.Priority, Notes: order.Notes,
@@ -378,7 +394,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		PlannedOrderID: &plannedID,
 		ItemCode:       order.ItemCode,
 		Mask:           mask,
-		PlannedQty:     order.Quantity,
+		PlannedQty:     decimal.NewFromFloat(order.Quantity),
 		Status:         productionentity.StatusOpen,
 		CostCenterID:   order.CostCenterCode,
 		EmployeeID:     order.EmployeeCode,
