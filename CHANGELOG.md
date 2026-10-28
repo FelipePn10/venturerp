@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.8.0] — 2026-10-28
+
+- feat: fundação enterprise (F1–F5), cadastros fiscais unificados e CIAP (`8a8c3a5d`)
+
 ## [v1.7.5] — 2026-10-19
 
 - fix(fiscal): dica do código IBGE na prévia sem código fixo errado (`e48414ca`)
