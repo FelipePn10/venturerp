@@ -131,7 +131,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		}
 		return n
 	}
-	dto := request.AddAppointmentDTO{ProductionOrderID: of, EmployeeID: &operador, ProducedQty: 5, BackflushWarehouseID: &deposito}
+	dto := request.AddAppointmentDTO{ProductionOrderID: of, EmployeeID: &operador, ProducedQty: decimal.RequireFromString("5"), BackflushWarehouseID: &deposito}
 
 	_, err := uc.Execute(ctx, dto)
 	if err == nil || !strings.Contains(err.Error(), "saldo bloqueado") {

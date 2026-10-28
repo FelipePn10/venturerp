@@ -3,6 +3,7 @@ package mrp_calculation_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"sort"
 	"strings"
 	"time"
@@ -51,13 +52,13 @@ type PeggingEnd struct {
 // que a sugestão do nó precisou; para cima, são as necessidades (do pai) que
 // a ordem do nó atende.
 type PeggingNode struct {
-	ItemCode        int64      `json:"item_code"`
-	ItemDescription string     `json:"item_description"`
-	UOM             string     `json:"uom,omitempty"`
-	NeedDate        time.Time  `json:"need_date"`
-	Quantity        float64    `json:"quantity"`
-	Demand          PeggingEnd `json:"demand"`
-	Supply          PeggingEnd `json:"supply"`
+	ItemCode        int64           `json:"item_code"`
+	ItemDescription string          `json:"item_description"`
+	UOM             string          `json:"uom,omitempty"`
+	NeedDate        time.Time       `json:"need_date"`
+	Quantity        decimal.Decimal `json:"quantity"`
+	Demand          PeggingEnd      `json:"demand"`
+	Supply          PeggingEnd      `json:"supply"`
 	// Late: este elo atrasa a cadeia — a ordem termina depois da necessidade
 	// (capacidade) ou já devia ter começado. LateReason diz qual.
 	Late       bool          `json:"late"`
@@ -69,16 +70,16 @@ type PeggingNode struct {
 // resumo da cadeia: quanto saiu do estoque, de firmes, de sugestões e se falta
 // algo em qualquer nível.
 type PeggingRoot struct {
-	ItemCode        int64      `json:"item_code"`
-	ItemDescription string     `json:"item_description"`
-	UOM             string     `json:"uom,omitempty"`
-	NeedDate        time.Time  `json:"need_date"`
-	Quantity        float64    `json:"quantity"`
-	Demand          PeggingEnd `json:"demand"`
-	FromStock       float64    `json:"from_stock"`
-	FromFirm        float64    `json:"from_firm"`
-	FromSuggestions float64    `json:"from_suggestions"`
-	Shortage        float64    `json:"shortage"`
+	ItemCode        int64           `json:"item_code"`
+	ItemDescription string          `json:"item_description"`
+	UOM             string          `json:"uom,omitempty"`
+	NeedDate        time.Time       `json:"need_date"`
+	Quantity        decimal.Decimal `json:"quantity"`
+	Demand          PeggingEnd      `json:"demand"`
+	FromStock       decimal.Decimal `json:"from_stock"`
+	FromFirm        decimal.Decimal `json:"from_firm"`
+	FromSuggestions decimal.Decimal `json:"from_suggestions"`
+	Shortage        decimal.Decimal `json:"shortage"`
 	// ChainShortage: algum componente da cadeia ficou sem cobertura.
 	ChainShortage bool `json:"chain_shortage"`
 	// ChainLate: algum elo da cadeia atrasa (ordem que termina depois da
@@ -254,7 +255,7 @@ func (idx *peggingIndex) supplyEnd(r entity.PeggingRecord) PeggingEnd {
 	return e
 }
 
-func (idx *peggingIndex) node(r entity.PeggingRecord, qtd float64) PeggingNode {
+func (idx *peggingIndex) node(r entity.PeggingRecord, qtd decimal.Decimal) PeggingNode {
 	item := idx.labels.Items[r.ItemCode]
 	n := PeggingNode{
 		ItemCode: r.ItemCode, ItemDescription: item.Description, UOM: item.UOM,
@@ -296,13 +297,13 @@ func diaDoFim(l entity.PeggingOrderLabel) time.Time {
 
 // suggestionTotal é a quantidade da sugestão — base para repartir os
 // componentes quando ela atende mais de uma necessidade (sobra de lote).
-func (idx *peggingIndex) suggestionTotal(code int64) float64 {
-	if l, ok := idx.labels.Suggestions[code]; ok && l.Quantity > 0 {
+func (idx *peggingIndex) suggestionTotal(code int64) decimal.Decimal {
+	if l, ok := idx.labels.Suggestions[code]; ok && l.Quantity.IsPositive() {
 		return l.Quantity
 	}
-	total := 0.0
+	total := decimal.Zero
 	for _, i := range idx.bySupply[peggingKey(entity.PegSupplySuggestion, &code)] {
-		total += idx.rows[i].Quantity
+		total = total.Add(idx.rows[i].Quantity)
 	}
 	return total
 }
@@ -311,17 +312,18 @@ const peggingMaxDepth = 40
 
 // down monta a cadeia abaixo das linhas: cada sugestão abre as necessidades
 // dos componentes que ela gerou, na proporção do que coube a esta origem.
-func (idx *peggingIndex) down(linhas []int, fator float64, depth int, visit map[int64]bool) []PeggingNode {
+func (idx *peggingIndex) down(linhas []int, fator decimal.Decimal, depth int, visit map[int64]bool) []PeggingNode {
 	out := []PeggingNode{}
 	for _, i := range linhas {
 		r := idx.rows[i]
-		n := idx.node(r, r.Quantity*fator)
+		// A parte de cada nível pode ser dízima: mostra na escala da coluna.
+		n := idx.node(r, r.Quantity.Mul(fator).Round(6))
 		if r.SupplyKind == entity.PegSupplySuggestion && r.SupplyCode != nil && depth < peggingMaxDepth && !visit[*r.SupplyCode] {
 			total := idx.suggestionTotal(*r.SupplyCode)
-			if total > 0 {
+			if total.IsPositive() {
 				visit[*r.SupplyCode] = true
 				filhos := idx.byDemand[peggingKey(entity.PegDemandSuggestion, r.SupplyCode)]
-				n.Children = idx.down(filhos, fator*r.Quantity/total, depth+1, visit)
+				n.Children = idx.down(filhos, fator.Mul(r.Quantity).Div(total), depth+1, visit)
 				delete(visit, *r.SupplyCode)
 			}
 		}
@@ -374,7 +376,7 @@ func (idx *peggingIndex) downFor(kind string, code *int64, item *int64, need *ti
 		}
 		linhas = append(linhas, i)
 	}
-	return idx.down(linhas, 1, 0, map[int64]bool{})
+	return idx.down(linhas, decimal.NewFromInt(1), 0, map[int64]bool{})
 }
 
 // Up: de uma ordem (sugestão ou ordem firme) até os pedidos/demandas que
@@ -422,24 +424,24 @@ func (idx *peggingIndex) roots() []PeggingRoot {
 			porRaiz[k] = root
 			ordem = append(ordem, k)
 		}
-		root.Quantity += r.Quantity
+		root.Quantity = root.Quantity.Add(r.Quantity)
 		switch r.SupplyKind {
 		case entity.PegSupplyStock:
-			root.FromStock += r.Quantity
+			root.FromStock = root.FromStock.Add(r.Quantity)
 		case entity.PegSupplyFirmOrder:
-			root.FromFirm += r.Quantity
+			root.FromFirm = root.FromFirm.Add(r.Quantity)
 		case entity.PegSupplySuggestion:
-			root.FromSuggestions += r.Quantity
+			root.FromSuggestions = root.FromSuggestions.Add(r.Quantity)
 		case entity.PegSupplyShortage:
-			root.Shortage += r.Quantity
+			root.Shortage = root.Shortage.Add(r.Quantity)
 		}
 		linhasDa[k] = append(linhasDa[k], i)
 	}
 	out := make([]PeggingRoot, 0, len(ordem))
 	for _, k := range ordem {
 		root := porRaiz[k]
-		arvore := idx.down(linhasDa[k], 1, 0, map[int64]bool{})
-		root.ChainShortage, root.LatestSupply = resumoCadeia(arvore, root.Shortage > 0, nil)
+		arvore := idx.down(linhasDa[k], decimal.NewFromInt(1), 0, map[int64]bool{})
+		root.ChainShortage, root.LatestSupply = resumoCadeia(arvore, root.Shortage.IsPositive(), nil)
 		root.ChainLate, root.LateReason = primeiroAtraso(arvore)
 		out = append(out, *root)
 	}

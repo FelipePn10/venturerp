@@ -3,6 +3,7 @@ package request
 import (
 	"encoding/json"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type CreateConsumerServiceCallTypeDTO struct {
@@ -207,9 +208,9 @@ type CreateRecurringSaleDTO struct {
 	MonthsQuantity         *int                                   `json:"months_quantity"`
 	PaymentsQuantity       *int                                   `json:"payments_quantity"`
 	GraceMonths            int                                    `json:"grace_months"`
-	PaymentValue           *float64                               `json:"payment_value"`
-	Quantity               float64                                `json:"quantity"`
-	UnitValue              float64                                `json:"unit_value"`
+	PaymentValue           *decimal.Decimal                       `json:"payment_value"`
+	Quantity               decimal.Decimal                        `json:"quantity"`
+	UnitValue              decimal.Decimal                        `json:"unit_value"`
 	Reason                 *string                                `json:"reason"`
 	CreatedBy              uuid.UUID                              `json:"created_by"`
 	Representatives        []CreateRecurringSaleRepresentativeDTO `json:"representatives"`
@@ -220,8 +221,8 @@ type CreateRecurringSaleDTO struct {
 	CurrencyCode           string                                 `json:"currency_code"`
 	AdjustmentIndex        *string                                `json:"adjustment_index"`
 	AdjustmentPeriodMonths *int                                   `json:"adjustment_period_months"`
-	AdjustmentFloorPct     *float64                               `json:"adjustment_floor_pct"`
-	AdjustmentCapPct       *float64                               `json:"adjustment_cap_pct"`
+	AdjustmentFloorPct     *decimal.Decimal                       `json:"adjustment_floor_pct"`
+	AdjustmentCapPct       *decimal.Decimal                       `json:"adjustment_cap_pct"`
 	BillingPolicy          json.RawMessage                        `json:"billing_policy"`
 	DeliveryPolicy         json.RawMessage                        `json:"delivery_policy"`
 	TaxPolicy              json.RawMessage                        `json:"tax_policy"`
@@ -230,27 +231,27 @@ type CreateRecurringSaleDTO struct {
 }
 
 type UpdateRecurringSaleDTO struct {
-	SalesPlanCode      *int64   `json:"sales_plan_code"`
-	SaleDate           string   `json:"sale_date"`
-	NextAdjustmentDate string   `json:"next_adjustment_date"`
-	MonthsQuantity     *int     `json:"months_quantity"`
-	PaymentsQuantity   *int     `json:"payments_quantity"`
-	GraceMonths        int      `json:"grace_months"`
-	PaymentValue       *float64 `json:"payment_value"`
-	Quantity           float64  `json:"quantity"`
-	UnitValue          float64  `json:"unit_value"`
-	Reason             *string  `json:"reason"`
-	IsActive           *bool    `json:"is_active"`
+	SalesPlanCode      *int64           `json:"sales_plan_code"`
+	SaleDate           string           `json:"sale_date"`
+	NextAdjustmentDate string           `json:"next_adjustment_date"`
+	MonthsQuantity     *int             `json:"months_quantity"`
+	PaymentsQuantity   *int             `json:"payments_quantity"`
+	GraceMonths        int              `json:"grace_months"`
+	PaymentValue       *decimal.Decimal `json:"payment_value"`
+	Quantity           decimal.Decimal  `json:"quantity"`
+	UnitValue          decimal.Decimal  `json:"unit_value"`
+	Reason             *string          `json:"reason"`
+	IsActive           *bool            `json:"is_active"`
 }
 
 type CreateRecurringSaleRepresentativeDTO struct {
-	RecurringSaleCode      int64   `json:"recurring_sale_code"`
-	RepresentativeCode     int64   `json:"representative_code"`
-	IsPrimary              bool    `json:"is_primary"`
-	CommissionPercent      float64 `json:"commission_percent"`
-	CommissionBase         string  `json:"commission_base"`
-	IsLifetime             bool    `json:"is_lifetime"`
-	CommissionInstallments *int    `json:"commission_installments"`
+	RecurringSaleCode      int64           `json:"recurring_sale_code"`
+	RepresentativeCode     int64           `json:"representative_code"`
+	IsPrimary              bool            `json:"is_primary"`
+	CommissionPercent      decimal.Decimal `json:"commission_percent"`
+	CommissionBase         string          `json:"commission_base"`
+	IsLifetime             bool            `json:"is_lifetime"`
+	CommissionInstallments *int            `json:"commission_installments"`
 }
 
 type MarkRecurringSaleOrderDTO struct {
@@ -277,21 +278,21 @@ type CancelRecurringSaleDTO struct {
 }
 
 type CalculateRecurringSalesAdjustmentDTO struct {
-	EnterpriseCode    *int64    `json:"enterprise_code"`
-	CustomerCode      *int64    `json:"customer_code"`
-	EstablishmentCode *int64    `json:"establishment_code"`
-	ItemCode          *int64    `json:"item_code"`
-	AdjustmentDate    string    `json:"adjustment_date"`
-	AdjustmentPercent float64   `json:"adjustment_percent"`
-	AdjustmentIndex   string    `json:"adjustment_index,omitempty"`
-	LegalBasis        string    `json:"legal_basis,omitempty"`
-	Reason            string    `json:"reason"`
-	CreatedBy         uuid.UUID `json:"created_by"`
-	Confirm           bool      `json:"confirm"`
-	IdempotencyKey    string    `json:"-"`
+	EnterpriseCode    *int64          `json:"enterprise_code"`
+	CustomerCode      *int64          `json:"customer_code"`
+	EstablishmentCode *int64          `json:"establishment_code"`
+	ItemCode          *int64          `json:"item_code"`
+	AdjustmentDate    string          `json:"adjustment_date"`
+	AdjustmentPercent decimal.Decimal `json:"adjustment_percent"`
+	AdjustmentIndex   string          `json:"adjustment_index,omitempty"`
+	LegalBasis        string          `json:"legal_basis,omitempty"`
+	Reason            string          `json:"reason"`
+	CreatedBy         uuid.UUID       `json:"created_by"`
+	Confirm           bool            `json:"confirm"`
+	IdempotencyKey    string          `json:"-"`
 }
 
 type RecalculateRecurringSalesAdjustmentDTO struct {
-	AdjustmentPercent float64 `json:"adjustment_percent"`
-	Reason            string  `json:"reason"`
+	AdjustmentPercent decimal.Decimal `json:"adjustment_percent"`
+	Reason            string          `json:"reason"`
 }

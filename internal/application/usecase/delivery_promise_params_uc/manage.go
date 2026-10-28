@@ -24,6 +24,15 @@ func (uc *ManageDeliveryPromiseParamsUseCase) Get(ctx context.Context) (*respons
 }
 
 func (uc *ManageDeliveryPromiseParamsUseCase) Save(ctx context.Context, dto request.UpdateDeliveryPromiseParamsDTO, userID string) (*response.DeliveryPromiseParamsResponse, error) {
+	// O autor é o da sessão. Antes vinha do corpo da requisição — a tela mandava
+	// o id do usuário e qualquer chamada podia gravar outro autor.
+	if uc.Auth != nil {
+		autor, err := uc.Auth.UserID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.UpdatedBy = autor
+	}
 	params := &entity.DeliveryPromiseParams{
 		UseDeliveryPromise:      dto.UseDeliveryPromise,
 		BlockedOrdersInPromise:  dto.BlockedOrdersInPromise,

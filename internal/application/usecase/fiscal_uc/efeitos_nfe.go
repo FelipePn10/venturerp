@@ -32,6 +32,14 @@ type EfeitosRepos struct {
 	Pedidos     salesrepo.SalesOrderRepository
 	Faturamento repository.SalesOrderInvoicingRepository
 	Pendencias  repository.PendenciasNFeRepository
+	// Series: a série que sai na nota vai para o cliente (e volta no cancelamento).
+	Series SeriesNaNota
+}
+
+// SeriesNaNota: o efeito da nota sobre o número de série (pós-venda 3.1).
+type SeriesNaNota interface {
+	SaidaPelaNota(ctx context.Context, fiscalExitID int64, cliente *int64, emissao time.Time, por *uuid.UUID) error
+	EstornoDaNota(ctx context.Context, fiscalExitID int64, por *uuid.UUID) error
 }
 
 // EmTransacaoEfeitos roda fn numa transação; erro devolvido desfaz tudo.
@@ -242,6 +250,11 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 		if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, userID); err != nil {
 			return err
 		}
+		if r.Series != nil {
+			if err := r.Series.SaidaPelaNota(ctx, exitID, exit.CustomerCode, exit.DataEmissao, atorOuNil(userID)); err != nil {
+				return fmt.Errorf("levando as séries da nota ao cliente: %w", err)
+			}
+		}
 		if err := faturarPedido(ctx, r, exit); err != nil {
 			return err
 		}
@@ -261,6 +274,11 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 		if e.GeraTitulos {
 			if err := r.Financeiro.CancelContasReceberByFiscalExit(ctx, exitID); err != nil {
 				return fmt.Errorf("cancelando os títulos da nota: %w", err)
+			}
+		}
+		if r.Series != nil {
+			if err := r.Series.EstornoDaNota(ctx, exitID, nil); err != nil {
+				return fmt.Errorf("devolvendo ao estoque as séries da nota: %w", err)
 			}
 		}
 		// O que a nota atendeu do pedido volta a ficar pendente; pedido que
@@ -443,4 +461,11 @@ func faturarPedido(ctx context.Context, r EfeitosRepos, exit *entity.FiscalExit)
 		}
 	}
 	return nil
+}
+
+func atorOuNil(id uuid.UUID) *uuid.UUID {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &id
 }

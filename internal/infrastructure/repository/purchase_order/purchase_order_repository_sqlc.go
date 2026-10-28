@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 func (r *PurchaseOrderRepositorySQLC) NextOrderNumber(ctx context.Context, enterpriseCode int64) (int64, error) {
@@ -313,6 +314,44 @@ func (r *PurchaseOrderRepositorySQLC) Cancel(ctx context.Context, code int64) er
 		`UPDATE public.purchase_order_items SET status = 'CANCELLED', updated_at = NOW()
 		 WHERE purchase_order_code = $1 AND status <> 'CANCELLED'`, code); err != nil {
 		return fmt.Errorf("cancelling purchase order %d lines: %w", code, err)
+	}
+	// Títulos a pagar ligados ao pedido (adiantamento, título lançado à mão
+	// com o pedido) caem junto; com pagamento, o cancelamento é recusado.
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `SELECT id, numero_documento, UPPER(status), COALESCE(valor_pago,0), COALESCE(valor_adiantamento_abatido,0), fiscal_entry_id IS NOT NULL
+		 FROM contas_pagar WHERE purchase_order_id=$1 AND enterprise_id=$2 AND is_active AND UPPER(status) <> 'CANCELADO' FOR UPDATE`, code, empresa)
+	if err != nil {
+		return err
+	}
+	var titulos []int64
+	for rows.Next() {
+		var id int64
+		var doc, st string
+		var pago, abatido decimal.Decimal
+		var daNota bool
+		if err := rows.Scan(&id, &doc, &st, &pago, &abatido, &daNota); err != nil {
+			rows.Close()
+			return err
+		}
+		// Título da nota de entrada é da nota: cai com o cancelamento dela.
+		if daNota {
+			rows.Close()
+			return errorsuc.NewValidationError(fmt.Sprintf("o título %s do pedido %d veio da nota de entrada: cancele a entrada da nota, que cancela o título", doc, code))
+		}
+		if pago.IsPositive() || abatido.IsPositive() || st == "PAGO" {
+			rows.Close()
+			return errorsuc.NewValidationError(fmt.Sprintf("o título %s do pedido %d já teve pagamento: estorne o pagamento antes de cancelar o pedido", doc, code))
+		}
+		titulos = append(titulos, id)
+	}
+	rows.Close()
+	if len(titulos) > 0 {
+		if _, err := tx.Exec(ctx, `UPDATE contas_pagar SET status='CANCELADO', is_active=FALSE, updated_at=NOW() WHERE id = ANY($1) AND enterprise_id=$2`, titulos, empresa); err != nil {
+			return fmt.Errorf("cancelando os títulos do pedido %d: %w", code, err)
+		}
 	}
 	return tx.Commit(ctx)
 }

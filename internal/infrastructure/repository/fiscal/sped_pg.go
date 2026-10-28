@@ -251,7 +251,7 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 		        COALESCE(dest_codigo_municipio,''), COALESCE(dest_logradouro,''), COALESCE(dest_numero,''),
 		        COALESCE(dest_complemento,''), COALESCE(dest_bairro,''), finalidade, condicao_pagamento_id IS NOT NULL,
 		        valor_total, valor_produtos, valor_frete, valor_seguro, valor_desconto, valor_ipi, valor_icms_st,
-		        base_icms_st, valor_pis, valor_cofins
+		        base_icms_st, valor_pis, valor_cofins, upper(COALESCE(uf_destinatario,''))
 		   FROM fiscal_exits
 		  WHERE enterprise_id=$1 AND status IN ('AUTHORIZED','CANCELLED') AND COALESCE(chave_acesso,'') <> ''
 		    AND data_emissao BETWEEN $2::date AND $3::date
@@ -271,7 +271,7 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 		var aPrazo bool
 		if err := rows.Scan(&id, &n.Serie, &n.Numero, &n.Chave, &n.Emissao, &n.Saida, &status, &cnpj, &nome, &ie,
 			&end.CMun, &end.Lgr, &end.Nro, &end.Cpl, &end.Bairro, &finalidade, &aPrazo,
-			&n.Total, &n.Produtos, &n.Frete, &n.Seguro, &n.Desconto, &n.IPI, &n.ST, &n.BaseST, &n.PIS, &n.COFINS); err != nil {
+			&n.Total, &n.Produtos, &n.Frete, &n.Seguro, &n.Desconto, &n.IPI, &n.ST, &n.BaseST, &n.PIS, &n.COFINS, &n.UF); err != nil {
 			return nil, nil, err
 		}
 		n.Modelo = "55"
@@ -308,7 +308,8 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 		        i.engineering_type, i.supplies_type_of_use, COALESCE(i.commercial_sale_type,'') = 'REVENDA', COALESCE(i.commercial_is_packaging,false),
 		        COALESCE(xi.ncm,''), COALESCE(i.accounting_cest,''),
 		        xi.origem_mercadoria, COALESCE(xi.cst_icms,''), xi.cfop, COALESCE(xi.cst_ipi,''),
-		        xi.aliq_icms * 100, xi.base_icms, xi.valor_icms, xi.base_icms_st, xi.valor_icms_st, xi.base_ipi, xi.valor_ipi, xi.total_price
+		        xi.aliq_icms * 100, xi.base_icms, xi.valor_icms - xi.valor_icms_diferido, xi.base_icms_st, xi.valor_icms_st, xi.base_ipi, xi.valor_ipi, xi.total_price,
+		        xi.icms_uf_dest_valor, xi.fcp_uf_dest_valor
 		   FROM fiscal_exit_items xi
 		   JOIN fiscal_exits x ON x.id = xi.fiscal_exit_id AND x.enterprise_id=$1
 		   LEFT JOIN items i ON i.code = xi.item_code
@@ -328,7 +329,7 @@ func (r *FiscalRepositoryPG) saidasEFD(ctx context.Context, empresa int64, ini, 
 		var nomeItem, unid, ncm, cest, origem, cst string
 		var it sped.ItemSaida
 		if err := irows.Scan(&exitID, &itemCode, &nomeItem, &unid, &engType, &tipoUso, &revenda, &embalagem, &ncm, &cest, &origem, &cst, &it.CFOP, &it.CSTIPI,
-			&it.AliqICMS, &it.BaseICMS, &it.ICMS, &it.BaseST, &it.ST, &it.BaseIPI, &it.IPI, &it.Total); err != nil {
+			&it.AliqICMS, &it.BaseICMS, &it.ICMS, &it.BaseST, &it.ST, &it.BaseIPI, &it.IPI, &it.Total, &it.DIFAL, &it.FCP); err != nil {
 			return nil, nil, err
 		}
 		it.CST = sped.CSTICMS(origem, cst)

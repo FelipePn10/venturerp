@@ -155,9 +155,21 @@ type NFEItem struct {
 	AliquotaICMS                 float64  `json:"aliquota_icms"`
 	ValorICMS                    float64  `json:"valor_icms"`
 	PercentualDiferimento        *float64 `json:"percentual_diferimento,omitempty"`
+	// PercentualReducaoBC é o pRedBC (CST 20, 51, 70 e 90); nil = sem redução.
+	PercentualReducaoBC *float64 `json:"-"`
+	// PercentualReducaoBCST é o pRedBCST da ST; nil = sem redução.
+	PercentualReducaoBCST *float64 `json:"-"`
+	// Simples Nacional (CSOSN 101 e 201): pCredSN e vCredICMSSN.
+	AliquotaCreditoSimples *float64 `json:"-"`
+	ValorCreditoSimples    *float64 `json:"-"`
+	// UFDest é o grupo ICMSUFDest (DIFAL da venda interestadual a consumidor
+	// final não contribuinte, EC 87/2015); nil = a nota não leva o grupo.
+	UFDest *NFEItemUFDest `json:"-"`
 	// CodigoBeneficioFiscal é o cBenef (PR, RS, RJ, SC, GO e DF o exigem nos CSTs
 	// com benefício). Vazio não vai no payload.
-	CodigoBeneficioFiscal          string   `json:"codigo_beneficio_fiscal,omitempty"`
+	CodigoBeneficioFiscal string `json:"codigo_beneficio_fiscal,omitempty"`
+	// InformacoesAdicionaisItem é o infAdProd: aqui vão os números de série.
+	InformacoesAdicionaisItem      string   `json:"informacoes_adicionais_item,omitempty"`
 	ValorICMSDiferido              *float64 `json:"valor_icms_diferido,omitempty"`
 	ModalidadeBaseCalculoICMSST    *int     `json:"modalidade_determinacao_bc_icms_st,omitempty"`
 	BaseCalculoICMSST              *float64 `json:"valor_base_calculo_icms_st,omitempty"`
@@ -189,11 +201,21 @@ type NFEItem struct {
 }
 
 // NFEItemIBSCBS é o grupo IBS/CBS do item (NT 2025.002).
+//
+// SemValores: CST que não exige tributo (isenção, imunidade, não incidência)
+// leva só CST e cClassTrib — o grupo de valores (gIBSCBS) não vai. ComReducao
+// leva, em cada tributo, o percentual de redução (pRedAliq) e a alíquota
+// efetiva (pAliqEfet) que de fato incide sobre a base.
 type NFEItemIBSCBS struct {
 	CST, ClassTrib                           string
+	SemValores                               bool
 	Base                                     float64
 	AliqIBSUF, ValorIBSUF, AliqIBSMun        float64
 	ValorIBSMun, ValorIBS, AliqCBS, ValorCBS float64
+	ComReducao                               bool
+	RedIBSUF, EfetIBSUF                      float64
+	RedIBSMun, EfetIBSMun                    float64
+	RedCBS, EfetCBS                          float64
 }
 
 type NFEFormaPagamento struct {
@@ -317,6 +339,19 @@ func (p NFEPayload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+// NFEItemUFDest é o grupo ICMSUFDest. Alíquotas em %; a partilha é 100% para a
+// UF de destino desde 2019 (EC 87/2015, art. 99 do ADCT).
+type NFEItemUFDest struct {
+	Base, AliquotaInterna, AliquotaInterestadual, ValorDestino float64
+	PercentualFCP, ValorFCP                                    float64
+}
+
+// cstComReducaoBC: CSTs que levam pRedBC.
+var cstComReducaoBC = map[string]bool{"20": true, "51": true, "70": true, "90": true, "900": true}
+
+// csosnComCredito: CSOSN que levam pCredSN e vCredICMSSN.
+var csosnComCredito = map[string]bool{"101": true, "201": true, "900": true}
+
 // cstComICMS: CSTs (e CSOSN) que destacam base, alíquota e valor do ICMS.
 var cstComICMS = map[string]bool{"00": true, "10": true, "20": true, "51": true, "70": true, "90": true, "900": true}
 
@@ -356,6 +391,29 @@ func (it NFEItem) campos() map[string]any {
 			m["icms_valor"] = math.Round((it.ValorICMS-*it.ValorICMSDiferido)*100) / 100
 		}
 	}
+	if it.PercentualReducaoBC != nil && *it.PercentualReducaoBC > 0 && cstComReducaoBC[it.CodigoSituacaoTributariaICMS] {
+		m["icms_reducao_base_calculo"] = *it.PercentualReducaoBC
+	}
+	if it.AliquotaCreditoSimples != nil && it.ValorCreditoSimples != nil && csosnComCredito[it.CodigoSituacaoTributariaICMS] {
+		m["icms_aliquota_credito_simples"] = *it.AliquotaCreditoSimples
+		m["icms_valor_credito_simples"] = *it.ValorCreditoSimples
+	}
+	if g := it.UFDest; g != nil {
+		m["icms_base_calculo_uf_destino"] = g.Base
+		m["icms_aliquota_interna_uf_destino"] = g.AliquotaInterna
+		m["icms_aliquota_interestadual"] = g.AliquotaInterestadual
+		m["icms_percentual_partilha"] = 100
+		m["icms_valor_uf_destino"] = g.ValorDestino
+		m["icms_valor_uf_remetente"] = 0
+		if g.PercentualFCP > 0 {
+			m["fcp_base_calculo_uf_destino"] = g.Base
+			m["fcp_percentual_uf_destino"] = g.PercentualFCP
+			m["fcp_valor_uf_destino"] = g.ValorFCP
+		}
+	}
+	if strings.TrimSpace(it.InformacoesAdicionaisItem) != "" {
+		m["informacoes_adicionais_item"] = strings.TrimSpace(it.InformacoesAdicionaisItem)
+	}
 	if strings.TrimSpace(it.CodigoBeneficioFiscal) != "" {
 		m["codigo_beneficio_fiscal"] = strings.TrimSpace(it.CodigoBeneficioFiscal)
 	}
@@ -373,6 +431,9 @@ func (it NFEItem) campos() map[string]any {
 			m["icms_aliquota_st"] = *it.AliquotaICMSST
 		}
 		m["icms_valor_st"] = *it.ValorICMSST
+		if it.PercentualReducaoBCST != nil && *it.PercentualReducaoBCST > 0 {
+			m["icms_reducao_base_calculo_st"] = *it.PercentualReducaoBCST
+		}
 	}
 	if it.CodigoSituacaoTributariaIPI != "" {
 		m["ipi_situacao_tributaria"] = it.CodigoSituacaoTributariaIPI
@@ -405,6 +466,17 @@ func (it NFEItem) campos() map[string]any {
 	if g := it.IBSCBS; g != nil {
 		m["ibs_cbs_situacao_tributaria"] = g.CST
 		m["ibs_cbs_classificacao_tributaria"] = g.ClassTrib
+		if g.SemValores {
+			return m
+		}
+		if g.ComReducao {
+			m["ibs_uf_percentual_reducao_aliquota"] = g.RedIBSUF
+			m["ibs_uf_aliquota_efetiva"] = g.EfetIBSUF
+			m["ibs_mun_percentual_reducao_aliquota"] = g.RedIBSMun
+			m["ibs_mun_aliquota_efetiva"] = g.EfetIBSMun
+			m["cbs_percentual_reducao_aliquota"] = g.RedCBS
+			m["cbs_aliquota_efetiva"] = g.EfetCBS
+		}
 		m["ibs_cbs_base_calculo"] = g.Base
 		m["ibs_uf_aliquota"] = g.AliqIBSUF
 		m["ibs_uf_valor"] = g.ValorIBSUF

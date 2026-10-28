@@ -182,8 +182,8 @@ func (r *FinancialRepositoryPG) ListPlanoContas(ctx context.Context) ([]*entity.
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, codigo, descricao, tipo, natureza, parent_code, nivel, is_active, created_at, accounting_account_id
-		 FROM plano_contas WHERE is_active = true AND enterprise_id = $1 ORDER BY codigo`, empresa)
+		`SELECT id, codigo, descricao, tipo, natureza, parent_code, nivel, is_active, created_at, accounting_account_id, exige_centro_custo
+		 FROM plano_contas WHERE is_active = true AND enterprise_id = $1 ORDER BY ordem_natural(codigo)`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing plano contas: %w", err)
 	}
@@ -193,7 +193,7 @@ func (r *FinancialRepositoryPG) ListPlanoContas(ctx context.Context) ([]*entity.
 	for rows.Next() {
 		var p entity.PlanoContas
 		if err := rows.Scan(&p.ID, &p.Codigo, &p.Descricao, &p.Tipo, &p.Natureza,
-			&p.ParentCode, &p.Nivel, &p.IsActive, &p.CreatedAt, &p.AccountingAccountID); err != nil {
+			&p.ParentCode, &p.Nivel, &p.IsActive, &p.CreatedAt, &p.AccountingAccountID, &p.ExigeCentroCusto); err != nil {
 			return nil, fmt.Errorf("scanning plano contas: %w", err)
 		}
 		out = append(out, &p)
@@ -208,14 +208,33 @@ func (r *FinancialRepositoryPG) CreateCentroCusto(ctx context.Context, c *entity
 	if err != nil {
 		return nil, err
 	}
-	err = r.pool.QueryRow(ctx,
-		`INSERT INTO centros_custo (codigo, descricao, tipo, is_active, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5)
+	// O centro nasce no cadastro único: code numérico livre (a chave que o lado
+	// industrial guarda) e o código da empresa na gestão.
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('cost_center_code'))`); err != nil {
+		return nil, err
+	}
+	err = tx.QueryRow(ctx,
+		`INSERT INTO cost_centers (code, description, type, is_ratio, start_date, is_active, created_by, enterprise_id)
+		 VALUES ((SELECT COALESCE(MAX(code),0)+1 FROM cost_centers), $1, $2::type_cc_enum, FALSE, CURRENT_DATE, $3,
+		         COALESCE(NULLIF($5,'')::uuid, (SELECT ue.user_id FROM user_enterprises ue WHERE ue.enterprise_id = $4 ORDER BY ue.user_id LIMIT 1)), $4)
 		 RETURNING id, created_at`,
-		c.Codigo, c.Descricao, c.Tipo, c.IsActive, empresa,
+		c.Descricao, tipoIndustrial(c.Tipo), c.IsActive, empresa, tenant.Ator(ctx),
 	).Scan(&c.ID, &c.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating centro custo: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO cost_center_gestao (cost_center_id, enterprise_id, codigo, updated_by) VALUES ($1,$2,$3,NULLIF($4,'')::uuid)
+		 ON CONFLICT (cost_center_id) DO UPDATE SET codigo = EXCLUDED.codigo, updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
+		c.ID, empresa, strings.TrimSpace(c.Codigo), tenant.Ator(ctx)); err != nil {
+		return nil, traduzirCodigoRepetido(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 	return c, nil
 }
@@ -227,7 +246,9 @@ func (r *FinancialRepositoryPG) ListCentrosCusto(ctx context.Context) ([]*entity
 	}
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, codigo, descricao, tipo, is_active, created_at
-		 FROM centros_custo WHERE is_active = true AND enterprise_id = $1 ORDER BY codigo`, empresa)
+		 FROM `+centrosCustoSQL+` WHERE is_active = true AND enterprise_id = $1
+		    AND start_date <= CURRENT_DATE AND (end_date IS NULL OR end_date >= CURRENT_DATE)
+		  ORDER BY codigo`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listing centros custo: %w", err)
 	}
@@ -309,10 +330,10 @@ func (r *FinancialRepositoryPG) ListRateiosContasPagar(ctx context.Context, ids 
 		return out, nil
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT r.conta_pagar_id, r.id, r.plano_contas_id, r.centro_custo_id, r.valor, pc.codigo, pc.descricao, cc.descricao
+		`SELECT r.conta_pagar_id, r.id, r.plano_contas_id, r.centro_custo_id, r.valor, pc.codigo, pc.descricao, cc.description
 		   FROM contas_pagar_rateios r
 		   LEFT JOIN plano_contas pc ON pc.id = r.plano_contas_id
-		   LEFT JOIN centros_custo cc ON cc.id = r.centro_custo_id
+		   LEFT JOIN cost_centers cc ON cc.id = r.centro_custo_id
 		  WHERE r.enterprise_id = $1 AND r.conta_pagar_id = ANY($2)
 		  ORDER BY r.conta_pagar_id, pc.codigo, r.id`, empresa, ids)
 	if err != nil {
@@ -389,14 +410,14 @@ func (r *FinancialRepositoryPG) ContasPagarPorPlano(ctx context.Context, f repos
 	          FROM partes p
 	      )
 	      SELECT v.plano_contas_id, COALESCE(pc.codigo, ''), COALESCE(pc.descricao, 'Sem plano de contas'),
-	             v.centro_custo_id, COALESCE(cc.descricao, ''),
+	             v.centro_custo_id, COALESCE(cc.description, ''),
 	             COUNT(DISTINCT v.id), SUM(v.parte), SUM(v.pago), SUM(v.parte - v.pago),
 	             SUM(CASE WHEN v.data_vencimento < CURRENT_DATE AND v.status <> 'PAGO' THEN v.parte - v.pago ELSE 0 END)
 	        FROM valores v
 	        LEFT JOIN plano_contas pc ON pc.id = v.plano_contas_id
-	        LEFT JOIN centros_custo cc ON cc.id = v.centro_custo_id
-	       GROUP BY v.plano_contas_id, pc.codigo, pc.descricao, v.centro_custo_id, cc.descricao
-	       ORDER BY pc.codigo NULLS LAST, cc.descricao NULLS FIRST`
+	        LEFT JOIN cost_centers cc ON cc.id = v.centro_custo_id
+	       GROUP BY v.plano_contas_id, pc.codigo, pc.descricao, v.centro_custo_id, cc.description
+	       ORDER BY pc.codigo NULLS LAST, cc.description NULLS FIRST`
 	rows, err := r.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("agrupando contas a pagar por plano de contas: %w", err)
@@ -1146,15 +1167,55 @@ func (r *FinancialRepositoryPG) GetFiscalDebits(ctx context.Context, competencia
 	if err != nil {
 		return nil, err
 	}
-	var icms, ipi, pis, cofins decimal.Decimal
+	var icms, ipi, pis, cofins, ibs, cbs decimal.Decimal
+	// IBS e CBS vêm do retrato gravado na autorização (o que foi transmitido).
 	if err := r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(valor_icms),0), COALESCE(SUM(valor_ipi),0), COALESCE(SUM(valor_pis),0), COALESCE(SUM(valor_cofins),0)
+		`SELECT COALESCE(SUM(valor_icms),0), COALESCE(SUM(valor_ipi),0), COALESCE(SUM(valor_pis),0), COALESCE(SUM(valor_cofins),0),
+		        COALESCE(SUM(valor_ibs),0), COALESCE(SUM(valor_cbs),0)
 		   FROM fiscal_exits
 		  WHERE enterprise_id = $2 AND status = 'AUTHORIZED' AND to_char(data_emissao, 'MM/YYYY') = $1`, competencia, empresa).
-		Scan(&icms, &ipi, &pis, &cofins); err != nil {
+		Scan(&icms, &ipi, &pis, &cofins, &ibs, &cbs); err != nil {
 		return nil, fmt.Errorf("getting fiscal debits: %w", err)
 	}
-	return map[string]decimal.Decimal{"ICMS": icms, "IPI": ipi, "PIS": pis, "COFINS": cofins}, nil
+	return map[string]decimal.Decimal{"ICMS": icms, "IPI": ipi, "PIS": pis, "COFINS": cofins, "IBS": ibs, "CBS": cbs}, nil
+}
+
+// GetDebitosPorUF soma, por UF de destino, o ICMS-ST e o DIFAL/FCP (grupo
+// ICMSUFDest) das notas de saída autorizadas no mês.
+func (r *FinancialRepositoryPG) GetDebitosPorUF(ctx context.Context, competencia string) ([]repository.DebitoPorUF, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT imposto, uf, SUM(valor)::numeric FROM (
+		    SELECT 'ST' AS imposto, upper(x.uf_destinatario) AS uf, xi.valor_icms_st AS valor
+		      FROM fiscal_exit_items xi JOIN fiscal_exits x ON x.id = xi.fiscal_exit_id
+		     WHERE x.enterprise_id = $2 AND x.status = 'AUTHORIZED' AND to_char(x.data_emissao, 'MM/YYYY') = $1
+		    UNION ALL
+		    SELECT 'DIFAL', upper(x.uf_destinatario), xi.icms_uf_dest_valor
+		      FROM fiscal_exit_items xi JOIN fiscal_exits x ON x.id = xi.fiscal_exit_id
+		     WHERE x.enterprise_id = $2 AND x.status = 'AUTHORIZED' AND to_char(x.data_emissao, 'MM/YYYY') = $1
+		    UNION ALL
+		    SELECT 'FCP', upper(x.uf_destinatario), xi.fcp_uf_dest_valor
+		      FROM fiscal_exit_items xi JOIN fiscal_exits x ON x.id = xi.fiscal_exit_id
+		     WHERE x.enterprise_id = $2 AND x.status = 'AUTHORIZED' AND to_char(x.data_emissao, 'MM/YYYY') = $1
+		) d
+		 WHERE valor > 0 AND COALESCE(uf, '') <> ''
+		 GROUP BY imposto, uf ORDER BY imposto, uf`, competencia, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("somando ST e DIFAL por UF: %w", err)
+	}
+	defer rows.Close()
+	var out []repository.DebitoPorUF
+	for rows.Next() {
+		var d repository.DebitoPorUF
+		if err := rows.Scan(&d.Imposto, &d.UF, &d.Valor); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // GetFiscalCredits soma os créditos que a empresa efetivamente toma no mês — a
@@ -1167,17 +1228,19 @@ func (r *FinancialRepositoryPG) GetFiscalCredits(ctx context.Context, competenci
 	if err != nil {
 		return nil, err
 	}
-	var icms, ipi, pis, cofins, icmsFrete decimal.Decimal
+	var icms, ipi, pis, cofins, ibs, cbs, icmsFrete decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN fi.gera_credito_icms THEN fi.valor_icms ELSE 0 END),0),
 		        COALESCE(SUM(CASE WHEN fi.gera_credito_ipi THEN fi.valor_ipi ELSE 0 END),0),
 		        COALESCE(SUM(CASE WHEN fi.gera_credito_pis THEN fi.valor_pis ELSE 0 END),0),
-		        COALESCE(SUM(CASE WHEN fi.gera_credito_cofins THEN fi.valor_cofins ELSE 0 END),0)
+		        COALESCE(SUM(CASE WHEN fi.gera_credito_cofins THEN fi.valor_cofins ELSE 0 END),0),
+		        COALESCE(SUM(CASE WHEN fi.gera_credito_ibscbs THEN fi.valor_ibs ELSE 0 END),0),
+		        COALESCE(SUM(CASE WHEN fi.gera_credito_ibscbs THEN fi.valor_cbs ELSE 0 END),0)
 		   FROM fiscal_entry_items fi
 		   JOIN fiscal_entries fe ON fe.id = fi.fiscal_entry_id
 		  WHERE fe.enterprise_id = $2 AND fe.is_active AND fe.status IN ('APPROVED','WRITTEN_OFF')
 		    AND to_char(fe.data_entrada, 'MM/YYYY') = $1`, competencia, empresa).
-		Scan(&icms, &ipi, &pis, &cofins); err != nil {
+		Scan(&icms, &ipi, &pis, &cofins, &ibs, &cbs); err != nil {
 		return nil, fmt.Errorf("getting fiscal credits: %w", err)
 	}
 	if err := r.pool.QueryRow(ctx,
@@ -1186,7 +1249,7 @@ func (r *FinancialRepositoryPG) GetFiscalCredits(ctx context.Context, competenci
 		Scan(&icmsFrete); err != nil {
 		return nil, fmt.Errorf("getting freight ICMS credits: %w", err)
 	}
-	return map[string]decimal.Decimal{"ICMS": icms.Add(icmsFrete), "IPI": ipi, "PIS": pis, "COFINS": cofins}, nil
+	return map[string]decimal.Decimal{"ICMS": icms.Add(icmsFrete), "IPI": ipi, "PIS": pis, "COFINS": cofins, "IBS": ibs, "CBS": cbs}, nil
 }
 
 func (r *FinancialRepositoryPG) GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error) {
@@ -2157,4 +2220,55 @@ func (r *FinancialRepositoryPG) AutoMatchExtrato(ctx context.Context, contaID in
 		matched++
 	}
 	return matched, nil
+}
+
+// RecebiveisDoPedidoDeVenda confere os títulos ligados ao pedido (sales_order_id
+// guarda o código do pedido): nenhum pode ter recebimento. cancelar=true os
+// cancela (e tira da carteira, como o cancelamento manual). Devolve quantos.
+func (r *FinancialRepositoryPG) RecebiveisDoPedidoDeVenda(ctx context.Context, pedido int64, cancelar bool) (int, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `SELECT id, numero_documento, UPPER(status), COALESCE(valor_recebido,0), fiscal_exit_id IS NOT NULL FROM contas_receber
+		 WHERE sales_order_id=$1 AND enterprise_id=$2 AND is_active AND UPPER(status) <> 'CANCELADO' FOR UPDATE`, pedido, empresa)
+	if err != nil {
+		return 0, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		var doc, st string
+		var recebido decimal.Decimal
+		var daNota bool
+		if err := rows.Scan(&id, &doc, &st, &recebido, &daNota); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		// Título da NF de saída é da nota: cai com o cancelamento dela.
+		if daNota {
+			rows.Close()
+			return 0, errorsuc.NewValidationError(fmt.Sprintf(
+				"o título %s do pedido %d veio da NF de saída: cancele a nota, que cancela o título", doc, pedido))
+		}
+		if recebido.IsPositive() || st == "RECEBIDO" || st == "PAGO" {
+			rows.Close()
+			return 0, errorsuc.NewValidationError(fmt.Sprintf(
+				"o título %s do pedido %d já teve recebimento: estorne o recebimento antes de cancelar o pedido", doc, pedido))
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if !cancelar || len(ids) == 0 {
+		return len(ids), nil
+	}
+	if _, err := tx.Exec(ctx, `UPDATE contas_receber SET status='CANCELADO', is_active=FALSE, updated_at=NOW() WHERE id = ANY($1) AND enterprise_id=$2`, ids, empresa); err != nil {
+		return 0, fmt.Errorf("cancelando os títulos do pedido %d: %w", pedido, err)
+	}
+	return len(ids), tx.Commit(ctx)
 }

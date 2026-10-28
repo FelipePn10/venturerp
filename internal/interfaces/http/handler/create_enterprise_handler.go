@@ -17,10 +17,17 @@ func (h *EnterpriseHandler) CreateEnterprise(w http.ResponseWriter, r *http.Requ
 	if !security.DecodeBody(w, r, &req) {
 		return
 	}
+	// O criador é o usuário da sessão — o corpo não escolhe quem fica ADMIN.
+	ator, err := h.createEnterpriseUC.Auth.UserID(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	req.CreatedBy = ator
 
 	enterprise, err := mapper.ToEnterpriseEntity(req)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -31,7 +38,7 @@ func (h *EnterpriseHandler) CreateEnterprise(w http.ResponseWriter, r *http.Requ
 			h.Conflict(w, c.Error())
 			return
 		}
-		h.InternalError(w, r, err)
+		security.RespondUseCaseError(w, err)
 		return
 	}
 
@@ -59,4 +66,26 @@ func (h *EnterpriseHandler) ListEnterprises(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.OK(w, results)
+}
+
+func (h *EnterpriseHandler) Identificacao(w http.ResponseWriter, r *http.Request) {
+	out, err := h.identificacaoUC.Obter(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	h.OK(w, out)
+}
+
+func (h *EnterpriseHandler) AtualizarIdentificacao(w http.ResponseWriter, r *http.Request) {
+	var req request.IdentificacaoEmpresaDTO
+	if !security.DecodeBody(w, r, &req) {
+		return
+	}
+	out, err := h.identificacaoUC.Atualizar(r.Context(), req)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	h.OK(w, out)
 }

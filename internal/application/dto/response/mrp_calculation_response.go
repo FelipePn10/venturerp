@@ -1,6 +1,7 @@
 package response
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -46,22 +47,22 @@ type MRPExceptionMessageResponse struct {
 
 // MRPItemProfileResponse is the API representation of an MRP item profile bucket.
 type MRPItemProfileResponse struct {
-	ItemCode        int64     `json:"item_code"`
-	PlanCode        int64     `json:"plan_code"`
-	CalculationDate time.Time `json:"calculation_date"`
-	Demand          float64   `json:"demand"`
-	OrdersPlanned   float64   `json:"orders_planned"`
-	OrdersFirm      float64   `json:"orders_firm"`
-	StockProjected  float64   `json:"stock_projected"`
-	LLC             int       `json:"llc"`
-	NeedDate        time.Time `json:"need_date"`
-	CreatedAt       time.Time `json:"created_at"`
+	ItemCode        int64           `json:"item_code"`
+	PlanCode        int64           `json:"plan_code"`
+	CalculationDate time.Time       `json:"calculation_date"`
+	Demand          decimal.Decimal `json:"demand"`
+	OrdersPlanned   decimal.Decimal `json:"orders_planned"`
+	OrdersFirm      decimal.Decimal `json:"orders_firm"`
+	StockProjected  decimal.Decimal `json:"stock_projected"`
+	LLC             int             `json:"llc"`
+	NeedDate        time.Time       `json:"need_date"`
+	CreatedAt       time.Time       `json:"created_at"`
 }
 
 type MRPItemProfileConsultationResponse struct {
-	Position string                    `json:"position"`
-	Rows     []*MRPItemProfileResponse `json:"rows"`
-	Totals   map[string]float64        `json:"totals"`
+	Position string                     `json:"position"`
+	Rows     []*MRPItemProfileResponse  `json:"rows"`
+	Totals   map[string]decimal.Decimal `json:"totals"`
 }
 
 // ConfiguredItemRuleResponse is the API representation of a configured item rule.

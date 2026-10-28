@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ func TestNetRequirementEnrichesPlannedExternalServiceOrders(t *testing.T) {
 		ServiceItemCode: &serviceItem, RemittanceType: "ORDER_ITEM",
 	}}}
 	service := &MRPServiceImpl{RoutingRepo: routing}
-	input := &entity.MRPInput{PlanCode: 8, ItemCode: 100, Mask: "AZUL", Quantity: 5, NeedDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}
+	input := &entity.MRPInput{PlanCode: 8, ItemCode: 100, Mask: "AZUL", Quantity: decimal.NewFromFloat(5), NeedDate: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}
 	output, err := service.calcNetReqFast(context.Background(), input, map[int64]*entity.StockSnapshot{}, map[int64][]*entity.ConfiguredItemRule{}, nil, map[int64]*cachedItemMRP{100: {}}, entity.DefaultTypedPlanningParams())
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +126,8 @@ func TestApplyLossFormula(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := applyLossFormula(tc.parentQty, tc.childPer, tc.lossPct, tc.formula)
-			if abs(got-tc.want) > 1e-6 {
+			got := applyLossFormula(dq(tc.parentQty), tc.childPer, tc.lossPct, tc.formula)
+			if abs(got.InexactFloat64()-tc.want) > 1e-6 {
 				t.Errorf("applyLossFormula = %v, want %v", got, tc.want)
 			}
 		})
@@ -170,17 +171,17 @@ func TestExplodeFromBOMWithFormula_MaskFilter(t *testing.T) {
 		},
 	}
 	// With mask "A": both apply (generic + A).
-	got := explodeFromBOMWithFormula(bom, 1, "A", 5, 0, 1)
+	got := explodeFromBOMWithFormula(bom, 1, "A", decimal.NewFromFloat(5), 0, 1)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 children for mask A, got %d", len(got))
 	}
 	// child 10 qty = 5*2 = 10
-	if got[0].ItemCode != 10 || got[0].Quantity != 10 {
+	if got[0].ItemCode != 10 || !got[0].Quantity.Equal(decimal.NewFromFloat(10)) {
 		t.Errorf("unexpected first child: %+v", got[0])
 	}
 
 	// With mask "B": only the generic child applies (A is filtered out).
-	gotB := explodeFromBOMWithFormula(bom, 1, "B", 5, 0, 1)
+	gotB := explodeFromBOMWithFormula(bom, 1, "B", decimal.NewFromFloat(5), 0, 1)
 	if len(gotB) != 1 || gotB[0].ItemCode != 10 {
 		t.Errorf("expected only generic child for mask B, got %+v", gotB)
 	}
@@ -190,16 +191,16 @@ func TestAggregateInputs(t *testing.T) {
 	early := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
 	inputs := []*entity.MRPInput{
-		{ItemCode: 1, Mask: "", Quantity: 5, NeedDate: early},
-		{ItemCode: 1, Mask: "", Quantity: 3, NeedDate: early},
-		{ItemCode: 1, Mask: "", Quantity: 4, NeedDate: late},
-		{ItemCode: 2, Mask: "X", Quantity: 7, NeedDate: late},
+		{ItemCode: 1, Mask: "", Quantity: decimal.NewFromFloat(5), NeedDate: early},
+		{ItemCode: 1, Mask: "", Quantity: decimal.NewFromFloat(3), NeedDate: early},
+		{ItemCode: 1, Mask: "", Quantity: decimal.NewFromFloat(4), NeedDate: late},
+		{ItemCode: 2, Mask: "X", Quantity: decimal.NewFromFloat(7), NeedDate: late},
 	}
 	out := aggregateInputs(inputs, true)
 	if len(out) != 3 {
 		t.Fatalf("expected 3 rows grouped by date, got %d", len(out))
 	}
-	if out[0].ItemCode != 1 || out[0].Quantity != 8 {
+	if out[0].ItemCode != 1 || !out[0].Quantity.Equal(decimal.NewFromFloat(8)) {
 		t.Errorf("item1 aggregate = %+v, want qty 8", out[0])
 	}
 
@@ -216,8 +217,8 @@ func TestAggregateInputsSeparatesTechnicalAssistanceWarehouses(t *testing.T) {
 	date := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
 	warehouseA, warehouseB := int64(10), int64(20)
 	inputs := []*entity.MRPInput{
-		{ItemCode: 1, Quantity: 2, NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseA},
-		{ItemCode: 1, Quantity: 3, NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseB},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(2), NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseA},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(3), NeedDate: date, TechnicalAssistance: true, WarehouseCode: &warehouseB},
 	}
 	if grouped := aggregateInputs(inputs, true); len(grouped) != 2 {
 		t.Fatalf("technical-assistance warehouses must remain separate, got %#v", grouped)
@@ -228,8 +229,8 @@ func TestAggregateInputsSeparatesInterFactorySources(t *testing.T) {
 	date := time.Date(2026, 2, 10, 0, 0, 0, 0, time.UTC)
 	sourceA, sourceB := int64(10), int64(20)
 	inputs := []*entity.MRPInput{
-		{ItemCode: 1, Quantity: 2, NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceA},
-		{ItemCode: 1, Quantity: 3, NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceB},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(2), NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceA},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(3), NeedDate: date, InterFactory: true, SourceEnterpriseCode: &sourceB},
 	}
 	if grouped := aggregateInputs(inputs, true); len(grouped) != 2 {
 		t.Fatalf("inter-factory sources must remain separate, got %#v", grouped)
@@ -240,35 +241,35 @@ func TestFirmSupplyForItem(t *testing.T) {
 	need := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	supply := map[int64][]ports.SupplyEntry{
 		1: {
-			{ItemCode: 1, Quantity: 10, ArrivalDate: need.AddDate(0, 0, -5)}, // before need → counts
-			{ItemCode: 1, Quantity: 4, ArrivalDate: need},                    // on need → counts (not after)
-			{ItemCode: 1, Quantity: 99, ArrivalDate: need.AddDate(0, 0, 1)},  // after need → excluded
+			{ItemCode: 1, Quantity: decimal.NewFromFloat(10), ArrivalDate: need.AddDate(0, 0, -5)}, // before need → counts
+			{ItemCode: 1, Quantity: decimal.NewFromFloat(4), ArrivalDate: need},                    // on need → counts (not after)
+			{ItemCode: 1, Quantity: decimal.NewFromFloat(99), ArrivalDate: need.AddDate(0, 0, 1)},  // after need → excluded
 		},
 	}
-	if got := firmSupplyForItem(supply, 1, need); got != 14 {
+	if got := firmSupplyForItem(supply, 1, need); !got.Equal(decimal.NewFromFloat(14)) {
 		t.Errorf("firmSupplyForItem = %v, want 14", got)
 	}
-	if got := firmSupplyForItem(supply, 999, need); got != 0 {
+	if got := firmSupplyForItem(supply, 999, need); !got.Equal(decimal.NewFromFloat(0)) {
 		t.Errorf("missing item should yield 0, got %v", got)
 	}
 }
 
 func TestAdvanceNettingStateDoesNotReuseConsumedStockOrSupply(t *testing.T) {
 	need := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
-	snapshots := map[int64]*entity.StockSnapshot{1: {ItemCode: 1, Quantity: 10}}
+	snapshots := map[int64]*entity.StockSnapshot{1: {ItemCode: 1, Quantity: decimal.NewFromFloat(10)}}
 	supplies := map[int64][]ports.SupplyEntry{1: {
-		{ItemCode: 1, Quantity: 4, ArrivalDate: need},
-		{ItemCode: 1, Quantity: 9, ArrivalDate: need.AddDate(0, 0, 1)},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(4), ArrivalDate: need},
+		{ItemCode: 1, Quantity: decimal.NewFromFloat(9), ArrivalDate: need.AddDate(0, 0, 1)},
 	}}
 	advanceNettingState(
 		&entity.MRPInput{ItemCode: 1, NeedDate: need},
-		&entity.MRPOutput{StockProjected: -6, PlannedOrders: []*entity.PlannedOrderSuggestion{{Quantity: 6}}},
+		&entity.MRPOutput{StockProjected: decimal.NewFromFloat(-6), PlannedOrders: []*entity.PlannedOrderSuggestion{{Quantity: decimal.NewFromFloat(6)}}},
 		snapshots, supplies,
 	)
-	if snapshots[1].Quantity != 0 {
+	if !snapshots[1].Quantity.Equal(decimal.NewFromFloat(0)) {
 		t.Fatalf("expected consumed projected stock, got %v", snapshots[1].Quantity)
 	}
-	if len(supplies[1]) != 1 || supplies[1][0].Quantity != 9 {
+	if len(supplies[1]) != 1 || !supplies[1][0].Quantity.Equal(decimal.NewFromFloat(9)) {
 		t.Fatalf("expected only future supply to remain, got %+v", supplies[1])
 	}
 }
@@ -280,12 +281,12 @@ func TestAdvanceNettingStateIgnoraOrdemDeServico(t *testing.T) {
 	snapshots := map[int64]*entity.StockSnapshot{}
 	advanceNettingState(
 		&entity.MRPInput{ItemCode: 1, NeedDate: need},
-		&entity.MRPOutput{StockProjected: -15, PlannedOrders: []*entity.PlannedOrderSuggestion{
-			{Quantity: 15, OrderType: "FABRICACAO"}, {Quantity: 15, OrderType: "SERVICO"},
+		&entity.MRPOutput{StockProjected: decimal.NewFromFloat(-15), PlannedOrders: []*entity.PlannedOrderSuggestion{
+			{Quantity: decimal.NewFromFloat(15), OrderType: "FABRICACAO"}, {Quantity: decimal.NewFromFloat(15), OrderType: "SERVICO"},
 		}},
 		snapshots, map[int64][]ports.SupplyEntry{},
 	)
-	if snapshots[1].Quantity != 0 {
+	if !snapshots[1].Quantity.Equal(decimal.NewFromFloat(0)) {
 		t.Fatalf("a ordem de serviço virou estoque do item: %v", snapshots[1].Quantity)
 	}
 	if suppliesItem(&entity.PlannedOrderSuggestion{OrderType: "SERVICO"}) || !suppliesItem(&entity.PlannedOrderSuggestion{OrderType: "COMPRA"}) {
@@ -358,11 +359,11 @@ func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
 		},
 	}
 	// Produzindo 10 unidades, sem perda, fórmula 1.
-	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 10, 1, 1)
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", decimal.NewFromFloat(10), 1, 1)
 
 	got := map[int64]float64{}
 	for _, in := range inputs {
-		got[in.ItemCode] = in.Quantity
+		got[in.ItemCode] = in.Quantity.InexactFloat64()
 	}
 	if _, ok := got[3]; ok {
 		t.Error("co-produto (3) não deve gerar demanda dependente")
@@ -387,11 +388,11 @@ func TestExplodeFromBOM_SelectsPrimarySubstitute(t *testing.T) {
 		},
 	}
 
-	inputs := explodeFromBOMWithFormula(bomMap, 1, "", 4, 1, 1)
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", decimal.NewFromFloat(4), 1, 1)
 
 	got := map[int64]float64{}
 	for _, in := range inputs {
-		got[in.ItemCode] = in.Quantity
+		got[in.ItemCode] = in.Quantity.InexactFloat64()
 	}
 	if _, ok := got[20]; ok {
 		t.Error("substituto secundário não deve gerar demanda dependente")

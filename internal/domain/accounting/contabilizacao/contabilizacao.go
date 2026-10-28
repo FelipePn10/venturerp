@@ -165,12 +165,18 @@ type ContasSaida struct {
 	ICMSVendas, ICMSRecolher                        *int64
 	PISVendas, PISRecolher, COFINSVendas, COFINSRec *int64
 	CMV, Estoque                                    *int64
+	// IBS e CBS da reforma: só lançados quando Saida.IBS/CBS vêm preenchidos,
+	// isto é, a partir do ano em que o destaque vira tributo a recolher.
+	IBSVendas, IBSRecolher, CBSVendas, CBSRecolher *int64
 }
 
 // Saida é a NF-e de saída autorizada.
 type Saida struct {
 	Total, IPI, ICMSST     decimal.Decimal
 	ICMS, PIS, COFINS, CMV decimal.Decimal
+	// IBS e CBS a recolher. Zero no ano de teste (2026), quando o destaque é
+	// informativo; quem chama decide pela data da nota.
+	IBS, CBS decimal.Decimal
 	// GeraReceita: venda (gera contas a receber). Remessa, bonificação e
 	// devolução não têm receita, só os impostos destacados e a baixa do custo.
 	GeraReceita bool
@@ -179,7 +185,8 @@ type Saida struct {
 
 // NotaSaida: D Clientes × C Receita (total − IPI − ICMS-ST), C IPI e ICMS-ST a
 // recolher (o cliente paga, a empresa repassa); D ICMS/PIS/COFINS sobre vendas
-// × C a recolher; D CMV × C Estoque pelo custo médio que saiu.
+// × C a recolher; D IBS/CBS sobre vendas × C a recolher (2027 em diante); D CMV
+// × C Estoque pelo custo médio que saiu.
 func NotaSaida(s Saida, c ContasSaida) ([]Lancamento, []string) {
 	var out []Lancamento
 	var faltando []string
@@ -206,6 +213,8 @@ func NotaSaida(s Saida, c ContasSaida) ([]Lancamento, []string) {
 	par(c.ICMSVendas, c.ICMSRecolher, s.ICMS, "ICMS sobre vendas", "ICMS sobre vendas", "ICMS a recolher")
 	par(c.PISVendas, c.PISRecolher, s.PIS, "PIS sobre vendas", "PIS sobre vendas", "PIS a recolher")
 	par(c.COFINSVendas, c.COFINSRec, s.COFINS, "COFINS sobre vendas", "COFINS sobre vendas", "COFINS a recolher")
+	par(c.IBSVendas, c.IBSRecolher, s.IBS, "IBS sobre vendas", "IBS sobre vendas", "IBS a recolher")
+	par(c.CBSVendas, c.CBSRecolher, s.CBS, "CBS sobre vendas", "CBS sobre vendas", "CBS a recolher")
 	par(c.CMV, c.Estoque, s.CMV, "custo da mercadoria vendida", "CMV", "estoque")
 	return out, unicos(faltando)
 }

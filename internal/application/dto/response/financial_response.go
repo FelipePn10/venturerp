@@ -31,6 +31,8 @@ type PlanoContasResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 	// Conta contábil do plano gerencial (contabilização automática).
 	AccountingAccountID *int64 `json:"accounting_account_id,omitempty"`
+	// ExigeCentroCusto: o lançamento nesta conta precisa de centro de custo.
+	ExigeCentroCusto bool `json:"exige_centro_custo"`
 }
 
 // CentroCustoResponse is the API representation of a cost center (financial).

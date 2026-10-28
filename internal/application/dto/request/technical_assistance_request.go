@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreateTADefectGroupDTO struct {
 	Description string    `json:"description"`
@@ -48,31 +51,31 @@ type CreateTechnicalAssistanceCallDTO struct {
 }
 
 type CreateTechnicalAssistanceCallItemDTO struct {
-	CallCode              int64   `json:"call_code"`
-	Sequence              int     `json:"sequence"`
-	ItemCode              int64   `json:"item_code"`
-	Mask                  string  `json:"mask"`
-	SerialNumber          *string `json:"serial_number"`
-	Quantity              float64 `json:"quantity"`
-	DefectReasonCode      *int64  `json:"defect_reason_code"`
-	DefectComplement      *string `json:"defect_complement"`
-	PurchaseInvoiceNumber *string `json:"purchase_invoice_number"`
-	PurchaseInvoiceDate   string  `json:"purchase_invoice_date"`
-	WarrantyDays          int     `json:"warranty_days"`
-	RequestedAction       string  `json:"requested_action"`
-	Notes                 *string `json:"notes"`
+	CallCode              int64           `json:"call_code"`
+	Sequence              int             `json:"sequence"`
+	ItemCode              int64           `json:"item_code"`
+	Mask                  string          `json:"mask"`
+	SerialNumber          *string         `json:"serial_number"`
+	Quantity              decimal.Decimal `json:"quantity"`
+	DefectReasonCode      *int64          `json:"defect_reason_code"`
+	DefectComplement      *string         `json:"defect_complement"`
+	PurchaseInvoiceNumber *string         `json:"purchase_invoice_number"`
+	PurchaseInvoiceDate   string          `json:"purchase_invoice_date"`
+	WarrantyDays          int             `json:"warranty_days"`
+	RequestedAction       string          `json:"requested_action"`
+	Notes                 *string         `json:"notes"`
 }
 
 type AddTechnicalAssistanceReturnNoteDTO struct {
-	CallCode      int64   `json:"call_code"`
-	NoteNumber    string  `json:"note_number"`
-	NoteSeries    *string `json:"note_series"`
-	EmissionDate  string  `json:"emission_date"`
-	CustomerCode  *int64  `json:"customer_code"`
-	OperationType string  `json:"operation_type"`
-	AccessKey     *string `json:"access_key"`
-	TotalValue    float64 `json:"total_value"`
-	Notes         *string `json:"notes"`
+	CallCode      int64           `json:"call_code"`
+	NoteNumber    string          `json:"note_number"`
+	NoteSeries    *string         `json:"note_series"`
+	EmissionDate  string          `json:"emission_date"`
+	CustomerCode  *int64          `json:"customer_code"`
+	OperationType string          `json:"operation_type"`
+	AccessKey     *string         `json:"access_key"`
+	TotalValue    decimal.Decimal `json:"total_value"`
+	Notes         *string         `json:"notes"`
 }
 
 type UpdateTechnicalAssistanceCallStatusDTO struct {
@@ -91,36 +94,36 @@ type CreateTechnicalAssistanceRMADTO struct {
 	EligibilityStatus string                          `json:"eligibility_status"`
 	EligibilityReason string                          `json:"eligibility_reason"`
 	SLADueAt          string                          `json:"sla_due_at"`
-	ProductCost       float64                         `json:"product_cost"`
-	FreightCost       float64                         `json:"freight_cost"`
-	ServiceCost       float64                         `json:"service_cost"`
+	ProductCost       decimal.Decimal                 `json:"product_cost"`
+	FreightCost       decimal.Decimal                 `json:"freight_cost"`
+	ServiceCost       decimal.Decimal                 `json:"service_cost"`
 	Items             []TechnicalAssistanceRMAItemDTO `json:"items"`
 	IdempotencyKey    string                          `json:"-"`
 }
 
 type TechnicalAssistanceRMAItemDTO struct {
-	CallItemCode         int64   `json:"call_item_code"`
-	ItemCode             int64   `json:"item_code"`
-	Quantity             float64 `json:"quantity"`
-	SerialNumber         *string `json:"serial_number"`
-	LotNumber            *string `json:"lot_number"`
-	RequestedDestination *string `json:"requested_destination"`
+	CallItemCode         int64           `json:"call_item_code"`
+	ItemCode             int64           `json:"item_code"`
+	Quantity             decimal.Decimal `json:"quantity"`
+	SerialNumber         *string         `json:"serial_number"`
+	LotNumber            *string         `json:"lot_number"`
+	RequestedDestination *string         `json:"requested_destination"`
 }
 
 type TransitionTechnicalAssistanceRMADTO struct {
-	Status              string   `json:"status"`
-	Reason              *string  `json:"reason"`
-	CorrelationID       *string  `json:"correlation_id"`
-	AuthorizationNumber *string  `json:"authorization_number"`
-	ReverseCarrierCode  *int64   `json:"reverse_carrier_code"`
-	ReverseTrackingCode *string  `json:"reverse_tracking_code"`
-	InspectionNotes     *string  `json:"inspection_notes"`
-	Destination         *string  `json:"destination"`
-	FiscalDocumentKey   *string  `json:"fiscal_document_key"`
-	StockMovementCode   *int64   `json:"stock_movement_code"`
-	ProductCost         *float64 `json:"product_cost"`
-	FreightCost         *float64 `json:"freight_cost"`
-	ServiceCost         *float64 `json:"service_cost"`
+	Status              string           `json:"status"`
+	Reason              *string          `json:"reason"`
+	CorrelationID       *string          `json:"correlation_id"`
+	AuthorizationNumber *string          `json:"authorization_number"`
+	ReverseCarrierCode  *int64           `json:"reverse_carrier_code"`
+	ReverseTrackingCode *string          `json:"reverse_tracking_code"`
+	InspectionNotes     *string          `json:"inspection_notes"`
+	Destination         *string          `json:"destination"`
+	FiscalDocumentKey   *string          `json:"fiscal_document_key"`
+	StockMovementCode   *int64           `json:"stock_movement_code"`
+	ProductCost         *decimal.Decimal `json:"product_cost"`
+	FreightCost         *decimal.Decimal `json:"freight_cost"`
+	ServiceCost         *decimal.Decimal `json:"service_cost"`
 }
 
 type GenerateTechnicalAssistanceOrdersDTO struct {

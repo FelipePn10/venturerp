@@ -2,6 +2,7 @@ package response
 
 import (
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"time"
 
 	csrepo "github.com/FelipePn10/panossoerp/internal/domain/consumer_service/repository"
@@ -186,16 +187,16 @@ type RecurringSaleResponse struct {
 	MonthsQuantity            *int                                  `json:"months_quantity,omitempty"`
 	PaymentsQuantity          *int                                  `json:"payments_quantity,omitempty"`
 	GraceMonths               int                                   `json:"grace_months"`
-	PaymentValue              *float64                              `json:"payment_value,omitempty"`
-	Quantity                  float64                               `json:"quantity"`
-	UnitValue                 float64                               `json:"unit_value"`
-	MonthlyValue              float64                               `json:"monthly_value"`
+	PaymentValue              *decimal.Decimal                      `json:"payment_value,omitempty"`
+	Quantity                  decimal.Decimal                       `json:"quantity"`
+	UnitValue                 decimal.Decimal                       `json:"unit_value"`
+	MonthlyValue              decimal.Decimal                       `json:"monthly_value"`
 	Reason                    *string                               `json:"reason,omitempty"`
 	GeneratedOrderCode        *int64                                `json:"generated_order_code,omitempty"`
 	GeneratedOrderAt          *time.Time                            `json:"generated_order_at,omitempty"`
 	SourceRecurringSaleCode   *int64                                `json:"source_recurring_sale_code,omitempty"`
 	OriginalAdjustmentCode    *int64                                `json:"original_adjustment_code,omitempty"`
-	AdjustmentPercent         *float64                              `json:"adjustment_percent,omitempty"`
+	AdjustmentPercent         *decimal.Decimal                      `json:"adjustment_percent,omitempty"`
 	IsActive                  bool                                  `json:"is_active"`
 	LifecycleStatus           string                                `json:"lifecycle_status"`
 	EffectiveFrom             *time.Time                            `json:"effective_from,omitempty"`
@@ -207,8 +208,8 @@ type RecurringSaleResponse struct {
 	CurrencyCode              string                                `json:"currency_code"`
 	AdjustmentIndex           *string                               `json:"adjustment_index,omitempty"`
 	AdjustmentPeriodMonths    *int                                  `json:"adjustment_period_months,omitempty"`
-	AdjustmentFloorPct        *float64                              `json:"adjustment_floor_pct,omitempty"`
-	AdjustmentCapPct          *float64                              `json:"adjustment_cap_pct,omitempty"`
+	AdjustmentFloorPct        *decimal.Decimal                      `json:"adjustment_floor_pct,omitempty"`
+	AdjustmentCapPct          *decimal.Decimal                      `json:"adjustment_cap_pct,omitempty"`
 	BillingPolicy             json.RawMessage                       `json:"billing_policy"`
 	DeliveryPolicy            json.RawMessage                       `json:"delivery_policy"`
 	TaxPolicy                 json.RawMessage                       `json:"tax_policy"`
@@ -224,37 +225,37 @@ type RecurringSaleResponse struct {
 }
 
 type RecurringSaleRepresentativeResponse struct {
-	Code                   int64   `json:"code"`
-	RepresentativeCode     int64   `json:"representative_code"`
-	IsPrimary              bool    `json:"is_primary"`
-	CommissionPercent      float64 `json:"commission_percent"`
-	CommissionBase         string  `json:"commission_base"`
-	IsLifetime             bool    `json:"is_lifetime"`
-	CommissionInstallments *int    `json:"commission_installments,omitempty"`
+	Code                   int64           `json:"code"`
+	RepresentativeCode     int64           `json:"representative_code"`
+	IsPrimary              bool            `json:"is_primary"`
+	CommissionPercent      decimal.Decimal `json:"commission_percent"`
+	CommissionBase         string          `json:"commission_base"`
+	IsLifetime             bool            `json:"is_lifetime"`
+	CommissionInstallments *int            `json:"commission_installments,omitempty"`
 }
 
 type RecurringSalesAdjustmentImpactResponse struct {
 	Rows       []RecurringSaleResponse                      `json:"rows"`
 	Impacts    []RecurringSalesAdjustmentLineImpactResponse `json:"impacts"`
 	TotalRows  int                                          `json:"total_rows"`
-	TotalValue float64                                      `json:"total_value"`
+	TotalValue decimal.Decimal                              `json:"total_value"`
 	Confirmed  bool                                         `json:"confirmed"`
 }
 
 type RecurringSalesAdjustmentLineImpactResponse struct {
-	SourceCodes       []int64   `json:"source_codes"`
-	ItemCode          int64     `json:"item_code"`
-	ItemMask          *string   `json:"item_mask,omitempty"`
-	PreviousUnitValue float64   `json:"previous_unit_value"`
-	NewUnitValue      float64   `json:"new_unit_value"`
-	Quantity          float64   `json:"quantity"`
-	PreviousTotal     float64   `json:"previous_total"`
-	NewTotal          float64   `json:"new_total"`
-	AdjustmentPercent float64   `json:"adjustment_percent"`
-	AdjustmentIndex   string    `json:"adjustment_index,omitempty"`
-	LegalBasis        string    `json:"legal_basis,omitempty"`
-	EffectiveDate     time.Time `json:"effective_date"`
-	Reason            string    `json:"reason"`
+	SourceCodes       []int64         `json:"source_codes"`
+	ItemCode          int64           `json:"item_code"`
+	ItemMask          *string         `json:"item_mask,omitempty"`
+	PreviousUnitValue decimal.Decimal `json:"previous_unit_value"`
+	NewUnitValue      decimal.Decimal `json:"new_unit_value"`
+	Quantity          decimal.Decimal `json:"quantity"`
+	PreviousTotal     decimal.Decimal `json:"previous_total"`
+	NewTotal          decimal.Decimal `json:"new_total"`
+	AdjustmentPercent decimal.Decimal `json:"adjustment_percent"`
+	AdjustmentIndex   string          `json:"adjustment_index,omitempty"`
+	LegalBasis        string          `json:"legal_basis,omitempty"`
+	EffectiveDate     time.Time       `json:"effective_date"`
+	Reason            string          `json:"reason"`
 }
 
 type TechnicalAssistanceRMAResponse struct {

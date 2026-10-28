@@ -3,6 +3,8 @@ package sales_quotation_uc
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	"strings"
 	"time"
 
@@ -26,6 +28,12 @@ type UseCase struct {
 	Divisions       divisionrepo.SalesDivisionRepository
 	Items           itemrepo.ItemRepository
 	Representatives representativevalidation.Repository
+	// Aprovacoes é opcional: com política ORCAMENTO_POLITICA_COMERCIAL ativa, o
+	// orçamento bloqueado pela política comercial abre a solicitação, e a
+	// liberação manual fica recusada enquanto ela estiver pendente.
+	Aprovacoes Aprovacoes
+	// Tributos sugere IPI e ST das linhas pelo cálculo da nota. Opcional.
+	Tributos ports.SugestorTributosVenda
 }
 
 func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationDTO) (*response.SalesQuotationResponse, error) {
@@ -350,6 +358,17 @@ func (uc *UseCase) ChangeRelease(ctx context.Context, dto request.ChangeSalesQuo
 	}
 	if strings.TrimSpace(dto.Reason) == "" {
 		return errorsuc.NewValidationError("informe o motivo")
+	}
+	if uc.Aprovacoes != nil && status != entity.SalesQuotationReleaseBlocked {
+		pendente, err := uc.Aprovacoes.PendenteDoDocumento(ctx, aprovacao.OrcamentoPoliticaComercial, dto.Code)
+		if err != nil {
+			return err
+		}
+		if pendente != nil {
+			return errorsuc.NewValidationError(fmt.Sprintf(
+				"o orçamento aguarda a aprovação nº %d da política comercial (nível %d de %d): a liberação é feita pelos aprovadores em Aprovações",
+				pendente.ID, pendente.NivelAtual, pendente.NiveisExigidos))
+		}
 	}
 	return uc.Repo.ChangeRelease(ctx, dto.Code, status, strings.TrimSpace(dto.Reason))
 }

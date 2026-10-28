@@ -132,8 +132,8 @@ type CreateItemParams struct {
 	WarehouseUnitOfMeasurement                 UnitOfMeasurementEnum
 	WarehouseAutomaticLow                      bool
 	WarehouseCyclicalCountConfig               []byte
-	WarehouseMinimumStock                      int32
-	WarehouseAvgMonthlyConsumptionManual       *int32
+	WarehouseMinimumStock                      pgtype.Numeric
+	WarehouseAvgMonthlyConsumptionManual       pgtype.Numeric
 	EngineeringItemBaseCode                    *int64
 	EngineeringWeight                          []byte
 	EngineeringDimensions                      []byte
@@ -146,9 +146,9 @@ type CreateItemParams struct {
 	PlanningTankCode                           *int64
 	PlanningGhost                              bool
 	PlanningAbcClass                           pgtype.Text
-	PlanningMinimumLot                         int64
-	PlanningMultipleLot                        int64
-	PlanningSafetyStock                        int64
+	PlanningMinimumLot                         pgtype.Numeric
+	PlanningMultipleLot                        pgtype.Numeric
+	PlanningSafetyStock                        pgtype.Numeric
 	PlanningCritical                           bool
 	PlanningExclusive                          bool
 	PlanningActive                             bool
@@ -1058,9 +1058,9 @@ type UpdateItemFoldersParams struct {
 	PlanningLlc                                int32
 	PlanningGhost                              bool
 	PlanningAbcClass                           pgtype.Text
-	PlanningMinimumLot                         int64
-	PlanningMultipleLot                        int64
-	PlanningSafetyStock                        int64
+	PlanningMinimumLot                         pgtype.Numeric
+	PlanningMultipleLot                        pgtype.Numeric
+	PlanningSafetyStock                        pgtype.Numeric
 	PlanningCritical                           bool
 	PlanningExclusive                          bool
 	PlanningActive                             bool
@@ -1071,10 +1071,10 @@ type UpdateItemFoldersParams struct {
 	SuppliesWarehouseCode                      *int64
 	SuppliesNotes                              pgtype.Text
 	WarehouseCode                              int64
-	WarehouseAvgMonthlyConsumptionManual       *int32
+	WarehouseAvgMonthlyConsumptionManual       pgtype.Numeric
 	WarehouseUnitOfMeasurement                 UnitOfMeasurementEnum
 	WarehouseAutomaticLow                      bool
-	WarehouseMinimumStock                      int32
+	WarehouseMinimumStock                      pgtype.Numeric
 	AccountingCalculatePisCofins               pgtype.Bool
 	WarehouseCyclicalCountConfig               []byte
 }

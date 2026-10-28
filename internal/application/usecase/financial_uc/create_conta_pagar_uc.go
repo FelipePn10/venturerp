@@ -128,8 +128,17 @@ func (uc *CreateContaPagarUseCase) Execute(
 // empresa: o id existe no banco (a chave estrangeira aceita), mas não é desta
 // empresa, e o título apareceria no plano de contas de outro CNPJ.
 func (uc *CreateContaPagarUseCase) conferirPlanosDaEmpresa(ctx context.Context, c *entity.ContaPagar) error {
-	if len(c.Rateios) == 0 {
-		return nil
+	partes := c.Rateios
+	if len(partes) == 0 {
+		// Sem rateio, vale o plano e o centro do próprio título.
+		if c.PlanoContasID == nil && c.CentroCustoID == nil {
+			return nil
+		}
+		var plano int64
+		if c.PlanoContasID != nil {
+			plano = *c.PlanoContasID
+		}
+		partes = []entity.RateioContaPagar{{PlanoContasID: plano, CentroCustoID: c.CentroCustoID}}
 	}
 	planos, err := uc.Repo.ListPlanoContas(ctx)
 	if err != nil {
@@ -139,20 +148,26 @@ func (uc *CreateContaPagarUseCase) conferirPlanosDaEmpresa(ctx context.Context, 
 	if err != nil {
 		return err
 	}
-	planoOK := map[int64]bool{}
+	planoOK, exigeCentro := map[int64]bool{}, map[int64]string{}
 	for _, p := range planos {
 		planoOK[p.ID] = p.IsActive
+		if p.ExigeCentroCusto {
+			exigeCentro[p.ID] = p.Codigo
+		}
 	}
 	centroOK := map[int64]bool{}
 	for _, cc := range centros {
 		centroOK[cc.ID] = cc.IsActive
 	}
-	for _, r := range c.Rateios {
-		if !planoOK[r.PlanoContasID] {
+	for _, r := range partes {
+		if r.PlanoContasID != 0 && !planoOK[r.PlanoContasID] {
 			return errorsuc.NewValidationError(fmt.Sprintf("o plano de contas %d não existe nesta empresa ou está inativo", r.PlanoContasID))
 		}
 		if r.CentroCustoID != nil && !centroOK[*r.CentroCustoID] {
-			return errorsuc.NewValidationError(fmt.Sprintf("o centro de custo %d não existe nesta empresa ou está inativo", *r.CentroCustoID))
+			return errorsuc.NewValidationError(fmt.Sprintf("o centro de custo %d não existe nesta empresa, está inativo ou fora da vigência", *r.CentroCustoID))
+		}
+		if conta, ok := exigeCentro[r.PlanoContasID]; ok && r.CentroCustoID == nil {
+			return errorsuc.NewValidationError(fmt.Sprintf("a conta %s exige centro de custo: informe o centro na parte do rateio", conta))
 		}
 	}
 	return nil

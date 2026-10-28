@@ -86,7 +86,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 		}
 		sources = append(sources, orderSource{
 			ref: fmt.Sprintf("OP-%d", op.OrderNumber), isOP: true, opCode: op.OrderNumber,
-			item: op.ItemCode, mask: op.Mask, qty: op.PlannedQty,
+			item: op.ItemCode, mask: op.Mask, qty: op.PlannedQty.InexactFloat64(),
 		})
 	}
 	for _, code := range dto.PlannedOrderCodes {

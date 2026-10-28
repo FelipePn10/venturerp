@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
@@ -31,10 +32,10 @@ func (r *MRPCalculationRepositorySQLC) CreateProfile(
 		ItemCode:        p.ItemCode,
 		PlanCode:        p.PlanCode,
 		CalculationDate: pgutil.ToPgDate(p.CalculationDate),
-		Demand:          pgutil.ToPgNumericFromFloat64(p.Demand),
-		OrdersPlanned:   pgutil.ToPgNumericFromFloat64(p.OrdersPlanned),
-		OrdersFirm:      pgutil.ToPgNumericFromFloat64(p.OrdersFirm),
-		StockProjected:  pgutil.ToPgNumericFromFloat64(p.StockProjected),
+		Demand:          pgutil.ToPgNumericFromDecimal(p.Demand),
+		OrdersPlanned:   pgutil.ToPgNumericFromDecimal(p.OrdersPlanned),
+		OrdersFirm:      pgutil.ToPgNumericFromDecimal(p.OrdersFirm),
+		StockProjected:  pgutil.ToPgNumericFromDecimal(p.StockProjected),
 		Llc:             int32(p.LLC),
 		NeedDate:        pgutil.ToPgDate(p.NeedDate),
 		EnterpriseID:    enterpriseID,
@@ -54,7 +55,7 @@ func (r *MRPCalculationRepositorySQLC) CreateProfileDetail(ctx context.Context, 
 	if err := r.q.CreateMRPProfileDetail(ctx, sqlc.CreateMRPProfileDetailParams{
 		PlanCode: detail.PlanCode, ItemCode: detail.ItemCode, NeedDate: pgutil.ToPgDate(detail.NeedDate),
 		DetailType: detail.DetailType, SourceCode: detail.SourceCode, ParentItemCode: detail.ParentItemCode,
-		Quantity: pgutil.ToPgNumericFromFloat64(detail.Quantity), EnterpriseID: enterpriseID,
+		Quantity: pgutil.ToPgNumericFromDecimal(detail.Quantity), EnterpriseID: enterpriseID,
 	}); err != nil {
 		return fmt.Errorf("creating MRP profile detail: %w", err)
 	}
@@ -238,9 +239,9 @@ func (r *MRPCalculationRepositorySQLC) CreateStockSnapshot(
 	row, err := r.q.CreateStockSnapshot(ctx, sqlc.CreateStockSnapshotParams{
 		ItemCode:      s.ItemCode,
 		WarehouseCode: s.WarehouseCode,
-		Quantity:      pgutil.ToPgNumericFromFloat64(s.Quantity),
-		ReservedQty:   pgutil.ToPgNumericFromFloat64(s.ReservedQty),
-		SafetyStock:   pgutil.ToPgNumericFromFloat64(s.SafetyStock),
+		Quantity:      pgutil.ToPgNumericFromDecimal(s.Quantity),
+		ReservedQty:   pgutil.ToPgNumericFromDecimal(s.ReservedQty),
+		SafetyStock:   pgutil.ToPgNumericFromDecimal(s.SafetyStock),
 		EnterpriseID:  enterpriseID,
 	})
 
@@ -269,14 +270,14 @@ func (r *MRPCalculationRepositorySQLC) GetStockSnapshot(
 	}
 
 	// Fall back to live stock_balances aggregated per item.
-	var qty, reservedQty, safetyStock float64
+	var qty, reservedQty, safetyStock decimal.Decimal
 	err = r.db.QueryRow(ctx, `
 		SELECT
 			COALESCE(SUM(quantity), 0),
 			COALESCE(SUM(reserved_qty), 0),
 			COALESCE(SUM(safety_stock), 0)
-		FROM stock_balances
-		WHERE item_code = $1 AND enterprise_id = $2
+		FROM stock_balances b
+		WHERE item_code = $1 AND enterprise_id = $2 AND `+saldoPlanejavel+`
 	`, itemCode, enterpriseID).Scan(&qty, &reservedQty, &safetyStock)
 	if err != nil {
 		return nil, nil
@@ -288,6 +289,13 @@ func (r *MRPCalculationRepositorySQLC) GetStockSnapshot(
 		SafetyStock: safetyStock,
 	}, nil
 }
+
+// saldoPlanejavel: saldo que o MRP conta como disponível. Rejeição e
+// almoxarifado sem disposição (sucata, avaria) não abastecem a produção; o
+// saldo em inspeção conta, como no SAP — ele é liberado pela decisão de uso, e
+// a parte recusada sai dele para a rejeição.
+const saldoPlanejavel = `NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id = b.warehouse_id AND w.enterprise_id = b.enterprise_id
+	AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))`
 
 func (r *MRPCalculationRepositorySQLC) CreateSalesOrderDemand(
 	ctx context.Context,
@@ -307,8 +315,8 @@ func (r *MRPCalculationRepositorySQLC) CreateSalesOrderDemand(
 		SalesOrderCode: d.SalesOrderCode,
 		ItemCode:       d.ItemCode,
 		Mask:           mask,
-		Quantity:       pgutil.ToPgNumericFromFloat64(d.Quantity),
-		DeliveredQty:   pgutil.ToPgNumericFromFloat64(d.DeliveredQty),
+		Quantity:       pgutil.ToPgNumericFromDecimal(d.Quantity),
+		DeliveredQty:   pgutil.ToPgNumericFromDecimal(d.DeliveredQty),
 		DeliveryDate:   pgutil.ToPgDate(d.DeliveryDate),
 		DivisionCode:   d.DivisionCode,
 		Status:         d.Status,
@@ -367,7 +375,7 @@ func (r *MRPCalculationRepositorySQLC) UpdateSalesOrderDemandStatus(
 	ctx context.Context,
 	code int64,
 	status string,
-	deliveredQty float64,
+	deliveredQty decimal.Decimal,
 ) (*entity.SalesOrderDemand, error) {
 	enterpriseID, err := tenant.IDPtr(ctx)
 	if err != nil {
@@ -378,7 +386,7 @@ func (r *MRPCalculationRepositorySQLC) UpdateSalesOrderDemandStatus(
 		ctx,
 		sqlc.UpdateSalesOrderDemandStatusParams{
 			Status:       status,
-			DeliveredQty: pgutil.ToPgNumericFromFloat64(deliveredQty),
+			DeliveredQty: pgutil.ToPgNumericFromDecimal(deliveredQty),
 			Code:         pgutil.ToPgInt8Ptr(&code),
 			EnterpriseID: enterpriseID,
 		},
@@ -470,7 +478,7 @@ func (r *MRPCalculationRepositorySQLC) CreatePlannedOrderSuggestion(
 		PlanCode:             s.PlanCode,
 		ItemCode:             s.ItemCode,
 		Mask:                 s.Mask,
-		Quantity:             pgutil.ToPgNumericFromFloat64(s.Quantity),
+		Quantity:             pgutil.ToPgNumericFromDecimal(s.Quantity),
 		NeedDate:             pgutil.ToPgDate(s.NeedDate),
 		StartDate:            startDate,
 		OrderType:            s.OrderType,
@@ -656,8 +664,8 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 			COALESCE(SUM(quantity), 0)      AS quantity,
 			COALESCE(SUM(reserved_qty), 0)  AS reserved_qty,
 			COALESCE(SUM(safety_stock), 0)  AS safety_stock
-		FROM stock_balances
-		WHERE enterprise_id = $1
+		FROM stock_balances b
+		WHERE enterprise_id = $1 AND `+saldoPlanejavel+`
 		GROUP BY item_code
 	`, enterpriseID)
 	if err != nil {
@@ -668,7 +676,7 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	m := make(map[int64]*entity.StockSnapshot)
 	for rows.Next() {
 		var itemCode int64
-		var qty, reservedQty, safetyStock float64
+		var qty, reservedQty, safetyStock decimal.Decimal
 		if err := rows.Scan(&itemCode, &qty, &reservedQty, &safetyStock); err != nil {
 			return nil, fmt.Errorf("scanning stock balance: %w", err)
 		}
@@ -714,10 +722,10 @@ func profileToEntity(row sqlc.MrpItemProfile) *entity.MRPItemProfile {
 		ItemCode:        row.ItemCode,
 		PlanCode:        row.PlanCode,
 		CalculationDate: pgutil.FromPgDate(row.CalculationDate),
-		Demand:          pgutil.FromPgNumericToFloat64(row.Demand),
-		OrdersPlanned:   pgutil.FromPgNumericToFloat64(row.OrdersPlanned),
-		OrdersFirm:      pgutil.FromPgNumericToFloat64(row.OrdersFirm),
-		StockProjected:  pgutil.FromPgNumericToFloat64(row.StockProjected),
+		Demand:          pgutil.FromPgNumericToDecimal(row.Demand),
+		OrdersPlanned:   pgutil.FromPgNumericToDecimal(row.OrdersPlanned),
+		OrdersFirm:      pgutil.FromPgNumericToDecimal(row.OrdersFirm),
+		StockProjected:  pgutil.FromPgNumericToDecimal(row.StockProjected),
 		LLC:             int(row.Llc),
 		NeedDate:        pgutil.FromPgDate(row.NeedDate),
 		CreatedAt:       pgutil.FromPgTimestamptz(row.CreatedAt),
@@ -785,9 +793,9 @@ func snapshotToEntity(
 	return &entity.StockSnapshot{
 		ItemCode:      row.ItemCode,
 		WarehouseCode: row.WarehouseCode,
-		Quantity:      pgutil.FromPgNumericToFloat64(row.Quantity),
-		ReservedQty:   pgutil.FromPgNumericToFloat64(row.ReservedQty),
-		SafetyStock:   pgutil.FromPgNumericToFloat64(row.SafetyStock),
+		Quantity:      pgutil.FromPgNumericToDecimal(row.Quantity),
+		ReservedQty:   pgutil.FromPgNumericToDecimal(row.ReservedQty),
+		SafetyStock:   pgutil.FromPgNumericToDecimal(row.SafetyStock),
 		SnapshotDate:  pgutil.FromPgTimestamptz(row.SnapshotDate),
 		CreatedAt:     pgutil.FromPgTimestamptz(row.CreatedAt),
 	}
@@ -809,8 +817,8 @@ func salesDemandToEntity(
 		SalesOrderCode: row.SalesOrderCode,
 		ItemCode:       row.ItemCode,
 		Mask:           mask,
-		Quantity:       pgutil.FromPgNumericToFloat64(row.Quantity),
-		DeliveredQty:   pgutil.FromPgNumericToFloat64(row.DeliveredQty),
+		Quantity:       pgutil.FromPgNumericToDecimal(row.Quantity),
+		DeliveredQty:   pgutil.FromPgNumericToDecimal(row.DeliveredQty),
 		DeliveryDate:   pgutil.FromPgDate(row.DeliveryDate),
 		DivisionCode:   row.DivisionCode,
 		Status:         row.Status,
@@ -863,7 +871,7 @@ func suggestionToEntity(row sqlc.MrpPlannedSuggestion) *entity.PlannedOrderSugge
 		PlanCode:             row.PlanCode,
 		ItemCode:             row.ItemCode,
 		Mask:                 row.Mask,
-		Quantity:             pgutil.FromPgNumericToFloat64(row.Quantity),
+		Quantity:             pgutil.FromPgNumericToDecimal(row.Quantity),
 		NeedDate:             pgutil.FromPgDate(row.NeedDate),
 		OrderType:            row.OrderType,
 		DemandType:           row.DemandType,

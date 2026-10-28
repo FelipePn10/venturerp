@@ -632,12 +632,181 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		 SELECT m.enterprise_id,'ESTOQUE_LOTE_PROXIMO_VENCIMENTO',1,'LOTE_ESTOQUE',m.id::text,COALESCE(m.lot,''),jsonb_build_object('movimentacao_id',m.id,'descricao','Há saldo disponível em lote próximo do vencimento. Avalie consumo, remanejamento ou bloqueio.','item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'unidade_estoque',i.warehouse_unit_of_measurement::text),'lote',jsonb_build_object('codigo',m.lot,'validade',m.expiration_date,'dias_ate_vencimento',m.expiration_date-CURRENT_DATE,'quantidade_disponivel',lb.quantity),'localizacao',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code))),'lote_movimento:'||m.id::text FROM stock_movements m JOIN enterprise_notification_subscriptions s ON s.enterprise_id=m.enterprise_id AND s.event_key='ESTOQUE_LOTE_PROXIMO_VENCIMENTO' AND s.enabled JOIN items i ON i.enterprise_id=m.enterprise_id AND i.code=m.item_code JOIN warehouse w ON w.id=m.warehouse_id JOIN stock_lot_balances lb ON lb.enterprise_id=m.enterprise_id AND lb.item_code=m.item_code AND lb.warehouse_id=m.warehouse_id AND lb.lot=m.lot AND lb.quantity>0 WHERE m.lot IS NOT NULL AND m.expiration_date IS NOT NULL AND m.expiration_date BETWEEN CURRENT_DATE AND CURRENT_DATE+COALESCE((s.thresholds->>'antecedencia_dias')::int,30) ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key,originator_user_id,occurred_at)
 	 SELECT m.enterprise_id,'ESTOQUE_MOVIMENTACAO_INCOMUM',1,'MOVIMENTACAO_ESTOQUE',m.id::text,m.id::text,jsonb_build_object('movimentacao_id',m.id,'item_codigo',m.item_code,'almoxarifado_id',m.warehouse_id,'tipo',m.movement_type,'quantidade',m.quantity,'valor_total',m.total_price,'regra',CASE WHEN ABS(m.quantity)>=COALESCE(NULLIF((s.thresholds->>'quantidade_limite')::numeric,0),1e30) THEN 'QUANTIDADE' WHEN ABS(m.total_price)>=COALESCE(NULLIF((s.thresholds->>'valor_limite')::numeric,0),1e30) THEN 'VALOR' ELSE 'HORARIO' END,'link','/stock/movements/'||m.id::text),'movimentacao:'||m.id::text,m.created_by,m.created_at FROM stock_movements m JOIN enterprise_notification_subscriptions s ON s.enterprise_id=m.enterprise_id AND s.event_key='ESTOQUE_MOVIMENTACAO_INCOMUM' AND s.enabled WHERE m.created_at>NOW()-INTERVAL '2 days' AND (ABS(m.quantity)>=COALESCE(NULLIF((s.thresholds->>'quantidade_limite')::numeric,0),1e30) OR ABS(m.total_price)>=COALESCE(NULLIF((s.thresholds->>'valor_limite')::numeric,0),1e30) OR ((s.thresholds ? 'horario_inicio') AND (s.thresholds ? 'horario_fim') AND m.created_at::time NOT BETWEEN (s.thresholds->>'horario_inicio')::time AND (s.thresholds->>'horario_fim')::time)) ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`}
+	statements = append(statements, slaAssistenciaStatements...)
+	statements = append(statements, cadastroItemStatements...)
+	statements = append(statements, contratoVendaStatements...)
+	statements = append(statements, centroDeCustoStatements...)
 	for _, statement := range statements {
 		if _, err = tx.Exec(ctx, statement); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+// slaAssistenciaStatements: cada prazo do chamado (primeira resposta e
+// solução) vira pendência "em risco" no momento de risco gravado no chamado
+// (horas corridas ou úteis), e "vencido" no limite. Chamado com o relógio
+// parado (aguardando o cliente) não gera alerta. A pendência se resolve quando
+// o chamado responde/soluciona (ou é cancelado); a de risco, também quando vira
+// vencida; e qualquer uma quando a retomada da pausa empurra o prazo. O limite
+// entra na chave: o prazo estendido que voltar a vencer alerta de novo.
+var slaAssistenciaStatements = []string{
+	`WITH marcos AS (
+	   SELECT e.id AS enterprise_id, c.code, c.call_number, c.subject, c.priority, c.customer_code, cu.name AS cliente, 'resposta' AS marco,
+	          c.opened_at AS inicio, c.sla_resposta_ate AS ate,
+	          COALESCE(c.sla_resposta_risco_em, c.opened_at + (c.sla_resposta_ate - c.opened_at) * (COALESCE(c.sla_alerta_pct, 80)::float8 / 100)) AS risco
+	     FROM technical_assistance_calls c JOIN enterprise e ON e.code = c.enterprise_code
+	     LEFT JOIN customers cu ON cu.code = c.customer_code AND cu.enterprise_id = e.id
+	    WHERE c.is_active AND c.status NOT IN ('ATTENDED','CLOSED','CANCELLED') AND c.respondido_em IS NULL AND c.sla_resposta_ate IS NOT NULL
+	      AND c.sla_pausado_desde IS NULL
+	   UNION ALL
+	   SELECT e.id, c.code, c.call_number, c.subject, c.priority, c.customer_code, cu.name, 'solucao',
+	          c.opened_at, c.sla_solucao_ate,
+	          COALESCE(c.sla_solucao_risco_em, c.opened_at + (c.sla_solucao_ate - c.opened_at) * (COALESCE(c.sla_alerta_pct, 80)::float8 / 100))
+	     FROM technical_assistance_calls c JOIN enterprise e ON e.code = c.enterprise_code
+	     LEFT JOIN customers cu ON cu.code = c.customer_code AND cu.enterprise_id = e.id
+	    WHERE c.is_active AND c.status NOT IN ('ATTENDED','CLOSED','CANCELLED') AND c.sla_solucao_ate IS NOT NULL
+	      AND c.sla_pausado_desde IS NULL
+	 ), devidos AS (
+	   SELECT m.*, CASE WHEN NOW() >= m.ate THEN 'ASSISTENCIA_SLA_VENCIDO' ELSE 'ASSISTENCIA_SLA_EM_RISCO' END AS event_key
+	     FROM marcos m
+	    WHERE NOW() >= m.risco
+	 )
+	 INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+	 SELECT d.enterprise_id, d.event_key, 1, 'CHAMADO_ASSISTENCIA', d.code::text, d.call_number::text,
+	        jsonb_strip_nulls(jsonb_build_object(
+	          'descricao', CASE WHEN d.event_key = 'ASSISTENCIA_SLA_VENCIDO'
+	                            THEN 'O chamado ' || d.call_number || ' passou do prazo de ' || CASE WHEN d.marco = 'resposta' THEN 'primeira resposta' ELSE 'solução' END || '.'
+	                            ELSE 'O chamado ' || d.call_number || ' está perto do prazo de ' || CASE WHEN d.marco = 'resposta' THEN 'primeira resposta' ELSE 'solução' END || '.' END,
+	          'chamado', d.call_number, 'assunto', d.subject, 'prioridade', d.priority,
+	          'cliente', jsonb_build_object('codigo', d.customer_code, 'nome', d.cliente),
+	          'prazo', d.marco, 'aberto_em', d.inicio, 'prazo_ate', d.ate)),
+	        'chamado:' || d.code::text || ':' || d.marco || ':' || CASE WHEN d.event_key = 'ASSISTENCIA_SLA_VENCIDO' THEN 'vencido' ELSE 'risco' END
+	          || ':' || floor(extract(epoch FROM d.ate))::bigint::text
+	   FROM devidos d
+	   JOIN enterprise_notification_subscriptions s ON s.enterprise_id = d.enterprise_id AND s.event_key = d.event_key AND s.enabled
+	 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+	`UPDATE notification_alerts a SET state='RESOLVIDO', resolved_at=NOW(),
+	        resolution_reason = CASE WHEN c.status IN ('ATTENDED','CLOSED') THEN 'Chamado solucionado'
+	                                 WHEN c.status = 'CANCELLED' OR NOT c.is_active THEN 'Chamado cancelado'
+	                                 WHEN a.deduplication_key LIKE '%:resposta:%' AND c.respondido_em IS NOT NULL THEN 'Chamado respondido'
+	                                 WHEN (a.deduplication_key LIKE '%:resposta:%' AND NOW() < c.sla_resposta_risco_em)
+	                                   OR (a.deduplication_key LIKE '%:solucao:%' AND NOW() < c.sla_solucao_risco_em) THEN 'Prazo estendido (relógio parado aguardando o cliente)'
+	                                 ELSE 'Prazo vencido' END
+	   FROM technical_assistance_calls c JOIN enterprise e ON e.code = c.enterprise_code
+	  WHERE a.state = 'ABERTO' AND a.event_key IN ('ASSISTENCIA_SLA_EM_RISCO','ASSISTENCIA_SLA_VENCIDO')
+	    AND e.id = a.enterprise_id AND c.code::text = a.aggregate_internal_id
+	    AND (c.status IN ('ATTENDED','CLOSED','CANCELLED') OR NOT c.is_active
+	         OR (a.deduplication_key LIKE '%:resposta:%' AND c.respondido_em IS NOT NULL)
+	         OR (a.event_key = 'ASSISTENCIA_SLA_EM_RISCO' AND a.deduplication_key LIKE '%:resposta:%' AND NOW() >= c.sla_resposta_ate)
+	         OR (a.event_key = 'ASSISTENCIA_SLA_EM_RISCO' AND a.deduplication_key LIKE '%:solucao:%' AND NOW() >= c.sla_solucao_ate)
+	         OR (a.deduplication_key LIKE '%:resposta:%' AND NOW() < c.sla_resposta_risco_em)
+	         OR (a.deduplication_key LIKE '%:solucao:%' AND NOW() < c.sla_solucao_risco_em))`,
+}
+
+// cadastroItemStatements: pendências do cadastro de item ativo e liberado (o
+// item em cadastro já aparece na lista da governança). Cada regra tem a sua
+// condição de pendência e a resolução quando a condição deixa de valer.
+var cadastroItemPendencias = []struct{ evento, descricao, condicao string }{
+	{"CADASTRO_ITEM_SEM_CLASSIFICACAO_FISCAL", "Item sem classificação fiscal (NCM): a NF de saída e a de entrada não saem.",
+		`i.engineering_type IN (0,1,2) AND COALESCE(btrim(i.accounting_sale_fiscal_classification_code),'') = ''`},
+	{"CADASTRO_ITEM_COMPRADO_SEM_FORNECEDOR", "Item comprado sem fornecedor preferencial: o MRP sugere a compra sem a quem comprar.",
+		`i.engineering_type = 1 AND NOT EXISTS (SELECT 1 FROM item_preferred_suppliers p WHERE p.item_code=i.code AND p.enterprise_id=i.enterprise_id AND p.is_active)`},
+	{"CADASTRO_ITEM_FABRICADO_SEM_ESTRUTURA", "Item fabricado sem estrutura: a OF não reserva nem baixa material.",
+		`i.engineering_type = 0 AND NOT EXISTS (SELECT 1 FROM item_structures s WHERE s.parent_code=i.code AND s.is_active)`},
+	{"CADASTRO_ITEM_FABRICADO_SEM_ROTEIRO", "Item fabricado sem roteiro: a OF não tem operação para apontar nem capacidade para planejar.",
+		`i.engineering_type = 0 AND NOT EXISTS (SELECT 1 FROM manufacturing_routes m WHERE m.item_code=i.code AND m.enterprise_id=i.enterprise_id AND m.is_active)`},
+}
+
+var cadastroItemStatements = func() []string {
+	out := []string{}
+	for _, r := range cadastroItemPendencias {
+		out = append(out,
+			`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+			 SELECT i.enterprise_id,'`+r.evento+`',1,'ITEM',i.code::text,i.business_code,
+			        jsonb_build_object('descricao','`+r.descricao+`','item',jsonb_build_object('codigo',i.business_code,'descricao',i.name)),
+			        'item:'||i.code::text||':`+r.evento+`'
+			   FROM items i
+			   JOIN enterprise_notification_subscriptions s ON s.enterprise_id=i.enterprise_id AND s.event_key='`+r.evento+`' AND s.enabled
+			   LEFT JOIN item_governanca g ON g.item_code=i.code AND g.enterprise_id=i.enterprise_id
+			  WHERE i.health::text='ATIVO' AND COALESCE(g.status,'LIBERADO')='LIBERADO' AND `+r.condicao+`
+			 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+			`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Cadastro regularizado'
+			  WHERE a.state='ABERTO' AND a.event_key='`+r.evento+`'
+			    AND NOT EXISTS (SELECT 1 FROM items i LEFT JOIN item_governanca g ON g.item_code=i.code AND g.enterprise_id=i.enterprise_id
+			                     WHERE i.enterprise_id=a.enterprise_id AND i.code::text=a.aggregate_internal_id
+			                       AND i.health::text='ATIVO' AND COALESCE(g.status,'LIBERADO')='LIBERADO' AND `+r.condicao+`)`)
+	}
+	// Inativo, bloqueado ou descontinuado com demanda aberta (pedido de venda,
+	// pedido de compra ou OF ainda em aberto).
+	demanda := `(EXISTS (SELECT 1 FROM sales_order_items si JOIN sales_orders so ON so.code=si.sales_order_code JOIN enterprise e ON e.code=so.enterprise_code
+	                      WHERE si.item_code=i.code AND e.id=i.enterprise_id AND si.status IN ('OPEN','PARTIAL'))
+	          OR EXISTS (SELECT 1 FROM purchase_order_items pi JOIN purchase_orders po ON po.code=pi.purchase_order_code JOIN enterprise e ON e.code=po.enterprise_code
+	                      WHERE pi.item_code=i.code AND e.id=i.enterprise_id AND pi.is_active AND po.is_active AND po.status NOT IN ('CANCELLED','CANCELED','CLOSED')
+	                        AND pi.requested_qty-pi.received_qty-pi.cancelled_qty > 0)
+	          OR EXISTS (SELECT 1 FROM production_orders o WHERE o.item_code=i.code AND o.enterprise_id=i.enterprise_id AND o.status IN ('OPEN','IN_PROGRESS')))`
+	inativo := `(i.health::text='INATIVO' OR g.status IN ('BLOQUEADO','DESCONTINUADO'))`
+	out = append(out,
+		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+		 SELECT i.enterprise_id,'CADASTRO_ITEM_INATIVO_COM_DEMANDA_ABERTA',1,'ITEM',i.code::text,i.business_code,
+		        jsonb_build_object('descricao','Item inativo, bloqueado ou descontinuado ainda tem pedido ou OF em aberto.',
+		                           'item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'situacao',COALESCE(g.status,i.health::text))),
+		        'item:'||i.code::text||':CADASTRO_ITEM_INATIVO_COM_DEMANDA_ABERTA'
+		   FROM items i
+		   JOIN enterprise_notification_subscriptions s ON s.enterprise_id=i.enterprise_id AND s.event_key='CADASTRO_ITEM_INATIVO_COM_DEMANDA_ABERTA' AND s.enabled
+		   LEFT JOIN item_governanca g ON g.item_code=i.code AND g.enterprise_id=i.enterprise_id
+		  WHERE `+inativo+` AND `+demanda+`
+		 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+		`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Demanda encerrada ou item reativado'
+		  WHERE a.state='ABERTO' AND a.event_key='CADASTRO_ITEM_INATIVO_COM_DEMANDA_ABERTA'
+		    AND NOT EXISTS (SELECT 1 FROM items i LEFT JOIN item_governanca g ON g.item_code=i.code AND g.enterprise_id=i.enterprise_id
+		                     WHERE i.enterprise_id=a.enterprise_id AND i.code::text=a.aggregate_internal_id AND `+inativo+` AND `+demanda+`)`)
+	return out
+}()
+
+// contratoVendaStatements: contrato ativo perto do fim da vigência e item com
+// saldo abaixo do percentual de alerta; resolvem quando o contrato sai de
+// ativo ou o saldo volta (pedido de chamada cancelado).
+var contratoVendaStatements = []string{
+	`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+	 SELECT c.enterprise_id,'COMERCIAL_CONTRATO_VENCENDO',1,'CONTRATO_VENDA',c.id::text,c.numero::text,
+	        jsonb_build_object('descricao','O contrato de venda '||c.numero||' vence em '||to_char(c.vigencia_fim,'DD/MM/YYYY')||'.',
+	                           'contrato',c.numero,'cliente',c.customer_code,'vigencia_fim',c.vigencia_fim),
+	        'contrato:'||c.id::text||':vencendo'
+	   FROM contratos_venda c
+	   JOIN enterprise_notification_subscriptions s ON s.enterprise_id=c.enterprise_id AND s.event_key='COMERCIAL_CONTRATO_VENCENDO' AND s.enabled
+	  WHERE c.situacao='ATIVO' AND c.vigencia_fim <= CURRENT_DATE + c.alerta_dias
+	 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+	`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Contrato encerrado ou cancelado'
+	  WHERE a.state='ABERTO' AND a.event_key='COMERCIAL_CONTRATO_VENCENDO'
+	    AND NOT EXISTS (SELECT 1 FROM contratos_venda c WHERE c.enterprise_id=a.enterprise_id AND c.id::text=a.aggregate_internal_id AND c.situacao='ATIVO')`,
+	`WITH saldo AS (
+	   SELECT c.enterprise_id, c.id AS contrato, c.numero, ci.id AS item, ci.item_code, ci.quantidade, c.alerta_saldo_pct,
+	          ci.quantidade - COALESCE((SELECT SUM(si.requested_qty - si.cancelled_qty) FROM contratos_venda_chamadas ch
+	                                     JOIN sales_order_items si ON si.code=ch.sales_order_item_code
+	                                    WHERE ch.contrato_item_id=ci.id AND si.status <> 'CANCELLED'), 0) AS resta
+	     FROM contratos_venda c JOIN contratos_venda_itens ci ON ci.contrato_id=c.id AND ci.enterprise_id=c.enterprise_id
+	    WHERE c.situacao='ATIVO' AND c.alerta_saldo_pct > 0
+	 )
+	 INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+	 SELECT s.enterprise_id,'COMERCIAL_CONTRATO_SALDO_BAIXO',1,'CONTRATO_VENDA_ITEM',s.item::text,s.numero::text,
+	        jsonb_build_object('descricao','O item '||COALESCE(i.business_code,s.item_code::text)||' do contrato '||s.numero||' tem saldo de '||s.resta||' de '||s.quantidade||'.',
+	                           'contrato',s.numero,'item',jsonb_build_object('codigo',i.business_code,'descricao',i.name),'saldo',s.resta,'contratado',s.quantidade),
+	        'contrato_item:'||s.item::text||':saldo'
+	   FROM saldo s
+	   JOIN enterprise_notification_subscriptions sub ON sub.enterprise_id=s.enterprise_id AND sub.event_key='COMERCIAL_CONTRATO_SALDO_BAIXO' AND sub.enabled
+	   LEFT JOIN items i ON i.code=s.item_code AND i.enterprise_id=s.enterprise_id
+	  WHERE s.resta < s.quantidade * s.alerta_saldo_pct / 100
+	 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+	`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Saldo do contrato regularizado ou contrato encerrado'
+	  WHERE a.state='ABERTO' AND a.event_key='COMERCIAL_CONTRATO_SALDO_BAIXO'
+	    AND NOT EXISTS (
+	      SELECT 1 FROM contratos_venda_itens ci JOIN contratos_venda c ON c.id=ci.contrato_id AND c.enterprise_id=ci.enterprise_id
+	       WHERE ci.enterprise_id=a.enterprise_id AND ci.id::text=a.aggregate_internal_id AND c.situacao='ATIVO'
+	         AND ci.quantidade - COALESCE((SELECT SUM(si.requested_qty - si.cancelled_qty) FROM contratos_venda_chamadas ch
+	                                        JOIN sales_order_items si ON si.code=ch.sales_order_item_code
+	                                       WHERE ch.contrato_item_id=ci.id AND si.status <> 'CANCELLED'), 0) < ci.quantidade * c.alerta_saldo_pct / 100)`,
 }
 
 // SchedulePolicyCycleCounts materializes the permanent policy stored on each
@@ -1116,4 +1285,73 @@ func (r *Repository) TransitionCycleCount(ctx context.Context, tenant int64, id,
 		}
 	}
 	return updated, tx.Commit(ctx)
+}
+
+// centroDeCustoStatements: o orçamento do mês estourado no centro de custo
+// (realizado do contas a pagar acima do orçado) e a requisição que espera o
+// aprovador do centro. A pendência de orçamento é do mês: resolve quando o
+// realizado volta para dentro do orçado (estorno, orçamento revisto) ou o mês
+// acaba; a de requisição, quando o aprovador decide.
+var centroDeCustoStatements = []string{
+	`WITH realizado AS (
+	   SELECT x.enterprise_id, x.centro, SUM(x.valor) AS valor FROM (
+	     SELECT cp.enterprise_id, r.centro_custo_id AS centro, cp.data_emissao AS dia, r.valor
+	       FROM contas_pagar_rateios r JOIN contas_pagar cp ON cp.id = r.conta_pagar_id
+	      WHERE cp.is_active AND cp.status <> 'CANCELADO' AND r.centro_custo_id IS NOT NULL
+	     UNION ALL
+	     SELECT cp.enterprise_id, cp.centro_custo_id, cp.data_emissao, cp.valor_bruto
+	       FROM contas_pagar cp
+	      WHERE cp.is_active AND cp.status <> 'CANCELADO' AND cp.centro_custo_id IS NOT NULL
+	        AND NOT EXISTS (SELECT 1 FROM contas_pagar_rateios r WHERE r.conta_pagar_id = cp.id)
+	   ) x
+	   WHERE date_trunc('month', x.dia) = date_trunc('month', CURRENT_DATE)
+	   GROUP BY x.enterprise_id, x.centro
+	 )
+	 INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+	 SELECT o.enterprise_id, 'FINANCEIRO_CENTRO_ORCAMENTO_ESTOURADO', 1, 'CENTRO_CUSTO', c.id::text, g.codigo,
+	        jsonb_strip_nulls(jsonb_build_object(
+	          'descricao', 'O centro de custo ' || g.codigo || ' passou do orçamento do mês.',
+	          'centro', jsonb_build_object('codigo', g.codigo, 'descricao', c.description, 'responsavel', ur.name),
+	          'mes', to_char(CURRENT_DATE, 'MM/YYYY'), 'orcado', o.valor, 'realizado', rz.valor, 'excedente', rz.valor - o.valor)),
+	        'orcamento:' || c.id::text || ':' || o.ano::text || '-' || o.mes::text
+	   FROM cost_center_orcamentos o
+	   JOIN cost_centers c ON c.id = o.cost_center_id
+	   JOIN cost_center_gestao g ON g.cost_center_id = c.id
+	   LEFT JOIN users ur ON ur.id = g.responsavel_id
+	   JOIN realizado rz ON rz.enterprise_id = o.enterprise_id AND rz.centro = o.cost_center_id
+	   JOIN enterprise_notification_subscriptions s ON s.enterprise_id = o.enterprise_id AND s.event_key = 'FINANCEIRO_CENTRO_ORCAMENTO_ESTOURADO' AND s.enabled
+	  WHERE o.ano = EXTRACT(YEAR FROM CURRENT_DATE) AND o.mes = EXTRACT(MONTH FROM CURRENT_DATE)
+	    AND o.valor > 0 AND rz.valor > o.valor
+	 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+	`UPDATE notification_alerts a SET state='RESOLVIDO', resolved_at=NOW(), resolution_reason='Realizado dentro do orçado ou mês encerrado'
+	  WHERE a.state = 'ABERTO' AND a.event_key = 'FINANCEIRO_CENTRO_ORCAMENTO_ESTOURADO'
+	    AND (a.deduplication_key NOT LIKE '%:' || EXTRACT(YEAR FROM CURRENT_DATE)::int::text || '-' || EXTRACT(MONTH FROM CURRENT_DATE)::int::text
+	         OR NOT EXISTS (
+	           SELECT 1 FROM cost_center_orcamentos o
+	            WHERE o.enterprise_id = a.enterprise_id AND o.cost_center_id::text = a.aggregate_internal_id
+	              AND o.ano = EXTRACT(YEAR FROM CURRENT_DATE) AND o.mes = EXTRACT(MONTH FROM CURRENT_DATE) AND o.valor > 0
+	              AND o.valor < COALESCE((
+	                SELECT SUM(x.valor) FROM (
+	                  SELECT r.valor, cp.data_emissao AS dia FROM contas_pagar_rateios r JOIN contas_pagar cp ON cp.id = r.conta_pagar_id
+	                   WHERE cp.enterprise_id = o.enterprise_id AND cp.is_active AND cp.status <> 'CANCELADO' AND r.centro_custo_id = o.cost_center_id
+	                  UNION ALL
+	                  SELECT cp.valor_bruto, cp.data_emissao FROM contas_pagar cp
+	                   WHERE cp.enterprise_id = o.enterprise_id AND cp.is_active AND cp.status <> 'CANCELADO' AND cp.centro_custo_id = o.cost_center_id
+	                     AND NOT EXISTS (SELECT 1 FROM contas_pagar_rateios r WHERE r.conta_pagar_id = cp.id)
+	                ) x WHERE date_trunc('month', x.dia) = date_trunc('month', CURRENT_DATE)), 0)))`,
+	`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
+	 SELECT a.enterprise_id, 'COMPRAS_REQUISICAO_AGUARDANDO_CENTRO', 1, 'REQUISICAO_COMPRA', a.id::text, a.requisition_code::text,
+	        jsonb_strip_nulls(jsonb_build_object(
+	          'descricao', 'A requisição de compra ' || a.requisition_code || ' espera a decisão do aprovador do centro de custo ' || g.codigo || '.',
+	          'requisicao', a.requisition_code, 'centro', g.codigo, 'aprovador', u.name, 'desde', a.criado_em)),
+	        'requisicao_centro:' || a.id::text || ':' || floor(extract(epoch FROM a.criado_em))::bigint::text
+	   FROM requisicao_aprovacoes_centro a
+	   JOIN cost_center_gestao g ON g.cost_center_id = a.cost_center_id
+	   LEFT JOIN users u ON u.id = a.aprovador_id
+	   JOIN enterprise_notification_subscriptions s ON s.enterprise_id = a.enterprise_id AND s.event_key = 'COMPRAS_REQUISICAO_AGUARDANDO_CENTRO' AND s.enabled
+	  WHERE a.status = 'PENDENTE'
+	 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+	`UPDATE notification_alerts al SET state='RESOLVIDO', resolved_at=NOW(), resolution_reason='Requisição decidida pelo aprovador do centro'
+	  WHERE al.state = 'ABERTO' AND al.event_key = 'COMPRAS_REQUISICAO_AGUARDANDO_CENTRO'
+	    AND NOT EXISTS (SELECT 1 FROM requisicao_aprovacoes_centro a WHERE a.enterprise_id = al.enterprise_id AND a.id::text = al.aggregate_internal_id AND a.status = 'PENDENTE')`,
 }

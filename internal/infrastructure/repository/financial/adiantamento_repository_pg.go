@@ -292,7 +292,7 @@ func (r *FinancialRepositoryPG) ListAplicacoesByAdiantamento(ctx context.Context
 	return result, rows.Err()
 }
 
-const adiantamentoSelect = `SELECT id, tipo, parceiro_id, conta_bancaria_id, numero_documento, data_adiantamento,
+const adiantamentoSelect = `SELECT id, tipo, parceiro_id, COALESCE(conta_bancaria_id, 0), numero_documento, data_adiantamento,
 	    valor_original, valor_utilizado, status, descricao, is_active, created_by, created_at, updated_at
 	 FROM public.adiantamentos`
 

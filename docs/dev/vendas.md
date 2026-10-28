@@ -62,7 +62,7 @@ faturamento, o pedido passa para `F`.
 | GET | `/report` | Relatório gerencial da carteira |
 | GET | `/{code}` | Consulta por código |
 | PUT | `/{code}` | Atualiza a capa |
-| DELETE | `/{code}/cancel` | Cancela o pedido com motivo/complemento |
+| DELETE | `/{code}/cancel` | Cancela o pedido com motivo/complemento. Os títulos a receber ligados ao pedido (sinal, adiantamento, título lançado à mão) são cancelados e saem da lista; título com recebimento — ou que veio da NF de saída — impede o cancelamento |
 | POST | `/{code}/analyze` | Registra análise comercial ou financeira |
 | POST | `/{code}/release` | Libera, libera manualmente ou bloqueia |
 | POST | `/{code}/attend` | Registra atendimento manual |
@@ -129,6 +129,14 @@ atraso podem receber motivo e ação planejada para acompanhamento da carteira.
 > crédito** (exposição = contas a receber em aberto + outros pedidos em aberto).
 > Excedeu o limite (ou cliente bloqueado) → pedido **bloqueado** automaticamente,
 > sem gerar demanda nem reserva. Ver `sales_order_uc/credit_check.go`.
+>
+> ✅ **Aprovação de crédito (migration 000413):** com política
+> `LIBERACAO_CREDITO` ativa (VAPR0100), o bloqueio abre uma solicitação no motor
+> de aprovação (`/api/aprovacoes`) e o `PATCH /{code}/unblock` é recusado
+> enquanto ela estiver pendente. Aprovada no último nível, o pedido é
+> desbloqueado **e termina a confirmação** (demanda do MRP e reserva, na mesma
+> transação). Sem política, o desbloqueio manual também termina a confirmação —
+> antes o pedido liberado nunca gerava demanda nem reserva.
 >
 > ✅ **Automação (ATP/reserva):** aprovado no crédito, cada linha **reserva o
 > estoque disponível** no depósito da linha (limitado ao disponível). ATP em
@@ -1168,6 +1176,227 @@ Migration `000193_technical_assistance` cria:
 
 ---
 
+## 10.1 Número de série e base instalada (`/api/pos-venda`) — migration 000434
+
+Pós-venda Fase 3.1 (plano em `.ai/tasks/pos-venda-fase3.md`). O equipamento é
+seguido pelo número de série, do estoque ao cliente — o equipamento/número de
+série do SAP, a Base de Atendimento do TOTVS. Domínio em
+`internal/domain/posvenda/serie`, caso de uso `serie_uc`, repositório
+`repository/serie` (pool ou transação: `New` / `NewTx`).
+
+**Tabelas.** `item_pos_venda` (perfil por empresa e item: `controla_serie`,
+`mascara_serie_id` → `lot_masks`), `numeros_serie` (única por empresa + item +
+série; situação `EM_ESTOQUE`, `NO_CLIENTE`, `EM_ASSISTENCIA`, `BAIXADO`; origem
+`PRODUCAO`, `COMPRA`, `CADASTRO`), `numeros_serie_eventos` (histórico imutável por
+gatilho) e `fiscal_exit_item_series` (séries da linha da NF; índice único parcial
+`ativo` impede a mesma série em duas notas vivas).
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET | `/perfis` · `/perfis/{item}` | Perfis / perfil do item (código de negócio) |
+| PUT | `/perfis/{item}` | Grava o perfil |
+| GET | `/series?item=&cliente=&situacao=&busca=&limite=` | Base instalada |
+| POST | `/series` | Cadastro manual (uma ou várias séries do item) |
+| GET | `/series/{id}` | Série com o histórico |
+| POST | `/series/{id}/instalacao` · `/transferencia` · `/baixa` | Transições (baixa = EXCLUIR no catálogo de acesso) |
+| GET | `/api/fiscal/exits/{id}/series` | Linhas da nota de item com série |
+| PUT | `/api/fiscal/exits/{id}/itens/{itemId}/series` | Séries da linha (nota em rascunho/rejeitada; só série em estoque) |
+
+**Integrações.**
+- **Entrega da OF:** `RegisterDeliveryWithMovements` chama
+  `serie.EntradaPelaProducaoTx` na mesma transação. `numeros_serie` do corpo, ou,
+  vazio, geradas pela máscara do perfil com as partes travadas (`FOR UPDATE`) — a
+  sequência não repete nem pula. Quantidade inteira, uma série por unidade.
+- **Prévia da NF:** `PreviaNFeUseCase.Series` → pendência IMPEDE
+  (`itens.numero_serie`) sem uma série em estoque por unidade, ou sem cliente do
+  cadastro.
+- **Transmissão:** `anexarSeries` grava as séries no `informacoes_adicionais_item`
+  (infAdProd) — na prévia e na autorização.
+- **Efeitos da NF:** `EfeitosRepos.Series` — autorização leva as séries ao cliente
+  (`VENDA`, com NF e data); cancelamento volta ao estoque (`ESTORNO_VENDA`) e solta
+  a nota.
+
+Telas: VATC0110 (perfil), VATC0100 (base instalada), VPRO0900 (séries na entrega),
+VFIS0200 (séries na prévia). Teste: `serie_uc/serie_integration_test.go`.
+
+---
+
+## 10.2 Garantia automática (`/api/pos-venda/garantia`) — migration 000435
+
+Pós-venda Fase 3.2. Regra pura em `internal/domain/posvenda/garantia`
+(`Determinar`): começa na venda — ou na instalação, se o perfil manda e ela foi
+registrada —, vale até o último dia do prazo (inclusive) e a garantia estendida
+da série prevalece quando vai além. Sem meses no perfil, vale
+`items.commercial_warranty_days`. Vencida, a cobertura sai toda falsa.
+
+- **Perfil** (`item_pos_venda`): `garantia_meses` (0–240), `garantia_inicio`
+  (`VENDA`/`INSTALACAO`), `cobre_pecas`, `cobre_mao_obra`, `cobre_deslocamento`.
+- **Série** (`numeros_serie`): `garantia_estendida_ate/_motivo`
+  (`POST /series/{id}/garantia-estendida`, evento `GARANTIA_ESTENDIDA`).
+- **Fonte da data** (`serie_uc.Determinar`): série da base instalada > NF de
+  saída **autorizada** do cliente com o número informado (`NotaDoCliente`) > data
+  informada. Avisos: série de outro cliente, série baixada, série ou NF não
+  encontrada.
+- **Item do chamado** (`technical_assistance_uc.AddCallItem`, campo `Garantia`):
+  grava `serie_id`, `garantia_origem` (`SERIE`/`NF`/`INFORMADA`),
+  `garantia_inicio`, a cobertura e `warranty_until`/`in_warranty`. Só sem decisão
+  do pós-venda vale o cálculo antigo (data da compra + dias digitados).
+- `GET /api/pos-venda/garantia?item=&serie=&cliente=&nf=&data_compra=` é a
+  consulta que a VATC0280 mostra antes de incluir o item.
+
+Teste: `serie_uc/garantia_integration_test.go`.
+
+---
+
+## 10.3 Ordem de serviço (`/api/pos-venda/os`) — migration 000436
+
+Pós-venda Fase 3.3. Atendimento do chamado **no cliente** (`CLIENTE`, técnico de
+campo) ou **na fábrica** (`FABRICA`, RMA). Regras puras em
+`internal/domain/posvenda/ordem` (transições, cobertura, totais); caso de uso
+`ordem_servico_uc`; repositório `repository/ordemservico`.
+
+- **Tabelas:** `os_parametros` (custo/preço da hora e do km, almoxarifado,
+  `item_servico_code`), `ordens_servico` (número por empresa, chamado, item do
+  chamado, série, cobertura copiada do item do chamado), `os_horas`, `os_pecas`,
+  `os_despesas` e `os_eventos` (imutável).
+- **Situações:** `ABERTA → AGENDADA → EM_EXECUCAO → CONCLUIDA → FATURADA`;
+  `CANCELADA` antes da conclusão; `CONCLUIDA → EM_EXECUCAO` (reabertura com
+  motivo). Iniciar exige técnico (`employees.code`); concluir exige hora
+  apontada, defeito constatado e solução.
+- **Série:** na OS `FABRICA`, iniciar leva a série a `EM_ASSISTENCIA` (evento
+  `ASSISTENCIA`) e concluir/cancelar a devolve a `NO_CLIENTE`
+  (`RETORNO_ASSISTENCIA`), na transação da OS (`serierepository.AssistenciaTx`).
+  Série que não está com o cliente no sistema não muda.
+- **Cobrado × garantia:** decidido pela cobertura (`Cobertura.PecaCobrada`,
+  `HoraCobrada(tipo)`, `DespesaCobrada`). Deslocamento (horas `DESLOCAMENTO` e
+  despesas) segue `cobre_deslocamento`.
+- **Estoque:** peça em garantia sai na hora (`OUT`, referência
+  `ASSISTENCIA_OS`, custo médio) e volta com `IN` ao mesmo custo se removida.
+  Peça **cobrada não movimenta estoque na OS**: o custo é estimado pela média e
+  ela sai pela NF do pedido do faturamento (a NF de saída sempre baixa estoque —
+  baixar na OS seria em dobro). OS com peça baixada só cancela depois de
+  removê-la.
+- **Faturamento** (`POST /os/{id}/faturamento`, só `CONCLUIDA` com valor a
+  cobrar): pedido de venda em rascunho, origem `ASSISTANCE`, uma linha por peça
+  cobrada e uma linha do item de serviço com o total das horas e despesas
+  cobradas. A OS fica `FATURADA` com `sales_order_code`. Tudo numa transação
+  com a OS travada (`ordemservico.PG.Faturar`): número, capa, linhas, totais
+  e a passagem a `FATURADA`. Falha numa linha não deixa pedido pela metade, e
+  dois cliques não faturam a mesma OS duas vezes. As linhas recalculam o total
+  e o pedido é totalizado (antes nasciam com total zero).
+- **Rotas:** `GET|PUT /os-parametros` (PUT só ADMIN), `GET|POST /os`,
+  `GET /os/{id}`, `POST /os/{id}/{agenda|inicio|conclusao|reabertura|cancelamento|faturamento|horas|pecas|despesas}`,
+  `DELETE /os/{id}/{horas|pecas|despesas}/{lancamento}`. Acesso: módulo
+  Assistência; cancelamento = Excluir, faturamento = Aprovar.
+- O item de serviço dos parâmetros e o item da peça vêm pelo **código de
+  negócio** (`item_servico`, `item_code`).
+
+Teste: `ordem_servico_uc/ordem_servico_integration_test.go`.
+
+---
+
+## 10.4 SLA da assistência (`/api/pos-venda/sla`) — migration 000437
+
+Pós-venda Fase 3.4. Regras puras em `internal/domain/posvenda/sla` (`Conferir`,
+`Prazos`, `Escolher`, `Situacao`); caso de uso `sla_uc`; repositório
+`repository/slaassistencia`.
+
+- **Regra** (`sla_assistencia`, por `enterprise_id`): prioridade
+  (`LOW`/`NORMAL`/`HIGH`/`CRITICAL`), `customer_code` opcional (acordo do
+  cliente, vence a geral), `horas_resposta`, `horas_solucao` (≥ resposta),
+  `alerta_pct` (1–99, padrão 80), `ativo`. Única por empresa + prioridade +
+  cliente (`NULLS NOT DISTINCT`). `customer_code` sem FK (o código do cliente
+  não é único sozinho); o repositório confere a empresa.
+- **Chamado** (`technical_assistance_calls`, empresa pelo `enterprise_code`):
+  `sla_id`, `sla_resposta_ate`, `sla_solucao_ate`, `sla_alerta_pct` gravados
+  na abertura (`CreateCall` → `SLA.AplicarAoChamado`). Mudar a regra não
+  reescreve chamado aberto. A tela manda só a data de
+  abertura: se é hoje, vale a hora real (`momentoDaAbertura`); data
+  retroativa fica como informada.
+- **Primeira resposta** (`respondido_em`, gravada uma vez): `UpdateStatus`
+  para qualquer situação diferente de `PENDING`/`CANCELLED`, ou a abertura de
+  OS (`ordem_servico_uc.Abrir`). **Solução**: `attended_at` (ou `closed_at`).
+- **Horas úteis** (migration 000444): a regra com `horas_uteis` conta só o
+  expediente da empresa (`sla_expediente`, intervalos por dia da semana; sem
+  cadastro, seg–sex 08–12 e 13–18) no fuso da empresa
+  (`enterprise_notification_settings.timezone`, padrão America/Sao_Paulo),
+  menos as folgas do calendário industrial (`is_workday = false`). O chamado
+  guarda `sla_horas_uteis`. Domínio: `sla.Calendario` (`Somar`, `Entre`).
+  Rotas `GET|PUT /sla/expediente` (PUT só ADMIN).
+- **Relógio parado:** em `WAITING_RETURN` ou `WAITING_ORDER` (aguardando o
+  cliente), `sla_pausado_desde` é preenchido e uma linha abre em `sla_pausas`.
+  Ao sair da espera para qualquer situação, inclusive atendido, os prazos em
+  aberto andam o tempo parado, no mesmo relógio da regra. A resposta só anda
+  se ainda não respondida. A pausa fecha com as horas paradas e
+  `sla_horas_pausadas` acumula. Ir de uma espera a outra não reinicia a pausa.
+  Gancho: `UpdateStatus` → `SLA.MudouStatus(de, para)`.
+- **Momento de risco** gravado no chamado (`sla_resposta_risco_em`,
+  `sla_solucao_risco_em`): o percentual de alerta no mesmo relógio. Com horas
+  úteis ele não é o percentual do intervalo corrido. Chamados anteriores foram
+  preenchidos pela conta corrida.
+- **Situação de cada prazo:** `NO_PRAZO`, `EM_RISCO` (passou do momento de
+  risco), `VENCIDO`, `CUMPRIDO`, `ESTOURADO` (concluído depois do prazo),
+  `PAUSADO` (relógio parado), `SEM_PRAZO`.
+- **Alertas** (`ScheduleOperationalAlerts`, `slaAssistenciaStatements`):
+  eventos `ASSISTENCIA_SLA_EM_RISCO` (ATENCAO) e `ASSISTENCIA_SLA_VENCIDO`
+  (CRITICO), pendências do módulo `ASSISTENCIA`. Só para empresa com
+  assinatura ativa. Chave `chamado:<code>:<resposta|solucao>:<risco|vencido>:<limite em epoch>`
+  (o prazo estendido que voltar a vencer alerta de novo). Chamado parado não
+  alerta. O alerta se resolve com o chamado respondido, solucionado ou
+  cancelado; o de risco, também quando o prazo vence; qualquer um quando a
+  retomada empurra o prazo.
+- **Rotas:** `GET /sla/regras`, `POST /sla/regras`, `PUT|DELETE /sla/regras/{id}`
+  (escrita só ADMIN), `GET /sla/painel?situacao=&cliente=&dias=` (situação
+  `EM_RISCO`/`VENCIDO` filtra pelo pior dos dois prazos; `PAUSADO`, pelos
+  chamados parados; `TODOS` inclui os encerrados dos últimos `dias`, padrão 90).
+
+Teste: `sla_uc/sla_integration_test.go`.
+
+---
+
+## 10.5 Indicadores, CAPA do chamado e recuperação (`/api/pos-venda`) — migration 000438
+
+Pós-venda Fase 3.5.
+
+- **Chamado → CAPA** (`recuperacao_uc.AbrirCAPA`,
+  `POST /chamados/{code}/capa {call_item_code?, metodo, responsavel?, prazo?}`):
+  abre pela `capa_uc` uma CAPA de origem `RECLAMACAO_CLIENTE`, com o cliente,
+  o item (o do item do chamado escolhido, ou o único) e a referência
+  "Chamado de assistência N", e grava `technical_assistance_calls.capa_id`.
+  Uma CAPA por chamado: a ligação é condicional (`capa_id IS NULL`). Se a
+  ligação falhar depois de a CAPA ser aberta, o erro cita a CAPA criada.
+- **Recuperação junto ao fornecedor** (`recuperacoes_fornecedor`, domínio
+  `posvenda/recuperacao`): `RECLAMADA → ACEITA | RECUSADA | RECUPERADA`;
+  `ACEITA → RECUPERADA | RECUSADA`; finais `RECUSADA` (exige resposta) e
+  `RECUPERADA` (exige valor > 0 e ≤ reclamado, forma `NOTA_CREDITO`/`DEBITO`/
+  `REPOSICAO`/`DESCONTO` e data). Aberta pela OS: herda chamado, item e a CAPA
+  do chamado. O fornecedor é da empresa (`suppliers.code` + `enterprise_id`).
+  Rotas: `GET|POST /recuperacoes`, `GET /recuperacoes/{id}`,
+  `POST /recuperacoes/{id}/situacao`.
+- **Indicadores** (`GET /indicadores?de=&ate=`, padrão 90 dias, máximo 3 anos;
+  domínio `posvenda/indicadores`, leitura em `repository/indicadorespv`):
+  - **Custo da garantia:** soma das linhas **não cobradas**, pelo custo
+    (horas × custo/h, peças × custo unitário, despesas × custo), das OS
+    `CONCLUIDA`/`FATURADA` concluídas no período. **Cobrado:** linhas
+    cobradas, pelo preço.
+  - **Recuperado:** reclamações `RECUPERADA` com `recuperado_em` no período.
+    **Custo líquido** = garantia − recuperado.
+  - Custo por **item**, **motivo do defeito** (do item do chamado) e **lote**
+    (da série).
+  - **MTTR:** média de `concluida_em − iniciada_em` das OS.
+  - **SLA:** `sla.Situacao` sobre os chamados com prazo abertos no período; só
+    entram os prazos já decididos (cumprido, estourado, vencido).
+  - **Confiabilidade** por item com série: em campo = `NO_CLIENTE` +
+    `EM_ASSISTENCIA`. Taxa de falha = séries com chamado no período ÷ em
+    campo. MTBF = dias em campo de todas as séries (da instalação ou da
+    venda até o último dia do período ou a baixa) ÷ falhas (itens de chamado
+    com a série, fora os cancelados).
+  - As datas vão como parâmetro do Go, nunca `CURRENT_DATE`.
+
+Teste: `recuperacao_uc/posvenda_qualidade_integration_test.go`.
+
+---
+
 ## 11. Atendimento ao Consumidor / SAC (`/api/consumer-service`)
 
 Modulo comercial para centralizar consumidores finais, contatos com clientes e
@@ -1389,3 +1618,165 @@ Migration `000195_recurring_sales` cria:
 | POST | `/{code}/cancel` | Cancela |
 
 **Status:** `OPEN` → `SEPARATED` → `CONFERRED` → `SHIPPED` (`CANCELLED`).
+
+**Numeração por empresa (migration 000440):** o número do romaneio e o da
+carga vêm de `shipment_sequences` / `shipment_load_sequences` (uma linha por
+empresa) e são únicos em `(enterprise_id, code)`. Até a 000440 a unicidade era
+global: a segunda empresa não conseguia criar o romaneio 1. A caixa de
+expedição aponta a carga da mesma empresa (FK `(enterprise_id, current_load)`).
+Teste: `shipment_uc/romaneio_por_empresa_integration_test.go`.
+
+## 13. Motor de aprovação (`/api/aprovacoes`) — migration 000413
+
+Tela **VAPR0100 — Aprovações** (rotina pessoal: aparece para qualquer perfil).
+
+| Rota | Quem | O que faz |
+|---|---|---|
+| `GET /solicitacoes?status=` | ADMIN/USER | Solicitações da empresa; `posso_aprovar` diz se é a vez do usuário (ou `motivo_bloqueio`). |
+| `GET /solicitacoes/{id}` | ADMIN/USER | Solicitação com o histórico. |
+| `POST /solicitacoes/{id}/aprovar` | aprovador do nível | Aprova o nível atual; no último, efetiva no documento. |
+| `POST /solicitacoes/{id}/reprovar` | aprovador do nível | Reprova (justificativa obrigatória); o documento segue bloqueado. |
+| `GET /politicas` · `PUT /politicas/{tipo}` | ADMIN | Alçada por tipo de documento. |
+
+- **Tipos:** `LIBERACAO_CREDITO` (pedido bloqueado pelo limite) e
+  `ORCAMENTO_POLITICA_COMERCIAL` (orçamento bloqueado por política comercial com
+  "exige aprovação"; aprovado, vira `RELEASED` com o nº da aprovação no
+  histórico; a liberação manual `PATCH /api/sales-quotation/{code}/release` é
+  recusada enquanto houver pendente).
+- **Níveis em escalada:** cada nível tem um teto (`valor_ate`) e um aprovador —
+  perfil de acesso da empresa OU usuário. O valor do documento exige os níveis
+  até o primeiro teto que o cobre; só o último nível fica sem teto.
+- **Segregação de funções** (padrão ligado): quem pediu não aprova e a mesma
+  pessoa não aprova dois níveis.
+- **Concorrência:** a aprovação grava só se a solicitação ainda estiver no nível
+  lido (dois aprovadores ao mesmo tempo não pulam nível — 409).
+- **Histórico imutável:** `aprovacao_eventos` recusa UPDATE/DELETE por gatilho.
+- **Sem política ativa** o módulo segue como antes (liberação manual).
+- Efetivar é idempotente; roda antes de concluir a solicitação, então uma falha
+  no documento mantém a aprovação pendente.
+
+
+## 14. Devolução de venda (`/api/devolucoes-venda`) — migration 000441
+
+Fase 5.1. Domínio `internal/domain/devolucaovenda` (CFOP de devolução,
+cálculo proporcional reaproveitando `fiscal/devolucao.Montar`, regras de
+abertura/efetivação); caso de uso `devolucao_venda_uc`; repositório
+`repository/devolucaovenda`. Tela VVND0700.
+
+- **Documento** (`devolucoes_venda`, `devolucoes_venda_itens`): nasce da NF de
+  saída `AUTHORIZED` (tipo 1) da empresa; por linha, quantidade ≤ vendido −
+  devolvido em devoluções não canceladas (conferido de novo na gravação, com a
+  NF travada); série obrigatória (uma por unidade, entre as que saíram na nota
+  e estão `NO_CLIENTE`). Grava valores e bases proporcionais.
+- **Modos:** `EMISSAO_PROPRIA` — `POST /{id}/nf` cria em `fiscal_exits` a NF-e
+  de **entrada** (`tipo_documento = 0`, `finalidade = 4`, `nfe_referenciada` =
+  chave da venda, `devolucao_venda_id`, itens com `fiscal_exit_item_origem_id`
+  e CFOP `dom.CFOP`); o payload da Focus usa `tipo_documento` da nota.
+  `NF_CLIENTE` — chave de 44 dígitos da NF do cliente; efetiva do rascunho.
+- **Efetivação** (idempotente, uma transação, `Repo.Efetivar`): entrada no
+  estoque (`reference_type = DEVOLUCAO_VENDA`) pelo custo médio da saída
+  original (`stock_movements` da NF de venda); séries de volta
+  (`serierepository.DevolucaoTx`, evento `DEVOLUCAO_VENDA`); abatimento dos
+  `contas_receber` em aberto da NF (desconto; quitado vira `RECEBIDO`); o
+  restante vira **adiantamento RECEBER** do cliente sem conta bancária (sem
+  fluxo de caixa — `adiantamentos.conta_bancaria_id` passou a aceitar nulo);
+  acertos em `fiscal_return_settlements` (`devolucao_venda_id`); estorno
+  proporcional da comissão `COMPETENCIA_FATURAMENTO` (`ESTORNO_FATURAMENTO`,
+  idempotência `devolucao_venda:<id>:<code>`). Fora da transação, os impostos
+  da devolução entram como crédito na apuração (`UpsertTaxAssessmentCredito`).
+- **Ganchos fiscais:** `AuthorizeFiscalExitUseCase` e `ConsultarNFeUseCase`
+  chamam `DevolucaoVenda.AoAutorizar` para a nota com `devolucao_venda_id` —
+  e **não** rodam os efeitos de venda (baixa de estoque/título).
+  `CancelFiscalExitUseCase` recusa cancelar a NF-e de devolução já efetivada.
+- **Cancelamento** da devolução: só rascunho/emitida sem efetivação (a NF-e
+  própria ainda não autorizada é cancelada junto; autorizada exige cancelar na
+  SEFAZ antes).
+- **Rotas:** `GET /previa?nota=`, `GET|POST /`, `GET /{id}`, `POST /{id}/nf`,
+  `POST /{id}/efetivar` (Aprovar), `POST /{id}/cancelamento` (Excluir); módulo
+  Comercial.
+- **Homologação Focus (2026-10-26):** venda NF 37 e devolução por emissão
+  própria NF 38 autorizadas (protocolo 141260000656871); a devolução efetivou
+  na autorização (estoque +4 pelo custo da saída, 210,00 abatidos do título).
+  O primeiro envio voltou com a rejeição **321** ("devolução não possui
+  documento fiscal referenciado [nItem]"). Desde a reforma, a SEFAZ exige a
+  referência POR ITEM (`gDFeReferenciado`: chave + nItem da saída). Agora
+  `fiscal_uc.referenciarDevolucaoDeVenda` preenche isso pela
+  `fiscal_exit_item_origem_id` de cada linha (`SequenciaDoItemDeSaida`), na
+  autorização e na prévia, como já fazia a devolução de compra.
+
+Teste: `devolucao_venda_uc/devolucao_venda_integration_test.go`,
+`fiscal_uc/tipo_documento_test.go`.
+
+## 15. Contrato de venda (`/api/contratos-venda`) — migration 000442
+
+Fase 5.2. Domínio `internal/domain/contratovenda` (cadastro, transições,
+`ConferirChamada`); caso de uso `contrato_venda_uc`; repositório
+`repository/contratovenda`. Tela VVND0710.
+
+- **Tabelas:** `contratos_venda` (cliente, vigência, `valor_contratado`
+  opcional, alertas), `contratos_venda_itens` (quantidade e preço fixados, um
+  por item), `contratos_venda_programacao` (parcelas; `sales_order_code`
+  quando atendida) e `contratos_venda_chamadas` (cada linha de pedido que
+  consumiu o contrato — o pedido de venda não ganhou coluna).
+- **Situações:** `RASCUNHO → ATIVO` (com item) `→ ENCERRADO`; `CANCELADO` só
+  sem chamada.
+- **Saldo:** consumido = Σ(`requested_qty − cancelled_qty`) dos itens de
+  pedido ligados e não `CANCELLED`; valor consumido = Σ × preço. Pedido
+  cancelado devolve o saldo.
+- **Chamada** (`POST /{id}/chamadas`): o caso de uso monta o pedido de venda
+  (rascunho, preço do contrato, condição de pagamento do contrato, entrega na
+  vigência); `Repo.Chamar` trava o contrato (`FOR UPDATE`), confere o saldo de
+  novo e grava pedido, itens (repositório do pedido sobre `sqlc.New(tx)`),
+  vínculos e parcela atendida numa transação.
+- **Alertas:** `COMERCIAL_CONTRATO_VENCENDO` (ativo com `vigencia_fim ≤ hoje
+  + alerta_dias`) e `COMERCIAL_CONTRATO_SALDO_BAIXO` (item com saldo <
+  contratado × `alerta_saldo_pct`), com resolução automática.
+- **Rotas:** `GET|POST /`, `GET /{id}`, `POST /{id}/situacao` (Aprovar),
+  `POST /{id}/programacao`, `DELETE /{id}/programacao/{parcela}`,
+  `POST /{id}/chamadas`; módulo Comercial.
+- **Totais:** cada linha do pedido de chamada recalcula o total, e o pedido é
+  totalizado na mesma transação. Antes, linha e capa nasciam com total zero.
+- **Preço travado:** alterar a linha de chamada no pedido mantém o preço do
+  contrato (`UpdateSalesOrderItemUseCase.Contratos` → `PrecoContratado`), sem
+  exigir tabela de preço no pedido (Fase 5.3).
+
+Teste: `contrato_venda_uc/contrato_venda_integration_test.go`.
+
+## 16. Políticas comerciais e alçada de desconto no pedido — migration 000443
+
+Fase 5.3. As políticas comerciais (VPDV0108: desconto, acréscimo, frete e
+comissão por cliente, segmento, região, condição, tabela, transportadora,
+item/máscara/linha/classificação, faixa de quantidade/valor e vigência) só
+valiam no orçamento. Agora `sales_order_uc.PoliticaDoPedido` as aplica também
+no pedido, depois de incluir ou alterar uma linha.
+
+- **Alçada:** `parametros_comerciais.desconto_max_pct` por empresa (nulo = sem
+  limite), em `GET|PUT /api/parametros-comerciais` (PUT só ADMIN). A tela é a
+  VAPR0100, no bloco do tipo de aprovação do pedido.
+- **Antes de gravar a linha** (`ConferirDesconto`): desconto acima da alçada
+  só passa se houver política de aprovação `PEDIDO_POLITICA_COMERCIAL` ativa.
+  Sem ela, a linha é recusada (422), porque ninguém aprovaria.
+- **Depois de gravar** (`Aplicar`):
+  - preenche desconto, acréscimo, frete e comissão da capa quando estão zerados
+    (mesma regra do orçamento);
+  - desconto acima da alçada, ou política que exige aprovação, bloqueia o pedido
+    e abre uma solicitação. Não duplica: se já há uma pendente, nada muda;
+  - a aprovação concedida continua valendo enquanto o motivo é o mesmo e o
+    total não passa do valor aprovado. Subir o desconto ou o valor pede nova
+    aprovação.
+- **Efetivador:** `PEDIDO_POLITICA_COMERCIAL` usa `LiberacaoDeCredito`
+  (`ConclusaoDoDesbloqueio`): desbloqueia o pedido e, se ele já estava
+  confirmado, gera a demanda e a reserva.
+- **Um sinal de bloqueio, duas aprovações:** com crédito e alçada pendentes no
+  mesmo pedido, aprovar um conclui a aprovação mas mantém o pedido bloqueado;
+  quem libera é a última (`LiberacaoDeCredito.Tipo/Aprovacoes`). O desbloqueio
+  manual é recusado enquanto qualquer uma das duas estiver pendente.
+- **Alteração de linha:** a alçada só é conferida quando o desconto sobe.
+- **Conversão do orçamento:** `ConvertUseCase.Alcada` confere a alçada nas
+  linhas com saldo antes de converter e, depois, aplica no pedido só a alçada
+  (`AplicarAlcada`). As políticas já foram aplicadas e aprovadas no orçamento.
+- **Fora:** o pedido de chamada de contrato é criado pelo repositório do
+  contrato, com o preço negociado, sem passar pelas políticas.
+
+Testes: `sales_order_uc/politica_pedido_integration_test.go` e o trecho de
+preço travado em `contrato_venda_uc/contrato_venda_integration_test.go`.

@@ -95,6 +95,9 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 		case "22003": // numeric_value_out_of_range
 			RespondError(w, http.StatusUnprocessableEntity, "um dos valores numéricos está fora da faixa que o cadastro aceita")
 			return
+		case "P0001": // RAISE EXCEPTION de regra do banco: a mensagem é para o usuário
+			RespondErrorCode(w, http.StatusUnprocessableEntity, "REGRA_DE_NEGOCIO", pgErr.Message)
+			return
 		case "23502", "23514": // not_null_violation, check_violation
 			RespondError(w, http.StatusUnprocessableEntity, "há um campo obrigatório ausente ou inválido")
 			return

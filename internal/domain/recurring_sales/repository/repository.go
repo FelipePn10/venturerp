@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/entity"
@@ -34,7 +35,7 @@ type ProjectionFilter struct {
 	ItemCode           *int64
 	ItemClassification *int64
 	RepresentativeCode *int64
-	AdjustmentPercent  float64
+	AdjustmentPercent  decimal.Decimal
 }
 
 type CancellationCommand struct {

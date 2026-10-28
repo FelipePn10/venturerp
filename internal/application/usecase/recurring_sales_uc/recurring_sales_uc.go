@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -193,10 +193,10 @@ func (uc *UseCase) Update(ctx context.Context, code int64, dto request.UpdateRec
 	current.SalesPlanCode, current.MonthsQuantity, current.PaymentsQuantity = dto.SalesPlanCode, dto.MonthsQuantity, dto.PaymentsQuantity
 	current.NextAdjustmentDate = datetime.ParseDatePtr(&dto.NextAdjustmentDate)
 	current.GraceMonths, current.PaymentValue, current.Reason = dto.GraceMonths, dto.PaymentValue, dto.Reason
-	if dto.Quantity != 0 {
+	if !dto.Quantity.IsZero() {
 		current.Quantity = dto.Quantity
 	}
-	if dto.UnitValue != 0 {
+	if !dto.UnitValue.IsZero() {
 		current.UnitValue = dto.UnitValue
 	}
 	if dto.IsActive != nil {
@@ -257,7 +257,7 @@ func (uc *UseCase) AddRepresentative(ctx context.Context, dto request.CreateRecu
 	if !dto.IsLifetime && (dto.CommissionInstallments == nil || *dto.CommissionInstallments <= 0) {
 		return nil, errorsuc.NewValidationError("a quantidade de parcelas da comissão é obrigatória quando ela não é vitalícia")
 	}
-	if dto.CommissionPercent < 0 {
+	if dto.CommissionPercent.IsNegative() {
 		return nil, errorsuc.NewValidationError("o percentual de comissão não pode ser negativo")
 	}
 	created, err := uc.Repo.AddRepresentative(ctx, &entity.Representative{
@@ -390,7 +390,7 @@ func (uc *UseCase) CalculateAdjustment(ctx context.Context, dto request.Calculat
 	}
 	impacts := make([]response.RecurringSaleResponse, 0)
 	lineImpacts := make([]response.RecurringSalesAdjustmentLineImpactResponse, 0)
-	total := 0.0
+	total := decimal.Zero
 	groups := map[string][]*entity.RecurringSale{}
 	for _, row := range rows {
 		if row.TermType != entity.TermIndefinite || row.GeneratedOrderCode == nil || row.SaleDate.Month() == adjustDate.Month() && row.SaleDate.Year() == adjustDate.Year() {
@@ -408,14 +408,14 @@ func (uc *UseCase) CalculateAdjustment(ctx context.Context, dto request.Calculat
 	for _, groupRows := range groups {
 		adjustment := buildAdjustment(groupRows, adjustDate, dto.AdjustmentPercent, dto.Reason, dto.CreatedBy)
 		sourceCodes := make([]int64, 0, len(groupRows))
-		previousTotal := 0.0
+		previousTotal := decimal.Zero
 		for _, source := range groupRows {
 			sourceCodes = append(sourceCodes, source.Code)
-			previousTotal += monthlyValue(source)
+			previousTotal = previousTotal.Add(monthlyValue(source))
 		}
-		previousUnit := 0.0
-		if adjustment.Quantity > 0 {
-			previousUnit = previousTotal / adjustment.Quantity
+		previousUnit := decimal.Zero
+		if adjustment.Quantity.IsPositive() {
+			previousUnit = previousTotal.Div(adjustment.Quantity)
 		}
 		index := strings.TrimSpace(dto.AdjustmentIndex)
 		if index == "" && groupRows[0].AdjustmentIndex != nil {
@@ -423,12 +423,12 @@ func (uc *UseCase) CalculateAdjustment(ctx context.Context, dto request.Calculat
 		}
 		lineImpacts = append(lineImpacts, response.RecurringSalesAdjustmentLineImpactResponse{
 			SourceCodes: sourceCodes, ItemCode: adjustment.ItemCode, ItemMask: adjustment.ItemMask,
-			PreviousUnitValue: round4(previousUnit), NewUnitValue: adjustment.UnitValue,
-			Quantity: adjustment.Quantity, PreviousTotal: round2(previousTotal), NewTotal: monthlyValue(adjustment),
+			PreviousUnitValue: previousUnit.Round(4), NewUnitValue: adjustment.UnitValue,
+			Quantity: adjustment.Quantity, PreviousTotal: previousTotal.Round(2), NewTotal: monthlyValue(adjustment),
 			AdjustmentPercent: dto.AdjustmentPercent, AdjustmentIndex: index,
 			LegalBasis: strings.TrimSpace(dto.LegalBasis), EffectiveDate: adjustDate, Reason: strings.TrimSpace(dto.Reason),
 		})
-		total += monthlyValue(adjustment)
+		total = total.Add(monthlyValue(adjustment))
 		if dto.Confirm {
 			payload, _ := json.Marshal(dto)
 			digest := sha256.Sum256(payload)
@@ -489,7 +489,7 @@ func (uc *UseCase) CalculateAdjustment(ctx context.Context, dto request.Calculat
 		}
 		impacts = append(impacts, *toRecurringSaleResponse(adjustment))
 	}
-	return &response.RecurringSalesAdjustmentImpactResponse{Rows: impacts, Impacts: lineImpacts, TotalRows: len(impacts), TotalValue: round2(total), Confirmed: dto.Confirm}, nil
+	return &response.RecurringSalesAdjustmentImpactResponse{Rows: impacts, Impacts: lineImpacts, TotalRows: len(impacts), TotalValue: total.Round(2), Confirmed: dto.Confirm}, nil
 }
 
 func (uc *UseCase) RecalculateAdjustment(ctx context.Context, code int64, dto request.RecalculateRecurringSalesAdjustmentDTO) (*response.RecurringSaleResponse, error) {
@@ -505,10 +505,11 @@ func (uc *UseCase) RecalculateAdjustment(ctx context.Context, code int64, dto re
 	}
 	base := current.UnitValue
 	if current.AdjustmentPercent != nil {
-		base = current.UnitValue / (1 + (*current.AdjustmentPercent / 100))
+		base = current.UnitValue.Div(fator(*current.AdjustmentPercent))
 	}
-	current.UnitValue = round4(base * (1 + dto.AdjustmentPercent/100))
-	current.AdjustmentPercent = &dto.AdjustmentPercent
+	current.UnitValue = base.Mul(fator(dto.AdjustmentPercent)).Round(4)
+	pct := dto.AdjustmentPercent
+	current.AdjustmentPercent = &pct
 	current.Reason = &dto.Reason
 	updated, err := uc.Repo.Update(ctx, current)
 	if err != nil {
@@ -565,7 +566,7 @@ func (uc *UseCase) CommissionProjection(ctx context.Context, filter rsrepo.Proje
 			}
 			out = append(out, entity.CommissionProjectionRow{
 				ProjectionRow: rev, RepresentativeCode: rep.RepresentativeCode,
-				CommissionPercent: rep.CommissionPercent, CommissionValue: round2(baseValue * rep.CommissionPercent / 100),
+				CommissionPercent: rep.CommissionPercent, CommissionValue: baseValue.Mul(rep.CommissionPercent).Div(cem).Round(2),
 			})
 		}
 	}
@@ -623,8 +624,8 @@ func (uc *UseCase) dtoToRecurringSale(dto request.CreateRecurringSaleDTO) (*enti
 	if len(rec.TaxPolicy) == 0 {
 		rec.TaxPolicy = json.RawMessage(`{}`)
 	}
-	if rec.Quantity == 0 {
-		rec.Quantity = 1
+	if rec.Quantity.IsZero() {
+		rec.Quantity = decimal.NewFromInt(1)
 	}
 	return rec, validateRecurringSale(rec)
 }
@@ -633,7 +634,7 @@ func validateRecurringSale(v *entity.RecurringSale) error {
 	if v.EnterpriseCode == 0 || v.CustomerCode == 0 || v.ItemCode == 0 {
 		return errorsuc.NewValidationError("empresa, cliente e item são obrigatórios")
 	}
-	if v.Quantity <= 0 || v.UnitValue < 0 || v.GraceMonths < 0 {
+	if !v.Quantity.IsPositive() || v.UnitValue.IsNegative() || v.GraceMonths < 0 {
 		return errorsuc.NewValidationError("a quantidade deve ser positiva e os valores não podem ser negativos")
 	}
 	if v.EffectiveUntil != nil && v.EffectiveFrom != nil && v.EffectiveUntil.Before(*v.EffectiveFrom) {
@@ -646,7 +647,7 @@ func validateRecurringSale(v *entity.RecurringSale) error {
 	if v.AdjustmentPeriodMonths != nil && *v.AdjustmentPeriodMonths <= 0 {
 		return errorsuc.NewValidationError("adjustment_period_months deve ser positivo")
 	}
-	if v.AdjustmentFloorPct != nil && v.AdjustmentCapPct != nil && *v.AdjustmentFloorPct > *v.AdjustmentCapPct {
+	if v.AdjustmentFloorPct != nil && v.AdjustmentCapPct != nil && v.AdjustmentFloorPct.GreaterThan(*v.AdjustmentCapPct) {
 		return errorsuc.NewValidationError("o piso do reajuste não pode superar o teto")
 	}
 	if v.TermType == entity.TermIndefinite && v.NextAdjustmentDate == nil {
@@ -715,25 +716,31 @@ func requiredDate(raw, field string) (time.Time, error) {
 
 func validDay(v int) bool { return v >= 1 && v <= 31 }
 
-func monthlyValue(v *entity.RecurringSale) float64 {
+var cem = decimal.NewFromInt(100)
+
+// fator de reajuste: 1 + pct/100.
+func fator(pct decimal.Decimal) decimal.Decimal { return decimal.NewFromInt(1).Add(pct.Div(cem)) }
+
+// monthlyValue: o valor mensal da recorrência, em centavos.
+func monthlyValue(v *entity.RecurringSale) decimal.Decimal {
 	if v.TermType == entity.TermFixed && v.PaymentValue != nil {
-		return round2(*v.PaymentValue)
+		return v.PaymentValue.Round(2)
 	}
-	return round2(v.Quantity * v.UnitValue)
+	return v.Quantity.Mul(v.UnitValue).Round(2)
 }
 
-func buildAdjustment(rows []*entity.RecurringSale, date time.Time, pct float64, reason string, createdBy uuid.UUID) *entity.RecurringSale {
+func buildAdjustment(rows []*entity.RecurringSale, date time.Time, pct decimal.Decimal, reason string, createdBy uuid.UUID) *entity.RecurringSale {
 	first := rows[0]
-	totalQty, totalValue := 0.0, 0.0
+	totalQty, totalValue := decimal.Zero, decimal.Zero
 	for _, row := range rows {
-		totalQty += row.Quantity
-		totalValue += monthlyValue(row)
+		totalQty = totalQty.Add(row.Quantity)
+		totalValue = totalValue.Add(monthlyValue(row))
 	}
-	avg := 0.0
-	if totalQty > 0 {
-		avg = totalValue / totalQty
+	avg := decimal.Zero
+	if totalQty.IsPositive() {
+		avg = totalValue.Div(totalQty)
 	}
-	adjusted := round4(avg * (1 + pct/100))
+	adjusted := avg.Mul(fator(pct)).Round(4)
 	createdUUID := createdBy
 	if createdUUID == uuid.Nil {
 		createdUUID = first.CreatedBy
@@ -790,8 +797,8 @@ func projectRevenue(rows []*entity.RecurringSale, filter rsrepo.ProjectionFilter
 			}
 			value := monthlyValue(row)
 			applied := false
-			if row.NextAdjustmentDate != nil && !monthStart(*row.NextAdjustmentDate).After(m) && filter.AdjustmentPercent != 0 {
-				value = round2(value * (1 + filter.AdjustmentPercent/100))
+			if row.NextAdjustmentDate != nil && !monthStart(*row.NextAdjustmentDate).After(m) && !filter.AdjustmentPercent.IsZero() {
+				value = value.Mul(fator(filter.AdjustmentPercent)).Round(2)
 				applied = true
 			}
 			out = append(out, entity.ProjectionRow{
@@ -821,8 +828,6 @@ func monthStart(t time.Time) time.Time {
 }
 func sameDate(a, b time.Time) bool   { return a.Year() == b.Year() && a.YearDay() == b.YearDay() }
 func timePtr(t time.Time) *time.Time { return &t }
-func round2(v float64) float64       { return math.Round(v*100) / 100 }
-func round4(v float64) float64       { return math.Round(v*10000) / 10000 }
 
 func intString(v int64) string {
 	if v == 0 {

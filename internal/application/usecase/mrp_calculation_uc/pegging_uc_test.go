@@ -2,6 +2,7 @@ package mrp_calculation_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -18,8 +19,8 @@ func (p peggingFalso) PeggingLabels(_ context.Context, refs entity.PeggingRefs) 
 	n := int64(5001)
 	return &entity.PeggingLabels{
 		Suggestions: map[int64]entity.PeggingOrderLabel{
-			10: {OrderNumber: &n, OrderType: "FABRICACAO", Quantity: 20},
-			11: {OrderType: "COMPRA", Quantity: 60},
+			10: {OrderNumber: &n, OrderType: "FABRICACAO", Quantity: decimal.NewFromFloat(20)},
+			11: {OrderType: "COMPRA", Quantity: decimal.NewFromFloat(60)},
 		},
 		FirmOrders: map[int64]entity.PeggingOrderLabel{}, SalesOrderItems: map[int64]entity.PeggingSalesLabel{},
 		Items: map[int64]entity.PeggingItemLabel{1: {Description: "CARRINHO"}, 2: {Description: "TUBO"}},
@@ -34,11 +35,11 @@ func i64(v int64) *int64 { return &v }
 func TestPeggingCadeiaProporcionalEFalta(t *testing.T) {
 	d := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	store := peggingFalso{rows: []entity.PeggingRecord{
-		{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(71), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: 15},
-		{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(72), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: 5},
-		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplyStock, Quantity: 20},
-		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(11), Quantity: 30},
-		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplyShortage, Quantity: 10},
+		{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(71), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: decimal.NewFromFloat(15)},
+		{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(72), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: decimal.NewFromFloat(5)},
+		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplyStock, Quantity: decimal.NewFromFloat(20)},
+		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(11), Quantity: decimal.NewFromFloat(30)},
+		{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplyShortage, Quantity: decimal.NewFromFloat(10)},
 	}}
 	uc := &PeggingUseCase{Store: store, Auth: profileAuth{}}
 
@@ -49,11 +50,11 @@ func TestPeggingCadeiaProporcionalEFalta(t *testing.T) {
 	if arvore[0].Supply.Label != "Sugestão 5001 · fabricação" {
 		t.Fatalf("rótulo: %q", arvore[0].Supply.Label)
 	}
-	total := 0.0
+	total := decimal.Zero
 	for _, c := range arvore[0].Children {
-		total += c.Quantity
+		total = total.Add(c.Quantity)
 	}
-	if total != 45 {
+	if !total.Equal(decimal.NewFromInt(45)) {
 		t.Fatalf("componentes do pedido 71 = %v, esperado 45 (15/20 de 60)", total)
 	}
 
@@ -63,7 +64,7 @@ func TestPeggingCadeiaProporcionalEFalta(t *testing.T) {
 	}
 
 	raizes, err := uc.Roots(context.Background(), 1)
-	if err != nil || len(raizes) != 2 || !raizes[0].ChainShortage || raizes[0].FromSuggestions != 15 {
+	if err != nil || len(raizes) != 2 || !raizes[0].ChainShortage || !raizes[0].FromSuggestions.Equal(decimal.NewFromFloat(15)) {
 		t.Fatalf("raízes: %+v (%v)", raizes, err)
 	}
 }
@@ -94,16 +95,16 @@ func TestPeggingEloAtrasadoEPedidosAfetados(t *testing.T) {
 	n := int64(9001)
 	store := peggingAtraso{
 		rows: []entity.PeggingRecord{
-			{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(71), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: 5},
-			{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(11), Quantity: 5},
-			{ItemCode: 3, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(11), NeedDate: d, SupplyKind: entity.PegSupplyFirmOrder, SupplyCode: i64(500), Quantity: 5},
-			{ItemCode: 1, DemandKind: entity.PegDemandIndependent, DemandCode: i64(3), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(12), Quantity: 5},
+			{ItemCode: 1, DemandKind: entity.PegDemandSalesOrder, DemandCode: i64(71), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(10), Quantity: decimal.NewFromFloat(5)},
+			{ItemCode: 2, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(10), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(11), Quantity: decimal.NewFromFloat(5)},
+			{ItemCode: 3, DemandKind: entity.PegDemandSuggestion, DemandCode: i64(11), NeedDate: d, SupplyKind: entity.PegSupplyFirmOrder, SupplyCode: i64(500), Quantity: decimal.NewFromFloat(5)},
+			{ItemCode: 1, DemandKind: entity.PegDemandIndependent, DemandCode: i64(3), NeedDate: d, SupplyKind: entity.PegSupplySuggestion, SupplyCode: i64(12), Quantity: decimal.NewFromFloat(5)},
 		},
 		labels: &entity.PeggingLabels{
 			Suggestions: map[int64]entity.PeggingOrderLabel{
-				10: {OrderNumber: &n, OrderType: "FABRICACAO", Quantity: 5},
-				11: {OrderType: "FABRICACAO", Quantity: 5, EstimatedEnd: &fimTarde, EstimatedEndDay: &diaFim},
-				12: {OrderType: "FABRICACAO", Quantity: 5, StartDate: &inicioPassado},
+				10: {OrderNumber: &n, OrderType: "FABRICACAO", Quantity: decimal.NewFromFloat(5)},
+				11: {OrderType: "FABRICACAO", Quantity: decimal.NewFromFloat(5), EstimatedEnd: &fimTarde, EstimatedEndDay: &diaFim},
+				12: {OrderType: "FABRICACAO", Quantity: decimal.NewFromFloat(5), StartDate: &inicioPassado},
 			},
 			FirmOrders: map[int64]entity.PeggingOrderLabel{}, SalesOrderItems: map[int64]entity.PeggingSalesLabel{71: {OrderNumber: i64(5001), Customer: "Cliente"}},
 			Items: map[int64]entity.PeggingItemLabel{2: {Description: "CHASSI"}},

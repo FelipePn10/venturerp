@@ -3,6 +3,7 @@ package production_order_uc
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"github.com/shopspring/decimal"
 	"time"
 )
 
@@ -17,9 +18,9 @@ func toProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOr
 		PlannedOrderID: o.PlannedOrderID,
 		ItemCode:       o.ItemCode,
 		Mask:           o.Mask,
-		PlannedQty:     o.PlannedQty,
-		ProducedQty:    o.ProducedQty,
-		ScrappedQty:    o.ScrappedQty,
+		PlannedQty:     o.PlannedQty.InexactFloat64(),
+		ProducedQty:    o.ProducedQty.InexactFloat64(),
+		ScrappedQty:    o.ScrappedQty.InexactFloat64(),
 		Status:         string(o.Status),
 		StartDate:      o.StartDate,
 		EndDate:        o.EndDate,
@@ -55,8 +56,8 @@ func toProductionAppointmentResponse(a *entity.ProductionAppointment) *response.
 		AppointmentDate:   a.AppointmentDate,
 		StartTime:         a.StartTime,
 		EndTime:           a.EndTime,
-		ProducedQty:       a.ProducedQty,
-		ScrappedQty:       a.ScrappedQty,
+		ProducedQty:       a.ProducedQty.InexactFloat64(),
+		ScrappedQty:       a.ScrappedQty.InexactFloat64(),
 		ScrapReason:       a.ScrapReason,
 		Notes:             a.Notes,
 		CreatedAt:         a.CreatedAt,
@@ -82,7 +83,7 @@ func toProductionConsumptionResponse(c *entity.ProductionConsumption) *response.
 		ProductionOrderID: c.ProductionOrderID,
 		AppointmentID:     c.AppointmentID,
 		ItemCode:          c.ItemCode,
-		ConsumedQty:       c.ConsumedQty,
+		ConsumedQty:       c.ConsumedQty.InexactFloat64(),
 		WarehouseID:       c.WarehouseID,
 		Lot:               c.Lot,
 		ConsumptionDate:   c.ConsumptionDate,
@@ -108,24 +109,24 @@ func ToProductionOrderCostResponse(c *entity.ProductionOrderCost) *response.Prod
 	}
 	out := &response.ProductionOrderCostResponse{
 		ProductionOrderID: c.ProductionOrderID,
-		ProducedQty:       c.ProducedQty,
-		MaterialCostReal:  c.MaterialCostReal,
-		LaborCostReal:     c.LaborCostReal,
-		OverheadCostReal:  c.OverheadCostReal,
-		TotalCostReal:     c.TotalCostReal,
-		UnitCostReal:      c.UnitCostReal,
-		MaterialCostStd:   c.MaterialCostStd,
-		LaborCostStd:      c.LaborCostStd,
-		OverheadCostStd:   c.OverheadCostStd,
-		TotalCostStd:      c.TotalCostStd,
-		MaterialVariance:  c.MaterialVariance,
-		LaborVariance:     c.LaborVariance,
-		OverheadVariance:  c.OverheadVariance,
-		TotalVariance:     c.TotalVariance,
+		ProducedQty:       c.ProducedQty.InexactFloat64(),
+		MaterialCostReal:  c.MaterialCostReal.InexactFloat64(),
+		LaborCostReal:     c.LaborCostReal.InexactFloat64(),
+		OverheadCostReal:  c.OverheadCostReal.InexactFloat64(),
+		TotalCostReal:     c.TotalCostReal.InexactFloat64(),
+		UnitCostReal:      c.UnitCostReal.InexactFloat64(),
+		MaterialCostStd:   c.MaterialCostStd.InexactFloat64(),
+		LaborCostStd:      c.LaborCostStd.InexactFloat64(),
+		OverheadCostStd:   c.OverheadCostStd.InexactFloat64(),
+		TotalCostStd:      c.TotalCostStd.InexactFloat64(),
+		MaterialVariance:  c.MaterialVariance.InexactFloat64(),
+		LaborVariance:     c.LaborVariance.InexactFloat64(),
+		OverheadVariance:  c.OverheadVariance.InexactFloat64(),
+		TotalVariance:     c.TotalVariance.InexactFloat64(),
 		Currency:          c.Currency,
 	}
-	if c.TotalCostStd != 0 {
-		out.VariancePct = c.TotalVariance / c.TotalCostStd * 100
+	if !c.TotalCostStd.IsZero() {
+		out.VariancePct = c.TotalVariance.Div(c.TotalCostStd).Mul(decimal.NewFromInt(100)).InexactFloat64()
 	}
 	if !c.SettledAt.IsZero() {
 		out.SettledAt = c.SettledAt.Format(time.RFC3339)

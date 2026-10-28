@@ -16,9 +16,18 @@ import (
 	quoteentity "github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
 )
 
+// AlcadaDoPedido: a alçada de desconto do pedido (sales_order_uc.PoliticaDoPedido).
+type AlcadaDoPedido interface {
+	ConferirDesconto(ctx context.Context, pct float64) error
+	AplicarAlcada(ctx context.Context, code int64) error
+}
+
 type ConvertUseCase struct {
 	Quotes *UseCase
 	UOW    ports.SalesQuotationConversionUnitOfWork
+	// Alcada: o desconto das linhas convertidas respeita a alçada do pedido —
+	// sem isso, converter o orçamento contornava a alçada. Opcional.
+	Alcada AlcadaDoPedido
 }
 
 func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQuotationDTO) (*response.SalesOrderResponse, error) {
@@ -58,8 +67,41 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if len(items) == 0 {
 		return nil, errorsuc.NewValidationError("o orçamento não possui itens para conversão")
 	}
+	if uc.Alcada != nil {
+		for _, qi := range items {
+			if !qi.IsActive || qi.Status == quoteentity.SalesQuotationItemStatusCancelled || !qi.RequestedQty.Sub(qi.AttendedQty).Sub(qi.CancelledQty).IsPositive() {
+				continue
+			}
+			if err := uc.Alcada.ConferirDesconto(ctx, qi.DiscountPct.InexactFloat64()); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if uc.UOW == nil {
 		return nil, errorsuc.NewValidationError("a conversão do orçamento não está configurada")
+	}
+	// ICMS, PIS e COFINS das linhas do pedido pelo cálculo da nota (o orçamento
+	// só guarda IPI e ST, que seguem como negociados). Calculado antes da
+	// transação: é leitura e não depende do pedido ainda não gravado.
+	tributos := map[int64]*ports.TributosSugeridos{}
+	if uc.Quotes.Tributos != nil && q.CustomerCode != nil {
+		cem := decimal.NewFromInt(100)
+		for _, qi := range items {
+			if !qi.IsActive || qi.Status == quoteentity.SalesQuotationItemStatusCancelled {
+				continue
+			}
+			saldo := qi.RequestedQty.Sub(qi.AttendedQty).Sub(qi.CancelledQty)
+			if !saldo.IsPositive() {
+				continue
+			}
+			liquido := qi.UnitPrice.Mul(cem.Sub(qi.DiscountPct)).Div(cem)
+			sug, err := uc.Quotes.Tributos.SugerirTributos(ctx, ports.ConsultaTributosVenda{
+				CustomerCode: q.CustomerCode, ItemCode: qi.ItemCode, Quantidade: saldo, ValorUnitario: liquido})
+			if err != nil {
+				return nil, err
+			}
+			tributos[qi.Code] = sug
+		}
 	}
 	status := orderentity.SalesOrderStatusOrder
 	if dto.Status != "" {
@@ -98,10 +140,10 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			ForeignDocument:     q.ForeignDocument,
 			CarrierCode:         q.CarrierCode,
 			FreightType:         q.FreightType,
-			FreightValue:        q.FreightValue.InexactFloat64(),
-			InsuranceValue:      q.InsuranceValue.InexactFloat64(),
-			DiscountValue:       q.DiscountValue.InexactFloat64(),
-			SurchargeValue:      q.SurchargeValue.InexactFloat64(),
+			FreightValue:        q.FreightValue,
+			InsuranceValue:      q.InsuranceValue,
+			DiscountValue:       q.DiscountValue,
+			SurchargeValue:      q.SurchargeValue,
 			// No pedido, total_gross e o valor dos produtos JA com desconto de
 			// item (o orcamento guarda o bruto antes do desconto). Mandar o
 			// bruto do orcamento inflava o pedido convertido.
@@ -110,8 +152,8 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			// itens: quando parte do orcamento ja foi atendida ou cancelada, o
 			// pedido leva so o saldo, e a capa tem de fechar com a soma das
 			// linhas.
-			TotalGross:  q.TotalNet.InexactFloat64(),
-			TotalNet:    q.TotalNet.InexactFloat64(),
+			TotalGross:  q.TotalNet,
+			TotalNet:    q.TotalNet,
 			Notes:       q.Notes,
 			ObsCustomer: q.ObsCustomer,
 			CreatedBy:   createdBy,
@@ -146,18 +188,21 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 				SalesUOM:         quoteItem.SalesUOM,
 				WarehouseCode:    quoteItem.WarehouseCode,
 				PriceTableCode:   quoteItem.PriceTableCode,
-				RequestedQty:     balance.InexactFloat64(),
-				UnitPrice:        quoteItem.UnitPrice.InexactFloat64(),
+				RequestedQty:     balance,
+				UnitPrice:        quoteItem.UnitPrice,
 				DeliveryDate:     quoteItem.DeliveryDate,
 				DeliveryDateFirm: quoteItem.DeliveryDateFirm,
 				IPIPct:           quoteItem.IPIPct.InexactFloat64(),
 				STPct:            quoteItem.STPct.InexactFloat64(),
+				ICMSPct:          sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.ICMSPct }),
+				PISPct:           sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.PISPct }),
+				COFINSPct:        sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.COFINSPct }),
 				DiscountPct:      quoteItem.DiscountPct.InexactFloat64(),
-				TotalGross:       valorProdutos.InexactFloat64(),
-				TotalNet:         valorProdutos.InexactFloat64(),
-				TotalIPI:         valorIPI.InexactFloat64(),
-				TotalST:          valorST.InexactFloat64(),
-				TotalNetWithIPI:  valorProdutos.Add(valorIPI).InexactFloat64(),
+				TotalGross:       valorProdutos,
+				TotalNet:         valorProdutos,
+				TotalIPI:         valorIPI,
+				TotalST:          valorST,
+				TotalNetWithIPI:  valorProdutos.Add(valorIPI),
 				Status:           orderentity.SalesOrderItemStatusOpen,
 				Notes:            quoteItem.Notes,
 			}
@@ -173,10 +218,10 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 		// total do orcamento inteiro: convertendo o saldo de um orcamento
 		// parcialmente atendido, o pedido nascia valendo mais do que os itens
 		// que ele tem, e esse numero ia para comissao, credito e faturamento.
-		created.TotalGross = somaProdutos.InexactFloat64()
-		created.TotalNet = somaProdutos.InexactFloat64()
-		created.TotalNetNoST = somaProdutos.Add(somaIPI).InexactFloat64()
-		created.TotalWithIPIWithST = somaProdutos.Add(somaIPI).Add(somaST).InexactFloat64()
+		created.TotalGross = somaProdutos
+		created.TotalNet = somaProdutos
+		created.TotalNetNoST = somaProdutos.Add(somaIPI)
+		created.TotalWithIPIWithST = somaProdutos.Add(somaIPI).Add(somaST)
 		atualizado, err := orders.Update(ctx, created)
 		if err != nil {
 			return nil, err
@@ -186,5 +231,18 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if err != nil {
 		return nil, err
 	}
+	if uc.Alcada != nil {
+		if err := uc.Alcada.AplicarAlcada(ctx, created.Code); err != nil {
+			return nil, err
+		}
+	}
 	return &response.SalesOrderResponse{Code: created.Code, OrderNumber: created.OrderNumber, EnterpriseCode: created.EnterpriseCode, Status: string(created.Status)}, nil
+}
+
+// sugerido: o percentual sugerido, ou zero sem sugestão.
+func sugerido(s *ports.TributosSugeridos, campo func(*ports.TributosSugeridos) decimal.Decimal) float64 {
+	if s == nil {
+		return 0
+	}
+	return campo(s).InexactFloat64()
 }

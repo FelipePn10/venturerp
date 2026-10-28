@@ -36,15 +36,15 @@ func TestProfileConsultation_FiltersAndBuildsCurrentTotals(t *testing.T) {
 	d1 := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	d2 := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	uc := GetItemProfileUseCase{Repo: profileRepo{rows: []*mrpentity.MRPItemProfile{
-		{ItemCode: 1, PlanCode: 2, NeedDate: d1, Demand: 5, StockProjected: 10},
-		{ItemCode: 1, PlanCode: 2, NeedDate: d2, Demand: 8, StockProjected: 2},
+		{ItemCode: 1, PlanCode: 2, NeedDate: d1, Demand: decimal.NewFromFloat(5), StockProjected: decimal.NewFromFloat(10)},
+		{ItemCode: 1, PlanCode: 2, NeedDate: d2, Demand: decimal.NewFromFloat(8), StockProjected: decimal.NewFromFloat(2)},
 	}}, Auth: profileAuth{}, Stock: profileStock{balances: []*stockentity.StockBalance{{Quantity: decimal.NewFromFloat(7)}, {Quantity: decimal.NewFromFloat(3)}}}}
 	to := time.Date(2026, 7, 31, 0, 0, 0, 0, time.UTC)
 	result, err := uc.Consult(context.Background(), 1, 2, "CURRENT", nil, &to)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Rows) != 1 || result.Totals["demand"] != 5 || result.Totals["stock_current"] != 10 {
+	if len(result.Rows) != 1 || !result.Totals["demand"].Equal(decimal.NewFromFloat(5)) || !result.Totals["stock_current"].Equal(decimal.NewFromFloat(10)) {
 		t.Fatalf("unexpected consultation: %+v", result)
 	}
 }

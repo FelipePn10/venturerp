@@ -43,7 +43,7 @@ func (uc *OperationalConsultationUseCase) Execute(ctx context.Context, id int64)
 	}
 	result := &response.ProductionOrderOperationalResponse{Order: toProductionOrderResponse(order),
 		Appointments: toProductionAppointmentResponses(appointments), Consumptions: toProductionConsumptionResponses(consumptions),
-		Totals: map[string]decimal.Decimal{"planned": decimal.NewFromFloat(order.PlannedQty), "produced": decimal.NewFromFloat(order.ProducedQty), "scrapped": decimal.NewFromFloat(order.ScrappedQty)}}
+		Totals: map[string]decimal.Decimal{"planned": order.PlannedQty, "produced": order.ProducedQty, "scrapped": order.ScrappedQty}}
 	for _, d := range deliveries {
 		result.Deliveries = append(result.Deliveries, &response.ProductionDeliveryResponse{ID: d.ID, Quantity: d.Quantity,
 			MovementClass: d.MovementClass, WarehouseID: d.WarehouseID, Lot: d.Lot, Final: d.IsFinal, DeliveredAt: d.DeliveredAt})
@@ -62,6 +62,6 @@ func (uc *OperationalConsultationUseCase) Execute(ctx context.Context, id int64)
 				WarehouseID: movement.WarehouseID, MovementType: movement.MovementType, Quantity: movement.Quantity.InexactFloat64(), Lot: movement.Lot})
 		}
 	}
-	result.Totals["pending"] = decimal.NewFromFloat(order.PlannedQty).Sub(result.Totals["delivered"])
+	result.Totals["pending"] = order.PlannedQty.Sub(result.Totals["delivered"])
 	return result, nil
 }

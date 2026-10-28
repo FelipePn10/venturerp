@@ -3,8 +3,12 @@ package handler
 import (
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 )
 
@@ -18,6 +22,12 @@ func (h *CostCenterHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateCostCenterDTO
 	if !security.DecodeBody(w, r, &dto) {
 		return
+	}
+	// O criador é o usuário da sessão (a tela nova não manda created_by).
+	if u, ok := r.Context().Value(contextkey.UserKey).(*appsecurity.AuthUser); ok && u != nil {
+		if id, err := uuid.Parse(u.ID); err == nil {
+			dto.CreatedBy = id
+		}
 	}
 	result, err := h.createUC.Execute(r.Context(), dto)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type InspectionPointType string
@@ -39,8 +40,8 @@ type InspectionPlan struct {
 	RouteOperationID *int64
 	PointType        InspectionPointType
 	Description      string
-	SampleSize       float64
-	AcceptanceLevel  float64
+	SampleSize       decimal.Decimal
+	AcceptanceLevel  decimal.Decimal
 	Instructions     *string
 	Characteristics  []InspectionCharacteristic
 	IsActive         bool
@@ -53,9 +54,9 @@ type InspectionCharacteristic struct {
 	ID             int64
 	PlanID         int64
 	Name           string
-	Nominal        *float64
-	ToleranceUpper *float64
-	ToleranceLower *float64
+	Nominal        *decimal.Decimal
+	ToleranceUpper *decimal.Decimal
+	ToleranceLower *decimal.Decimal
 	Unit           *string
 	IsCritical     bool
 }
@@ -66,9 +67,9 @@ type QualityRecord struct {
 	ProductionOrderID *int64
 	Lot               *string
 	ItemCode          int64
-	InspectedQty      float64
-	ApprovedQty       float64
-	RejectedQty       float64
+	InspectedQty      decimal.Decimal
+	ApprovedQty       decimal.Decimal
+	RejectedQty       decimal.Decimal
 	Result            InspectionResult
 	InspectorID       *int64
 	InspectedAt       time.Time
@@ -82,18 +83,20 @@ type QualityMeasurement struct {
 	ID               int64
 	RecordID         int64
 	CharacteristicID int64
-	MeasuredValue    float64
+	MeasuredValue    decimal.Decimal
 	IsConformant     bool
 }
 
 type NonConformance struct {
-	ID                int64
-	Code              int64
-	QualityRecordID   *int64
+	ID              int64
+	Code            int64
+	QualityRecordID *int64
+	// LotID: lote de inspeção de origem.
+	LotID             *int64
 	ProductionOrderID *int64
 	ItemCode          int64
 	Lot               *string
-	NonConformQty     float64
+	NonConformQty     decimal.Decimal
 	Description       string
 	Severity          NCSeverity
 	RootCause         *string
@@ -108,7 +111,7 @@ type NonConformance struct {
 }
 
 func NewInspectionPlan(itemCode int64, pointType InspectionPointType, description string,
-	sampleSize, acceptanceLevel float64, createdBy uuid.UUID) (*InspectionPlan, error) {
+	sampleSize, acceptanceLevel decimal.Decimal, createdBy uuid.UUID) (*InspectionPlan, error) {
 	if itemCode <= 0 {
 		return nil, domainerr.NewValidation("o item deve ser um código maior que zero")
 	}
@@ -126,7 +129,7 @@ func NewInspectionPlan(itemCode int64, pointType InspectionPointType, descriptio
 	}, nil
 }
 
-func NewNonConformance(code, itemCode int64, description string, qty float64,
+func NewNonConformance(code, itemCode int64, description string, qty decimal.Decimal,
 	severity NCSeverity, createdBy uuid.UUID) (*NonConformance, error) {
 	if code <= 0 {
 		return nil, domainerr.NewValidation("o código deve ser maior que zero")
@@ -134,7 +137,7 @@ func NewNonConformance(code, itemCode int64, description string, qty float64,
 	if description == "" {
 		return nil, domainerr.NewValidation("informe a descrição")
 	}
-	if qty <= 0 {
+	if !qty.IsPositive() {
 		return nil, domainerr.NewValidation("a quantidade não conforme deve ser maior que zero")
 	}
 	return &NonConformance{

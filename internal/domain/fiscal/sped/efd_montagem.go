@@ -54,6 +54,8 @@ type ItemSaida struct {
 	AliqICMS, BaseICMS, ICMS decimal.Decimal
 	BaseST, ST, BaseIPI, IPI decimal.Decimal
 	Total                    decimal.Decimal
+	// DIFAL e FCP da UF de destino (grupo ICMSUFDest da NF-e).
+	DIFAL, FCP decimal.Decimal
 }
 
 type NotaSaida struct {
@@ -63,7 +65,9 @@ type NotaSaida struct {
 	Cancelada                                     bool
 	Total, Produtos, Frete, Seguro, Desconto      decimal.Decimal
 	IPI, ST, BaseST, PIS, COFINS                  decimal.Decimal
-	Itens                                         []ItemSaida
+	// UF do destinatário: a quem se recolhe a ST e o DIFAL (E200/E300).
+	UF    string
+	Itens []ItemSaida
 }
 
 type Frete struct {
@@ -85,15 +89,20 @@ type DadosEFD struct {
 	SaldoCredorAnteriorICMS decimal.Decimal
 	SaldoCredorAnteriorIPI  decimal.Decimal
 	CodReceitaICMS          string
-	VencimentoICMS          time.Time
-	ContribuinteIPI         bool
-	Inventario              []EFDInventarioItem
-	MotivoInventario        string
+	// Códigos de receita (COD_REC) das guias da ST, do DIFAL e do FCP para
+	// outros estados — por padrão os da GNRE (100099, 100102 e 100129).
+	CodReceitaST, CodReceitaDIFAL, CodReceitaFCP string
+	VencimentoICMS                               time.Time
+	ContribuinteIPI                              bool
+	Inventario                                   []EFDInventarioItem
+	MotivoInventario                             string
 	// Itens das saídas (a NF-e própria não tem C170, mas o 0200 é exigido
 	// pelos itens do inventário e é útil ao fisco).
 	Itens []ItemCadastro
 	// AjustesApuracao (E111): as notas especiais de ajuste emitidas no mês.
 	AjustesApuracao []AjusteApuracao
+	// CIAP: a apuração do CIAP do mês (Bloco G); o crédito entra no E111.
+	CIAP *DadosCIAP
 	// InventarioItens (bloco H): o estoque próprio numa data (em geral 31/12,
 	// entregue na EFD de fevereiro). Vazio = bloco H sem movimento.
 	InventarioItens []ItemInventario
@@ -258,6 +267,8 @@ func Montar(d DadosEFD) EFDParams {
 		p.DocumentosFiscais = append(p.DocumentosFiscais, doc)
 	}
 
+	stPorUF := map[string]decimal.Decimal{}
+	difalPorUF := map[string][2]decimal.Decimal{}
 	for _, n := range d.Saidas {
 		if n.Cancelada {
 			p.DocumentosFiscais = append(p.DocumentosFiscais, EFDDocumentoFiscal{IndOper: "1", IndEmit: "0",
@@ -290,6 +301,25 @@ func Montar(d DadosEFD) EFDParams {
 		}
 		doc.VlBcIcms, doc.VlIcms = v2(bcDoc), v2(icmsDoc)
 		doc.AnaliticosICMS = an.fechar(n.Total)
+		// C101 (DIFAL da venda a consumidor final de outra UF) e a apuração da
+		// ST e do DIFAL/FCP por UF de destino (E200 e E300).
+		difalDoc, fcpDoc, stDoc := decimal.Zero, decimal.Zero, decimal.Zero
+		for _, it := range n.Itens {
+			difalDoc, fcpDoc, stDoc = difalDoc.Add(it.DIFAL), fcpDoc.Add(it.FCP), stDoc.Add(it.ST)
+		}
+		if difalDoc.IsPositive() || fcpDoc.IsPositive() {
+			doc.C101 = &EFDC101{VlFcpUfDest: v2(fcpDoc), VlIcmsUfDest: v2(difalDoc)}
+		}
+		if uf := strings.ToUpper(strings.TrimSpace(n.UF)); uf != "" {
+			if stDoc.IsPositive() {
+				stPorUF[uf] = stPorUF[uf].Add(stDoc)
+			}
+			if difalDoc.IsPositive() || fcpDoc.IsPositive() {
+				d := difalPorUF[uf]
+				d[0], d[1] = d[0].Add(difalDoc), d[1].Add(fcpDoc)
+				difalPorUF[uf] = d
+			}
+		}
 		for _, k := range an.ordem {
 			g := an.grupos[k]
 			if cfopSaida(g.cfop) {
@@ -315,7 +345,36 @@ func Montar(d DadosEFD) EFDParams {
 		creditos = creditos.Add(icms.Round(2))
 	}
 
+	if g, aj := montarCIAP(d, d.Empresa.IndAtividade); g != nil {
+		p.CIAP = g
+		if aj != nil {
+			d.AjustesApuracao = append(d.AjustesApuracao, *aj)
+		}
+	}
 	p.ApuracaoICMS = apurarICMS(d, debitos, creditos)
+	mesRef := d.Periodo.DataInicial.Format("012006")
+	for _, uf := range chavesOrdenadas(stPorUF) {
+		v := v2(stPorUF[uf])
+		// Outro estado: ICMS-ST pelas saídas para outra UF (999), guia GNRE
+		// 100099. Próprio estado: 002, com o código de receita da UF.
+		cod, rec := "999", firstNonBlank(d.CodReceitaST, "100099")
+		if strings.EqualFold(uf, d.Empresa.UF) {
+			cod, rec = "002", firstNonBlank(d.CodReceitaST, d.CodReceitaICMS)
+		}
+		p.ApuracoesST = append(p.ApuracoesST, EFDApuracaoST{UF: uf, Retencao: v, Recolher: v,
+			Obrigacao: EFDObrigacao{CodOr: cod, VlOr: v, DtVcto: d.VencimentoICMS, CodRec: rec, MesRef: mesRef}})
+	}
+	for _, uf := range chavesOrdenadas(difalPorUF) {
+		t := difalPorUF[uf]
+		a := EFDApuracaoDIFAL{UF: uf, Difal: v2(t[0]), FCP: v2(t[1])}
+		if t[0].IsPositive() {
+			a.Obrigacoes = append(a.Obrigacoes, EFDObrigacao{CodOr: "000", VlOr: v2(t[0]), DtVcto: d.VencimentoICMS, CodRec: firstNonBlank(d.CodReceitaDIFAL, "100102"), MesRef: mesRef})
+		}
+		if t[1].IsPositive() {
+			a.Obrigacoes = append(a.Obrigacoes, EFDObrigacao{CodOr: "006", VlOr: v2(t[1]), DtVcto: d.VencimentoICMS, CodRec: firstNonBlank(d.CodReceitaFCP, "100129"), MesRef: mesRef})
+		}
+		p.ApuracoesDIFAL = append(p.ApuracoesDIFAL, a)
+	}
 
 	p.ApuracaoIPI = ipi.fechar(d.SaldoCredorAnteriorIPI)
 

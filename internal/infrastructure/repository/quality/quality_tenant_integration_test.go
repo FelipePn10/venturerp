@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
+	"github.com/shopspring/decimal"
 )
 
 // Plano de inspeção, característica, registro e não conformidade são da
@@ -31,11 +32,11 @@ func TestQualidadeIsoladaPorEmpresa(t *testing.T) {
 	testutil.SeedItem(t, pool, a.Ctx, item, actor)
 	repo := quality.New(sqlc.New(pool))
 
-	plano, err := repo.CreatePlan(a.Ctx, &entity.InspectionPlan{ItemCode: item, PointType: entity.PointShipping, Description: "Final", SampleSize: 1, AcceptanceLevel: 0, CreatedBy: actor})
+	plano, err := repo.CreatePlan(a.Ctx, &entity.InspectionPlan{ItemCode: item, PointType: entity.PointShipping, Description: "Final", SampleSize: decimal.NewFromInt(1), AcceptanceLevel: decimal.Zero, CreatedBy: actor})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repo.CreatePlan(b.Ctx, &entity.InspectionPlan{ItemCode: item, PointType: entity.PointShipping, Description: "Intruso", SampleSize: 1, CreatedBy: actor}); err == nil {
+	if _, err := repo.CreatePlan(b.Ctx, &entity.InspectionPlan{ItemCode: item, PointType: entity.PointShipping, Description: "Intruso", SampleSize: decimal.NewFromInt(1), CreatedBy: actor}); err == nil {
 		t.Fatal("empresa B criou plano para o item da A")
 	}
 	if _, err := repo.GetPlanByID(b.Ctx, plano.ID); err == nil {
@@ -60,7 +61,7 @@ func TestQualidadeIsoladaPorEmpresa(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	nc, err := repo.CreateNC(a.Ctx, &entity.NonConformance{Code: code, ItemCode: item, NonConformQty: 1, Description: "risco", Severity: entity.SeverityMinor, CreatedBy: actor})
+	nc, err := repo.CreateNC(a.Ctx, &entity.NonConformance{Code: code, ItemCode: item, NonConformQty: decimal.NewFromInt(1), Description: "risco", Severity: entity.SeverityMinor, CreatedBy: actor})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -64,6 +64,38 @@ type CFOP struct {
 	Doacao          bool
 	IsActive        bool
 	CreatedAt       time.Time
+	Oficial         CFOPOficial
+}
+
+// CFOPOficial: o que vem da tabela oficial do Portal Nacional da NF-e (IT
+// 2023.002) — vigência e os indicadores que a SEFAZ usa nas validações.
+type CFOPOficial struct {
+	Oficial         bool // o código está na tabela oficial
+	InicioVigencia  *time.Time
+	FimVigencia     *time.Time
+	NFe             bool // pode ser usado em NF-e (indNFe)
+	Comunicacao     bool // indComunica
+	Transporte      bool // indTransp
+	Devolucao       bool // indDevol: exige o documento referenciado
+	Retorno         bool // indRetor
+	Anulacao        bool // indAnula
+	Remessa         bool // indRemes
+	Combustivel     bool // indComb
+	ExclusivoIBSCBS bool // indExcIBSCBS
+}
+
+// VigenteEm: dentro da vigência oficial no dia (código fora da tabela não tem
+// vigência a conferir).
+func (c *CFOP) VigenteEm(dia time.Time) bool {
+	o := c.Oficial
+	if !o.Oficial {
+		return true
+	}
+	d := time.Date(dia.Year(), dia.Month(), dia.Day(), 0, 0, 0, 0, time.UTC)
+	if o.InicioVigencia != nil && d.Before(*o.InicioVigencia) {
+		return false
+	}
+	return o.FimVigencia == nil || !d.After(*o.FimVigencia)
 }
 
 // ─── ICMS/IPI Tax Params (Redução, Substituição, Diferimento) ─────────────────
@@ -207,6 +239,20 @@ type ICMSIPITaxParam struct {
 	// ── DIFAL purchases ──────────────────────────────────────────────────────
 	DifalPurchaseRedPct    float64
 	DifalPurchaseRedTarget *IcmsReductionTarget
+
+	// ── Cenário ─────────────────────────────────────────────────────────────────
+	// FinalidadeCompra restringe a regra a REVENDA, INDUSTRIALIZACAO ou
+	// USO_CONSUMO (nil = qualquer). MvaPct é a MVA original da ST (40 = 40%) e
+	// MvaAjustarInterestadual liga o ajuste da MVA na venda interestadual.
+	FinalidadeCompra        *string
+	MvaPct                  float64
+	MvaAjustarInterestadual bool
+
+	// SupplierCode restringe a regra de entrada a um fornecedor (suppliers.code);
+	// regra com fornecedor não vale na saída. OrigemReducaoID: regra copiada do
+	// antigo cadastro de redução/substituição (VFIS0330, migração 000433).
+	SupplierCode    *int64
+	OrigemReducaoID *int64
 
 	IsActive  bool
 	CreatedAt time.Time

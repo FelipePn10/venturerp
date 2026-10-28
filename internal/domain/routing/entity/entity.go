@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -376,8 +377,8 @@ type RouteInspection struct {
 	StepSequence        int16
 	PointType           string // RECEBIMENTO | PROCESSO | EXPEDICAO
 	Description         string
-	SampleSize          float64
-	AcceptanceLevel     float64
+	SampleSize          decimal.Decimal
+	AcceptanceLevel     decimal.Decimal
 	Instructions        *string
 	CharacteristicCount int64
 	IsActive            bool

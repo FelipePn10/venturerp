@@ -1151,7 +1151,7 @@ func (q *Queries) ListDocumentsForRouteOperation(ctx context.Context, arg ListDo
 
 const listInspectionPlansByRoute = `-- name: ListInspectionPlansByRoute :many
 
-SELECT ip.id, ip.item_code, ip.route_operation_id, ip.point_type, ip.description, ip.sample_size, ip.acceptance_level, ip.instructions, ip.is_active, ip.created_at, ip.updated_at, ip.created_by, ro.sequence AS step_sequence,
+SELECT ip.id, ip.item_code, ip.route_operation_id, ip.point_type, ip.description, ip.sample_size, ip.acceptance_level, ip.instructions, ip.is_active, ip.created_at, ip.updated_at, ip.created_by, ip.sampling_procedure_id, ro.sequence AS step_sequence,
        (SELECT count(*) FROM inspection_plan_characteristics c WHERE c.plan_id = ip.id) AS characteristic_count
 FROM inspection_plans ip
 JOIN route_operations ro ON ro.id = ip.route_operation_id
@@ -1179,6 +1179,7 @@ type ListInspectionPlansByRouteRow struct {
 	CreatedAt           pgtype.Timestamptz
 	UpdatedAt           pgtype.Timestamptz
 	CreatedBy           pgtype.UUID
+	SamplingProcedureID *int64
 	StepSequence        int16
 	CharacteristicCount int64
 }
@@ -1206,6 +1207,7 @@ func (q *Queries) ListInspectionPlansByRoute(ctx context.Context, arg ListInspec
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CreatedBy,
+			&i.SamplingProcedureID,
 			&i.StepSequence,
 			&i.CharacteristicCount,
 		); err != nil {
@@ -1537,6 +1539,53 @@ func (q *Queries) ListRoutesByItem(ctx context.Context, arg ListRoutesByItemPara
 	return items, nil
 }
 
+const listRoutesByItemWithInactive = `-- name: ListRoutesByItemWithInactive :many
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes
+WHERE item_code = $1 AND enterprise_id = $2
+ORDER BY is_active DESC, alternative
+`
+
+type ListRoutesByItemWithInactiveParams struct {
+	ItemCode     int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListRoutesByItemWithInactive(ctx context.Context, arg ListRoutesByItemWithInactiveParams) ([]ManufacturingRoute, error) {
+	rows, err := q.db.Query(ctx, listRoutesByItemWithInactive, arg.ItemCode, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ManufacturingRoute
+	for rows.Next() {
+		var i ManufacturingRoute
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.ItemCode,
+			&i.Mask,
+			&i.Alternative,
+			&i.Description,
+			&i.Situation,
+			&i.IsStandard,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.ValidFrom,
+			&i.ValidTo,
+			&i.EnterpriseID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextOperationCode = `-- name: NextOperationCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::BIGINT AS next_code FROM operations WHERE enterprise_id=$1
 `
@@ -1573,6 +1622,33 @@ func (q *Queries) OperationUsedInRoutes(ctx context.Context, arg OperationUsedIn
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const reactivateRoute = `-- name: ReactivateRoute :execrows
+UPDATE manufacturing_routes mr
+SET is_active = TRUE,
+    is_standard = mr.is_standard AND NOT EXISTS (
+        SELECT 1 FROM manufacturing_routes o
+        WHERE o.enterprise_id = mr.enterprise_id AND o.item_code = mr.item_code
+          AND COALESCE(o.mask, '') = COALESCE(mr.mask, '')
+          AND o.id <> mr.id AND o.is_active AND o.is_standard),
+    updated_at = NOW()
+WHERE mr.id = $1 AND mr.enterprise_id = $2 AND NOT mr.is_active
+`
+
+type ReactivateRouteParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+// Reativa o roteiro. Se outro roteiro ativo do mesmo item/máscara já é o
+// padrão, o reativado volta como alternativo para não haver dois padrões.
+func (q *Queries) ReactivateRoute(ctx context.Context, arg ReactivateRouteParams) (int64, error) {
+	result, err := q.db.Exec(ctx, reactivateRoute, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const removeRouteOpResource = `-- name: RemoveRouteOpResource :execrows

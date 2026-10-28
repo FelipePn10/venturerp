@@ -48,25 +48,22 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 		if !it.IsActive || it.Status == entity.SalesOrderItemStatusCancelled || it.WarehouseCode == nil {
 			continue
 		}
-		wanted := it.RequestedQty - it.AttendedQty - it.CancelledQty
-		if wanted <= 0 {
+		wanted := it.RequestedQty.Sub(it.AttendedQty).Sub(it.CancelledQty)
+		if !wanted.IsPositive() {
 			continue
 		}
 
 		// Sem saldo cadastrado no depósito o disponível é zero; falha de leitura é erro.
-		available := 0.0
+		available := decimal.Zero
 		bal, balErr := estoque.GetBalance(ctx, it.ItemCode, it.Mask, *it.WarehouseCode)
 		if balErr != nil && !errorsuc.EhNaoEncontrado(balErr) {
 			return fmt.Errorf("lendo o saldo do item %d: %w", it.ItemCode, balErr)
 		}
 		if balErr == nil {
-			available = bal.AvailableQty.InexactFloat64()
+			available = bal.AvailableQty
 		}
-		reserveQty := wanted
-		if available < reserveQty {
-			reserveQty = available
-		}
-		if reserveQty <= 0 {
+		reserveQty := decimal.Min(wanted, available)
+		if !reserveQty.IsPositive() {
 			continue
 		}
 
@@ -75,7 +72,7 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 			ItemCode:          it.ItemCode,
 			Mask:              it.Mask,
 			WarehouseID:       *it.WarehouseCode,
-			Quantity:          decimal.NewFromFloat(reserveQty),
+			Quantity:          reserveQty,
 			ReferenceType:     stockentity.ReferenceTypeSalesOrder,
 			ReferenceCode:     code,
 			ReferenceItemCode: &itemCode,

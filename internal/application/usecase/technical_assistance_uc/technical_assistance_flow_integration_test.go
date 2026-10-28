@@ -2,6 +2,7 @@ package technical_assistance_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func (f *assistanceProductionOrders) Create(_ context.Context, v *prodentity.Pro
 
 func TestTechnicalAssistanceReturnNoteAndOrderGenerationFlow(t *testing.T) {
 	salesReason, productionReason := int64(31), int64(32)
-	repo := &fakeTARepo{reasons: map[int64]*entity.DefectReason{salesReason: {Code: salesReason, GeneratesSalesOrder: true, RequiresReturnNote: true}, productionReason: {Code: productionReason, GeneratesProductionOrder: true}}, call: &entity.Call{Code: 1, CallNumber: 10, EnterpriseCode: 1, CustomerCode: 20, Status: entity.CallStatusPending, OpenedAt: time.Now()}, items: []*entity.CallItem{{Code: 1, ItemCode: 100, Quantity: 1, DefectReasonCode: &salesReason}, {Code: 2, ItemCode: 200, Quantity: 2, DefectReasonCode: &productionReason}}}
+	repo := &fakeTARepo{reasons: map[int64]*entity.DefectReason{salesReason: {Code: salesReason, GeneratesSalesOrder: true, RequiresReturnNote: true}, productionReason: {Code: productionReason, GeneratesProductionOrder: true}}, call: &entity.Call{Code: 1, CallNumber: 10, EnterpriseCode: 1, CustomerCode: 20, Status: entity.CallStatusPending, OpenedAt: time.Now()}, items: []*entity.CallItem{{Code: 1, ItemCode: 100, Quantity: decimal.NewFromInt(1), DefectReasonCode: &salesReason}, {Code: 2, ItemCode: 200, Quantity: decimal.NewFromInt(2), DefectReasonCode: &productionReason}}}
 	sales := &assistanceSalesOrders{}
 	production := &assistanceProductionOrders{}
 	uc := &UseCase{Repo: repo, Auth: taAllowAuth{}, SalesOrders: sales, ProductionOrders: production}

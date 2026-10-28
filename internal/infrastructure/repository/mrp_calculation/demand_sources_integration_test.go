@@ -4,6 +4,7 @@ package mrp_calculation
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
@@ -74,7 +75,7 @@ func TestDemandSourcesAreTenantFilteredAndResolveClassificationDescendants(t *te
 	repo := NewMRPCalculationRepositorySQLC(sqlc.New(pool), pool)
 	tenantCtx := context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
 	demands, err := repo.ListOpenSalesOrderDemands(tenantCtx, planCode, nil)
-	if err != nil || len(demands) != 1 || demands[0].ItemCode != itemCode || demands[0].Quantity != 5 {
+	if err != nil || len(demands) != 1 || demands[0].ItemCode != itemCode || !demands[0].Quantity.Equal(decimal.NewFromFloat(5)) {
 		t.Fatalf("unexpected tenant sales demands: %#v, %v", demands, err)
 	}
 	if !demands[0].TechnicalAssistance || demands[0].WarehouseCode == nil || *demands[0].WarehouseCode != warehouseCode {

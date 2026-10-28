@@ -3,6 +3,8 @@ package technical_assistance_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
+	"github.com/FelipePn10/panossoerp/internal/domain/posvenda/garantia"
 	prodentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	prodrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -31,6 +34,36 @@ type UseCase struct {
 	Items            interface {
 		FindItemByCode(context.Context, valueobject.ItemCode) (*itementity.Item, error)
 	}
+	// Garantia, quando presente, decide a garantia do item pelo pós-venda
+	// (base instalada pela série, ou a NF de saída do cliente).
+	Garantia GarantiaDoChamado
+	// SLA, quando presente, grava os prazos do chamado na abertura e a
+	// primeira resposta quando ele sai de pendente.
+	SLA SLADoChamado
+}
+
+// momentoDaAbertura: a tela manda só a data. Aberto hoje, vale a hora real —
+// senão o chamado nasceria à meia-noite (UTC) e o SLA contaria horas que não
+// passaram. Data retroativa continua sendo a data informada.
+func momentoDaAbertura(informada, agora time.Time) time.Time {
+	ai, mi, di := informada.Date()
+	aa, ma, da := agora.Date()
+	if ai == aa && mi == ma && di == da && informada.Hour() == 0 && informada.Minute() == 0 && informada.Second() == 0 {
+		return agora
+	}
+	return informada
+}
+
+type SLADoChamado interface {
+	AplicarAoChamado(ctx context.Context, callCode int64) error
+	Responder(ctx context.Context, callCode int64) error
+	// MudouStatus para e retoma o relógio do SLA (aguardando o cliente).
+	MudouStatus(ctx context.Context, callCode int64, de, para string) error
+}
+
+// GarantiaDoChamado: o pós-venda decide a garantia (serie_uc).
+type GarantiaDoChamado interface {
+	GarantiaParaChamado(ctx context.Context, item int64, serie *string, cliente, numeroNF *int64, compra *time.Time) (garantia.Resultado, *int64, *time.Time, error)
 }
 
 func (uc *UseCase) tenantID(ctx context.Context) (int64, error) {
@@ -188,7 +221,7 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 		if !ok {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("data de abertura inválida (%q)", dto.OpenedAt))
 		}
-		openedAt = parsed
+		openedAt = momentoDaAbertura(parsed, openedAt)
 	}
 	callNumber, err := uc.Repo.NextCallNumber(ctx, tenantID)
 	if err != nil {
@@ -227,6 +260,11 @@ func (uc *UseCase) CreateCall(ctx context.Context, dto request.CreateTechnicalAs
 			return nil, err
 		}
 	}
+	if uc.SLA != nil {
+		if err := uc.SLA.AplicarAoChamado(ctx, created.Code); err != nil {
+			return nil, fmt.Errorf("o chamado %d foi aberto, mas o prazo do SLA não foi gravado: %w", created.CallNumber, err)
+		}
+	}
 	return uc.GetCall(ctx, created.Code)
 }
 
@@ -241,8 +279,8 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 	if dto.CallCode == 0 || dto.ItemCode == 0 {
 		return nil, errorsuc.NewValidationError("informe o chamado e o item")
 	}
-	if dto.Quantity <= 0 {
-		dto.Quantity = 1
+	if !dto.Quantity.IsPositive() {
+		dto.Quantity = decimal.NewFromInt(1)
 	}
 	if dto.WarrantyDays == 0 && uc.Items != nil {
 		itemCode, codeErr := valueobject.NewItemCode(dto.ItemCode)
@@ -272,13 +310,49 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 	}
 	inWarranty := false
 	var warrantyUntil *time.Time
-	if dto.PurchaseInvoiceDate != "" && dto.WarrantyDays > 0 {
-		purchaseDate := parseDatePtr(dto.PurchaseInvoiceDate)
-		if purchaseDate != nil {
-			until := purchaseDate.AddDate(0, 0, dto.WarrantyDays)
-			warrantyUntil = &until
-			inWarranty = !time.Now().After(until)
+	purchaseDate := parseDatePtr(dto.PurchaseInvoiceDate)
+	var gar struct {
+		serieID            *int64
+		origem             *string
+		inicio             *time.Time
+		pecas, mao, desloc *bool
+	}
+	decidida := false
+	if uc.Garantia != nil {
+		var cliente *int64
+		if call, err := uc.Repo.GetCall(ctx, tenantID, dto.CallCode); err == nil && call != nil && call.CustomerCode > 0 {
+			c := call.CustomerCode
+			cliente = &c
 		}
+		var nf *int64
+		if dto.PurchaseInvoiceNumber != nil {
+			if n, err := strconv.ParseInt(strings.TrimSpace(*dto.PurchaseInvoiceNumber), 10, 64); err == nil && n > 0 {
+				nf = &n
+			}
+		}
+		r, serieID, venda, err := uc.Garantia.GarantiaParaChamado(ctx, dto.ItemCode, dto.SerialNumber, cliente, nf, purchaseDate)
+		if err != nil {
+			return nil, fmt.Errorf("decidindo a garantia do item: %w", err)
+		}
+		if r.Ate != nil {
+			decidida = true
+			warrantyUntil, inWarranty = r.Ate, r.EmGarantia
+			o := r.Origem
+			gar.serieID, gar.origem, gar.inicio = serieID, &o, r.InicioEm
+			gar.pecas, gar.mao, gar.desloc = &r.CobrePecas, &r.CobreMaoObra, &r.CobreDeslocamento
+			if purchaseDate == nil && venda != nil {
+				purchaseDate = venda
+			}
+		} else if serieID != nil {
+			gar.serieID = serieID
+		}
+	}
+	if !decidida && purchaseDate != nil && dto.WarrantyDays > 0 {
+		until := purchaseDate.AddDate(0, 0, dto.WarrantyDays)
+		warrantyUntil = &until
+		inWarranty = !time.Now().After(until)
+		o := "INFORMADA"
+		gar.origem = &o
 	}
 	generatesRevenue := false
 	if reason != nil {
@@ -294,7 +368,7 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 		DefectReasonCode:      dto.DefectReasonCode,
 		DefectComplement:      dto.DefectComplement,
 		PurchaseInvoiceNumber: dto.PurchaseInvoiceNumber,
-		PurchaseInvoiceDate:   parseDatePtr(dto.PurchaseInvoiceDate),
+		PurchaseInvoiceDate:   purchaseDate,
 		WarrantyDays:          dto.WarrantyDays,
 		WarrantyUntil:         warrantyUntil,
 		InWarranty:            inWarranty,
@@ -302,6 +376,12 @@ func (uc *UseCase) AddCallItem(ctx context.Context, dto request.CreateTechnicalA
 		RequestedAction:       action,
 		Status:                "OPEN",
 		Notes:                 dto.Notes,
+		SerieID:               gar.serieID,
+		GarantiaOrigem:        gar.origem,
+		GarantiaInicio:        gar.inicio,
+		CobrePecas:            gar.pecas,
+		CobreMaoObra:          gar.mao,
+		CobreDeslocamento:     gar.desloc,
 	})
 	if err != nil {
 		return nil, err
@@ -447,6 +527,7 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnical
 		return nil, err
 	}
 	next := entity.CallStatus(dto.Status)
+	anterior := call.Status
 	now := time.Now()
 	if next == entity.CallStatusAttended || next == entity.CallStatusClosed {
 		if err := uc.validateCanAttend(ctx, call); err != nil {
@@ -465,6 +546,17 @@ func (uc *UseCase) UpdateStatus(ctx context.Context, dto request.UpdateTechnical
 	updated, err := uc.Repo.UpdateCall(ctx, tenantID, call)
 	if err != nil {
 		return nil, err
+	}
+	// Sair de pendente é a primeira resposta do SLA (cancelar não é resposta).
+	if uc.SLA != nil && next != entity.CallStatusPending && next != entity.CallStatusCancelled {
+		if err := uc.SLA.Responder(ctx, call.Code); err != nil {
+			return nil, err
+		}
+	}
+	if uc.SLA != nil && anterior != next {
+		if err := uc.SLA.MudouStatus(ctx, call.Code, string(anterior), string(next)); err != nil {
+			return nil, err
+		}
 	}
 	return toCallResponse(updated), nil
 }
@@ -517,7 +609,7 @@ func (uc *UseCase) generateSalesOrder(ctx context.Context, call *entity.Call, dt
 			DigitDate:      time.Now(),
 			WarehouseCode:  dto.WarehouseCode,
 			RequestedQty:   item.Quantity,
-			UnitPrice:      0,
+			UnitPrice:      decimal.Zero,
 			Status:         orderentity.SalesOrderItemStatusOpen,
 			Notes:          strPtr("Item gerado por assistência técnica"),
 		}); errItem != nil {

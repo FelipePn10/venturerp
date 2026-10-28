@@ -2,6 +2,7 @@ package sales_order_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -21,6 +22,10 @@ type CreateSalesOrderItemUseCase struct {
 	Auth   ports.AuthService
 	Prices customerrepo.CustomerRepository
 	Items  any
+	// Tributos sugere os impostos da linha pelo cálculo da nota. Opcional.
+	Tributos ports.SugestorTributosVenda
+	// Politica aplica as políticas comerciais e a alçada de desconto. Opcional.
+	Politica *PoliticaDoPedido
 }
 
 func (uc *CreateSalesOrderItemUseCase) Execute(
@@ -56,11 +61,19 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	if tableCode == nil {
 		return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
 	}
-	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, itemCode, dto.RequestedQty)
+	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, itemCode, dto.RequestedQty.InexactFloat64())
 	if err != nil {
 		return nil, err
 	}
-	dto.UnitPrice, dto.PriceTableCode = pricing.AppliedPrice, tableCode
+	dto.UnitPrice, dto.PriceTableCode = decimal.NewFromFloat(pricing.AppliedPrice), tableCode
+	if err := uc.Politica.ConferirDesconto(ctx, dto.DiscountPct); err != nil {
+		return nil, err
+	}
+
+	if err := preencherTributos(ctx, uc.Tributos, dto.TributosManuais, dto.SalesOrderCode, itemCode, dto.RequestedQty, dto.UnitPrice, dto.DiscountPct,
+		percentuaisDaLinha{IPI: &dto.IPIPct, ICMS: &dto.ICMSPct, PIS: &dto.PISPct, COFINS: &dto.COFINSPct, ST: &dto.STPct}); err != nil {
+		return nil, err
+	}
 
 	digitDate := datetime.ParseDateOrDefault(dto.DigitDate, time.Now())
 
@@ -95,20 +108,21 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 
 	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
 
-	// Compute totals
-	grossUnit := dto.UnitPrice * (1 - dto.DiscountPct/100)
-	item.TotalGross = grossUnit * dto.RequestedQty
-	ipiAmt := item.TotalGross * dto.IPIPct / 100
-	item.TotalIPI = ipiAmt
-	item.TotalNet = item.TotalGross
-	item.TotalNetWithIPI = item.TotalGross + ipiAmt
-	item.TotalST = item.TotalGross * dto.STPct / 100
+	item.RecalcularTotais()
 
 	item.UnitWeightNet = dto.UnitWeightNet
 	item.UnitWeightGross = dto.UnitWeightGross
 
 	created, err := uc.Repo.CreateItem(ctx, item)
 	if err != nil {
+		return nil, err
+	}
+	// A capa (crédito, comissão, rateio do frete no faturamento) lê os totais
+	// do pedido: sem refazer, eles ficavam zerados depois de incluir a linha.
+	if err := uc.Repo.RecalculateTotals(ctx, dto.SalesOrderCode); err != nil {
+		return nil, err
+	}
+	if err := uc.Politica.Aplicar(ctx, dto.SalesOrderCode); err != nil {
 		return nil, err
 	}
 	return toSalesOrderItemResponse(created), nil
@@ -119,6 +133,12 @@ type UpdateSalesOrderItemUseCase struct {
 	Auth   ports.AuthService
 	Prices customerrepo.CustomerRepository
 	Items  any
+	// Tributos sugere os impostos da linha pelo cálculo da nota. Opcional.
+	Tributos ports.SugestorTributosVenda
+	// Politica aplica as políticas comerciais e a alçada de desconto. Opcional.
+	Politica *PoliticaDoPedido
+	// Contratos mantém o preço da linha de chamada de contrato. Opcional.
+	Contratos PrecosContratados
 }
 
 func (uc *UpdateSalesOrderItemUseCase) Execute(
@@ -152,14 +172,36 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	if tableCode == nil {
 		tableCode = order.PriceTableCode
 	}
-	if tableCode == nil {
-		return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
+	var contratado *decimal.Decimal
+	if uc.Contratos != nil {
+		if contratado, err = uc.Contratos.PrecoContratado(ctx, current.Code); err != nil {
+			return nil, err
+		}
 	}
-	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, current.ItemCode, dto.RequestedQty)
-	if err != nil {
+	if contratado != nil {
+		// Linha de chamada de contrato: o preço é o do contrato, não o da tabela.
+		dto.UnitPrice = *contratado
+	} else {
+		if tableCode == nil {
+			return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
+		}
+		pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, current.ItemCode, dto.RequestedQty.InexactFloat64())
+		if err != nil {
+			return nil, err
+		}
+		dto.UnitPrice = decimal.NewFromFloat(pricing.AppliedPrice)
+	}
+	// Só confere quando o desconto sobe: alterar a quantidade de uma linha já
+	// aceita não deve ser recusado por causa do desconto que ela já tinha.
+	if dto.DiscountPct > current.DiscountPct {
+		if err := uc.Politica.ConferirDesconto(ctx, dto.DiscountPct); err != nil {
+			return nil, err
+		}
+	}
+	if err := preencherTributos(ctx, uc.Tributos, dto.TributosManuais, current.SalesOrderCode, current.ItemCode, dto.RequestedQty, dto.UnitPrice, dto.DiscountPct,
+		percentuaisDaLinha{IPI: &dto.IPIPct, ICMS: &dto.ICMSPct, PIS: &dto.PISPct, COFINS: &dto.COFINSPct, ST: &dto.STPct}); err != nil {
 		return nil, err
 	}
-	dto.UnitPrice = pricing.AppliedPrice
 
 	item := &entity.SalesOrderItem{
 		Code:             dto.Code,
@@ -186,29 +228,28 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
 
 	// Determine status from quantities
-	balance := dto.RequestedQty - dto.AttendedQty - dto.CancelledQty
+	balance := dto.RequestedQty.Sub(dto.AttendedQty).Sub(dto.CancelledQty)
 	switch {
-	case dto.CancelledQty >= dto.RequestedQty:
+	case dto.CancelledQty.GreaterThanOrEqual(dto.RequestedQty):
 		item.Status = entity.SalesOrderItemStatusCancelled
-	case dto.AttendedQty >= dto.RequestedQty:
+	case dto.AttendedQty.GreaterThanOrEqual(dto.RequestedQty):
 		item.Status = entity.SalesOrderItemStatusDelivered
-	case dto.AttendedQty > 0 || balance < dto.RequestedQty:
+	case dto.AttendedQty.IsPositive() || balance.LessThan(dto.RequestedQty):
 		item.Status = entity.SalesOrderItemStatusPartial
 	default:
 		item.Status = entity.SalesOrderItemStatusOpen
 	}
 
-	// Recompute totals
-	grossUnit := dto.UnitPrice * (1 - dto.DiscountPct/100)
-	item.TotalGross = grossUnit * dto.RequestedQty
-	ipiAmt := item.TotalGross * dto.IPIPct / 100
-	item.TotalIPI = ipiAmt
-	item.TotalNet = item.TotalGross
-	item.TotalNetWithIPI = item.TotalGross + ipiAmt
-	item.TotalST = item.TotalGross * dto.STPct / 100
+	item.RecalcularTotais()
 
 	updated, err := uc.Repo.UpdateItem(ctx, item)
 	if err != nil {
+		return nil, err
+	}
+	if err := uc.Repo.RecalculateTotals(ctx, current.SalesOrderCode); err != nil {
+		return nil, err
+	}
+	if err := uc.Politica.Aplicar(ctx, current.SalesOrderCode); err != nil {
 		return nil, err
 	}
 	return toSalesOrderItemResponse(updated), nil
@@ -239,5 +280,12 @@ func (uc *CancelSalesOrderItemUseCase) Execute(ctx context.Context, itemCode int
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.CancelItem(ctx, itemCode)
+	item, err := uc.Repo.GetItem(ctx, itemCode)
+	if err != nil {
+		return err
+	}
+	if err := uc.Repo.CancelItem(ctx, itemCode); err != nil {
+		return err
+	}
+	return uc.Repo.RecalculateTotals(ctx, item.SalesOrderCode)
 }

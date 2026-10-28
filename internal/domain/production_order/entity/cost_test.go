@@ -1,19 +1,20 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 
 	"github.com/google/uuid"
 )
 
-func almostEqual(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+func almostEqual(a decimal.Decimal, b float64) bool { return math.Abs(a.InexactFloat64()-b) < 1e-6 }
 
 func TestBuildSettlement_VariancesAndOverheadApplication(t *testing.T) {
 	// Produced 10 units. Real material 1200, real labor 600.
 	// Standard per unit: material 100, labor 50, overhead 25.
-	in := ActualCostInputs{ProducedQty: 10, MaterialCostReal: 1200, LaborCostReal: 600}
-	std := StandardUnitCost{Material: 100, Labor: 50, Overhead: 25}
+	in := ActualCostInputs{ProducedQty: decimal.RequireFromString("10"), MaterialCostReal: decimal.RequireFromString("1200"), LaborCostReal: decimal.RequireFromString("600")}
+	std := StandardUnitCost{Material: decimal.RequireFromString("100"), Labor: decimal.RequireFromString("50"), Overhead: decimal.RequireFromString("25")}
 
 	c := BuildSettlement(7, in, std, "", uuid.Nil)
 
@@ -47,12 +48,12 @@ func TestBuildSettlement_VariancesAndOverheadApplication(t *testing.T) {
 }
 
 func TestBuildSettlement_NoStandardLaborSkipsOverhead(t *testing.T) {
-	in := ActualCostInputs{ProducedQty: 5, MaterialCostReal: 500, LaborCostReal: 100}
-	std := StandardUnitCost{Material: 90, Labor: 0, Overhead: 40}
+	in := ActualCostInputs{ProducedQty: decimal.RequireFromString("5"), MaterialCostReal: decimal.RequireFromString("500"), LaborCostReal: decimal.RequireFromString("100")}
+	std := StandardUnitCost{Material: decimal.RequireFromString("90"), Labor: decimal.RequireFromString("0"), Overhead: decimal.RequireFromString("40")}
 
 	c := BuildSettlement(1, in, std, "USD", uuid.Nil)
 
-	if c.OverheadCostReal != 0 {
+	if !c.OverheadCostReal.IsZero() {
 		t.Fatalf("overhead real = %v, want 0 when std labor is 0", c.OverheadCostReal)
 	}
 	if !almostEqual(c.TotalCostReal, 600) {
@@ -64,11 +65,11 @@ func TestBuildSettlement_NoStandardLaborSkipsOverhead(t *testing.T) {
 }
 
 func TestBuildSettlement_ZeroProducedQtyNoDivByZero(t *testing.T) {
-	in := ActualCostInputs{ProducedQty: 0, MaterialCostReal: 100, LaborCostReal: 0}
-	std := StandardUnitCost{Material: 10, Labor: 5, Overhead: 2}
+	in := ActualCostInputs{ProducedQty: decimal.RequireFromString("0"), MaterialCostReal: decimal.RequireFromString("100"), LaborCostReal: decimal.RequireFromString("0")}
+	std := StandardUnitCost{Material: decimal.RequireFromString("10"), Labor: decimal.RequireFromString("5"), Overhead: decimal.RequireFromString("2")}
 
 	c := BuildSettlement(1, in, std, "", uuid.Nil)
-	if c.UnitCostReal != 0 {
+	if !c.UnitCostReal.IsZero() {
 		t.Fatalf("unit real = %v, want 0 for zero produced qty", c.UnitCostReal)
 	}
 }

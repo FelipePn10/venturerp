@@ -98,7 +98,8 @@ INSERT INTO icms_ipi_tax_params (
     fcp_st_partilha_pct,
     icms_difal_red_pct, icms_difal_type,
     difal_purchase_red_pct, difal_purchase_red_target,
-    enterprise_id
+    enterprise_id,
+    finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code
 ) SELECT
     $1,  $2,  $3,  $4,  $5,
     $6,  $7,  $8,  $9,  $10, $11,
@@ -114,10 +115,13 @@ INSERT INTO icms_ipi_tax_params (
     $62, $63, $64, $65, $66, $67,
     $68, $69, $70, $71, $72, $73, $74,
     $75, $76, $77, $78,
-    $79
--- Item e cliente citados na regra têm de ser da empresa.
+    $79,
+    sqlc.narg(finalidade_compra)::varchar, sqlc.arg(mva_pct)::numeric, sqlc.arg(mva_ajustar_interestadual)::boolean,
+    sqlc.narg(supplier_code)::bigint
+-- Item, cliente e fornecedor citados na regra têm de ser da empresa.
  WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $79))
    AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $79))
+   AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $79))
 RETURNING *;
 
 -- name: UpdateTaxParam :one
@@ -150,8 +154,12 @@ SET ncm_code = $2, item_code = $3, item_config_mask = $4, uf = $5, operation_typ
     fcp_st_partilha_pct = $75,
     icms_difal_red_pct = $76, icms_difal_type = $77,
     difal_purchase_red_pct = $78, difal_purchase_red_target = $79,
-    is_active = $80, updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $81
+    is_active = $80, updated_at = NOW(),
+    finalidade_compra = sqlc.narg(finalidade_compra)::varchar, mva_pct = sqlc.arg(mva_pct)::numeric,
+    mva_ajustar_interestadual = sqlc.arg(mva_ajustar_interestadual)::boolean,
+    supplier_code = sqlc.narg(supplier_code)::bigint
+WHERE icms_ipi_tax_params.id = $1 AND icms_ipi_tax_params.enterprise_id = $81
+  AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $81))
 RETURNING *;
 
 -- name: GetTaxParamByID :one

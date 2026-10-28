@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -35,5 +36,16 @@ func TestPasswordChangeIDInvalidoResponde400(t *testing.T) {
 				t.Fatalf("%s com id %q: %d %s", c.nome, id, rec.Code, rec.Body.String())
 			}
 		}
+	}
+}
+
+// Senha atual errada não é sessão inválida: responder 401 derrubava a sessão
+// no app.
+func TestPasswordChangeSenhaAtualErradaNaoResponde401(t *testing.T) {
+	h := NewPasswordChangeHandler(nil)
+	rec := httptest.NewRecorder()
+	h.writeError(rec, httptest.NewRequest(http.MethodPost, "/", nil), user_uc.ErrCurrentPasswordInvalid)
+	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "senha atual") {
+		t.Fatalf("%d %s", rec.Code, rec.Body.String())
 	}
 }

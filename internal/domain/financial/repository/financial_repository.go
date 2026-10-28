@@ -185,6 +185,9 @@ type FinancialRepository interface {
 
 	// Fiscal Data for Tax Assessment
 	GetFiscalDebits(ctx context.Context, competencia string) (map[string]decimal.Decimal, error)
+	// GetDebitosPorUF: ICMS-ST, DIFAL e FCP das saídas autorizadas do mês, por
+	// UF de destino — o que se recolhe a cada estado (GNRE ou inscrição).
+	GetDebitosPorUF(ctx context.Context, competencia string) ([]DebitoPorUF, error)
 	GetFiscalCredits(ctx context.Context, competencia string) (map[string]decimal.Decimal, error)
 	GetFiscalConfig(ctx context.Context) (*fiscalEntity.FiscalConfig, error)
 
@@ -228,4 +231,11 @@ type FinancialRepository interface {
 	GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error)
 	ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error
 	AutoMatchExtrato(ctx context.Context, contaID int64) (int, error)
+}
+
+// DebitoPorUF é um imposto devido a um estado no mês. Imposto: ST, DIFAL ou FCP.
+type DebitoPorUF struct {
+	Imposto string
+	UF      string
+	Valor   decimal.Decimal
 }

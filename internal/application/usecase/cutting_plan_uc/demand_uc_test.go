@@ -3,6 +3,7 @@ package cutting_plan_uc
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -83,7 +84,7 @@ func itemWithDims(code int64, l, w, h int, llc int, uom types.TypeUnitOfMeasurem
 
 func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 	// Product 1000 → 4× component 2000 (a 720mm leg) → raw material 5000 (a bar).
-	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: 2}}
+	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("2")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
 		1000: {{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Perna 720", Quantity: 4}},
 		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: 1}}, // component's raw material
@@ -129,7 +130,7 @@ func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 }
 
 func TestGenerateFromOrders_SelectsPrimarySubstituteForCutDemand(t *testing.T) {
-	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: 1}}
+	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("1")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
 		1000: {
 			{ParentCode: 1000, ChildCode: 2100, ChildDescription: "Alternativa B", Quantity: 99, SubstituteGroup: 1, SubstitutePriority: 2},

@@ -1,6 +1,8 @@
 package response
 
 import (
+	"github.com/shopspring/decimal"
+
 	"encoding/json"
 	"time"
 )
@@ -454,25 +456,25 @@ type CommercialPolicySpecificItemResponse struct {
 }
 
 type CommercialPolicyEffectResponse struct {
-	PolicyCode       int64   `json:"policy_code"`
-	PolicyID         int64   `json:"policy_id"`
-	Description      string  `json:"description"`
-	Kind             string  `json:"kind"`
-	CalcType         string  `json:"calc_type"`
-	PercentValue     float64 `json:"percent_value"`
-	FixedValue       float64 `json:"fixed_value"`
-	AppliedValue     float64 `json:"applied_value"`
-	RequiresApproval bool    `json:"requires_approval"`
-	Stackable        bool    `json:"stackable"`
+	PolicyCode       int64           `json:"policy_code"`
+	PolicyID         int64           `json:"policy_id"`
+	Description      string          `json:"description"`
+	Kind             string          `json:"kind"`
+	CalcType         string          `json:"calc_type"`
+	PercentValue     decimal.Decimal `json:"percent_value"`
+	FixedValue       decimal.Decimal `json:"fixed_value"`
+	AppliedValue     decimal.Decimal `json:"applied_value"`
+	RequiresApproval bool            `json:"requires_approval"`
+	Stackable        bool            `json:"stackable"`
 }
 
 type CommercialPolicyEvaluationResponse struct {
-	GrossValue       float64                          `json:"gross_value"`
-	DiscountValue    float64                          `json:"discount_value"`
-	SurchargeValue   float64                          `json:"surcharge_value"`
-	FreightValue     float64                          `json:"freight_value"`
-	CommissionValue  float64                          `json:"commission_value"`
-	NetValue         float64                          `json:"net_value"`
+	GrossValue       decimal.Decimal                  `json:"gross_value"`
+	DiscountValue    decimal.Decimal                  `json:"discount_value"`
+	SurchargeValue   decimal.Decimal                  `json:"surcharge_value"`
+	FreightValue     decimal.Decimal                  `json:"freight_value"`
+	CommissionValue  decimal.Decimal                  `json:"commission_value"`
+	NetValue         decimal.Decimal                  `json:"net_value"`
 	RequiresApproval bool                             `json:"requires_approval"`
 	Effects          []CommercialPolicyEffectResponse `json:"effects"`
 }
@@ -531,6 +533,7 @@ type CustomerResponse struct {
 	CarrierGroupID        *int64                    `json:"carrier_group_id,omitempty"`
 	InvoiceTypeID         *int64                    `json:"invoice_type_id,omitempty"`
 	TaxTypeID             *int64                    `json:"tax_type_id,omitempty"`
+	FinalidadeCompra      *string                   `json:"finalidade_compra,omitempty"`
 	PaymentCondVisibility string                    `json:"payment_cond_visibility"`
 	CreditLimit           float64                   `json:"credit_limit"`
 	Website               *string                   `json:"website,omitempty"`

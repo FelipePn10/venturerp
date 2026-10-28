@@ -77,6 +77,7 @@ type EnterpriseHandler struct {
 	createEnterpriseUC *enterprise_uc.CreateEnterpriseUseCase
 	getEnterpriseUC    *enterprise_uc.GetEnterpriseUseCase
 	listEnterprisesUC  *enterprise_uc.ListEnterprisesUseCase
+	identificacaoUC    *enterprise_uc.IdentificacaoUseCase
 }
 
 type ModifierHandler struct {

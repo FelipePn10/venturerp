@@ -72,8 +72,44 @@ mudam sempre; tipo, centro-pai, "rateio de absorção" e data inicial só sem us
 ciclo) também no `POST /create`. Desativar com filho ativo → 409. `end_date`
 ausente no `PUT` **limpa** a data final — mande a atual para mantê-la.
 
-Enum de classificação: `CostCenterEnum`. Também há centros de custo no financeiro
-(`/api/financial/centros-custo`) para o plano financeiro.
+Enum de classificação: `CostCenterEnum`.
+
+**Cadastro único (migração 447, 2026-10-27).** Não há mais dois cadastros: o
+financeiro (`centros_custo`, VFIN0130) foi migrado para `cost_centers`, empresa a
+empresa, com o código alfanumérico preservado e a hierarquia montada pelo
+prefixo (`CC-FAB-CORTE` abaixo de `CC-FAB`); as referências financeiras (títulos,
+rateios, itens e parcelas de nota, frete, regras de rateio, ECD) apontam para
+`cost_centers.id`. O `code` numérico continua a chave do lado industrial; o
+código da empresa fica em `cost_center_gestao` (gatilho cria a linha de todo
+centro novo; `POST /create` com `code` 0 usa o próximo livre).
+
+| Método | Rota | Ação |
+|---|---|---|
+| GET `/gestao` | centros com a gestão (código da empresa, responsável, aprovador, conta padrão) |
+| PUT `/{costCenterCode}/gestao` | grava a gestão (código único na empresa; aprovar requisições exige aprovador; usuários e conta da empresa) |
+| GET `/usuarios` | usuários da empresa (responsável e aprovador) |
+| GET/PUT `/orcamento?ano=` | orçado mensal × realizado; o PUT grava os meses (`valor` em texto decimal) |
+| GET `/arvore?ano=&mes=` | árvore com orçado e realizado próprios e consolidados, `estourado` (mes 0 = ano) |
+| GET `/aprovacoes?status=&minhas=&requisicao=` | aprovações de requisição pelo centro |
+| POST `/aprovacoes/{id}/aprovar` · `/reprovar` | decide (só o aprovador do centro; quem pediu não aprova; reprovar exige motivo; duas decisões simultâneas: uma passa) |
+
+**Realizado** = contas a pagar não cancelados pela data de emissão: o rateio do
+título por centro, ou o centro do título sem rateio (a nota de entrada aprovada
+gera o título com o rateio dos itens, então não há dupla contagem).
+
+**Requisição de compra:** criar ou acrescentar item de centro com
+`aprova_requisicoes` abre (ou reabre, se o item novo chegou depois da
+aprovação, ou depois da reprovação) a aprovação do aprovador do centro; a
+geração de pedidos pula a requisição pendente ou reprovada, com o motivo. A
+requisição de serviço gerada ao firmar a ordem planejada (MRP, operação
+externa) leva o centro de custo da ordem e abre a mesma aprovação, dentro da
+transação da firmação (`cost_center.AprovacoesNaTransacao`).
+
+**Alertas:** `FINANCEIRO_CENTRO_ORCAMENTO_ESTOURADO` (realizado do mês acima do
+orçado; resolve quando volta para dentro ou o mês acaba) e
+`COMPRAS_REQUISICAO_AGUARDANDO_CENTRO` (resolve quando o aprovador decide).
+
+Domínio: `internal/domain/cost_center/gestao`.
 
 ---
 

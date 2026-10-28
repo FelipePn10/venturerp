@@ -25,6 +25,8 @@ func TestRotaDeItemEhReconhecidaPelaPosicaoDoSegmento(t *testing.T) {
 		{"/api/sales-order/items/77", -1},
 		{"/api/consumer-service/calls/checklist/77", -1},
 		{"/api/items/classifications/masks/9", -1},
+		{"/api/items/governanca/parametros", -1},
+		{"/api/items/governanca/itens/MP-CH-3MM", -1},
 		{"/api/items/search/MP-CH-3MM", 3},
 		{"/api/stock/movements/item/MP-CH-3MM", 4},
 		{"/api/stock/balances/atp/MP-CH-3MM", 4},

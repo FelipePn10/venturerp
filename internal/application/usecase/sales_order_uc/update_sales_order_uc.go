@@ -32,6 +32,11 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
 		return nil, err
 	}
+	finalidade, err := normalizarFinalidade(dto.FinalidadeCompra)
+	if err != nil {
+		return nil, err
+	}
+	dto.FinalidadeCompra = finalidade
 
 	o := &entity.SalesOrder{
 		Code:                        dto.Code,
@@ -46,6 +51,7 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 		SalesDivisionCode:           dto.SalesDivisionCode,
 		CommissionPct:               dto.CommissionPct,
 		TaxTypeCode:                 dto.TaxTypeCode,
+		FinalidadeCompra:            dto.FinalidadeCompra,
 		PresenceIndicator:           dto.PresenceIndicator,
 		SalesChannel:                dto.SalesChannel,
 		DefaultNFType:               dto.DefaultNFType,

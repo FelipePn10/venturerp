@@ -308,9 +308,11 @@ func TestScenario_ImportedGoods_SF13_FourPercent(t *testing.T) {
 	near(t, "ValorICMS", 40.00, item.ValorICMS)
 }
 
-// Also test origins 4, 5, 8.
-func TestScenario_ImportedGoods_Origins_4_5_8(t *testing.T) {
-	for _, origin := range []string{"4", "5", "8"} {
+// Res. SF 13/2012: 4% para origens 1, 2, 3 e 8 (importada ou com conteúdo de
+// importação acima de 40%). Origens 4 e 5 são nacionais e 6/7 não têm similar
+// nacional: seguem a alíquota interestadual comum (PR→BA = 7%).
+func TestScenario_ImportedGoods_Origins(t *testing.T) {
+	for origin, quer := range map[string]float64{"1": 0.04, "2": 0.04, "3": 0.04, "8": 0.04, "0": 0.07, "4": 0.07, "5": 0.07, "6": 0.07, "7": 0.07} {
 		params := TaxCalculationParams{
 			Itens: []TaxItem{
 				{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: origin},
@@ -321,7 +323,7 @@ func TestScenario_ImportedGoods_Origins_4_5_8(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		near(t, "AliquotaICMS origin "+origin, 0.04, res.Itens[0].AliquotaICMS)
+		near(t, "AliquotaICMS origin "+origin, quer, res.Itens[0].AliquotaICMS)
 	}
 }
 
@@ -553,7 +555,9 @@ func TestScenario_Interstate_SameRegion_12pct(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Scenario 17: Default 12% when UF pair not in table
+// Scenario 17: par fora da tabela usa a Resolução SF 22/1989 (PR→AM = 7%).
+// Antes valia 12% fixo, o que destacava ICMS a mais na venda do Sul/Sudeste
+// para o Norte, Nordeste e Centro-Oeste.
 // ---------------------------------------------------------------------------
 
 func TestScenario_Interstate_DefaultRate(t *testing.T) {
@@ -567,8 +571,7 @@ func TestScenario_Interstate_DefaultRate(t *testing.T) {
 
 	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
 
-	// Default fallback 12%
-	near(t, "AliquotaICMS_default", 0.12, res.Itens[0].AliquotaICMS)
+	near(t, "AliquotaICMS_resolucao_SF_22_89", 0.07, res.Itens[0].AliquotaICMS)
 }
 
 // ---------------------------------------------------------------------------
@@ -648,6 +651,8 @@ func TestScenario_ST_ReducedBase(t *testing.T) {
 	near(t, "BaseICMSST", 1176.00, item.BaseICMSST)
 	// ICMS-ST = 1176 × 12% − 120 = 141.12 − 120 = 21.12
 	near(t, "ValorICMSST", 21.12, item.ValorICMSST)
+	// pRedBCST vai no XML em percentual.
+	near(t, "ReducaoBaseSTPct", 20, item.ReducaoBaseSTPct)
 }
 
 // ---------------------------------------------------------------------------

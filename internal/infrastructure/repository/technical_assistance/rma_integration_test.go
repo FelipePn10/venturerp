@@ -4,6 +4,7 @@ package technical_assistance_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -44,7 +45,7 @@ func TestRMAIsTransactionalIdempotentAndTenantSafe(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM users WHERE id=$1`, actor)
 	})
 	repo := repository.New(pool)
-	rma := &entity.RMA{CallCode: callCode, Status: "SOLICITADO", ReasonCode: "DEFEITO", EligibilityStatus: "ELEGIVEL", EligibilityReason: "garantia vigente", SLADueAt: time.Now().Add(48 * time.Hour), IdempotencyKey: "integration-rma", CreatedBy: actor, Items: []*entity.RMAItem{{CallItemCode: itemCode, ItemCode: 99, Quantity: 1}}}
+	rma := &entity.RMA{CallCode: callCode, Status: "SOLICITADO", ReasonCode: "DEFEITO", EligibilityStatus: "ELEGIVEL", EligibilityReason: "garantia vigente", SLADueAt: time.Now().Add(48 * time.Hour), IdempotencyKey: "integration-rma", CreatedBy: actor, Items: []*entity.RMAItem{{CallItemCode: itemCode, ItemCode: 99, Quantity: decimal.NewFromInt(1)}}}
 	created, err := repo.CreateRMA(ctx, enterpriseA, rma)
 	if err != nil {
 		t.Fatal(err)

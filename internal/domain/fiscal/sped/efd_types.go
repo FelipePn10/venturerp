@@ -13,6 +13,13 @@ type EFDParams struct {
 	// Conhecimentos de transporte (D100/D190): o CT-e do frete de compra.
 	Conhecimentos []EFDConhecimento
 	ApuracaoICMS  *EFDApuracaoICMS
+	// CIAP (Bloco G, 0300/0305/0500/0600): o crédito do ativo imobilizado.
+	CIAP *EFDCIAP
+	// ApuracoesST (E200/E210/E250): o ICMS-ST retido, por UF de destino.
+	ApuracoesST []EFDApuracaoST
+	// ApuracoesDIFAL (E300/E310/E316): DIFAL e FCP da venda a consumidor final
+	// não contribuinte de outra UF (EC 87/2015), por UF de destino.
+	ApuracoesDIFAL []EFDApuracaoDIFAL
 	// ApuracaoIPI (E500/E510/E520): contribuinte do IPI (indústria).
 	ApuracaoIPI *EFDApuracaoIPI
 	Inventario  []EFDInventarioItem
@@ -159,6 +166,8 @@ type EFDDocumentoFiscal struct {
 	VlPisSt    float64
 	VlCofinsSt float64
 	Itens      []EFDItemDoc
+	// C101: DIFAL e FCP da UF de destino (venda a não contribuinte de outra UF).
+	C101 *EFDC101
 	// C190 analítico (one per CFOP/CST/aliquota combination)
 	AnaliticosICMS []EFDC190
 }
@@ -289,4 +298,24 @@ type EFDInventarioItem struct {
 	TxtCompl string
 	CodCta   string
 	VlItemIr float64
+}
+
+// EFDC101 — informação complementar do C100 na venda interestadual a
+// consumidor final não contribuinte (EC 87/2015).
+type EFDC101 struct {
+	VlFcpUfDest, VlIcmsUfDest, VlIcmsUfRem float64
+}
+
+// EFDApuracaoST — E200 (período), E210 (apuração) e E250 (obrigação) de uma UF.
+type EFDApuracaoST struct {
+	UF                 string
+	Retencao, Recolher float64
+	Obrigacao          EFDObrigacao
+}
+
+// EFDApuracaoDIFAL — E300 (período), E310 (apuração) e E316 (obrigações) de uma UF.
+type EFDApuracaoDIFAL struct {
+	UF         string
+	Difal, FCP float64
+	Obrigacoes []EFDObrigacao
 }

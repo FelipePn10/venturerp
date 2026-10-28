@@ -2,6 +2,7 @@ package valueobject
 
 import (
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 )
@@ -111,21 +112,41 @@ func TestCyclicalCountConfigJSONContractAndLegacyRead(t *testing.T) {
 }
 
 func TestReorderPoint_Calculate(t *testing.T) {
+	d := decimal.RequireFromString
 	// ROP = (TR * CM / CR) + ES = (10*5/2)+3 = 28
-	r, err := NewReorderPoint(10, 5, 2, 3)
+	r, err := NewReorderPoint(10, d("5"), 2, d("3"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	got, err := r.Calculate()
-	if err != nil {
-		t.Fatalf("Calculate error: %v", err)
+	if got, _ := r.Calculate(); !got.Equal(d("28")) {
+		t.Errorf("Calculate() = %s, want 28", got)
 	}
-	if got != 28 {
-		t.Errorf("Calculate() = %d, want 28", got)
+	// Item em KG: 7 dias × 12,5 kg/mês ÷ 30 + 2,5 = 5,4166… → 6 (sobe; antes o
+	// MRP truncava a divisão inteira).
+	r, _ = NewReorderPoint(7, d("12.5"), 30, d("2.5"))
+	if got, _ := r.Calculate(); !got.Equal(d("6")) {
+		t.Errorf("fracionado = %s, want 6", got)
 	}
-
 	// CR == 0 is invalid at construction and Calculate guards against it.
-	if _, err := NewReorderPoint(10, 5, 0, 3); err == nil {
+	if _, err := NewReorderPoint(10, d("5"), 0, d("3")); err == nil {
 		t.Error("expected error for CR=0")
+	}
+	if _, err := NewReorderPoint(10, d("-1"), 2, d("3")); err == nil {
+		t.Error("consumo negativo")
+	}
+}
+
+func TestReorderPointJSONNumericoECompativel(t *testing.T) {
+	r, _ := NewReorderPoint(7, decimal.RequireFromString("12.5"), 30, decimal.RequireFromString("2.5"))
+	b, err := json.Marshal(r)
+	if err != nil || string(b) != `{"TR":7,"CM":12.5,"CR":30,"ES":2.5}` {
+		t.Fatalf("JSONB deve guardar números: %s %v", b, err)
+	}
+	// Formato gravado antes (inteiros) e o que o desktop envia continuam lidos.
+	for _, raw := range []string{`{"TR":7,"CM":200,"CR":2,"ES":50}`, `{"TR":7,"CM":"200","CR":2,"ES":"50"}`} {
+		var v ReorderPoint
+		if err := json.Unmarshal([]byte(raw), &v); err != nil || v.TR != 7 || !v.CM.Equal(decimal.NewFromInt(200)) || !v.ES.Equal(decimal.NewFromInt(50)) {
+			t.Fatalf("%s: %+v %v", raw, v, err)
+		}
 	}
 }

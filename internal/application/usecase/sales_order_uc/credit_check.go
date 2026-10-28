@@ -114,15 +114,14 @@ func isOpenReceivable(s finentity.ContaReceberStatus) bool {
 }
 
 // orderExposureValue picks the most complete monetary value available on the
-// order header for credit-exposure purposes. O pedido guarda os totais em
-// float; a soma da exposição é feita em decimal a partir daqui.
+// order header for credit-exposure purposes.
 func orderExposureValue(o *entity.SalesOrder) decimal.Decimal {
 	switch {
-	case o.TotalWithIPIWithST > 0:
-		return decimal.NewFromFloat(o.TotalWithIPIWithST)
-	case o.TotalNet > 0:
-		return decimal.NewFromFloat(o.TotalNet)
+	case o.TotalWithIPIWithST.IsPositive():
+		return o.TotalWithIPIWithST
+	case o.TotalNet.IsPositive():
+		return o.TotalNet
 	default:
-		return decimal.NewFromFloat(o.TotalGross)
+		return o.TotalGross
 	}
 }

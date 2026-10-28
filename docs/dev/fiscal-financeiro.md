@@ -49,6 +49,7 @@
 34. [Cadastro de Classificações Fiscais](#34-cadastro-de-classificações-fiscais)
 35. [Tipos de Operação de Entrada](#35-tipos-de-operação-de-entrada)
 42. [SPED Fiscal — EFD ICMS/IPI automática](#42-sped-fiscal--efd-icmsipi-automática)
+43. [Reforma Tributária — IBS/CBS parametrizado](#43-reforma-tributária--ibscbs-parametrizado-migration-000411)
 
 ---
 
@@ -86,6 +87,31 @@ infrastructure/
 ## 2. Pré-requisito: Configuração Fiscal
 
 Antes de emitir qualquer NF-e, configure a empresa. Sem isso, a autorização retorna `"token Focus NF-e não configurado"`.
+
+**Identificação × parâmetros (desde 2026-10-27).** A identificação da empresa
+(CNPJ, razão social, nome fantasia, IE, regime, endereço, IBGE, CEP, telefone,
+e-mail) é mantida num lugar só: `GET`/`PUT /api/enterprise/identificacao`
+(VEMP0100, alteração só ADMIN, grava `enterprise.name` e `fiscal_configs` na
+mesma transação, regras em `enterprise/entity/dados_fiscais.go`, inclusive o
+prefixo IBGE da UF). A VFIS0100 grava só os parâmetros fiscais: o `PUT
+/api/fiscal/config` **sem** `cnpj_empresa` e `razao_social` mantém a
+identificação gravada (o corpo antigo, com tudo, continua aceito). Nome fantasia
+e e-mail não se apagam mais nessa gravação.
+
+**Token Focus de produção — só pela Venture ERP.** `entity.ConferirTrocaDoFocus`
+recusa pela API: passar para produção, sair dela e trocar o token em produção
+(422, mensagem "só é gravado ou trocado pela Venture ERP"). Em produção, os
+demais parâmetros continuam editáveis (`focus_producao_travado: true` na
+resposta). O gesto é feito no servidor, dentro do contêiner da API:
+
+```bash
+docker exec -i <api> /app/venture-admin focus-status -empresa 1
+docker exec -i <api> /app/venture-admin focus-producao -empresa 1 -por "Nome (Venture)" -motivo "início da produção" < token.txt
+docker exec -i <api> /app/venture-admin focus-homologacao -empresa 1 -por "Nome (Venture)" -motivo "troca de certificado"
+```
+
+O token vem pela entrada padrão (nunca por argumento). Cada gesto fica em
+`focus_token_eventos` (migração 446), que não aceita alteração nem exclusão.
 
 ### `GET /api/fiscal/config`
 
@@ -161,6 +187,8 @@ Atualiza a configuração fiscal da empresa.
 | `telefone` | Não | Telefone do emitente (DDD + número) |
 | `icms_interno_aliquota` | Sim | Alíquota interna (decimal, ex: `0.12` = 12%) |
 | `icms_diferimento_percentual` | Sim | Percentual de diferimento CST 51 como ratio (ex: `0.3846` = 38,46%). Esse valor é lido dinamicamente ao autorizar a NF-e — alterar aqui reflete imediatamente no payload Focus NF-e. |
+| `exigir_regra_icms_ipi` | Não | Liga a regra obrigatória: linha de nota de venda sem regra de ICMS/IPI (VFIS0320) não é transmitida. Ausente no PUT mantém o valor gravado. |
+| `aliquota_credito_simples` | Não | pCredSN (%) do optante do Simples, crédito de ICMS do comprador (CSOSN 101/201). Ausente no PUT mantém o valor gravado. |
 | `regime_tributario` | Sim | `"1"` Simples, `"2"` Lucro Presumido, `"3"` Lucro Real |
 
 > **Importante:** os campos de endereço são obrigatórios para a autorização da NF-e na SEFAZ. Sem eles o Focus NF-e rejeita o payload.
@@ -171,55 +199,178 @@ Atualiza a configuração fiscal da empresa.
 
 ## 3. Motor Tributário
 
-O motor em `internal/domain/fiscal/engine/tax_engine.go` é chamado automaticamente ao criar uma NF-e de Saída. As regras implementadas são:
+O cálculo é um só para a NF-e de saída, o simulador, o orçamento e o pedido:
+`fiscal_uc.Tributador` resolve o contexto da operação e chama o motor
+(`internal/domain/fiscal/engine/tax_engine.go`). Nada mais calcula imposto de
+venda por conta própria.
 
-### Cenários de ICMS
+### Contexto da operação (migrações 000425 e 000426)
 
-| Cenário | Condição | Regra |
+| Dado | De onde vem |
+|---|---|
+| **Regime do emitente** | `fiscal_configs.regime_tributario`: `1` Simples, `2` Lucro Presumido, `3` Lucro Real (textos antigos como `lucro_real` também valem; desconhecido = Real). |
+| **Destinatário** | IE preenchida = contribuinte; vazia = não contribuinte; `ISENTO` = contribuinte isento (indIEDest 2, tratado como não contribuinte no ICMS). |
+| **Finalidade da compra** | `REVENDA`, `INDUSTRIALIZACAO` ou `USO_CONSUMO`: a informada na nota → a do pedido (`sales_orders.finalidade_compra`, ou a tributação do pedido com `is_consumer`) → a do cliente (`customers.finalidade_compra`, ou a tributação do cliente com `is_consumer`) → deduzida pela IE. Fica gravada em `fiscal_exits.finalidade_compra`. |
+| **Consumidor final** | Não contribuinte, ou contribuinte com finalidade `USO_CONSUMO`. Vai no XML como `indFinal = 1`. |
+| **Regra de ICMS/IPI** | `icms_ipi_tax_params` (VFIS0320), por linha — ver a hierarquia abaixo. A linha grava `regra_icms_ipi_id` (NULL = regra geral da empresa). |
+| **Tipo de nota** | `fiscal_exits.invoice_type_id`, só quando informado na nota ou no faturamento do pedido. Sem tipo de nota, nada muda. |
+
+**Hierarquia da regra** (`ParametroICMSIPIPG`): item > NCM de prefixo mais longo
+> tipo de nota da saída > cliente > segmento do cliente > tributação do cliente
+> finalidade > optante do Simples (empresa do Simples) > preferencial > mais
+antiga. Regra restrita a um dado (tipo de nota, finalidade, tributação, segmento)
+só vale quando a nota tem esse mesmo dado.
+
+**Regra obrigatória**: `fiscal_configs.exigir_regra_icms_ipi`. Ligada, linha de
+nota de venda (finalidade 1, sem tributação própria) sem regra é **IMPEDE** na
+prévia e a autorização recusa. Desligada, a linha usa a regra geral e a prévia dá
+**ATENÇÃO**. Devolução de compra e beneficiamento ficam fora.
+
+### ICMS
+
+| Situação | Regra |
+|---|---|
+| Base | Valor + frete − desconto; com **IPI** quando consumidor final (CF, art. 155, §2º, XI). |
+| Interna | Alíquota interna da configuração, ou a da regra para o tipo de destinatário. |
+| Diferimento (CST 51) | Só interna, contribuinte e **não** consumidor final (SEFA/PR, Consulta 11/2011: uso, consumo e ativo encerram o diferimento). Percentual da regra ou da configuração; o tipo de nota pode desligar. `pDif` gravado por linha. O cBenef vem da linha, da regra ou de `fiscal_configs.cbenef_diferimento` (migração 000428; no PR, **PR830001** — art. 28, I, do Anexo VIII do RICMS/2017). |
+| Interestadual | Tabela `icms_interstate`; par ausente = Resolução SF 22/1989 (Sul/Sudeste exceto ES → N/NE/CO/ES = 7%; demais 12%). Importada (origens 1, 2, 3, 8) = 4%. |
+| Redução de base | Da regra (`BASE` reduz a base, CST 20 e `pRedBC`; `PERCENTUAL` reduz a alíquota). |
+| CST da regra | Vence o calculado; 40/41/50/60 zeram ICMS, diferido e DIFAL. Tipo de nota ISENTO → 40, OUTROS → 41. |
+
+### DIFAL (EC 87/2015)
+
+Venda interestadual a **não contribuinte** (regime normal): grupo `ICMSUFDest`
+gravado por linha (`icms_uf_dest_*`, `fcp_uf_dest_*`) e enviado à SEFAZ —
+antes ele era calculado e descartado, e a SEFAZ recusava a nota (rejeição 694).
+```
+Base UF destino = base da operação (com IPI) × (1 − redução DIFAL da regra)
+DIFAL           = base × (alíq. interna destino − alíq. interestadual)
+FCP             = base × FCP do destino
+```
+- Contribuinte comprando para uso e consumo: o DIFAL é do comprador e não vai na nota.
+- Simples Nacional: sem DIFAL (STF, ADI 5464).
+- Regra com `icms_difal_type` NAO_CONSIDERA ou ISENTO_OUTRAS: sem DIFAL.
+- A alíquota interna vem da tabela `icms_internal`: as 27 UFs com a alíquota
+  modal de 2026 (migração 000427; fonte NCM Brasil e, para AL, Lei 9.776/2025).
+  A migração só atualiza linha ainda com o valor do seed original — correção
+  feita pela tela é preservada. A prévia mostra a alíquota e o FCP usados.
+- **FCP**: na tabela só o FCP generalizado (RJ 2%, SE 1%). Nas demais UFs o FCP
+  incide sobre listas de produtos e vai na **regra** de ICMS/IPI do produto: o
+  acréscimo Não-Contrib. com natureza Fundo de Combate à Pobreza vence o da tabela.
+
+### ICMS-ST
+
+A MVA vem da linha (`mva_pct`, fração, aplicada como recebida) ou da regra
+(`mva_pct`, em %) — esta só para contribuinte que revende ou industrializa e
+quando o tipo de nota calcula ST. Na venda interestadual a MVA da regra é
+ajustada (Convênio ICMS 142/18, cl. 13ª) se `mva_ajustar_interestadual`:
+```
+MVA ajustada = [(1 + MVA) × (1 − ALQ inter) / (1 − ALQ intra)] − 1
+BaseST  = (BaseICMS próprio + IPI) × (1 + MVA) × (1 − redução da ST)
+ICMS-ST = BaseST × alíq. interna do destino − ICMS próprio   (mínimo 0)
+```
+Alíquota da ST: a da linha, a da regra (`icms_pct_for_st_*`) ou a da tabela.
+CST: `00/51 → 10`, `20 → 70`, `40/41 → 30`.
+ST e diferimento não convivem: com ST na venda interna, a linha sai CST 10 sem
+nada diferido, e a nota explicativa diz que a ST prevaleceu.
+O mesmo vale para todo passo que desfaz o diferimento depois de calculado —
+CST imposto pela regra ou pelo tipo de nota, Simples Nacional: a nota
+explicativa da linha deixa de dizer "ICMS diferido" e diz por que não há
+diferimento.
+Com redução da base da ST, o percentual vai no XML como `pRedBCST`
+(`fiscal_exit_items.icms_st_reducao_base_pct`, migração 000431).
+
+### Simples Nacional
+
+ICMS, IPI e PIS/COFINS não são destacados. O ICMS vai como **CSOSN** (o da regra,
+ou deduzido: 101/102, 201/202 com ST, 400 sem tributação, 500 ST anterior). Com
+`fiscal_configs.aliquota_credito_simples` e destinatário contribuinte que não é
+consumidor final, CSOSN 101/201 leva `pCredSN`/`vCredICMSSN`. IPI CST 99,
+PIS/COFINS CST 49. Na ST, o ICMS próprio deduzido é o da alíquota normal (LC 123,
+art. 13, §6º). A prévia impede CST de 2 dígitos no Simples (e CSOSN no regime
+normal) e CSOSN 101/201 sem pCredSN.
+
+### PIS/COFINS por regime
+
+| Regime | Alíquota básica | Tabela de NCM |
 |---|---|---|
-| **INTERNA_CONTRIBUINTE** | Emitente UF == Destino UF e destinatário é contribuinte | ICMS à alíquota interna configurada + **diferimento parcial CST 51** (percentual lido de `icms_diferimento_percentual` em `fiscal_configs`) |
-| **INTERNA_NAO_CONTRIBUINTE** | Emitente UF == Destino UF e não-contribuinte | Base inclui IPI, CST 00, sem diferimento |
-| **INTERESTADUAL contribuinte** | UFs diferentes, IE preenchida | Alíquota da tabela interestadual, base sem IPI, **sem DIFAL** |
-| **INTERESTADUAL não-contribuinte / PF** | UFs diferentes, IE ausente/ISENTO ou `tipo_pessoa = "F"` | Base inclui IPI, DIFAL calculado (EC 87/2015), FCP quando aplicável |
-| **Importada (Res. SF 13/2012)** | `origem_mercadoria` ∈ `{"3","4","5","8"}` | Força alíquota interestadual de **4%**, independente da UF destino |
+| Lucro Real | 1,65% / 7,6% (CST 01) | vale inteira |
+| Lucro Presumido | 0,65% / 3% (CST 01) | só exceções (CST ≠ 01: monofásico, alíquota zero…) |
+| Simples | sem destaque (CST 49) | não se aplica |
 
-### PIS/COFINS (Lucro Real)
-
-- Alíquota padrão: **PIS 1,65%** e **COFINS 7,6%** sobre a base (não-cumulativo)
-- NCMs com alíquotas específicas na tabela `ncm_taxes` sobrepõem os defaults
-- NCMs monofásicos (CST 04) devem ter alíquota `0` na tabela → imposto zerado
+Tipo de nota que não calcula PIS/COFINS: CST 49 com valor zero.
 
 ### IPI
 
-- Alíquota por NCM configurada na tabela `ncm_taxes`
-- Para contribuintes: IPI **não** entra na base de ICMS
-- Para não-contribuintes: IPI **entra** na base de ICMS
+Alíquota e CST da tabela de NCM; a regra pode trocar o CST (51–55 zeram) e
+reduzir a base ou a alíquota por tipo de destinatário.
 
-### DIFAL + FCP
+### Simulador e orçamento/pedido
 
-Calculado apenas para vendas interestaduais a não-contribuintes:
-```
-DIFAL = (alíq. interna do estado destino − alíq. interestadual) × base ICMS
-FCP   = alíq. FCP do estado destino × base ICMS
-```
+- `POST /api/fiscal/tributacao/simular` (módulo Fiscal, tela VFIS0325) e
+  `POST /api/sales-order/tributacao/simular` (módulo Comercial): o mesmo cálculo,
+  sem gravar. Sem a UF da empresa na configuração, a simulação aponta IMPEDE (toda
+  operação pareceria interestadual). Corpo: `customer_code` ou `uf_destino`/`ie_destinatario`,
+  `finalidade_compra`, `invoice_type_id`, `itens[]` (`item_code` comercial ou
+  `ncm`, `quantidade`, `valor_unitario`). Resposta: cenário, linhas com a regra e
+  as notas explicativas, totais e pendências (IMPEDE/ATENÇÃO).
+- Linha de **pedido** com IPI, ICMS, PIS, COFINS e ST todos zerados e
+  **orçamento** com IPI e ST zerados são tributados pela regra ao incluir/alterar,
+  salvo `tributos_manuais = true`. Percentual digitado nunca é sobrescrito; a
+  prévia da nota avisa quando o IPI ou o ICMS da nota difere do negociado no pedido.
 
-### ICMS-ST (Substituição Tributária)
+### Homologação (23/10/2026)
 
-Calculado por item **quando o item informa `mva_pct`** (a MVA pode já ser a "MVA
-ajustada" para operações interestaduais — o motor aplica como recebida):
-```
-BaseST  = (BaseICMS próprio + IPI) × (1 + MVA) × (1 − red_base_st_pct)
-ICMS-ST = BaseST × alíq. interna do destino − ICMS próprio   (mínimo 0)
-```
-- A **alíquota interna do destino** (a empresa é o substituto) é resolvida da tabela
-  de ICMS interno para a UF de destino (interestadual) ou da configuração fiscal
-  (operação interna). Pode ser sobreposta por `aliq_interna_destino_st`.
-- O **CST de ICMS** é promovido para a variante de ST: `00 → 10`, `20 → 70`,
-  `51 → 10` (a ST prevalece sobre o diferimento, que é zerado).
-- Os valores (`base_icms_st`, `aliq_icms_st`, `valor_icms_st`, `mva`) são
-  persistidos por item, somados no cabeçalho da nota (`base_icms_st`,
-  `valor_icms_st`) e enviados no payload Focus NF-e. O **ICMS-ST soma ao total
-  da NF-e** (cobrado do destinatário), diferentemente do ICMS próprio.
+Emitidas e **autorizadas** pela SEFAZ-PR em homologação (Focus), com o XML
+autorizado conferido: revenda PR (CST 51, pDif 38,46%, cBenef PR830001), uso e
+consumo PR (indFinal 1, IPI na base), consumidor em GO (7% + grupo ICMSUFDest,
+DIFAL 126,00) e ST pela regra (CST 10, MVA 40%). Destinatário fictício no PR é
+recusado com 234 (IE não vinculada ao CNPJ): o teste precisa de CNPJ/IE reais.
+
+### Pedido de venda: totais da capa
+
+Incluir, alterar ou cancelar linha refaz os totais da capa
+(`RecalculateSalesOrderTotals`): bruto = líquido = produtos; sem ST = produtos +
+IPI; com IPI e ST = produtos + IPI + ST. Antes a capa ficava zerada, e crédito,
+comissão e o rateio do frete no faturamento parcial liam zero.
+
+### Destinatário, CFOP e informações complementares
+
+- Pessoa física **com IE** (produtor rural) é contribuinte; sem IE, não contribuinte.
+- A prévia **impede** CFOP incompatível com o destino (5xxx para outra UF, 6xxx
+  dentro da UF, 7xxx sem destinatário no exterior) e avisa ST calculada com CFOP
+  que não é de ST. Venda interestadual a não contribuinte sugere 6107 (a sugestão
+  é de venda de produção; quem revende troca para 5102/6102/6108 no faturamento).
+- `fiscal_exits.informacoes_complementares` (migração 000430) é o texto do
+  usuário; a nota acrescenta, sem repetir, os dispositivos legais das regras
+  aplicadas e os textos obrigatórios do Simples (CGSN 140, art. 59 — com o
+  pCredSN quando há crédito; LC 123, art. 23). Vai no `infCpl`.
+- A capa grava o ICMS **destacado** (operação − diferido); a migração 000429
+  corrige as notas antigas.
+
+### Apuração e SPED de ST, DIFAL e FCP
+
+- A apuração do período, além do ICMS próprio, gera um lançamento e um título a
+  pagar **por UF de destino** para ST (`ST-UF`), DIFAL (`DIFAL-UF`) e FCP
+  (`FCP-UF`). Falha ao criar o título agora interrompe a apuração (antes era
+  ignorada).
+- EFD ICMS/IPI: C101 (DIFAL/FCP por nota), E200/E210/E250 (ST por UF) e
+  E300/E310/E316 (DIFAL/FCP por UF). Códigos de receita padrão da GNRE: 100099
+  (ST), 100102 (DIFAL) e 100129 (FCP) — confira no PVA a obrigação (COD_OR) de
+  cada UF antes da primeira transmissão.
+
+### Conversão de orçamento em pedido
+
+A linha do pedido nasce com IPI, ST, ICMS, PIS e COFINS: o que o orçamento já
+tinha é mantido; o que faltava (ICMS, PIS, COFINS) é sugerido pela regra.
+
+### NF-e de entrada
+
+O regime restringe os créditos da operação de entrada: Simples não aproveita
+ICMS, IPI, PIS e COFINS; Presumido não aproveita PIS e COFINS. Compra de outra UF
+para uso, consumo ou ativo (CFOP 2556, 2407, 2551, 2406) mostra na conferência o
+DIFAL a recolher pela base dupla (LC 190/2022):
+`base = (valor − ICMS origem) / (1 − interna)`, `DIFAL = base × interna − ICMS origem`.
 
 ---
 
@@ -593,10 +744,9 @@ servem para consulta, auditoria, SPED/livros e impressão/observações.
   o emitente vai só pelo CNPJ (nome, endereço, IE e CRT vêm do cadastro da empresa
   na Focus). O formato aninhado anterior era recusado ("CNPJ do emitente não
   autorizado").
-- Cada item leva o grupo **IBS/CBS** (obrigatório desde 2026 no regime normal):
-  CST 000, cClassTrib 000001, CBS 0,9% e IBS UF 0,1% sobre o valor da operação sem
-  ICMS/PIS/COFINS (`internal/domain/fiscal/reforma`). Ano sem alíquota cadastrada
-  é recusado antes da SEFAZ. Simples Nacional não leva o grupo.
+- Cada item leva o grupo **IBS/CBS** (obrigatório desde 2026 no regime normal),
+  calculado sobre o valor da operação sem ICMS/PIS/COFINS (LC 214/2025, art. 12,
+  § 2º) — ver §43. Simples Nacional não leva o grupo.
 - Frete, seguro e desconto da nota são rateados nos itens; `presenca_comprador`
   é 9 (0 em nota complementar/ajuste/devolução); `data_emissao` no fuso de
   Brasília com a hora da transmissão.
@@ -1435,7 +1585,7 @@ excluídos — **só quando isso não muda o que já foi lançado**:
 
 | Rota | O que faz |
 |---|---|
-| `GET /plano-contas/cadastro` · `GET /centros-custo/cadastro` | lista ativos **e** inativos (a tela de cadastro); `/list` continua só com ativos (as telas que escolhem) |
+| `GET /plano-contas/cadastro` · `GET /centros-custo/cadastro` | lista ativos **e** inativos (a tela de cadastro); `/list` continua só com ativos (as telas que escolhem). O plano de contas sai em **ordem natural** (`ordem_natural(codigo)`, migração 000423): `2.1.10` depois de `2.1.9`, não logo abaixo de `2.1.1`; vale também para o plano contábil |
 | `GET /plano-contas/{id}/uso` · `GET /centros-custo/{id}/uso` | `{"em_uso": bool, "usos": [{"onde", "quantidade"}]}` |
 | `PUT /plano-contas/{id}` · `PUT /centros-custo/{id}` | altera (ADMIN e USER) |
 | `DELETE /plano-contas/{id}` · `DELETE /centros-custo/{id}` | exclui — **só ADMIN**; responde 204 |
@@ -1462,6 +1612,19 @@ O corpo do `PUT` é o do cadastro mais `is_active` (nulo mantém a situação).
 ---
 
 ### 7.4 Centros de Custo
+
+**Cadastro único (migração 447).** As rotas `/api/financial/centros-custo/*`
+são um adaptador do cadastro único `cost_centers` + `cost_center_gestao` (o
+código da empresa): a tabela `centros_custo` virou `centros_custo_legado`. A
+tela é a VCTB0102 (VFIN0130 abre nela). A conferência de uso antes de excluir é
+a mesma dos dois lados (`cost_center.UsosDoCentro`). Veja `docs/dev/custos.md`
+§2.
+
+**Regras no lançamento** (`create_conta_pagar_uc.go`): o centro tem de estar
+ativo e dentro da vigência; a conta com `exige_centro_custo` (plano de contas,
+VFIN0120) não aceita parte de rateio — nem título sem rateio — sem centro. Na
+nota de entrada, o item com centro e sem conta (nem da linha do pedido) recebe a
+conta padrão do centro.
 
 #### `POST /api/financial/centros-custo/create`
 
@@ -1724,7 +1887,7 @@ Saldo atual de todas as contas bancárias.
 
 ### `POST /api/financial/apuracao-impostos`
 
-Apura os impostos de um período (competência). Consolida ICMS, IPI, PIS e COFINS das NF-es autorizadas do período.
+Apura os impostos de um período (competência). Consolida ICMS, IPI, PIS e COFINS das NF-es autorizadas do período. A partir de 01/2027 também apura IBS e CBS (débito do retrato da NF-e de saída, crédito dos itens de entrada com `gera_credito_ibscbs`); veja §43.
 
 **Request:**
 ```json
@@ -2063,6 +2226,26 @@ Cadastro de dispositivos legais referenciados nos parâmetros de ICMS/IPI.
 ### Naturezas de Operação (CFOP)
 
 Cadastro dos códigos CFOP e suas classificações.
+
+**Tabela oficial (migração 445).** A migração carrega a "Tabela de CFOP" do
+Portal Nacional da NF-e — Informe Técnico 2023.002 v2.10, publicada em
+04/09/2026, 619 códigos (Convênio s/nº de 15/12/1970, Anexo II) — com título,
+nota explicativa, vigência e os indicadores da SEFAZ (`ind_nfe`, `ind_devol`,
+`ind_retor`, `ind_remes`, `ind_anula`, `ind_comunica`, `ind_transp`,
+`ind_comb`, `ind_exc_ibscbs`, `oficial`). Antes nenhuma migração carregava a
+tabela e cada base tinha só o que alguém digitou (a Usimac não tinha nenhum:
+a VFIS0300 aparecia vazia). Código já cadastrado mantém a descrição e os campos
+da empresa (utilização, DIFAL, doação…). O `PUT` sem `description_full`,
+`origem_clas_ipi` ou `codigo_anexo_sn` mantém o valor gravado.
+
+**Conferência na prévia e na autorização** (`fiscal_uc/cfop_da_nota.go`):
+impede CFOP fora da tabela, inativo, fora da vigência na data de emissão, não
+permitido em NF-e, e CFOP de devolução (`ind_devol`) sem a nota referenciada
+(na nota ou por item).
+
+**Sugestão no faturamento do pedido** (`cfopDaLinha`): item comprado ou de
+terceiro (`engineering_type` 1 ou 2) vendido com o CFOP de produção (x101,
+x107, x401) sai com o de revenda (x102, x108, x403); o contrário não é forçado.
 
 | Endpoint | Descrição |
 |----------|-----------|
@@ -2517,6 +2700,17 @@ Registro da apuração mensal do Simples Nacional por anexo (migration `000129`)
 
 ## 28. Cadastro de Redução / Substituição / Diferimento de ICMS/IPI
 
+> **Unificado em `icms_ipi_tax_params` (VFIS0320) — migração 000433.** Este
+> cadastro nunca entrou no cálculo da nota: a regra gravada aqui era ignorada.
+> A migração copiou cada regra para a VFIS0320 da mesma empresa
+> (`origem_reducao_id` = id daqui; item e cliente convertidos de id para código;
+> fornecedor em `supplier_code`) e ampliou os percentuais da VFIS0320 para 4
+> casas. Regra com vínculo de outra empresa ou sem item/NCM não é copiada (a
+> migração informa quantas). `POST`/`PUT` passam a responder 422 apontando a
+> VFIS0320; as leituras continuam, para o desktop antigo abrir a tela. O
+> "estabelecimento" daqui era o da própria empresa e não tem equivalente.
+> O que segue documenta o formato antigo.
+
 Tabela de parametrização avançada de ICMS por item, NCM, UF, tipo de operação e segmento de cliente. Implementa a hierarquia de busca em 11 níveis (preferencial > item+máscara+cliente+estabelecimento > classificação).
 
 | Endpoint | Descrição |
@@ -2808,9 +3002,10 @@ de ICMS → Cadastro de Fornecedores).
 
 ### Redução / Substituição / Diferimento de ICMS
 
-A tabela `icms_reduction_substitutions` (seção 28) possui o filtro `supplier_id`,
-permitindo regras tributárias específicas por fornecedor. Seguindo a convenção do
-módulo fiscal, a coluna é um `BIGINT` sem FK rígida (validação em nível de aplicação).
+A regra de ICMS/IPI (`icms_ipi_tax_params.supplier_code`, VFIS0320 — migração
+000433, que unificou a antiga `icms_reduction_substitutions`) pode ser restrita a
+um fornecedor: vale só na entrada; na nota de saída é ignorada. O fornecedor tem
+de ser da empresa (conferido na inclusão e na alteração).
 
 ### Provider de defaults
 
@@ -2861,7 +3056,60 @@ filhas `fiscal_classification_languages` (idiomas) e
 
 ---
 
+## 34-A. CIAP — Crédito do ICMS do Ativo Permanente (VFIS0345, migração 448)
+
+LC 87/1996, art. 20, § 5º; EFD ICMS/IPI, Bloco G (Guia Prático 3.1.8 — leiaute
+de G110, G125, G130, G140, 0300, 0305, 0500 e 0600 conferido no texto do Guia).
+
+- **Bens.** O item da nota de entrada aprovada com CFOP de ativo (x551/x406) e
+  ICMS entra sozinho no CIAP (`CIAPPG.Sincronizar`, idempotente, chamado ao
+  listar, ao apurar e ao gerar a EFD). Nota cancelada depois: sem parcela
+  apropriada o bem sai; com parcela, fica baixado (OT). O bem anterior ao
+  sistema entra à mão (saldo inicial). Simples Nacional não tem CIAP.
+- **Custo e contabilização.** O ICMS (próprio e ST) desse bem não é crédito de
+  uma vez na nota nem custo (`entrada.ICMSDoCIAP`): sai do custo e vai à conta
+  de ICMS a recuperar dos parâmetros contábeis (sem ela, volta ao custo).
+- **Apuração do mês** (`ciap.Apurar`): parcela = total ÷ parcelas (48),
+  truncada em 2 casas (o PVA recusa parcela maior que total ÷ NR_PARC), a partir
+  do mês da entrada (IM nesse mês, SI depois, e BA junto da última); o bem
+  baixado no mês sai com SI sem parcela e AT/PE/OT. Índice = saídas tributadas
+  e de exportação ÷ total de saídas (8 casas), das NF-e de saída autorizadas
+  (linha com ICMS ou CFOP 7xxx), ou informadas quando a legislação da UF exclui
+  operações. Crédito = soma das parcelas × índice. O mês grava e se refaz até
+  ser fechado.
+- **EFD.** Com a apuração gravada, a EFD automática gera 0300/0305 (centro de
+  custo do bem, ou o código padrão do Guia: 3 área produtiva / 1 área
+  operacional), 0500 (conta do ativo, natureza 01) e 0600, o Bloco G e o crédito
+  no E111 com o código de ajuste dos parâmetros (5.1.1 de outros créditos da UF
+  da empresa, conferido ao salvar). Avisos: mês com parcela sem apuração, bem
+  sem conta, apuração sem código de ajuste, fornecedor do G130 sem 0150.
+
+Rotas `/api/fiscal/ciap`: `GET/PUT /parametros`, `GET/POST /bens`,
+`PUT /bens/{id}`, `POST /bens/{id}/baixa`, `DELETE /bens/{id}` (ADMIN; só o
+manual sem parcela), `GET /apuracao?ano=&mes=` (prévia), `POST /apuracao`,
+`POST /apuracao/fechar`, `GET /apuracoes?ano=`.
+
 ## 35. Tipos de Operação de Entrada
+
+**Revisão de 2026-10-27.**
+- A natureza é o CFOP de entrada da tabela oficial: 4 dígitos (`1.101` vira
+  `1101`), iniciado por 1, 2 ou 3, existente, ativo e vigente (VFIS0300). Na
+  nota, o 1º dígito acompanha a UF do fornecedor.
+- Os créditos marcados têm de caber na natureza: uso e consumo (x556, x407) não
+  credita ICMS nem IPI; ativo imobilizado (x551, x406) não credita IPI, e o ICMS
+  dele é apropriado em parcelas no CIAP (§ 34-A), fora da nota.
+- Com grupo de estados, a operação só vale para **fornecedor** de UF do grupo: a
+  nota de entrada de outra UF é recusada (`entrada_servico.go`). A conferência
+  "UF × natureza" abaixo (`/validate`) continua como era.
+- **Sem tipo de operação**, o CFOP de entrada não é mais só a troca do dígito do
+  CFOP do fornecedor: a finalidade da compra é de quem compra. Pela linha do
+  pedido de compra (`utilization_type`) ou pelo tipo de uso do item
+  (`supplies_type_of_use`), a venda do fornecedor (x101/x102, ou x401/x403/x405
+  com ST) entra como compra para industrialização (x101/x401), uso e consumo
+  (x556/x407) ou ativo (x551/x406), e uso e consumo/ativo não tomam crédito de
+  ICMS nem de IPI. Compra para comercialização (x102/x403) só por tipo de
+  operação. Foi assim que o clone da Tecnofer mostrou aço comprado de revenda
+  (5102) lançado como 1102 em vez de 1101.
 
 Cadastro de **Tipos de Operação de Entrada** (migration `000144`) usado na inclusão da
 NF de entrada. Tabelas: `entry_operation_types` + **Grupo de Estado** (`state_groups`
@@ -3128,3 +3376,89 @@ para ISO-8859-1 ao baixar.
 Valores somam em `decimal` e viram texto com 2 casas. Datas do período vão à
 consulta como `AAAA-MM-DD`, para o fuso do banco não deslocar o dia. Inventário
 O `POST /api/fiscal/sped/efd` antigo, com os registros no corpo, continua aceito.
+
+## 43. Reforma Tributária — IBS/CBS parametrizado (migration 000411)
+
+Tela **VFIS0670 — Reforma Tributária (IBS/CBS)**. Rotas em `/api/fiscal/reforma`
+(leitura ADMIN/USER, gravação ADMIN):
+
+| Rota | O que faz |
+|---|---|
+| `GET /classificacoes?cst=&busca=&somente_nfe=` | Tabela oficial de cClassTrib/CST (IT 2025.002, Portal da Conformidade Fácil, publicação 01/10/2026; 173 códigos, 104 admitidos na NF-e). Nacional, só leitura — atualizar = nova migração. |
+| `GET /aliquotas` | Anos 2026–2033 com a alíquota que vale e a origem: `EMPRESA`, `LEI` ou `PENDENTE`. |
+| `PUT /aliquotas/{ano}` · `DELETE` | Cadastro da empresa (IBS UF, IBS município, CBS e fundamento). Excluir volta o ano para a lei. |
+| `GET /cfop` · `PUT /cfop/{cfop}` · `DELETE` | cClassTrib padrão por CFOP de saída, por empresa (bonificação, transferência, exportação…). |
+| `PUT /api/fiscal/exits/{id}/itens/{itemId}/cclass-trib` | cClassTrib próprio de uma linha de nota em rascunho/rejeitada (`null` volta ao padrão). |
+
+**Alíquotas.** Sem cadastro vale a lei: 2026 CBS 0,9% e IBS UF 0,1% (arts. 343 e
+346); 2027–2028 IBS UF 0,05% e município 0,05% (art. 344). A CBS de 2027 em diante
+é a alíquota de referência fixada pela União menos 0,1 ponto (art. 347) — não é
+número da lei, então sem cadastro a nota de 2027 é recusada antes da SEFAZ (e a
+prévia mostra a pendência `itens.ibs_cbs`).
+
+**cClassTrib por linha** (`reforma.EscolherClassTrib`): linha da nota › CFOP da
+empresa › classificação fiscal de venda do item vigente na emissão
+(`fiscal_classifications.cod_clas_trib`, validado contra a tabela no cadastro) ›
+`000001`. O CST são os 3 primeiros dígitos. Código fora da tabela, fora da
+vigência ou não admitido na NF-e é recusado na autorização com a linha e a origem.
+
+**Cálculo** (`reforma.Calcular`): CST sem exigência de tributo (isenção 400,
+imunidade/não incidência 410…) leva só CST e cClassTrib, sem o grupo de valores;
+CST com redução leva `*_percentual_reducao_aliquota` (pRedAliq) e
+`*_aliquota_efetiva` (pAliqEfet) — alíquota × (1 − redução), 4 casas — para IBS
+UF, IBS município e CBS.
+
+**Convivência dos dois modelos** (migration 000414, `GET|PUT /reforma/modo`).
+A reforma só ACRESCENTA o grupo IBS/CBS ao item: ICMS, ICMS-ST, IPI, PIS/COFINS,
+cBenef, rateios, totais, partes e pagamento saem exatamente como antes. Modo da
+empresa: `AUTOMATICO` (padrão — modelo atual + grupo IBS/CBS no regime normal) ou
+`SOMENTE_ATUAL` (só o modelo atual; exige motivo e a prévia avisa) — válvula para
+continuar emitindo se a SEFAZ ou a Focus recusarem o grupo novo, sem versão nova.
+Simples Nacional nunca leva o grupo. Provas: `reforma_compatibilidade_test.go`
+(mesma nota com e sem a reforma, campos do modelo atual idênticos, nomes de campo
+da referência da Focus, casas decimais do formato Focus) e simulação com as 762
+notas do banco de demonstração gerando payload idêntico byte a byte entre a v1.7.5
+e esta versão.
+
+**CST suportados na emissão:** 000, 010, 011, 200, 400, 410 e 550 — os que só
+usam o grupo padrão, a redução (`gRed`) ou nenhum grupo de valores (IT 2025.002,
+tabela CST). Os demais (220/221 alíquota fixa, 222 redutor de base, 510/515
+diferimento, 620 monofásico, 800/810/811/820/830) exigem grupos que a emissão
+ainda não preenche e são recusados no cadastro (CFOP, classificação fiscal,
+linha) e antes da transmissão.
+
+**Retrato.** Antes de transmitir, a autorização grava em `fiscal_exit_items` o
+CST/cClassTrib enviado, a origem, a base, a alíquota efetiva e os valores, e em
+`fiscal_exits` os totais `valor_ibs`/`valor_cbs` (base da apuração a partir de
+2027). A resposta da nota traz `cclass_trib` e `ibs_cbs_enviado` por linha.
+
+**PIS/COFINS em 2027.** A LC 214 revoga PIS e COFINS a partir de 1º/01/2027
+(art. 542). A prévia avisa (ATENÇÃO) nota de 2027 com PIS/COFINS; o tratamento
+desses grupos no leiaute de 2027 depende de nota técnica e não foi alterado.
+
+**Apuração e contabilização (migration 000416).** 2026 é o ano de teste: o
+destaque é obrigatório, mas quem cumpre as obrigações acessórias está dispensado
+do recolhimento. Por isso `reforma.Recolhivel` (data ≥ 2027) decide:
+
+- **Apuração** (`POST /api/financial/apuracao-impostos`, competência `MM/AAAA`):
+  a partir de 01/2027 entram as linhas `IBS` e `CBS`. O débito é a soma de
+  `fiscal_exits.valor_ibs`/`valor_cbs` (o retrato transmitido) das notas
+  autorizadas. O crédito é a soma de `valor_ibs`/`valor_cbs` dos itens de
+  entrada aprovados com `gera_credito_ibscbs`. Saldo devedor gera o título
+  `APUR-IBS-MMAAAA`/`APUR-CBS-MMAAAA`, com vencimento no dia de PIS/COFINS da
+  configuração fiscal (o regulamento ainda não fixou o prazo).
+- **Contabilização da NF-e de saída:** D IBS/CBS sobre vendas × C IBS/CBS a
+  recolher (contas `ibs_vendas_account_id`, `ibs_recolher_account_id`,
+  `cbs_vendas_account_id`, `cbs_recolher_account_id` dos parâmetros, tela
+  VCTB0200). É o mesmo tratamento do ICMS, porque o total da nota e as
+  duplicatas não somam IBS/CBS por fora. Nota de 2026 não lança nada. Nota de
+  2027 com IBS/CBS e sem as contas cadastradas não é contabilizada e volta um
+  aviso dizendo qual conta falta.
+
+**Fora do escopo (não aplicável ao segmento):** o diferimento (CST 510/515)
+existe na tabela oficial só para energia elétrica (510001, art. 28) e insumos
+agropecuários e aquícolas (515001, art. 138). O monofásico (620) é de
+combustíveis. Nenhum dos três ocorre em indústria metalúrgica ou moveleira, e a
+emissão os recusa com mensagem. O crédito presumido (`cCredPres`) e o Imposto
+Seletivo continuam sem cálculo.
+

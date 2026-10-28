@@ -70,4 +70,6 @@ type SalesOrderRepository interface {
 	UpdateItem(ctx context.Context, item *entity.SalesOrderItem) (*entity.SalesOrderItem, error)
 	ListItems(ctx context.Context, salesOrderCode int64) ([]*entity.SalesOrderItem, error)
 	CancelItem(ctx context.Context, itemCode int64) error
+	// RecalculateTotals refaz os totais da capa pela soma das linhas ativas.
+	RecalculateTotals(ctx context.Context, salesOrderCode int64) error
 }

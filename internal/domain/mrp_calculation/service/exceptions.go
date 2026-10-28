@@ -2,9 +2,9 @@ package service
 
 import (
 	"fmt"
+	"github.com/shopspring/decimal"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -23,7 +23,7 @@ import (
 // horizonte, excesso quase nunca aparecia, e uma ordem que cobria a necessidade
 // de novembro seria "atrasada" em relação à de outubro.
 type exceptionBasis struct {
-	stock        map[int64]float64
+	stock        map[int64]decimal.Decimal
 	supply       map[int64][]ports.SupplyEntry
 	requirements map[int64][]requirement
 	// suggestions são as sugestões gravadas pelo cálculo, por item — o
@@ -46,13 +46,13 @@ func (b *exceptionBasis) rotulo(item int64) string {
 }
 
 // qtd formata a quantidade como o usuário lê: 80 e 12,5 (não 80.00 e 12.50).
-func qtd(v float64) string {
-	return strings.Replace(strconv.FormatFloat(math.Round(v*10000)/10000, 'f', -1, 64), ".", ",", 1)
+func qtd(v decimal.Decimal) string {
+	return strings.Replace(v.Round(4).String(), ".", ",", 1)
 }
 
 type requirement struct {
 	date     time.Time
-	quantity float64
+	quantity decimal.Decimal
 	// Origem da necessidade (pegging).
 	kind string
 	code *int64
@@ -61,12 +61,12 @@ type requirement struct {
 type suggestedSupply struct {
 	code     int64
 	needDate time.Time
-	quantity float64
+	quantity decimal.Decimal
 }
 
 func newExceptionBasis(snapshots map[int64]*entity.StockSnapshot, supply map[int64][]ports.SupplyEntry) *exceptionBasis {
 	b := &exceptionBasis{
-		stock:        make(map[int64]float64, len(snapshots)),
+		stock:        make(map[int64]decimal.Decimal, len(snapshots)),
 		supply:       make(map[int64][]ports.SupplyEntry, len(supply)),
 		requirements: make(map[int64][]requirement),
 		suggestions:  make(map[int64][]suggestedSupply),
@@ -78,7 +78,7 @@ func newExceptionBasis(snapshots map[int64]*entity.StockSnapshot, supply map[int
 		}
 		// Mesma conta do netting (calcNetReqFast): o estoque de segurança não
 		// cobre necessidade.
-		if avail := snap.Quantity - snap.ReservedQty - snap.SafetyStock; avail > 0 {
+		if avail := snap.Quantity.Sub(snap.ReservedQty).Sub(snap.SafetyStock); avail.IsPositive() {
 			b.stock[item] = avail
 		}
 	}
@@ -88,8 +88,8 @@ func newExceptionBasis(snapshots map[int64]*entity.StockSnapshot, supply map[int
 	return b
 }
 
-func (b *exceptionBasis) addRequirement(item int64, date time.Time, quantity float64, kind string, code *int64) {
-	if b == nil || quantity <= 0 {
+func (b *exceptionBasis) addRequirement(item int64, date time.Time, quantity decimal.Decimal, kind string, code *int64) {
+	if b == nil || !quantity.IsPositive() {
 		return
 	}
 	b.requirements[item] = append(b.requirements[item], requirement{date: date, quantity: quantity, kind: kind, code: code})
@@ -97,14 +97,11 @@ func (b *exceptionBasis) addRequirement(item int64, date time.Time, quantity flo
 
 // addSuggestion registra a sugestão gravada que traz o item ao estoque.
 func (b *exceptionBasis) addSuggestion(s *entity.PlannedOrderSuggestion) {
-	if b == nil || s == nil || s.Code <= 0 || s.Quantity <= 0 || !suppliesItem(s) {
+	if b == nil || s == nil || s.Code <= 0 || !s.Quantity.IsPositive() || !suppliesItem(s) {
 		return
 	}
 	b.suggestions[s.ItemCode] = append(b.suggestions[s.ItemCode], suggestedSupply{code: s.Code, needDate: s.NeedDate, quantity: s.Quantity})
 }
-
-// tolerância de arredondamento nas comparações de quantidade.
-const quantityEpsilon = 1e-9
 
 // messages faz o pegging de cada item: o estoque inicial cobre as primeiras
 // necessidades; depois cada ordem firme, na ordem de chegada, cobre a próxima
@@ -130,31 +127,31 @@ func (b *exceptionBasis) messages() []*entity.MRPExceptionMessage {
 		// 1. Estoque inicial cobre as primeiras necessidades.
 		stock := b.stock[item]
 		for i := range reqs {
-			if stock <= quantityEpsilon {
+			if !stock.IsPositive() {
 				break
 			}
-			usado := math.Min(stock, reqs[i].quantity)
-			reqs[i].quantity -= usado
-			stock -= usado
+			usado := decimal.Min(stock, reqs[i].quantity)
+			reqs[i].quantity = reqs[i].quantity.Sub(usado)
+			stock = stock.Sub(usado)
 		}
 		abertas := reqs[:0]
 		for _, r := range reqs {
-			if r.quantity > quantityEpsilon {
+			if r.quantity.IsPositive() {
 				abertas = append(abertas, r)
 			}
 		}
-		totalAberto := 0.0
+		totalAberto := decimal.Zero
 		for _, r := range abertas {
-			totalAberto += r.quantity
+			totalAberto = totalAberto.Add(r.quantity)
 		}
 
 		// 2. Ordens firmes em ordem de chegada cobrem as necessidades em aberto.
 		entries := append([]ports.SupplyEntry(nil), b.supply[item]...)
 		sort.SliceStable(entries, func(i, j int) bool { return entries[i].ArrivalDate.Before(entries[j].ArrivalDate) })
-		usadoFirme, sobra := 0.0, 0.0
+		usadoFirme, sobra := decimal.Zero, decimal.Zero
 		k := 0
 		for _, e := range entries {
-			for k < len(abertas) && abertas[k].quantity <= quantityEpsilon {
+			for k < len(abertas) && !abertas[k].quantity.IsPositive() {
 				k++
 			}
 			if k >= len(abertas) {
@@ -164,16 +161,16 @@ func (b *exceptionBasis) messages() []*entity.MRPExceptionMessage {
 			}
 			precisaEm := abertas[k].date
 			restante := e.Quantity
-			for restante > quantityEpsilon && k < len(abertas) {
-				usado := math.Min(restante, abertas[k].quantity)
-				abertas[k].quantity -= usado
-				restante -= usado
-				if abertas[k].quantity <= quantityEpsilon {
+			for restante.IsPositive() && k < len(abertas) {
+				usado := decimal.Min(restante, abertas[k].quantity)
+				abertas[k].quantity = abertas[k].quantity.Sub(usado)
+				restante = restante.Sub(usado)
+				if !abertas[k].quantity.IsPositive() {
 					k++
 				}
 			}
-			sobra += restante
-			usadoFirme += e.Quantity
+			sobra = sobra.Add(restante)
+			usadoFirme = usadoFirme.Add(e.Quantity)
 			if m := timingMessage(item, b.rotulo(item), e, precisaEm); m != nil {
 				out = append(out, m)
 			}
@@ -181,7 +178,7 @@ func (b *exceptionBasis) messages() []*entity.MRPExceptionMessage {
 
 		// 3. Excesso: as ordens que cobrem necessidade trazem mais do que ela
 		// além da tolerância. A ordem inteira sobrando já virou "cancelar".
-		if totalAberto > quantityEpsilon && sobra > totalAberto*excessThreshold {
+		if totalAberto.IsPositive() && sobra.GreaterThan(totalAberto.Mul(decimal.NewFromFloat(excessThreshold))) {
 			out = append(out, &entity.MRPExceptionMessage{
 				ItemCode:    item,
 				MessageType: entity.ExceptionExcess,

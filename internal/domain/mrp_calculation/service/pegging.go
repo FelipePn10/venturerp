@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"sort"
 	"time"
 
@@ -52,7 +53,7 @@ func (b *exceptionBasis) pegging() []entity.PeggingRecord {
 		estoque := b.stock[item]
 		firmes := append(b.supply[item][:0:0], b.supply[item]...)
 		sort.SliceStable(firmes, func(i, j int) bool { return firmes[i].ArrivalDate.Before(firmes[j].ArrivalDate) })
-		restanteFirme := make([]float64, len(firmes))
+		restanteFirme := make([]decimal.Decimal, len(firmes))
 		for i, f := range firmes {
 			restanteFirme[i] = f.Quantity
 		}
@@ -63,60 +64,53 @@ func (b *exceptionBasis) pegging() []entity.PeggingRecord {
 			}
 			return sugestoes[i].needDate.Before(sugestoes[j].needDate)
 		})
-		restanteSug := make([]float64, len(sugestoes))
+		restanteSug := make([]decimal.Decimal, len(sugestoes))
 		for i, s := range sugestoes {
 			restanteSug[i] = s.quantity
 		}
 
 		for _, r := range reqs {
 			falta := r.quantity
-			add := func(kind string, code *int64, data *time.Time, qtd float64) {
+			add := func(kind string, code *int64, data *time.Time, qtd decimal.Decimal) {
 				out = append(out, entity.PeggingRecord{
 					ItemCode: item, DemandKind: r.kind, DemandCode: r.code, NeedDate: r.date,
 					SupplyKind: kind, SupplyCode: code, SupplyDate: data, Quantity: qtd,
 				})
-				falta -= qtd
+				falta = falta.Sub(qtd)
 			}
-			if estoque > quantityEpsilon && falta > quantityEpsilon {
-				usado := minF(estoque, falta)
-				estoque -= usado
+			if estoque.IsPositive() && falta.IsPositive() {
+				usado := decimal.Min(estoque, falta)
+				estoque = estoque.Sub(usado)
 				add(entity.PegSupplyStock, nil, nil, usado)
 			}
 			for i := range firmes {
-				if falta <= quantityEpsilon {
+				if !falta.IsPositive() {
 					break
 				}
-				if restanteFirme[i] <= quantityEpsilon || firmes[i].ArrivalDate.After(r.date) {
+				if !restanteFirme[i].IsPositive() || firmes[i].ArrivalDate.After(r.date) {
 					continue
 				}
-				usado := minF(restanteFirme[i], falta)
-				restanteFirme[i] -= usado
+				usado := decimal.Min(restanteFirme[i], falta)
+				restanteFirme[i] = restanteFirme[i].Sub(usado)
 				code, chegada := firmes[i].SourceCode, firmes[i].ArrivalDate
 				add(entity.PegSupplyFirmOrder, &code, &chegada, usado)
 			}
 			for i := range sugestoes {
-				if falta <= quantityEpsilon {
+				if !falta.IsPositive() {
 					break
 				}
-				if restanteSug[i] <= quantityEpsilon || sugestoes[i].needDate.After(r.date) {
+				if !restanteSug[i].IsPositive() || sugestoes[i].needDate.After(r.date) {
 					continue
 				}
-				usado := minF(restanteSug[i], falta)
-				restanteSug[i] -= usado
+				usado := decimal.Min(restanteSug[i], falta)
+				restanteSug[i] = restanteSug[i].Sub(usado)
 				code, data := sugestoes[i].code, sugestoes[i].needDate
 				add(entity.PegSupplySuggestion, &code, &data, usado)
 			}
-			if falta > quantityEpsilon {
+			if falta.IsPositive() {
 				add(entity.PegSupplyShortage, nil, nil, falta)
 			}
 		}
 	}
 	return out
-}
-
-func minF(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
 }

@@ -152,6 +152,15 @@ type CreateTaxParamDTO struct {
 	// DIFAL purchases
 	DifalPurchaseRedPct    float64 `json:"difal_purchase_red_pct"`
 	DifalPurchaseRedTarget *string `json:"difal_purchase_red_target,omitempty"`
+
+	// Cenário: finalidade da compra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO;
+	// vazia = qualquer), MVA original da ST (%) e ajuste da MVA na venda
+	// interestadual (ausente = ajusta).
+	FinalidadeCompra        *string `json:"finalidade_compra,omitempty"`
+	MvaPct                  float64 `json:"mva_pct"`
+	MvaAjustarInterestadual *bool   `json:"mva_ajustar_interestadual,omitempty"`
+	// SupplierCode: fornecedor (código) que restringe a regra de entrada.
+	SupplierCode *int64 `json:"supplier_code,omitempty"`
 }
 
 type UpdateTaxParamDTO struct {

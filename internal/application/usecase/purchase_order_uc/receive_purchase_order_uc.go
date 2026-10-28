@@ -26,7 +26,9 @@ type ReceivingInspectionGate interface {
 	ResolveInspectionRoute(ctx context.Context, itemCode int64, mask string) (inspectionWarehouseID int64, matched bool)
 	// OpenInspectionOrderFromReceipt opens an inspection order for material routed
 	// into the inspection warehouse; returns the created order id and number.
-	OpenInspectionOrderFromReceipt(ctx context.Context, itemCode int64, mask string, quantity float64, inspectionWarehouseID int64, supplierCode, purchaseOrderCode, purchaseOrderItemCode *int64, lot *string) (int64, int64, error)
+	// AbrirDoRecebimento abre o lote de inspeção (id e número).
+	AbrirDoRecebimento(ctx context.Context, item int64, mask string, quantidade decimal.Decimal, almoxInspecao int64,
+		fornecedor, pedido, linha *int64, lote *string, notaEntrada *int64) (int64, int64, error)
 }
 
 type ReceivePurchaseOrderUseCase struct {
@@ -184,9 +186,9 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		movements = append(movements, stockMovementReceiptResponse(created))
 
 		if underInspection {
-			orderID, orderNumber, err := uc.Inspection.OpenInspectionOrderFromReceipt(
-				ctx, line.ItemCode, line.Mask, stockQty, targetWarehouse,
-				order.SupplierCode, &dto.PurchaseOrderCode, &line.Code, item.Lot)
+			orderID, orderNumber, err := uc.Inspection.AbrirDoRecebimento(
+				ctx, line.ItemCode, line.Mask, stockQtyExata, targetWarehouse,
+				order.SupplierCode, &dto.PurchaseOrderCode, &line.Code, item.Lot, nil)
 			if err != nil {
 				return nil, err
 			}

@@ -99,6 +99,9 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	if err := conferirPeriodoFechado(ctx, tx, enterpriseID); err != nil {
 		return err
 	}
+	if err := barrarSaidaDaInspecao(ctx, tx, enterpriseID, m); err != nil {
+		return err
+	}
 	if err := valorizarSaidaPelaMedia(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}
@@ -2298,4 +2301,48 @@ func AjustarCustoTx(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64
 		return 0, decimal.Zero, fmt.Errorf("registrando o ajuste de custo: %w", err)
 	}
 	return movID, aplicado, nil
+}
+
+// saidasDaInspecao: referências que podem tirar material de um almoxarifado de
+// inspeção. A decisão de uso do lote (QUALITY_LOT) é o caminho normal; o
+// estorno/cancelamento da entrada, o estorno de movimento e o inventário
+// precisam continuar funcionando; as referências antigas da inspeção de
+// recebimento ficam para lançamentos já existentes.
+var saidasDaInspecao = map[string]bool{
+	"QUALITY_LOT": true, entity.ReferenceTypeNFEntry: true, entity.ReferenceTypePurchaseOrder: true,
+	entity.ReferenceTypeReversal: true, entity.ReferenceTypeInventory: true, entity.ReferenceTypeCycleCount: true,
+	"RECEIVING_INSPECTION": true, "RECEIVING_INSPECTION_ANALYSIS": true,
+}
+
+// barrarSaidaDaInspecao é o bloqueio do material em inspeção: enquanto o lote
+// não tem decisão de uso, ele não é consumido, separado, faturado nem
+// transferido à mão. Antes o almoxarifado de inspeção só ficava fora do ATP e
+// da reposição — qualquer requisição, apontamento ou transferência o tirava.
+func barrarSaidaDaInspecao(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
+	saida := false
+	switch m.MovementType {
+	case entity.MovementTypeOut, entity.MovementTypeTransferOut, entity.MovementTypePlannedRequisition, "SAIDA":
+		saida = true
+	case entity.MovementTypeAdjustment:
+		saida = m.Quantity.IsNegative()
+	}
+	if !saida {
+		return nil
+	}
+	if m.ReferenceType != nil && saidasDaInspecao[*m.ReferenceType] {
+		return nil
+	}
+	var local string
+	err := tx.QueryRow(ctx, `SELECT location::text FROM warehouse WHERE id=$1 AND enterprise_id=$2`, m.WarehouseID, enterpriseID).Scan(&local)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("conferindo o almoxarifado da saída: %w", err)
+	}
+	if local != "INSPECAO" {
+		return nil
+	}
+	return errorsuc.NewValidationError(fmt.Sprintf(
+		"o item %d está no almoxarifado de inspeção e só sai pela decisão de uso do lote de inspeção (VINS0300): aceite, rejeite ou devolva o lote primeiro", m.ItemCode))
 }

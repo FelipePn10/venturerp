@@ -36,7 +36,7 @@ type ProductionOrderRepository interface {
 	// ComputeActualCostInputs aggregates the shop-floor actuals: material valued
 	// at the consumed items' weighted-average cost and labor from the appointed
 	// hours × the work center's cost/hour.
-	ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (materialReal, laborReal float64, err error)
+	ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (materialReal, laborReal decimal.Decimal, err error)
 	SettleCost(ctx context.Context, c *entity.ProductionOrderCost) (*entity.ProductionOrderCost, error)
 	GetCost(ctx context.Context, productionOrderID int64) (*entity.ProductionOrderCost, error)
 

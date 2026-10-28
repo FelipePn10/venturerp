@@ -1,7 +1,10 @@
 package sales_quotation_uc
 
 import (
+	"fmt"
+
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	"strconv"
 
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
@@ -35,7 +38,7 @@ func (uc *UseCase) applyCommercialPolicies(ctx context.Context, quotationCode in
 	for _, item := range items {
 		quantity = quantity.Add(item.Balance)
 	}
-	policyCtx := customerentity.CommercialPolicyContext{GrossValue: q.TotalGross.InexactFloat64(), Quantity: quantity.InexactFloat64(), CustomerCode: q.CustomerCode, CarrierID: q.CarrierCode}
+	policyCtx := customerentity.CommercialPolicyContext{GrossValue: q.TotalGross, Quantity: quantity, CustomerCode: q.CustomerCode, CarrierID: q.CarrierCode}
 	if q.CustomerCode != nil {
 		customer, err := uc.Customers.GetCustomerByCode(ctx, *q.CustomerCode)
 		if err != nil {
@@ -83,35 +86,35 @@ func (uc *UseCase) applyCommercialPolicies(ctx context.Context, quotationCode in
 		itemCode := strconv.FormatInt(item.ItemCode, 10)
 		itemMask := item.Mask
 		itemCtx := policyCtx
-		itemCtx.GrossValue = item.TotalGross.InexactFloat64()
-		itemCtx.Quantity = item.Balance.InexactFloat64()
+		itemCtx.GrossValue = item.TotalGross
+		itemCtx.Quantity = item.Balance
 		itemCtx.ItemCode = &itemCode
 		itemCtx.ItemMask = &itemMask
 		itemEvaluation, err := customerentity.EvaluateCommercialPolicies(itemPolicies, itemCtx)
 		if err != nil {
 			return err
 		}
-		evaluation.DiscountValue += itemEvaluation.DiscountValue
-		evaluation.SurchargeValue += itemEvaluation.SurchargeValue
-		evaluation.FreightValue += itemEvaluation.FreightValue
-		evaluation.CommissionValue += itemEvaluation.CommissionValue
+		evaluation.DiscountValue = evaluation.DiscountValue.Add(itemEvaluation.DiscountValue)
+		evaluation.SurchargeValue = evaluation.SurchargeValue.Add(itemEvaluation.SurchargeValue)
+		evaluation.FreightValue = evaluation.FreightValue.Add(itemEvaluation.FreightValue)
+		evaluation.CommissionValue = evaluation.CommissionValue.Add(itemEvaluation.CommissionValue)
 		evaluation.RequiresApproval = evaluation.RequiresApproval || itemEvaluation.RequiresApproval
 	}
 	changed := false
-	if q.DiscountValue.IsZero() && evaluation.DiscountValue > 0 {
-		q.DiscountValue = decimal.NewFromFloat(evaluation.DiscountValue)
+	if q.DiscountValue.IsZero() && evaluation.DiscountValue.IsPositive() {
+		q.DiscountValue = evaluation.DiscountValue
 		changed = true
 	}
-	if q.SurchargeValue.IsZero() && evaluation.SurchargeValue > 0 {
-		q.SurchargeValue = decimal.NewFromFloat(evaluation.SurchargeValue)
+	if q.SurchargeValue.IsZero() && evaluation.SurchargeValue.IsPositive() {
+		q.SurchargeValue = evaluation.SurchargeValue
 		changed = true
 	}
-	if q.FreightValue.IsZero() && evaluation.FreightValue > 0 {
-		q.FreightValue = decimal.NewFromFloat(evaluation.FreightValue)
+	if q.FreightValue.IsZero() && evaluation.FreightValue.IsPositive() {
+		q.FreightValue = evaluation.FreightValue
 		changed = true
 	}
-	if q.CommissionPct.IsZero() && evaluation.CommissionValue > 0 && q.TotalGross.IsPositive() {
-		q.CommissionPct = decimal.NewFromFloat(evaluation.CommissionValue).Div(q.TotalGross).Mul(decimal.NewFromInt(100))
+	if q.CommissionPct.IsZero() && evaluation.CommissionValue.IsPositive() && q.TotalGross.IsPositive() {
+		q.CommissionPct = evaluation.CommissionValue.Div(q.TotalGross).Mul(decimal.NewFromInt(100))
 		changed = true
 	}
 	if evaluation.RequiresApproval {
@@ -127,5 +130,17 @@ func (uc *UseCase) applyCommercialPolicies(ctx context.Context, quotationCode in
 	if _, err = uc.Repo.Update(ctx, q); err != nil {
 		return err
 	}
-	return uc.Repo.RecalculateTotals(ctx, q.Code)
+	if err := uc.Repo.RecalculateTotals(ctx, q.Code); err != nil {
+		return err
+	}
+	if evaluation.RequiresApproval && uc.Aprovacoes != nil {
+		atual, err := uc.Repo.GetByCode(ctx, q.Code)
+		if err != nil {
+			return err
+		}
+		if _, err := uc.Aprovacoes.Solicitar(ctx, aprovacao.OrcamentoPoliticaComercial, q.Code, atual.TotalGross, "Política comercial exige aprovação"); err != nil {
+			return fmt.Errorf("abrindo a aprovação do orçamento %d: %w", q.Code, err)
+		}
+	}
+	return nil
 }

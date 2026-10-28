@@ -25,8 +25,8 @@ type CreateInspectionPlanParams struct {
 	RouteOperationID pgtype.Int8
 	PointType        InspectionPointType
 	Description      string
-	SampleSize       float64
-	AcceptanceLevel  float64
+	SampleSize       pgtype.Numeric
+	AcceptanceLevel  pgtype.Numeric
 	Instructions     pgtype.Text
 	CreatedBy        pgtype.UUID
 	EnterpriseID     int64
@@ -96,9 +96,9 @@ RETURNING id,plan_id,name,nominal,tolerance_upper,tolerance_lower,unit,is_critic
 type AddCharacteristicParams struct {
 	PlanID         int64
 	Name           string
-	Nominal        pgtype.Float8
-	ToleranceUpper pgtype.Float8
-	ToleranceLower pgtype.Float8
+	Nominal        pgtype.Numeric
+	ToleranceUpper pgtype.Numeric
+	ToleranceLower pgtype.Numeric
 	Unit           pgtype.Text
 	IsCritical     bool
 	EnterpriseID   int64
@@ -146,9 +146,9 @@ type CreateQualityRecordParams struct {
 	ProductionOrderID pgtype.Int8
 	Lot               pgtype.Text
 	ItemCode          int64
-	InspectedQty      float64
-	ApprovedQty       float64
-	RejectedQty       float64
+	InspectedQty      pgtype.Numeric
+	ApprovedQty       pgtype.Numeric
+	RejectedQty       pgtype.Numeric
 	Result            InspectionResultEnum
 	InspectorID       pgtype.Int8
 	Notes             pgtype.Text
@@ -177,7 +177,7 @@ WHERE EXISTS (SELECT 1 FROM quality_records r WHERE r.id = $1 AND EXISTS (SELECT
 type AddMeasurementParams struct {
 	RecordID         int64
 	CharacteristicID int64
-	MeasuredValue    float64
+	MeasuredValue    pgtype.Numeric
 	IsConformant     bool
 	EnterpriseID     int64
 }
@@ -246,9 +246,10 @@ func (q *Queries) ListRecordsByItem(ctx context.Context, itemCode, enterpriseID 
 // ─── non-conformances ─────────────────────────────────────────────────────────
 
 const createNC = `INSERT INTO non_conformances
-(code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,is_open,created_by)
-SELECT $1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9
+(code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,is_open,created_by,lot_id)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,TRUE,$9,$11
 WHERE EXISTS (SELECT 1 FROM items it WHERE it.code = $4 AND it.enterprise_id = $10)
+  AND ($11::bigint IS NULL OR EXISTS (SELECT 1 FROM quality_inspection_lots l WHERE l.id = $11 AND l.enterprise_id = $10))
 RETURNING id,code,quality_record_id,production_order_id,item_code,lot,nonconform_qty,description,severity,root_cause,corrective_action,disposition,disposed_at,disposed_by,is_open,created_at,updated_at,created_by`
 
 type CreateNCParams struct {
@@ -257,17 +258,19 @@ type CreateNCParams struct {
 	ProductionOrderID pgtype.Int8
 	ItemCode          int64
 	Lot               pgtype.Text
-	NonConformQty     float64
+	NonConformQty     pgtype.Numeric
 	Description       string
 	Severity          NcSeverityEnum
 	CreatedBy         pgtype.UUID
 	EnterpriseID      int64
+	// LotID: lote de inspeção que originou a NC (desde a migração 000418).
+	LotID pgtype.Int8
 }
 
 func (q *Queries) CreateNC(ctx context.Context, arg CreateNCParams) (NonConformance, error) {
 	row := q.db.QueryRow(ctx, createNC,
 		arg.Code, arg.QualityRecordID, arg.ProductionOrderID,
-		arg.ItemCode, arg.Lot, arg.NonConformQty, arg.Description, arg.Severity, arg.CreatedBy, arg.EnterpriseID,
+		arg.ItemCode, arg.Lot, arg.NonConformQty, arg.Description, arg.Severity, arg.CreatedBy, arg.EnterpriseID, arg.LotID,
 	)
 	var i NonConformance
 	err := row.Scan(&i.ID, &i.Code, &i.QualityRecordID, &i.ProductionOrderID, &i.ItemCode,

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 	"time"
@@ -25,11 +26,11 @@ func TestExplodeWithVars_UsesQuantityFormula(t *testing.T) {
 	}
 	vars := map[string]float64{"COMPRIMENTO": 1200, "PROFUNDIDADE": 600}
 
-	inputs := explodeFromBOMWithVars(bomMap, 1, "1200#600", 10, 1, 1, vars, time.Time{})
+	inputs := explodeFromBOMWithVars(bomMap, 1, "1200#600", decimal.NewFromFloat(10), 1, 1, vars, time.Time{})
 
 	got := map[int64]float64{}
 	for _, in := range inputs {
-		got[in.ItemCode] = in.Quantity
+		got[in.ItemCode] = in.Quantity.InexactFloat64()
 	}
 	if math.Abs(got[2]-36) > 1e-9 {
 		t.Errorf("perfil = %v, quer 36 (3,6 m × 10 peças)", got[2])
@@ -45,8 +46,8 @@ func TestExplodeWithVars_FallsBackToFixedQuantity(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {{ChildCode: 2, Quantity: 4, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
-	inputs := explodeFromBOMWithVars(bomMap, 1, "", 10, 1, 1, nil, time.Time{})
-	if len(inputs) != 1 || inputs[0].Quantity != 40 {
+	inputs := explodeFromBOMWithVars(bomMap, 1, "", decimal.NewFromFloat(10), 1, 1, nil, time.Time{})
+	if len(inputs) != 1 || !inputs[0].Quantity.Equal(decimal.NewFromFloat(40)) {
 		t.Fatalf("explosão = %+v, quer 40 (4 × 10)", inputs)
 	}
 }
@@ -56,12 +57,12 @@ func TestExplodeWithVars_LossAppliesOverFormulaResult(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {{ChildCode: 2, Quantity: 1, LossPercentage: 10, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
-	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", 5, 1, 1, map[string]float64{"COMPRIMENTO": 2000}, time.Time{})
+	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", decimal.NewFromFloat(5), 1, 1, map[string]float64{"COMPRIMENTO": 2000}, time.Time{})
 	if len(inputs) != 1 {
 		t.Fatalf("explosão = %+v", inputs)
 	}
 	// 2 m × 5 peças × 1,10 = 11
-	if math.Abs(inputs[0].Quantity-11) > 1e-9 {
+	if math.Abs(inputs[0].Quantity.InexactFloat64()-11) > 1e-9 {
 		t.Fatalf("quantidade = %v, quer 11", inputs[0].Quantity)
 	}
 }

@@ -94,8 +94,8 @@ type Warehouse struct {
 	UnitOfMeasurement               types.TypeUnitOfMeasurementItem // Qual unidade de medida será armazenada para esse item
 	AutomaticLow                    bool                            // Faz baixa autom?
 	CyclicalCountConfig             *valueobject.CyclicalCountConfig
-	MinimumStock                    int32 // Estoque mínimo para alerta de compra
-	AverageMonthlyConsumptionManual *int  // Consumo médio mensal inserido manualmente ou se for nil gera um calculo de consumo médio/mês
+	MinimumStock                    decimal.Decimal  // Estoque mínimo para alerta de compra, na unidade do estoque
+	AverageMonthlyConsumptionManual *decimal.Decimal // Consumo médio mensal inserido manualmente ou se for nil gera um calculo de consumo médio/mês
 }
 
 type Engineering struct {
@@ -120,9 +120,9 @@ type Planning struct {
 	TankCode     *int // Setor onde é feito
 	Ghost        bool
 	ABCClass     *string
-	MinimumLot   int64
-	MultipleLot  int64
-	SafetyStock  int64
+	MinimumLot   decimal.Decimal
+	MultipleLot  decimal.Decimal
+	SafetyStock  decimal.Decimal
 	Critical     bool
 	Exclusive    bool
 	Active       bool
@@ -244,7 +244,7 @@ func (i *Item) Validate() error {
 	if i.Supplies.PurchaseUOM != nil && !i.Supplies.PurchaseUOM.IsValid() {
 		return domainerr.NewValidation("unidade de medida de compra inválida")
 	}
-	if i.Planning.MinimumLot < 0 || i.Planning.MultipleLot < 0 || i.Planning.SafetyStock < 0 || i.Commercial.WarrantyDays < 0 {
+	if i.Planning.MinimumLot.IsNegative() || i.Planning.MultipleLot.IsNegative() || i.Planning.SafetyStock.IsNegative() || i.Warehouse.MinimumStock.IsNegative() || i.Commercial.WarrantyDays < 0 {
 		return domainerr.NewValidation("as quantidades de planejamento e os dias de garantia não podem ser negativos")
 	}
 	if i.Commercial.SaleType != nil && *i.Commercial.SaleType != "VENDA" && *i.Commercial.SaleType != "REVENDA" {

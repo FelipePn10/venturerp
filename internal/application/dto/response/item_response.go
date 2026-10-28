@@ -74,8 +74,8 @@ type ItemWarehouseResponse struct {
 	UnitOfMeasurement               string                           `json:"unit_of_measurement"`
 	AutomaticLow                    bool                             `json:"automatic_low"`
 	CyclicalCountConfig             *ItemCyclicalCountConfigResponse `json:"cyclical_count_config,omitempty"`
-	MinimumStock                    int32                            `json:"minimum_stock"`
-	AverageMonthlyConsumptionManual *int                             `json:"average_monthly_consumption_manual,omitempty"`
+	MinimumStock                    float64                          `json:"minimum_stock"`
+	AverageMonthlyConsumptionManual *float64                         `json:"average_monthly_consumption_manual,omitempty"`
 }
 
 type ItemCyclicalCountConfigResponse struct {
@@ -117,9 +117,9 @@ type ItemPlanningResponse struct {
 	TankCode     *int                      `json:"tank_code,omitempty"`
 	Ghost        bool                      `json:"ghost"`
 	ABCClass     *string                   `json:"abc_class,omitempty"`
-	MinimumLot   int64                     `json:"minimum_lot"`
-	MultipleLot  int64                     `json:"multiple_lot"`
-	SafetyStock  int64                     `json:"safety_stock"`
+	MinimumLot   float64                   `json:"minimum_lot"`
+	MultipleLot  float64                   `json:"multiple_lot"`
+	SafetyStock  float64                   `json:"safety_stock"`
 	Critical     bool                      `json:"critical"`
 	Exclusive    bool                      `json:"exclusive"`
 	Active       bool                      `json:"active"`
@@ -127,10 +127,10 @@ type ItemPlanningResponse struct {
 
 // ItemReorderPointResponse is an item reorder point value.
 type ItemReorderPointResponse struct {
-	TR int16 `json:"tr"`
-	CM int16 `json:"cm"`
-	CR int   `json:"cr"`
-	ES int16 `json:"es"`
+	TR int     `json:"tr"`
+	CM float64 `json:"cm"`
+	CR int     `json:"cr"`
+	ES float64 `json:"es"`
 }
 
 // ItemSuppliesResponse is the supplies folder of an item.

@@ -76,6 +76,14 @@ type TechnicalAssistanceCallItemResponse struct {
 	GeneratesRevenue bool       `json:"generates_revenue"`
 	RequestedAction  string     `json:"requested_action"`
 	Status           string     `json:"status"`
+	// Garantia (pós-venda 3.2).
+	SerialNumber      *string    `json:"serial_number,omitempty"`
+	SerieID           *int64     `json:"serie_id,omitempty"`
+	GarantiaOrigem    *string    `json:"garantia_origem,omitempty"`
+	GarantiaInicio    *time.Time `json:"garantia_inicio,omitempty"`
+	CobrePecas        *bool      `json:"cobre_pecas,omitempty"`
+	CobreMaoObra      *bool      `json:"cobre_mao_obra,omitempty"`
+	CobreDeslocamento *bool      `json:"cobre_deslocamento,omitempty"`
 }
 
 type TechnicalAssistanceReturnNoteResponse struct {

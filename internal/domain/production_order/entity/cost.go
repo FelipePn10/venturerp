@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,26 +13,26 @@ import (
 type ProductionOrderCost struct {
 	ID                int64
 	ProductionOrderID int64
-	ProducedQty       float64
+	ProducedQty       decimal.Decimal
 
 	// Actual cost (total for the order).
-	MaterialCostReal float64
-	LaborCostReal    float64
-	OverheadCostReal float64
-	TotalCostReal    float64
-	UnitCostReal     float64
+	MaterialCostReal decimal.Decimal
+	LaborCostReal    decimal.Decimal
+	OverheadCostReal decimal.Decimal
+	TotalCostReal    decimal.Decimal
+	UnitCostReal     decimal.Decimal
 
 	// Standard cost snapshot (unit standard × produced quantity).
-	MaterialCostStd float64
-	LaborCostStd    float64
-	OverheadCostStd float64
-	TotalCostStd    float64
+	MaterialCostStd decimal.Decimal
+	LaborCostStd    decimal.Decimal
+	OverheadCostStd decimal.Decimal
+	TotalCostStd    decimal.Decimal
 
 	// Variance (actual − standard); positive means it cost more than the standard.
-	MaterialVariance float64
-	LaborVariance    float64
-	OverheadVariance float64
-	TotalVariance    float64
+	MaterialVariance decimal.Decimal
+	LaborVariance    decimal.Decimal
+	OverheadVariance decimal.Decimal
+	TotalVariance    decimal.Decimal
 
 	Currency  string
 	SettledAt time.Time
@@ -42,16 +43,16 @@ type ProductionOrderCost struct {
 //   - MaterialCostReal: Σ (consumed quantity × weighted-average cost of the item)
 //   - LaborCostReal:    Σ (appointment hours × cost/hour of the work center)
 type ActualCostInputs struct {
-	ProducedQty      float64
-	MaterialCostReal float64
-	LaborCostReal    float64
+	ProducedQty      decimal.Decimal
+	MaterialCostReal decimal.Decimal
+	LaborCostReal    decimal.Decimal
 }
 
 // StandardUnitCost is the per-unit standard cost split for the produced item.
 type StandardUnitCost struct {
-	Material float64
-	Labor    float64
-	Overhead float64
+	Material decimal.Decimal
+	Labor    decimal.Decimal
+	Overhead decimal.Decimal
 }
 
 // BuildSettlement combines the shop-floor actuals with the standard cost to
@@ -64,21 +65,22 @@ type StandardUnitCost struct {
 func BuildSettlement(productionOrderID int64, in ActualCostInputs, std StandardUnitCost, currency string, settledBy uuid.UUID) *ProductionOrderCost {
 	qty := in.ProducedQty
 
-	overheadReal := 0.0
-	if std.Labor > 0 {
-		overheadReal = in.LaborCostReal * (std.Overhead / std.Labor)
+	// Overhead real proporcional à mão de obra real, na razão do padrão.
+	overheadReal := decimal.Zero
+	if std.Labor.IsPositive() {
+		overheadReal = in.LaborCostReal.Mul(std.Overhead).Div(std.Labor)
 	}
 
-	totalReal := in.MaterialCostReal + in.LaborCostReal + overheadReal
-	unitReal := 0.0
-	if qty > 0 {
-		unitReal = totalReal / qty
+	totalReal := in.MaterialCostReal.Add(in.LaborCostReal).Add(overheadReal)
+	unitReal := decimal.Zero
+	if qty.IsPositive() {
+		unitReal = totalReal.Div(qty)
 	}
 
-	materialStd := std.Material * qty
-	laborStd := std.Labor * qty
-	overheadStd := std.Overhead * qty
-	totalStd := materialStd + laborStd + overheadStd
+	materialStd := std.Material.Mul(qty)
+	laborStd := std.Labor.Mul(qty)
+	overheadStd := std.Overhead.Mul(qty)
+	totalStd := materialStd.Add(laborStd).Add(overheadStd)
 
 	if currency == "" {
 		currency = "BRL"
@@ -99,10 +101,10 @@ func BuildSettlement(productionOrderID int64, in ActualCostInputs, std StandardU
 		OverheadCostStd: overheadStd,
 		TotalCostStd:    totalStd,
 
-		MaterialVariance: in.MaterialCostReal - materialStd,
-		LaborVariance:    in.LaborCostReal - laborStd,
-		OverheadVariance: overheadReal - overheadStd,
-		TotalVariance:    totalReal - totalStd,
+		MaterialVariance: in.MaterialCostReal.Sub(materialStd),
+		LaborVariance:    in.LaborCostReal.Sub(laborStd),
+		OverheadVariance: overheadReal.Sub(overheadStd),
+		TotalVariance:    totalReal.Sub(totalStd),
 
 		Currency:  currency,
 		SettledBy: settledBy,

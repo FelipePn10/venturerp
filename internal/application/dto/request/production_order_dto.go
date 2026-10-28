@@ -8,20 +8,20 @@ import (
 // CreateProductionOrderDTO: o item chega pelo código de negócio (texto), como a
 // tela de ordem de fabricação (VPRO0900) o conhece.
 type CreateProductionOrderDTO struct {
-	OrderNumber    *int64    `json:"order_number,omitempty"`
-	PlannedOrderID *int64    `json:"planned_order_id,omitempty"`
-	ItemCode       TextCode  `json:"item_code"`
-	Mask           string    `json:"mask"`
-	PlannedQty     float64   `json:"planned_qty"`
-	StartDate      *string   `json:"start_date,omitempty"`
-	EndDate        *string   `json:"end_date,omitempty"`
-	MachineID      *int64    `json:"machine_id,omitempty"`
-	CostCenterID   *int64    `json:"cost_center_id,omitempty"`
-	EmployeeID     *int64    `json:"employee_id,omitempty"`
-	WarehouseID    *int64    `json:"warehouse_id,omitempty"`
-	Priority       *string   `json:"priority,omitempty"`
-	Notes          *string   `json:"notes,omitempty"`
-	CreatedBy      uuid.UUID `json:"-"`
+	OrderNumber    *int64          `json:"order_number,omitempty"`
+	PlannedOrderID *int64          `json:"planned_order_id,omitempty"`
+	ItemCode       TextCode        `json:"item_code"`
+	Mask           string          `json:"mask"`
+	PlannedQty     decimal.Decimal `json:"planned_qty"`
+	StartDate      *string         `json:"start_date,omitempty"`
+	EndDate        *string         `json:"end_date,omitempty"`
+	MachineID      *int64          `json:"machine_id,omitempty"`
+	CostCenterID   *int64          `json:"cost_center_id,omitempty"`
+	EmployeeID     *int64          `json:"employee_id,omitempty"`
+	WarehouseID    *int64          `json:"warehouse_id,omitempty"`
+	Priority       *string         `json:"priority,omitempty"`
+	Notes          *string         `json:"notes,omitempty"`
+	CreatedBy      uuid.UUID       `json:"-"`
 }
 
 type StartProductionOrderDTO struct {
@@ -40,17 +40,17 @@ type MaintainProductionOrderDTO struct {
 }
 
 type AddAppointmentDTO struct {
-	ProductionOrderID int64     `json:"production_order_id"`
-	MachineID         *int64    `json:"machine_id,omitempty"`
-	EmployeeID        *int64    `json:"employee_id,omitempty"`
-	AppointmentDate   string    `json:"appointment_date"`
-	StartTime         *string   `json:"start_time,omitempty"`
-	EndTime           *string   `json:"end_time,omitempty"`
-	ProducedQty       float64   `json:"produced_qty"`
-	ScrappedQty       float64   `json:"scrapped_qty"`
-	ScrapReason       *string   `json:"scrap_reason,omitempty"`
-	Notes             *string   `json:"notes,omitempty"`
-	CreatedBy         uuid.UUID `json:"-"`
+	ProductionOrderID int64           `json:"production_order_id"`
+	MachineID         *int64          `json:"machine_id,omitempty"`
+	EmployeeID        *int64          `json:"employee_id,omitempty"`
+	AppointmentDate   string          `json:"appointment_date"`
+	StartTime         *string         `json:"start_time,omitempty"`
+	EndTime           *string         `json:"end_time,omitempty"`
+	ProducedQty       decimal.Decimal `json:"produced_qty"`
+	ScrappedQty       decimal.Decimal `json:"scrapped_qty"`
+	ScrapReason       *string         `json:"scrap_reason,omitempty"`
+	Notes             *string         `json:"notes,omitempty"`
+	CreatedBy         uuid.UUID       `json:"-"`
 	// Backflush         WarehouseID, when set, triggers backflush: the BOM
 	// components are auto-consumed (OUT) from this warehouse in proportion to the
 	// produced quantity. Omit to disable backflush for this appointment.
@@ -58,15 +58,15 @@ type AddAppointmentDTO struct {
 }
 
 type AddConsumptionDTO struct {
-	ProductionOrderID int64     `json:"production_order_id"`
-	AppointmentID     *int64    `json:"appointment_id,omitempty"`
-	ItemCode          int64     `json:"item_code"`
-	ConsumedQty       float64   `json:"consumed_qty"`
-	WarehouseID       *int64    `json:"warehouse_id,omitempty"`
-	Lot               *string   `json:"lot,omitempty"`
-	ConsumptionDate   string    `json:"consumption_date"`
-	Notes             *string   `json:"notes,omitempty"`
-	CreatedBy         uuid.UUID `json:"-"`
+	ProductionOrderID int64           `json:"production_order_id"`
+	AppointmentID     *int64          `json:"appointment_id,omitempty"`
+	ItemCode          int64           `json:"item_code"`
+	ConsumedQty       decimal.Decimal `json:"consumed_qty"`
+	WarehouseID       *int64          `json:"warehouse_id,omitempty"`
+	Lot               *string         `json:"lot,omitempty"`
+	ConsumptionDate   string          `json:"consumption_date"`
+	Notes             *string         `json:"notes,omitempty"`
+	CreatedBy         uuid.UUID       `json:"-"`
 }
 
 type CompleteProductionOrderDTO struct {
@@ -82,6 +82,9 @@ type CompleteProductionOrderDTO struct {
 	Quantity       *decimal.Decimal `json:"quantity,omitempty"`
 	Final          bool             `json:"final"`
 	IdempotencyKey string           `json:"idempotency_key"`
+	// NumerosSerie: uma série por unidade entregue, quando o item controla
+	// série (VATC0110). Vazio com máscara no perfil: o sistema gera.
+	NumerosSerie []string `json:"numeros_serie,omitempty"`
 }
 
 // ReturnScrapDTO returns the scrap/offcut of a production order to stock as a

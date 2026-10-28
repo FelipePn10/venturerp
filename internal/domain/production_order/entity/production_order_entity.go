@@ -23,9 +23,9 @@ type ProductionOrder struct {
 	PlannedOrderID *int64
 	ItemCode       int64
 	Mask           string
-	PlannedQty     float64
-	ProducedQty    float64
-	ScrappedQty    float64
+	PlannedQty     decimal.Decimal
+	ProducedQty    decimal.Decimal
+	ScrappedQty    decimal.Decimal
 	Status         ProductionOrderStatus
 	StartDate      *time.Time
 	EndDate        *time.Time
@@ -52,8 +52,8 @@ type ProductionAppointment struct {
 	AppointmentDate   time.Time
 	StartTime         *string
 	EndTime           *string
-	ProducedQty       float64
-	ScrappedQty       float64
+	ProducedQty       decimal.Decimal
+	ScrappedQty       decimal.Decimal
 	ScrapReason       *string
 	Notes             *string
 	CreatedAt         time.Time
@@ -66,7 +66,7 @@ type ProductionConsumption struct {
 	ProductionOrderID int64
 	AppointmentID     *int64
 	ItemCode          int64
-	ConsumedQty       float64
+	ConsumedQty       decimal.Decimal
 	WarehouseID       *int64
 	Lot               *string
 	ConsumptionDate   time.Time
@@ -87,6 +87,13 @@ type ProductionDelivery struct {
 	DeliveredAt       time.Time
 	CreatedBy         uuid.UUID
 	Lines             []ProductionDeliveryLine
+	// ItemCode/Mask: o item entregue, para criar as séries na mesma transação.
+	ItemCode int64
+	Mask     *string
+	// NumerosSerie informadas na entrega (item que controla série).
+	NumerosSerie []string
+	// SeriesGravadas: as séries criadas (informadas ou geradas pela máscara).
+	SeriesGravadas []string
 }
 
 type ProductionDeliveryLine struct {

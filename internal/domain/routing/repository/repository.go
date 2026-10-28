@@ -23,6 +23,10 @@ type RoutingRepository interface {
 	GetRouteByItemCode(ctx context.Context, itemCode int64, mask string, alternative int16) (*entity.ManufacturingRoute, error)
 	ListRoutesByItem(ctx context.Context, itemCode int64) ([]*entity.ManufacturingRoute, error)
 	DeactivateRoute(ctx context.Context, id int64) error
+	// ListRoutesByItemWithInactive inclui os desativados, para a tela poder reativá-los.
+	ListRoutesByItemWithInactive(ctx context.Context, itemCode int64) ([]*entity.ManufacturingRoute, error)
+	// ReactivateRoute devolve false se o roteiro não existe ou já está ativo.
+	ReactivateRoute(ctx context.Context, id int64) (bool, error)
 
 	// Route operations
 	AddRouteOperation(ctx context.Context, op *entity.RouteOperation) (*entity.RouteOperation, error)

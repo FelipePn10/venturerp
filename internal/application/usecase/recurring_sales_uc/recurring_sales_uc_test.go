@@ -2,6 +2,7 @@ package recurring_sales_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func TestCreateRequiresAdjustmentDateForIndefiniteTerm(t *testing.T) {
 }
 
 func TestCreateFixedTermRequiresPaymentsAfterGrace(t *testing.T) {
-	payments, months, grace, value := 2, 12, 2, 100.0
+	payments, months, grace, value := 2, 12, 2, decimal.NewFromInt(100)
 	uc := &UseCase{Repo: &fakeRSRepo{}, Auth: rsAllowAuth{}}
 	_, err := uc.Create(context.Background(), request.CreateRecurringSaleDTO{
 		EnterpriseCode: 1, CustomerCode: 2, ItemCode: 3, SaleDate: "2026-07-01", TermType: "FIXED",
@@ -161,8 +162,8 @@ func TestGenerateSalesOrderCreatesMonthlyLinesUntilAdjustment(t *testing.T) {
 		rows: []*entity.RecurringSale{{
 			Code: 7, EnterpriseCode: 1, CustomerCode: 2, ItemCode: 3, MovementType: entity.MovementSale,
 			TermType: entity.TermIndefinite, SaleDate: time.Date(2026, 7, 5, 0, 0, 0, 0, time.UTC),
-			NextAdjustmentDate: &next, Quantity: 2, UnitValue: 50, CreatedBy: uuid.Nil, IsActive: true,
-			Representatives: []*entity.Representative{{RepresentativeCode: 9, IsPrimary: true, CommissionPercent: 5}},
+			NextAdjustmentDate: &next, Quantity: decimal.NewFromInt(2), UnitValue: decimal.NewFromInt(50), CreatedBy: uuid.Nil, IsActive: true,
+			Representatives: []*entity.Representative{{RepresentativeCode: 9, IsPrimary: true, CommissionPercent: decimal.NewFromInt(5)}},
 		}},
 	}
 	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}, SalesOrders: orderCreator, SalesOrderItems: itemCreator, Representatives: activeRepresentativeRepo{}}
@@ -183,8 +184,8 @@ func TestGenerateSalesOrderCreatesMonthlyLinesUntilAdjustment(t *testing.T) {
 	if len(itemCreator.dtos) != 3 {
 		t.Fatalf("generated lines = %d, want Jul/Aug/Sep", len(itemCreator.dtos))
 	}
-	if itemCreator.dtos[0].RequestedQty != 1 || itemCreator.dtos[0].UnitPrice != 100 {
-		t.Fatalf("grouped first line qty/unit = %.2f/%.2f, want 1/100", itemCreator.dtos[0].RequestedQty, itemCreator.dtos[0].UnitPrice)
+	if !itemCreator.dtos[0].RequestedQty.Equal(decimal.NewFromInt(1)) || !itemCreator.dtos[0].UnitPrice.Equal(decimal.NewFromInt(100)) {
+		t.Fatalf("grouped first line qty/unit = %s/%s, want 1/100", itemCreator.dtos[0].RequestedQty, itemCreator.dtos[0].UnitPrice)
 	}
 	if itemCreator.dtos[1].DeliveryDate == nil || *itemCreator.dtos[1].DeliveryDate != "2026-08-31" {
 		t.Fatalf("second delivery date = %v, want 2026-08-31", itemCreator.dtos[1].DeliveryDate)
@@ -226,11 +227,11 @@ func TestAdjustmentPreviewExplainsPreviousAndNewValues(t *testing.T) {
 		Code: 7, EnterpriseCode: 1, CustomerCode: 2, ItemCode: 3,
 		MovementType: entity.MovementSale, TermType: entity.TermIndefinite,
 		SaleDate: time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), NextAdjustmentDate: &adjustmentDate,
-		Quantity: 2, UnitValue: 50, GeneratedOrderCode: &orderCode, IsActive: true, AdjustmentIndex: &index,
+		Quantity: decimal.NewFromInt(2), UnitValue: decimal.NewFromInt(50), GeneratedOrderCode: &orderCode, IsActive: true, AdjustmentIndex: &index,
 	}}}
 	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}}
 	got, err := uc.CalculateAdjustment(context.Background(), request.CalculateRecurringSalesAdjustmentDTO{
-		AdjustmentDate: "2027-07-01", AdjustmentPercent: 10, Reason: "Reajuste anual",
+		AdjustmentDate: "2027-07-01", AdjustmentPercent: decimal.NewFromInt(10), Reason: "Reajuste anual",
 		LegalBasis: "Cláusula 8", Confirm: false,
 	})
 	if err != nil {
@@ -240,7 +241,7 @@ func TestAdjustmentPreviewExplainsPreviousAndNewValues(t *testing.T) {
 		t.Fatalf("impactos = %d, esperado 1", len(got.Impacts))
 	}
 	impact := got.Impacts[0]
-	if impact.PreviousUnitValue != 50 || impact.NewUnitValue != 55 || impact.PreviousTotal != 100 || impact.NewTotal != 110 {
+	if !impact.PreviousUnitValue.Equal(decimal.NewFromInt(50)) || !impact.NewUnitValue.Equal(decimal.NewFromInt(55)) || !impact.PreviousTotal.Equal(decimal.NewFromInt(100)) || !impact.NewTotal.Equal(decimal.NewFromInt(110)) {
 		t.Fatalf("valores inesperados: %+v", impact)
 	}
 	if impact.AdjustmentIndex != "IPCA" || impact.LegalBasis != "Cláusula 8" || impact.Reason != "Reajuste anual" {

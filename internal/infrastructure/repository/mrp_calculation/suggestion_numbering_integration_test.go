@@ -5,6 +5,7 @@ package mrp_calculation
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func TestSuggestionNumberInUseAndFirmedOrder(t *testing.T) {
 
 	repo := NewMRPCalculationRepositorySQLC(sqlc.New(pool), pool)
 	sugestao := func(plano, n int64) *entity.PlannedOrderSuggestion {
-		return &entity.PlannedOrderSuggestion{OrderNumber: &n, PlanCode: plano, ItemCode: item, Quantity: 1, NeedDate: time.Now(), OrderType: "FABRICACAO", DemandType: "INDEPENDENTE"}
+		return &entity.PlannedOrderSuggestion{OrderNumber: &n, PlanCode: plano, ItemCode: item, Quantity: decimal.NewFromFloat(1), NeedDate: time.Now(), OrderType: "FABRICACAO", DemandType: "INDEPENDENTE"}
 	}
 	if _, err := repo.CreatePlannedOrderSuggestion(a.Ctx, sugestao(planoA, numero)); !errors.Is(err, mrprepository.ErrOrderNumberInUse) {
 		t.Fatalf("número de ordem planejada ativa: %v, esperado ErrOrderNumberInUse", err)

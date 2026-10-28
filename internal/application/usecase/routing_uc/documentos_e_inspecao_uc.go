@@ -3,6 +3,7 @@ package routing_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -152,10 +153,10 @@ func (uc *RouteUseCase) AddInspection(ctx context.Context, dto request.CreateRou
 		return nil, errorsuc.NewValidationError(fmt.Sprintf(
 			"ponto de inspeção %q inválido: use %s", dto.PointType, listaLegivel(pontosDeInspecao)))
 	}
-	if dto.SampleSize <= 0 {
+	if !dto.SampleSize.IsPositive() {
 		return nil, errorsuc.NewValidationError("o tamanho da amostra precisa ser maior que zero")
 	}
-	if dto.AcceptanceLevel < 0 || dto.AcceptanceLevel > 100 {
+	if dto.AcceptanceLevel.IsNegative() || dto.AcceptanceLevel.GreaterThan(decimal.NewFromInt(100)) {
 		return nil, errorsuc.NewValidationError("o nível de aceitação vai de 0 a 100%")
 	}
 
@@ -265,8 +266,8 @@ func toInspectionResponse(i *entity.RouteInspection) response.RouteInspectionRes
 		StepSequence:        i.StepSequence,
 		PointType:           i.PointType,
 		Description:         i.Description,
-		SampleSize:          i.SampleSize,
-		AcceptanceLevel:     i.AcceptanceLevel,
+		SampleSize:          i.SampleSize.InexactFloat64(),
+		AcceptanceLevel:     i.AcceptanceLevel.InexactFloat64(),
 		Instructions:        i.Instructions,
 		CharacteristicCount: i.CharacteristicCount,
 	}

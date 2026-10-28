@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 func diaOut(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, time.UTC) }
 
 func firme(code int64, qtd float64, chegada time.Time) ports.SupplyEntry {
-	return ports.SupplyEntry{Quantity: qtd, ArrivalDate: chegada, SourceType: ports.SupplySourcePlannedOrder, SourceCode: code}
+	return ports.SupplyEntry{Quantity: dq(qtd), ArrivalDate: chegada, SourceType: ports.SupplySourcePlannedOrder, SourceCode: code}
 }
 
 // Cada ordem firme é comparada com a necessidade que ela cobre, depois do
@@ -20,7 +21,7 @@ func firme(code int64, qtd float64, chegada time.Time) ports.SupplyEntry {
 // netting.
 func TestExcecoesPorPegging(t *testing.T) {
 	b := newExceptionBasis(
-		map[int64]*entity.StockSnapshot{1: {Quantity: 10}},
+		map[int64]*entity.StockSnapshot{1: {Quantity: decimal.NewFromFloat(10)}},
 		map[int64][]ports.SupplyEntry{
 			// Item 1: estoque 10 cobre parte do dia 5; a ordem 100 cobre o
 			// resto do dia 5 mas chega dia 12 (7 d → antecipar); a 101 cobre o
@@ -33,10 +34,10 @@ func TestExcecoesPorPegging(t *testing.T) {
 			3: {firme(300, 100, diaOut(1).AddDate(0, 0, -40))},
 		},
 	)
-	b.addRequirement(1, diaOut(5), 15, "", nil)
-	b.addRequirement(1, diaOut(20), 30, "", nil)
-	b.addRequirement(2, diaOut(6), 8, "", nil)
-	b.addRequirement(3, diaOut(1), 20, "", nil)
+	b.addRequirement(1, diaOut(5), decimal.NewFromFloat(15), "", nil)
+	b.addRequirement(1, diaOut(20), decimal.NewFromFloat(30), "", nil)
+	b.addRequirement(2, diaOut(6), decimal.NewFromFloat(8), "", nil)
+	b.addRequirement(3, diaOut(1), decimal.NewFromFloat(20), "", nil)
 
 	por := map[int64]*entity.MRPExceptionMessage{}
 	excesso := 0
@@ -75,7 +76,7 @@ func TestBaseDeExcecoesNaoEnxergaONetting(t *testing.T) {
 	supply := map[int64][]ports.SupplyEntry{1: {firme(1, 5, diaOut(12))}}
 	b := newExceptionBasis(nil, supply)
 	supply[1] = supply[1][:0]
-	b.addRequirement(1, diaOut(5), 5, "", nil)
+	b.addRequirement(1, diaOut(5), decimal.NewFromFloat(5), "", nil)
 	if len(b.messages()) != 1 {
 		t.Fatal("a ordem atrasada sumiu porque o netting esvaziou o mapa")
 	}
@@ -89,8 +90,8 @@ func TestExcecaoComCodigoDeNegocio(t *testing.T) {
 		9004: {firme(2, 12.5, diaOut(25))},
 	})
 	b.labels = map[int64]string{9003: "RODA-200"}
-	b.addRequirement(9003, diaOut(18), 80, "", nil)
-	b.addRequirement(9004, diaOut(18), 12.5, "", nil)
+	b.addRequirement(9003, diaOut(18), decimal.NewFromFloat(80), "", nil)
+	b.addRequirement(9004, diaOut(18), decimal.NewFromFloat(12.5), "", nil)
 	textos := map[int64]string{}
 	for _, m := range b.messages() {
 		textos[m.ItemCode] = m.Description

@@ -2,8 +2,8 @@ package handler
 
 import (
 	"errors"
+	"github.com/shopspring/decimal"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -200,9 +200,9 @@ func (h *RecurringSalesHandler) filter(r *http.Request) rsrepo.Filter {
 }
 
 func (h *RecurringSalesHandler) projectionFilter(r *http.Request) rsrepo.ProjectionFilter {
-	pct := 0.0
-	if raw := r.URL.Query().Get("adjustment_percent"); raw != "" {
-		pct, _ = strconv.ParseFloat(raw, 64)
+	pct := decimal.Zero
+	if raw := strings.TrimSpace(r.URL.Query().Get("adjustment_percent")); raw != "" {
+		pct, _ = decimal.NewFromString(strings.ReplaceAll(raw, ",", "."))
 	}
 	return rsrepo.ProjectionFilter{
 		From: parseHandlerDateValue(r.URL.Query().Get("from")), To: parseHandlerDateValue(r.URL.Query().Get("to")),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -23,6 +24,11 @@ type ConsultarNFeUseCase struct {
 	// emissão se perdeu), estoque, títulos e pedido entram por aqui — antes só a
 	// situação mudava e os efeitos nunca aconteciam.
 	Efeitos *EfeitosNFe
+	// DevolucaoVenda: a NF-e de entrada da devolução de venda autorizada pela
+	// consulta efetiva a devolução — nunca os efeitos de venda.
+	DevolucaoVenda interface {
+		AoAutorizar(ctx context.Context, exit *entity.FiscalExit, userID uuid.UUID) []string
+	}
 }
 
 type ConsultarNFeResult struct {
@@ -120,7 +126,14 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 				if _, errSituacao := uc.Repo.UpdateExitAuthorization(ctx, exitID, resp.Chave(), resp.Protocolo, *exit.FocusRef, resp.PathXML, resp.PathDANFE); errSituacao != nil {
 					return nil, fmt.Errorf("gravando a autorização da NF-e: %w", errSituacao)
 				}
-				if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+				switch {
+				case exit.DevolucaoVendaID != nil:
+					if uc.DevolucaoVenda != nil {
+						if userID, errU := uc.Auth.UserID(ctx); errU == nil {
+							avisos = append(avisos, uc.DevolucaoVenda.AoAutorizar(ctx, exit, userID)...)
+						}
+					}
+				case uc.Efeitos != nil && exit.FiscalEntryID == nil:
 					avisos = append(avisos, uc.aplicarEfeitos(ctx, exitID)...)
 				}
 			}

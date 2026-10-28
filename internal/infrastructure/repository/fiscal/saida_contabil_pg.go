@@ -32,6 +32,23 @@ func (r *FiscalRepositoryPG) CustoDaSaida(ctx context.Context, exitID int64) (de
 	return v, err
 }
 
+// TributosReformaDaSaida lê os totais de IBS e CBS que a autorização gravou
+// junto do retrato transmitido.
+func (r *FiscalRepositoryPG) TributosReformaDaSaida(ctx context.Context, exitID int64) (decimal.Decimal, decimal.Decimal, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return decimal.Zero, decimal.Zero, err
+	}
+	var ibs, cbs decimal.Decimal
+	err = r.db.QueryRow(ctx,
+		`SELECT COALESCE(valor_ibs,0), COALESCE(valor_cbs,0) FROM fiscal_exits WHERE id=$1 AND enterprise_id=$2`,
+		exitID, empresa).Scan(&ibs, &cbs)
+	if err != nil {
+		return decimal.Zero, decimal.Zero, fmt.Errorf("lendo IBS/CBS da NF-e %d: %w", exitID, err)
+	}
+	return ibs, cbs, nil
+}
+
 // EstornarEstoqueDaSaida devolve ao estoque, pelo mesmo custo, o que a NF-e
 // cancelada baixou. Idempotente: repetir o cancelamento não devolve de novo.
 func (r *FiscalRepositoryPG) EstornarEstoqueDaSaida(ctx context.Context, exitID int64, userID uuid.UUID) (int, error) {

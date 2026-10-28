@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
+	costcenterrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -57,11 +60,11 @@ func (r *FinancialRepositoryPG) contarUsos(ctx context.Context, refs []referenci
 
 // ---------- Plano de Contas ----------
 
-const planoCols = `id, codigo, descricao, tipo, natureza, parent_code, nivel, is_active, created_at, accounting_account_id`
+const planoCols = `id, codigo, descricao, tipo, natureza, parent_code, nivel, is_active, created_at, accounting_account_id, exige_centro_custo`
 
 func scanPlano(row pgx.Row) (*entity.PlanoContas, error) {
 	var p entity.PlanoContas
-	if err := row.Scan(&p.ID, &p.Codigo, &p.Descricao, &p.Tipo, &p.Natureza, &p.ParentCode, &p.Nivel, &p.IsActive, &p.CreatedAt, &p.AccountingAccountID); err != nil {
+	if err := row.Scan(&p.ID, &p.Codigo, &p.Descricao, &p.Tipo, &p.Natureza, &p.ParentCode, &p.Nivel, &p.IsActive, &p.CreatedAt, &p.AccountingAccountID, &p.ExigeCentroCusto); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError("plano de contas não encontrado")
 		}
@@ -75,7 +78,7 @@ func (r *FinancialRepositoryPG) ListPlanoContasComInativos(ctx context.Context) 
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT `+planoCols+` FROM plano_contas WHERE enterprise_id = $1 ORDER BY codigo`, empresa)
+	rows, err := r.pool.Query(ctx, `SELECT `+planoCols+` FROM plano_contas WHERE enterprise_id = $1 ORDER BY ordem_natural(codigo)`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listando o plano de contas: %w", err)
 	}
@@ -113,9 +116,10 @@ func (r *FinancialRepositoryPG) UpdatePlanoContas(ctx context.Context, p *entity
 		return nil, err
 	}
 	return scanPlano(r.pool.QueryRow(ctx,
-		`UPDATE plano_contas SET codigo = $3, descricao = $4, tipo = $5, natureza = $6, parent_code = $7, nivel = $8, is_active = $9
+		`UPDATE plano_contas SET codigo = $3, descricao = $4, tipo = $5, natureza = $6, parent_code = $7, nivel = $8, is_active = $9,
+		        exige_centro_custo = $10
 		  WHERE id = $1 AND enterprise_id = $2 RETURNING `+planoCols,
-		p.ID, empresa, p.Codigo, p.Descricao, p.Tipo, p.Natureza, p.ParentCode, p.Nivel, p.IsActive))
+		p.ID, empresa, p.Codigo, p.Descricao, p.Tipo, p.Natureza, p.ParentCode, p.Nivel, p.IsActive, p.ExigeCentroCusto))
 }
 
 func (r *FinancialRepositoryPG) DeletePlanoContas(ctx context.Context, id int64) error {
@@ -167,6 +171,28 @@ func (r *FinancialRepositoryPG) FilhasAtivasPlanoContas(ctx context.Context, cod
 
 const centroCols = `id, codigo, descricao, tipo, is_active, created_at`
 
+// centrosCustoSQL: o cadastro financeiro de centro de custo (VFIN0130) é uma
+// vista do cadastro único (cost_centers + a gestão, que guarda o código da
+// empresa). O tipo segue os nomes antigos desta rota.
+const centrosCustoSQL = `(SELECT c.id, g.codigo, c.description AS descricao,
+		CASE c.type WHEN 'PRODUCTIVE' THEN 'PRODUTIVO' WHEN 'COMMERCIAL' THEN 'COMERCIAL'
+		            WHEN 'AUXILIARY' THEN 'AUXILIAR' ELSE 'ADMINISTRATIVO' END AS tipo,
+		c.is_active, c.created_at, c.enterprise_id, c.start_date, c.end_date
+	   FROM cost_centers c JOIN cost_center_gestao g ON g.cost_center_id = c.id) centros_custo`
+
+// tipoIndustrial: o tipo da rota financeira no cadastro único.
+func tipoIndustrial(t string) string {
+	switch strings.ToUpper(strings.TrimSpace(t)) {
+	case "PRODUTIVO":
+		return "PRODUCTIVE"
+	case "COMERCIAL":
+		return "COMMERCIAL"
+	case "AUXILIAR":
+		return "AUXILIARY"
+	}
+	return "ADMINISTRATIVE"
+}
+
 func scanCentro(row pgx.Row) (*entity.CentroCusto, error) {
 	var c entity.CentroCusto
 	if err := row.Scan(&c.ID, &c.Codigo, &c.Descricao, &c.Tipo, &c.IsActive, &c.CreatedAt); err != nil {
@@ -183,7 +209,7 @@ func (r *FinancialRepositoryPG) ListCentrosCustoComInativos(ctx context.Context)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT `+centroCols+` FROM centros_custo WHERE enterprise_id = $1 ORDER BY codigo`, empresa)
+	rows, err := r.pool.Query(ctx, `SELECT `+centroCols+` FROM `+centrosCustoSQL+` WHERE enterprise_id = $1 ORDER BY codigo`, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("listando os centros de custo: %w", err)
 	}
@@ -204,7 +230,7 @@ func (r *FinancialRepositoryPG) GetCentroCusto(ctx context.Context, id int64) (*
 	if err != nil {
 		return nil, err
 	}
-	return scanCentro(r.pool.QueryRow(ctx, `SELECT `+centroCols+` FROM centros_custo WHERE id = $1 AND enterprise_id = $2`, id, empresa))
+	return scanCentro(r.pool.QueryRow(ctx, `SELECT `+centroCols+` FROM `+centrosCustoSQL+` WHERE id = $1 AND enterprise_id = $2`, id, empresa))
 }
 
 func (r *FinancialRepositoryPG) UpdateCentroCusto(ctx context.Context, c *entity.CentroCusto) (*entity.CentroCusto, error) {
@@ -212,10 +238,37 @@ func (r *FinancialRepositoryPG) UpdateCentroCusto(ctx context.Context, c *entity
 	if err != nil {
 		return nil, err
 	}
-	return scanCentro(r.pool.QueryRow(ctx,
-		`UPDATE centros_custo SET codigo = $3, descricao = $4, tipo = $5, is_active = $6
-		  WHERE id = $1 AND enterprise_id = $2 RETURNING `+centroCols,
-		c.ID, empresa, c.Codigo, c.Descricao, c.Tipo, c.IsActive))
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	// A mesma regra do cadastro único: desativar com centro filho ativo, não.
+	if !c.IsActive {
+		var filhos int64
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM cost_centers f JOIN cost_centers p ON p.code = f.parent_code
+			WHERE p.id = $1 AND p.enterprise_id = $2 AND f.is_active`, c.ID, empresa).Scan(&filhos); err != nil {
+			return nil, err
+		}
+		if filhos > 0 {
+			return nil, errorsuc.NewConflictError(fmt.Sprintf("o centro de custo tem %d centro(s) filho(s) ativo(s): desative os filhos antes", filhos))
+		}
+	}
+	tag, err := tx.Exec(ctx, `UPDATE cost_centers SET description = $3, type = $4::type_cc_enum, is_active = $5, updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2`, c.ID, empresa, c.Descricao, tipoIndustrial(c.Tipo), c.IsActive)
+	if err != nil {
+		return nil, fmt.Errorf("alterando o centro de custo: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, errorsuc.NewNotFoundError("centro de custo não encontrado")
+	}
+	if _, err := tx.Exec(ctx, `UPDATE cost_center_gestao SET codigo = $2, updated_at = NOW() WHERE cost_center_id = $1`, c.ID, strings.TrimSpace(c.Codigo)); err != nil {
+		return nil, traduzirCodigoRepetido(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.GetCentroCusto(ctx, c.ID)
 }
 
 func (r *FinancialRepositoryPG) DeleteCentroCusto(ctx context.Context, id int64) error {
@@ -223,7 +276,7 @@ func (r *FinancialRepositoryPG) DeleteCentroCusto(ctx context.Context, id int64)
 	if err != nil {
 		return err
 	}
-	tag, err := r.pool.Exec(ctx, `DELETE FROM centros_custo WHERE id = $1 AND enterprise_id = $2`, id, empresa)
+	tag, err := r.pool.Exec(ctx, `DELETE FROM cost_centers WHERE id = $1 AND enterprise_id = $2`, id, empresa)
 	if err != nil {
 		return fmt.Errorf("excluindo o centro de custo: %w", err)
 	}
@@ -233,6 +286,25 @@ func (r *FinancialRepositoryPG) DeleteCentroCusto(ctx context.Context, id int64)
 	return nil
 }
 
+// UsosCentroCusto: a mesma lista do cadastro único (lado industrial e
+// financeiro) — excluir por aqui não pode deixar máquina ou estrutura órfã.
 func (r *FinancialRepositoryPG) UsosCentroCusto(ctx context.Context, id int64) ([]entity.UsoCadastro, error) {
-	return r.contarUsos(ctx, usosCentroCusto, id)
+	usos, err := costcenterrepo.UsosDoCentro(ctx, r.pool, id)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]entity.UsoCadastro, 0, len(usos))
+	for _, u := range usos {
+		out = append(out, entity.UsoCadastro{Onde: u.Onde, Quantidade: u.Quantidade})
+	}
+	return out, nil
+}
+
+// traduzirCodigoRepetido: o código do centro é único na empresa.
+func traduzirCodigoRepetido(err error) error {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23505" {
+		return errorsuc.NewConflictError("já existe centro de custo com este código nesta empresa")
+	}
+	return err
 }

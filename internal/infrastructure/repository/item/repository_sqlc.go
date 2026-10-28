@@ -81,8 +81,8 @@ func (r *RepositoryItemSQLC) Create(
 		WarehouseUnitOfMeasurement:           sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
 		WarehouseAutomaticLow:                item.Warehouse.AutomaticLow,
 		WarehouseCyclicalCountConfig:         cyclicalCountConfig,
-		WarehouseMinimumStock:                item.Warehouse.MinimumStock,
-		WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(item.Warehouse.AverageMonthlyConsumptionManual),
+		WarehouseMinimumStock:                pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock),
+		WarehouseAvgMonthlyConsumptionManual: pgutil.ToPgNumericFromDecimalPtr(item.Warehouse.AverageMonthlyConsumptionManual),
 
 		EngineeringItemBaseCode: intPtrToInt64Ptr(item.Engineering.ItemBaseCod),
 		EngineeringWeight:       weight,
@@ -97,9 +97,9 @@ func (r *RepositoryItemSQLC) Create(
 		PlanningTankCode:     intPtrToInt64Ptr(item.Planning.TankCode),
 		PlanningGhost:        item.Planning.Ghost,
 		PlanningAbcClass:     pgutil.ToPgTextFromPtr(item.Planning.ABCClass),
-		PlanningMinimumLot:   item.Planning.MinimumLot,
-		PlanningMultipleLot:  item.Planning.MultipleLot,
-		PlanningSafetyStock:  item.Planning.SafetyStock,
+		PlanningMinimumLot:   pgutil.ToPgNumericFromDecimal(item.Planning.MinimumLot),
+		PlanningMultipleLot:  pgutil.ToPgNumericFromDecimal(item.Planning.MultipleLot),
+		PlanningSafetyStock:  pgutil.ToPgNumericFromDecimal(item.Planning.SafetyStock),
 		PlanningCritical:     item.Planning.Critical,
 		PlanningExclusive:    item.Planning.Exclusive,
 		PlanningActive:       item.Planning.Active,
@@ -204,16 +204,16 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 		EngineeringWeight: weight, EngineeringDimensions: dimensions,
 		EngineeringType: int16(item.Engineering.Type), EngineeringTypeStruct: int16(item.Engineering.TypeStruct), EngineeringOem: item.Engineering.OEM,
 		PlanningTypeMrp: int16(item.Planning.TypeMRP), PlanningLlc: int32(item.Planning.LLC), PlanningGhost: item.Planning.Ghost,
-		PlanningAbcClass: pgutil.ToPgTextFromPtr(item.Planning.ABCClass), PlanningMinimumLot: item.Planning.MinimumLot,
-		PlanningMultipleLot: item.Planning.MultipleLot, PlanningSafetyStock: item.Planning.SafetyStock,
+		PlanningAbcClass: pgutil.ToPgTextFromPtr(item.Planning.ABCClass), PlanningMinimumLot: pgutil.ToPgNumericFromDecimal(item.Planning.MinimumLot),
+		PlanningMultipleLot: pgutil.ToPgNumericFromDecimal(item.Planning.MultipleLot), PlanningSafetyStock: pgutil.ToPgNumericFromDecimal(item.Planning.SafetyStock),
 		PlanningCritical: item.Planning.Critical, PlanningExclusive: item.Planning.Exclusive, PlanningActive: item.Planning.Active,
 		SuppliesTypeOfUse: int16(item.Supplies.TypeOfUse), SuppliesPurchaseUom: unitOfMeasurementToPgText(item.Supplies.PurchaseUOM),
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist, SuppliesHarvest: item.Supplies.Harvest,
 		SuppliesWarehouseCode: item.Supplies.WarehouseCode, SuppliesNotes: pgutil.ToPgTextFromPtr(item.Supplies.Notes),
-		WarehouseCode: int64(item.Warehouse.WarehouseCode), WarehouseAvgMonthlyConsumptionManual: intPtrToInt32Ptr(item.Warehouse.AverageMonthlyConsumptionManual),
+		WarehouseCode: int64(item.Warehouse.WarehouseCode), WarehouseAvgMonthlyConsumptionManual: pgutil.ToPgNumericFromDecimalPtr(item.Warehouse.AverageMonthlyConsumptionManual),
 		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
-		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: item.Warehouse.MinimumStock}
-	dbItem, err := r.q.UpdateItemFolders(ctx, p)
+		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock)}
+	dbItem, err := r.atualizarComAutor(ctx, p)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
@@ -229,6 +229,27 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 		return nil, err
 	}
 	return updated, nil
+}
+
+// atualizarComAutor grava a alteração; com o pool, numa transação que informa
+// o autor ao gatilho do histórico do cadastro.
+func (r *RepositoryItemSQLC) atualizarComAutor(ctx context.Context, p sqlc.UpdateItemFoldersParams) (sqlc.Item, error) {
+	if r.pool == nil {
+		return r.q.UpdateItemFolders(ctx, p)
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return sqlc.Item{}, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT set_config('venture.item_actor', $1, true)`, tenant.Ator(ctx)); err != nil {
+		return sqlc.Item{}, fmt.Errorf("registrar o autor da alteração do item: %w", err)
+	}
+	item, err := r.q.WithTx(tx).UpdateItemFolders(ctx, p)
+	if err != nil {
+		return sqlc.Item{}, err
+	}
+	return item, tx.Commit(ctx)
 }
 
 func (r *RepositoryItemSQLC) validateFiscalReferences(ctx context.Context, item *entity.Item) error {
@@ -454,8 +475,8 @@ func mapDBItemToEntity(
 			UnitOfMeasurement:               types.TypeUnitOfMeasurementItem(dbItem.WarehouseUnitOfMeasurement),
 			AutomaticLow:                    dbItem.WarehouseAutomaticLow,
 			CyclicalCountConfig:             cyclicalCount,
-			MinimumStock:                    dbItem.WarehouseMinimumStock,
-			AverageMonthlyConsumptionManual: int32PtrToIntPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
+			MinimumStock:                    pgutil.FromPgNumericToDecimal(dbItem.WarehouseMinimumStock),
+			AverageMonthlyConsumptionManual: pgutil.FromPgNumericToDecimalPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
 		},
 
 		Engineering: entity.Engineering{
@@ -474,9 +495,9 @@ func mapDBItemToEntity(
 			TankCode:     int64PtrToIntPtr(dbItem.PlanningTankCode),
 			Ghost:        dbItem.PlanningGhost,
 			ABCClass:     pgTextToStringPtr(dbItem.PlanningAbcClass),
-			MinimumLot:   dbItem.PlanningMinimumLot,
-			MultipleLot:  dbItem.PlanningMultipleLot,
-			SafetyStock:  dbItem.PlanningSafetyStock,
+			MinimumLot:   pgutil.FromPgNumericToDecimal(dbItem.PlanningMinimumLot),
+			MultipleLot:  pgutil.FromPgNumericToDecimal(dbItem.PlanningMultipleLot),
+			SafetyStock:  pgutil.FromPgNumericToDecimal(dbItem.PlanningSafetyStock),
 			Critical:     dbItem.PlanningCritical,
 			Exclusive:    dbItem.PlanningExclusive,
 			Active:       dbItem.PlanningActive,

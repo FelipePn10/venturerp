@@ -67,10 +67,10 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	plannedQty := decimal.NewFromFloat(order.PlannedQty)
-	producedQty := decimal.NewFromFloat(order.ProducedQty)
+	plannedQty := order.PlannedQty
+	producedQty := order.ProducedQty
 	qty := plannedQty.Sub(delivered)
-	if dto.Quantity == nil && order.ProducedQty > 0 {
+	if dto.Quantity == nil && order.ProducedQty.IsPositive() {
 		qty = producedQty.Sub(delivered)
 	}
 	if dto.Quantity != nil {
@@ -130,7 +130,8 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 	endDate := datetime.ParseDateOrDefault(dto.EndDate, time.Now())
 	delivery := &entity.ProductionDelivery{ProductionOrderID: dto.ID, Quantity: qty, IdempotencyKey: key,
 		MovementClass: movementClass, WarehouseID: *warehouseID, Lot: dto.Lot, IsFinal: dto.Final,
-		DeliveredAt: endDate, CreatedBy: order.CreatedBy, Lines: lines}
+		DeliveredAt: endDate, CreatedBy: order.CreatedBy, Lines: lines,
+		ItemCode: order.ItemCode, Mask: mascaraDaOrdem(order.Mask), NumerosSerie: dto.NumerosSerie}
 	var movements []*stockentity.StockMovement
 	if uc.StockRepo != nil {
 		if qty.IsPositive() {
@@ -220,6 +221,14 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 }
 
 func stringPtr(value string) *string { return &value }
+
+// mascaraDaOrdem: a ordem guarda "" quando o item não é configurado.
+func mascaraDaOrdem(m string) *string {
+	if strings.TrimSpace(m) == "" {
+		return nil
+	}
+	return &m
+}
 
 func sameDeliveryLot(a, b *string) bool {
 	if a == nil {

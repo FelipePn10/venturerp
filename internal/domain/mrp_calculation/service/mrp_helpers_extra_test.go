@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -38,11 +39,11 @@ func TestPublicStructureAndLLCMethods(t *testing.T) {
 	mask := "A"
 	structure := &publicMethodStructRepo{children: []*structentity.ItemStructure{{ChildCode: 2, Quantity: 2, LossPercentage: 10, IsActive: true}, {ChildCode: 3, Quantity: 1, IsActive: false}, {ChildCode: 4, Quantity: 1, IsActive: true, ParentMask: &mask}}, bom: map[int64][]*structentity.ItemStructure{1: {{ChildCode: 2, IsActive: true}}, 2: {{ChildCode: 5, IsActive: true}}}}
 	service := &MRPServiceImpl{StructRepo: structure, MRPRepo: &publicMethodMRPRepo{params: &entity.TypedPlanningParams{FormulaPerdasEstrutura: 1}}}
-	inputs, err := service.ExplodeStructure(context.Background(), 1, "", 3, 1)
-	if err != nil || len(inputs) != 1 || abs(inputs[0].Quantity-6.6) > 1e-6 {
+	inputs, err := service.ExplodeStructure(context.Background(), 1, "", decimal.NewFromFloat(3), 1)
+	if err != nil || len(inputs) != 1 || abs(inputs[0].Quantity.InexactFloat64()-6.6) > 1e-6 {
 		t.Fatalf("inputs=%+v err=%v", inputs, err)
 	}
-	if deep, err := service.ExplodeStructure(context.Background(), 1, "", 1, 21); err != nil || len(deep) != 0 {
+	if deep, err := service.ExplodeStructure(context.Background(), 1, "", decimal.NewFromFloat(1), 21); err != nil || len(deep) != 0 {
 		t.Fatalf("depth guard=%v err=%v", deep, err)
 	}
 	llc, err := service.CalculateItemLLC(context.Background(), 1)
@@ -71,7 +72,7 @@ func TestFindPriorityForQuantity(t *testing.T) {
 		{5000, ""}, // outside every interval
 	}
 	for _, c := range cases {
-		if got := findPriorityForQuantity(priorities, c.qty); got != c.want {
+		if got := findPriorityForQuantity(priorities, dq(c.qty)); got != c.want {
 			t.Errorf("findPriorityForQuantity(%v) = %q, want %q", c.qty, got, c.want)
 		}
 	}
@@ -134,13 +135,13 @@ func TestExplodeFromBOM_DefaultFormulaAppliesLoss(t *testing.T) {
 			{ChildCode: 300, Quantity: 1, LossPercentage: 0},  // 5*1     = 5
 		},
 	}
-	out := explodeFromBOM(bom, 100, "", 5, 0)
+	out := explodeFromBOM(bom, 100, "", decimal.NewFromFloat(5), 0)
 	if len(out) != 2 {
 		t.Fatalf("expected 2 children, got %d", len(out))
 	}
 	byItem := map[int64]float64{}
 	for _, in := range out {
-		byItem[in.ItemCode] = in.Quantity
+		byItem[in.ItemCode] = in.Quantity.InexactFloat64()
 	}
 	if byItem[200] < 10.999 || byItem[200] > 11.001 {
 		t.Fatalf("child 200 qty = %v, want ~11", byItem[200])

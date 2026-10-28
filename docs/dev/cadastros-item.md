@@ -88,7 +88,7 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
     "warehouse_code": 1,
     "unit_of_measurement": "UN",      // UM de ESTOQUE (chapa inteira)
     "automatic_low": false,
-    "minimum_stock": 20,              // alerta de compra
+    "minimum_stock": 20,              // alerta de compra; aceita fração (12.5 KG)
     "cyclical_count_config": {"days_interval": 30}
   },
   "engineering": {                    // Pasta Engenharia
@@ -106,7 +106,10 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
     "abc_class": "A",
     "minimum_lot": 10,
     "multiple_lot": 5,
-    "safety_stock": 2,
+    "safety_stock": 2,                // lote, múltiplo e segurança aceitam fração
+                                      // (6 casas, na UM de estoque): barra de 6,35 M
+                                      // → "multiple_lot": 6.35. O reorder_point
+                                      // continua inteiro (TR/CM/CR/ES).
     "critical": false,
     "exclusive": false,
     "active": true
@@ -324,3 +327,57 @@ Cadastre o roteiro (operações, predecessores, overlap) — o MRP usa o **camin
 
 > O **fluxo completo** desse produto (pedido de venda → MRP → APS → ordens → estoque)
 > está em [`00-fluxo-geral.md`](00-fluxo-geral.md).
+
+## 10. Governança do cadastro (`/api/items/governanca`) — migration 000439
+
+Fase 4. Domínio `internal/domain/items/governanca` (status, transições,
+catálogo de campos por visão, completude, similaridade); caso de uso
+`item_governanca_uc`; repositório `repository/itemgovernanca`. Tela VENT0250.
+
+- **Status** (`item_governanca`, por empresa): `EM_CADASTRO`, `LIBERADO`,
+  `BLOQUEADO`, `DESCONTINUADO` (com `substituto_code`, que precisa estar
+  liberado). Sem linha = `LIBERADO` (itens antigos não mudam). Transições:
+  `EM_CADASTRO → BLOQUEADO|DESCONTINUADO` (a liberação é pelas visões),
+  `LIBERADO → BLOQUEADO|DESCONTINUADO`, `BLOQUEADO → LIBERADO|DESCONTINUADO`,
+  `DESCONTINUADO → LIBERADO`, sempre com motivo. A mudança leva o status que a
+  tela viu (`de`) e recusa com conflito se ele mudou.
+- **Item novo:** com `item_governanca_parametros.exige_liberacao`, o
+  `CreateItemUseCase` chama `AoCriarItem` e o item nasce `EM_CADASTRO`.
+- **Visões** (`item_visoes_liberadas`): ENGENHARIA, FISCAL, SUPRIMENTOS,
+  PLANEJAMENTO, COMERCIAL, CUSTOS. Liberar exige a visão sem pendência e
+  `Aprovar` no módulo da área (`ControleDeAcesso.PodeNoModulo`; usuário sem
+  perfil restrito segue o papel). Com a última visão exigida
+  (`parametros.visoes`), `EM_CADASTRO → LIBERADO` na mesma transação.
+- **Completude:** `governanca.Catalogo` define o campo, a visão, os tipos de
+  item (`engineering_type`: 0 fabricado, 1 comprado, 2 de terceiro, 3 serviço)
+  e se é obrigatório por padrão; a empresa ajusta em `item_regras_campo`. A
+  ficha (`to_jsonb(items)` + estrutura, roteiro, fornecedor, custo padrão,
+  conversão da UM de compra) é lida pelo repositório.
+- **Bloqueio de uso:** gatilho `item_conferir_utilizavel` (BEFORE INSERT e
+  UPDATE OF item_code) em `sales_order_items`, `sales_quotation_items`,
+  `purchase_order_items`, `purchase_requisition_items`, `production_orders`,
+  `fiscal_exit_items`: `RAISE ... ERRCODE 'P0001'` com a mensagem ao usuário.
+  `security.RespondUseCaseError` trata `P0001` como 422 `REGRA_DE_NEGOCIO`.
+- **Histórico** (`item_historico`, imutável): gatilho `trg_items_historico`
+  grava a criação e cada coluna alterada (fora as calculadas: ABC, LLC,
+  política de contagem), com o autor de `venture.item_actor`. O repositório de
+  item com pool (`ComPool`) faz a alteração numa transação com `set_config`.
+  Liberações e status também entram no histórico.
+- **Duplicidade** (`GET /duplicados?nome=&ncm=&excluir=`): candidatos por
+  palavra em comum ou mesmo NCM (SQL), nota por `governanca.Classificar`
+  (sobreposição de palavras ou distância de edição, sem acento; ≥ 0,6). Sem
+  extensão `pg_trgm`.
+- **Alertas:** produtores `CADASTRO_ITEM_SEM_CLASSIFICACAO_FISCAL`,
+  `_COMPRADO_SEM_FORNECEDOR`, `_FABRICADO_SEM_ESTRUTURA`,
+  `_FABRICADO_SEM_ROTEIRO` (item ativo e liberado) e
+  `_INATIVO_COM_DEMANDA_ABERTA` (inativo/bloqueado/descontinuado com pedido ou
+  OF aberta) em `ScheduleOperationalAlerts`, com resolução automática.
+- **Rotas:** `GET|PUT /parametros`, `GET /regras`, `PUT /regras/{campo}`
+  (`{"obrigatorio": bool|null}`), `GET /pendentes`, `GET /duplicados`,
+  `GET /itens/{item}`, `POST /itens/{item}/liberacoes|estorno|status`,
+  `GET /itens/{item}/historico|uso`. `governanca` é caminho estático no
+  middleware do código de negócio; o caso de uso resolve o código. Painel,
+  pendentes e liberação/estorno são rotas livres (a área decide); status
+  exige `Aprovar` no módulo Engenharia.
+
+Teste: `item_governanca_uc/governanca_integration_test.go`.

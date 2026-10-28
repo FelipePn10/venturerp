@@ -29,6 +29,19 @@ type CFOPResponse struct {
 	Doacao          bool      `json:"doacao"`
 	IsActive        bool      `json:"is_active"`
 	CreatedAt       time.Time `json:"created_at"`
+	// Tabela oficial (IT 2023.002): vigência e indicadores da SEFAZ.
+	Oficial        bool    `json:"oficial"`
+	InicioVigencia *string `json:"inicio_vigencia,omitempty"`
+	FimVigencia    *string `json:"fim_vigencia,omitempty"`
+	IndNFe         bool    `json:"ind_nfe"`
+	IndComunica    bool    `json:"ind_comunica"`
+	IndTransp      bool    `json:"ind_transp"`
+	IndDevol       bool    `json:"ind_devol"`
+	IndRetor       bool    `json:"ind_retor"`
+	IndAnula       bool    `json:"ind_anula"`
+	IndRemes       bool    `json:"ind_remes"`
+	IndComb        bool    `json:"ind_comb"`
+	IndExcIBSCBS   bool    `json:"ind_exc_ibscbs"`
 }
 
 // ─── ICMS/IPI Tax Param ────────────────────────────────────────────────────────
@@ -114,6 +127,11 @@ type TaxParamResponse struct {
 	ICMSDifalType                    *string   `json:"icms_difal_type,omitempty"`
 	DifalPurchaseRedPct              float64   `json:"difal_purchase_red_pct"`
 	DifalPurchaseRedTarget           *string   `json:"difal_purchase_red_target,omitempty"`
+	FinalidadeCompra                 *string   `json:"finalidade_compra,omitempty"`
+	MvaPct                           float64   `json:"mva_pct"`
+	MvaAjustarInterestadual          bool      `json:"mva_ajustar_interestadual"`
+	SupplierCode                     *int64    `json:"supplier_code,omitempty"`
+	OrigemReducaoID                  *int64    `json:"origem_reducao_id,omitempty"`
 	CreatedAt                        time.Time `json:"created_at"`
 }
 

@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -97,7 +98,7 @@ type CallItem struct {
 	ItemCode              int64
 	Mask                  string
 	SerialNumber          *string
-	Quantity              float64
+	Quantity              decimal.Decimal
 	DefectReasonCode      *int64
 	DefectComplement      *string
 	PurchaseInvoiceNumber *string
@@ -111,6 +112,13 @@ type CallItem struct {
 	Notes                 *string
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
+	// Garantia determinada pelo pós-venda (3.2): de onde veio e o que cobre.
+	SerieID           *int64
+	GarantiaOrigem    *string
+	GarantiaInicio    *time.Time
+	CobrePecas        *bool
+	CobreMaoObra      *bool
+	CobreDeslocamento *bool
 }
 
 type ReturnNote struct {
@@ -122,7 +130,7 @@ type ReturnNote struct {
 	CustomerCode  *int64
 	OperationType string
 	AccessKey     *string
-	TotalValue    float64
+	TotalValue    decimal.Decimal
 	Notes         *string
 	CreatedAt     time.Time
 	CreatedBy     uuid.UUID
@@ -158,9 +166,9 @@ type RMA struct {
 	InspectedAt         *time.Time
 	Destination         *string
 	SLADueAt            time.Time
-	ProductCost         float64
-	FreightCost         float64
-	ServiceCost         float64
+	ProductCost         decimal.Decimal
+	FreightCost         decimal.Decimal
+	ServiceCost         decimal.Decimal
 	FiscalDocumentKey   *string
 	StockMovementCode   *int64
 	IdempotencyKey      string
@@ -189,7 +197,7 @@ type RMAItem struct {
 	RMACode              int64
 	CallItemCode         int64
 	ItemCode             int64
-	Quantity             float64
+	Quantity             decimal.Decimal
 	SerialNumber         *string
 	LotNumber            *string
 	RequestedDestination *string

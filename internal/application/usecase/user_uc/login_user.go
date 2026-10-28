@@ -13,6 +13,19 @@ import (
 var dummyPasswordHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-used-only-for-timing"), bcrypt.DefaultCost)
 var ErrIdentitySync = errors.New("training identity synchronization failed")
 
+// EmpresaDoUsuario: empresa a que o usuário tem acesso (para escolher no login).
+type EmpresaDoUsuario = repository.EmpresaDoUsuario
+
+// ErrEmpresaObrigatoria: senha conferida, mas o usuário tem acesso a mais de
+// uma empresa e não disse em qual entra. Leva a lista para a tela escolher.
+type ErrEmpresaObrigatoria struct{ Empresas []EmpresaDoUsuario }
+
+func (e *ErrEmpresaObrigatoria) Error() string { return "escolha a empresa" }
+
+type empresasDoUsuario interface {
+	EmpresasDoUsuario(ctx context.Context, userID string) ([]EmpresaDoUsuario, error)
+}
+
 type IdentityMirror interface {
 	SyncIdentity(ctx context.Context, userID string, enterpriseID int64) error
 }
@@ -46,6 +59,16 @@ func (uc *LoginUserUseCase) Execute(
 	}
 	authorization, err := uc.Repo.ResolveAuthorization(ctx, user.ID.String(), login.EnterpriseCode)
 	if err != nil {
+		// Com acesso a mais de uma empresa e sem a escolha, a tela precisa
+		// perguntar em qual entrar (antes respondia "credenciais inválidas" e o
+		// usuário não entrava de jeito nenhum).
+		if login.EnterpriseCode == nil {
+			if r, ok := uc.Repo.(empresasDoUsuario); ok {
+				if lista, errLista := r.EmpresasDoUsuario(ctx, user.ID.String()); errLista == nil && len(lista) > 1 {
+					return "", "", "", "", 0, 0, &ErrEmpresaObrigatoria{Empresas: lista}
+				}
+			}
+		}
 		return "", "", "", "", 0, 0, errors.New("invalid enterprise selection")
 	}
 	if uc.Mirror != nil {

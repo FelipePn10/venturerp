@@ -348,7 +348,7 @@ INSERT INTO customers (
     region_id, market_segment_id, customer_type_id,
     payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
     invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by, enterprise_id
+    credit_limit, website, created_by, enterprise_id, finalidade_compra
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
@@ -356,8 +356,8 @@ INSERT INTO customers (
     $12, $13, $14,
     $15, $16, $17, $18,
     $19, $20, $21,
-    $22, $23, $24, $25
-) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
+    $22, $23, $24, $25, $26::varchar
+) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra
 `
 
 type CreateCustomerParams struct {
@@ -386,6 +386,7 @@ type CreateCustomerParams struct {
 	Website               pgtype.Text
 	CreatedBy             pgtype.UUID
 	EnterpriseID          int64
+	FinalidadeCompra      pgtype.Text
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -417,6 +418,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.Website,
 		arg.CreatedBy,
 		arg.EnterpriseID,
+		arg.FinalidadeCompra,
 	)
 	var i Customer
 	err := row.Scan(
@@ -451,6 +453,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.EnterpriseID,
+		&i.FinalidadeCompra,
 	)
 	return i, err
 }
@@ -1255,7 +1258,7 @@ func (q *Queries) GetContactTypeByCode(ctx context.Context, arg GetContactTypeBy
 }
 
 const getCustomerByCode = `-- name: GetCustomerByCode :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetCustomerByCodeParams struct {
@@ -1298,12 +1301,13 @@ func (q *Queries) GetCustomerByCode(ctx context.Context, arg GetCustomerByCodePa
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.EnterpriseID,
+		&i.FinalidadeCompra,
 	)
 	return i, err
 }
 
 const getCustomerByDocument = `-- name: GetCustomerByDocument :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1
 `
 
 type GetCustomerByDocumentParams struct {
@@ -1346,6 +1350,7 @@ func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDo
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.EnterpriseID,
+		&i.FinalidadeCompra,
 	)
 	return i, err
 }
@@ -1904,7 +1909,7 @@ func (q *Queries) ListCustomerTypes(ctx context.Context, arg ListCustomerTypesPa
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers
 WHERE enterprise_id = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
@@ -1956,6 +1961,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.EnterpriseID,
+			&i.FinalidadeCompra,
 		); err != nil {
 			return nil, err
 		}
@@ -1968,7 +1974,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 }
 
 const listEstablishments = `-- name: ListEstablishments :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers
 WHERE corporate_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY code
 `
@@ -2019,6 +2025,7 @@ func (q *Queries) ListEstablishments(ctx context.Context, arg ListEstablishments
 			&i.CreatedBy,
 			&i.UpdatedAt,
 			&i.EnterpriseID,
+			&i.FinalidadeCompra,
 		); err != nil {
 			return nil, err
 		}
@@ -2792,9 +2799,9 @@ SET name = $2, trade_name = $3, state_registration = $4, municipal_registration 
     payment_condition_id = $11, sales_table_id = $12, carrier_id = $13,
     carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
     payment_cond_visibility = $17, credit_limit = $18, website = $19,
-    is_active = $20, updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $21
-RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id
+    is_active = $20, finalidade_compra = $21::varchar, updated_at = NOW()
+WHERE id = $1 AND enterprise_id = $22
+RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra
 `
 
 type UpdateCustomerParams struct {
@@ -2818,6 +2825,7 @@ type UpdateCustomerParams struct {
 	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
 	IsActive              bool
+	FinalidadeCompra      pgtype.Text
 	EnterpriseID          int64
 }
 
@@ -2843,6 +2851,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		arg.CreditLimit,
 		arg.Website,
 		arg.IsActive,
+		arg.FinalidadeCompra,
 		arg.EnterpriseID,
 	)
 	var i Customer
@@ -2878,6 +2887,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.CreatedBy,
 		&i.UpdatedAt,
 		&i.EnterpriseID,
+		&i.FinalidadeCompra,
 	)
 	return i, err
 }

@@ -19,6 +19,35 @@ import (
 type FiscalClassificationUseCase struct {
 	repo repository.FiscalClassificationRepository
 	auth ports.AuthService
+	// ClassTrib confere o cClassTrib contra a tabela oficial do IBS/CBS. Opcional:
+	// sem ele o campo é gravado como digitado.
+	ClassTrib ValidadorClassTrib
+}
+
+// ValidadorClassTrib recusa cClassTrib fora da tabela oficial ou não admitido
+// na NF-e — o erro apareceria só na emissão, longe do cadastro.
+type ValidadorClassTrib interface {
+	ValidarClassTribDaClassificacao(ctx context.Context, codigo string) error
+}
+
+func (uc *FiscalClassificationUseCase) validarClassTrib(ctx context.Context, f *request.FiscalClassificationFields) error {
+	for _, campo := range []**string{&f.CodClasTrib, &f.CodClasTribTribReg} {
+		if *campo == nil {
+			continue
+		}
+		v := strings.TrimSpace(**campo)
+		if v == "" {
+			*campo = nil
+			continue
+		}
+		*campo = &v
+		if uc.ClassTrib != nil {
+			if err := uc.ClassTrib.ValidarClassTribDaClassificacao(ctx, v); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func NewFiscalClassificationUseCase(repo repository.FiscalClassificationRepository, auth ports.AuthService) *FiscalClassificationUseCase {
@@ -97,6 +126,9 @@ func (uc *FiscalClassificationUseCase) Create(ctx context.Context, dto request.C
 	if err != nil {
 		return nil, err
 	}
+	if err := uc.validarClassTrib(ctx, &dto.FiscalClassificationFields); err != nil {
+		return nil, err
+	}
 	applyFields(c, dto.FiscalClassificationFields)
 	c.EnterpriseID = enterpriseID
 	created, err := uc.repo.Create(ctx, c)
@@ -113,6 +145,9 @@ func (uc *FiscalClassificationUseCase) Update(ctx context.Context, dto request.U
 	}
 	c, err := uc.repo.GetByCode(ctx, enterpriseID, dto.Code)
 	if err != nil {
+		return nil, err
+	}
+	if err := uc.validarClassTrib(ctx, &dto.FiscalClassificationFields); err != nil {
 		return nil, err
 	}
 	applyFields(c, dto.FiscalClassificationFields)

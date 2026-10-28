@@ -13,19 +13,19 @@ import (
 
 // PlanSummary resume o resultado de um plano para comparar.
 type PlanSummary struct {
-	PlanCode         int64      `json:"plan_code"`
-	CalculatedAt     *time.Time `json:"calculated_at,omitempty"`
-	Suggestions      int        `json:"suggestions"`
-	ProductionQty    float64    `json:"production_qty"`
-	PurchaseQty      float64    `json:"purchase_qty"`
-	CoverageCritical int        `json:"coverage_critical"`
-	CoverageWarning  int        `json:"coverage_warning"`
-	CoverageOK       int        `json:"coverage_ok"`
-	Exceptions       int        `json:"exceptions"`
-	OverloadDays     int        `json:"overload_days"`
-	MaxLoadPct       float64    `json:"max_load_pct"`
-	Roots            int        `json:"roots"`
-	RootsShort       int        `json:"roots_with_shortage"`
+	PlanCode         int64           `json:"plan_code"`
+	CalculatedAt     *time.Time      `json:"calculated_at,omitempty"`
+	Suggestions      int             `json:"suggestions"`
+	ProductionQty    decimal.Decimal `json:"production_qty"`
+	PurchaseQty      decimal.Decimal `json:"purchase_qty"`
+	CoverageCritical int             `json:"coverage_critical"`
+	CoverageWarning  int             `json:"coverage_warning"`
+	CoverageOK       int             `json:"coverage_ok"`
+	Exceptions       int             `json:"exceptions"`
+	OverloadDays     int             `json:"overload_days"`
+	MaxLoadPct       float64         `json:"max_load_pct"`
+	Roots            int             `json:"roots"`
+	RootsShort       int             `json:"roots_with_shortage"`
 	// RootsLate: pedidos/demandas cuja cadeia tem elo atrasado (ordem que
 	// termina depois da necessidade ou já devia ter começado).
 	RootsLate int `json:"roots_late"`
@@ -33,16 +33,16 @@ type PlanSummary struct {
 
 // ItemDiff é a diferença de um item entre o plano e o cenário.
 type ItemDiff struct {
-	ItemCode          int64      `json:"item_code"`
-	Description       string     `json:"description"`
-	BasePlanned       float64    `json:"base_planned"`
-	ScenarioPlanned   float64    `json:"scenario_planned"`
-	BaseStatus        string     `json:"base_status"`
-	ScenarioStatus    string     `json:"scenario_status"`
-	BaseShortage      float64    `json:"base_shortage"`
-	ScenarioShortage  float64    `json:"scenario_shortage"`
-	BaseShortageDate  *time.Time `json:"base_shortage_date,omitempty"`
-	ScenarioShortDate *time.Time `json:"scenario_shortage_date,omitempty"`
+	ItemCode          int64           `json:"item_code"`
+	Description       string          `json:"description"`
+	BasePlanned       decimal.Decimal `json:"base_planned"`
+	ScenarioPlanned   decimal.Decimal `json:"scenario_planned"`
+	BaseStatus        string          `json:"base_status"`
+	ScenarioStatus    string          `json:"scenario_status"`
+	BaseShortage      decimal.Decimal `json:"base_shortage"`
+	ScenarioShortage  decimal.Decimal `json:"scenario_shortage"`
+	BaseShortageDate  *time.Time      `json:"base_shortage_date,omitempty"`
+	ScenarioShortDate *time.Time      `json:"scenario_shortage_date,omitempty"`
 }
 
 // WorkCenterDiff é a diferença de carga de um centro de trabalho.
@@ -72,12 +72,12 @@ type ScenarioComparison struct {
 type planResult struct {
 	summary  PlanSummary
 	coverage map[int64]mrp_report_uc.CoverageRow
-	planned  map[int64]float64
+	planned  map[int64]decimal.Decimal
 	wc       map[int64]*WorkCenterDiff // só as horas/dias/máx do lado
 }
 
 func (uc *ScenarioUseCase) planResult(ctx context.Context, plan int64) (*planResult, error) {
-	out := &planResult{summary: PlanSummary{PlanCode: plan}, coverage: map[int64]mrp_report_uc.CoverageRow{}, planned: map[int64]float64{}, wc: map[int64]*WorkCenterDiff{}}
+	out := &planResult{summary: PlanSummary{PlanCode: plan}, coverage: map[int64]mrp_report_uc.CoverageRow{}, planned: map[int64]decimal.Decimal{}, wc: map[int64]*WorkCenterDiff{}}
 	if uc.Plans != nil {
 		at, err := uc.Plans.LastCalculatedAt(ctx, plan)
 		if err != nil {
@@ -92,14 +92,14 @@ func (uc *ScenarioUseCase) planResult(ctx context.Context, plan int64) (*planRes
 	for _, s := range sugs {
 		switch s.OrderType {
 		case "FABRICACAO":
-			out.summary.ProductionQty += s.Quantity
+			out.summary.ProductionQty = out.summary.ProductionQty.Add(s.Quantity)
 		case "COMPRA":
-			out.summary.PurchaseQty += s.Quantity
+			out.summary.PurchaseQty = out.summary.PurchaseQty.Add(s.Quantity)
 		default:
 			continue
 		}
 		out.summary.Suggestions++
-		out.planned[s.ItemCode] += s.Quantity
+		out.planned[s.ItemCode] = out.planned[s.ItemCode].Add(s.Quantity)
 	}
 	excs, err := uc.Results.ListExceptionsByPlan(ctx, plan)
 	if err != nil {
@@ -218,9 +218,8 @@ func (uc *ScenarioUseCase) Compare(ctx context.Context, id int64) (*ScenarioComp
 		if d.Description == "" {
 			d.Description = b.Description
 		}
-		d.BaseShortage, _ = b.FirmShortageQty.Float64()
-		d.ScenarioShortage, _ = c.FirmShortageQty.Float64()
-		mudou := !decimal.NewFromFloat(d.BasePlanned).Equal(decimal.NewFromFloat(d.ScenarioPlanned)) ||
+		d.BaseShortage, d.ScenarioShortage = b.FirmShortageQty, c.FirmShortageQty
+		mudou := !d.BasePlanned.Equal(d.ScenarioPlanned) ||
 			d.BaseStatus != d.ScenarioStatus || !b.FirmShortageQty.Equal(c.FirmShortageQty) || !sameDate(d.BaseShortageDate, d.ScenarioShortDate)
 		if mudou {
 			out.Items = append(out.Items, d)

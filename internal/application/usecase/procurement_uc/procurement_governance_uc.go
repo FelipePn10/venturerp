@@ -395,33 +395,6 @@ func (uc *UseCase) ResolveInspectionRoute(ctx context.Context, itemCode int64, m
 	return route.InspectionWarehouseID, true
 }
 
-// OpenInspectionOrderFromReceipt opens a PENDING_INSPECTION order for material that a
-// purchase receipt routed into the inspection warehouse.
-func (uc *UseCase) OpenInspectionOrderFromReceipt(ctx context.Context, itemCode int64, mask string, quantity float64, inspectionWarehouseID int64, supplierCode, purchaseOrderCode, purchaseOrderItemCode *int64, lot *string) (int64, int64, error) {
-	route, err := uc.Repo.FindReceivingInspectionRoute(ctx, 1, itemCode, mask, nil)
-	var routeID *int64
-	if err == nil {
-		routeID = &route.ID
-	}
-	order := &entity.ReceivingInspectionOrder{
-		RouteID:               routeID,
-		Source:                "PURCHASE_RECEIPT",
-		SupplierCode:          supplierCode,
-		PurchaseOrderCode:     purchaseOrderCode,
-		PurchaseOrderItemCode: purchaseOrderItemCode,
-		ItemCode:              itemCode,
-		Mask:                  mask,
-		Lot:                   lot,
-		WarehouseID:           inspectionWarehouseID,
-		Quantity:              quantity,
-	}
-	created, err := uc.Repo.CreateReceivingInspectionOrder(ctx, order)
-	if err != nil {
-		return 0, 0, err
-	}
-	return created.ID, created.OrderNumber, nil
-}
-
 func validContractStatus(s string) bool {
 	switch s {
 	case "DRAFT", "ACTIVE", "SUSPENDED", "CLOSED", "CANCELLED":

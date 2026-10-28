@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strconv"
 
 	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
@@ -54,7 +55,7 @@ func applyScenarioDemands(adj *entity.ScenarioAdjustments, demands []*inddemande
 		if c.NeedDate != nil {
 			copia.DemandDate = *c.NeedDate
 		}
-		if copia.Quantity > 0 {
+		if copia.Quantity.IsPositive() {
 			outD = append(outD, &copia)
 		}
 	}
@@ -77,12 +78,12 @@ func applyScenarioDemands(adj *entity.ScenarioAdjustments, demands []*inddemande
 		if c.NeedDate != nil {
 			copia.NeedDate = *c.NeedDate
 		}
-		if copia.Quantity > 0 {
+		if copia.Quantity.IsPositive() {
 			outI = append(outI, &copia)
 		}
 	}
 	for _, c := range novas {
-		if c.Quantity == nil || *c.Quantity <= 0 || c.NeedDate == nil || c.ItemCode <= 0 {
+		if c.Quantity == nil || !c.Quantity.IsPositive() || c.NeedDate == nil || c.ItemCode <= 0 {
 			continue
 		}
 		id := c.ID
@@ -113,10 +114,7 @@ func applyScenarioStock(adj *entity.ScenarioAdjustments, snapshots map[int64]*en
 		} else {
 			copia = entity.StockSnapshot{ItemCode: item}
 		}
-		copia.Quantity += delta
-		if copia.Quantity < 0 {
-			copia.Quantity = 0
-		}
+		copia.Quantity = decimal.Max(decimal.Zero, copia.Quantity.Add(delta))
 		snapshots[item] = &copia
 	}
 }

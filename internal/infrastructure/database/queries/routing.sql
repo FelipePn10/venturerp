@@ -102,6 +102,24 @@ SELECT * FROM manufacturing_routes
 WHERE item_code = $1 AND enterprise_id = sqlc.arg(enterprise_id) AND is_active = TRUE
 ORDER BY alternative;
 
+-- name: ListRoutesByItemWithInactive :many
+SELECT * FROM manufacturing_routes
+WHERE item_code = $1 AND enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY is_active DESC, alternative;
+
+-- Reativa o roteiro. Se outro roteiro ativo do mesmo item/máscara já é o
+-- padrão, o reativado volta como alternativo para não haver dois padrões.
+-- name: ReactivateRoute :execrows
+UPDATE manufacturing_routes mr
+SET is_active = TRUE,
+    is_standard = mr.is_standard AND NOT EXISTS (
+        SELECT 1 FROM manufacturing_routes o
+        WHERE o.enterprise_id = mr.enterprise_id AND o.item_code = mr.item_code
+          AND COALESCE(o.mask, '') = COALESCE(mr.mask, '')
+          AND o.id <> mr.id AND o.is_active AND o.is_standard),
+    updated_at = NOW()
+WHERE mr.id = $1 AND mr.enterprise_id = sqlc.arg(enterprise_id) AND NOT mr.is_active;
+
 -- name: DeactivateRoute :exec
 UPDATE manufacturing_routes SET is_active = FALSE, updated_at = NOW() WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id);
 

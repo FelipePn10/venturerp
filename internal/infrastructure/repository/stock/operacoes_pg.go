@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"sort"
 	"strings"
 	"time"
@@ -476,13 +477,6 @@ func (r *StockRepositorySQLC) SaldosComSituacao(ctx context.Context, itemCode in
 
 // ---------- Reposição (ponto de pedido / mínimo) ----------
 
-type pontoDePedido struct {
-	TR int16 `json:"TR"`
-	CM int16 `json:"CM"`
-	CR int   `json:"CR"`
-	ES int16 `json:"ES"`
-}
-
 // SugestoesDeReposicao lista os itens com projeção (disponível − reservado +
 // em pedido) no ponto de pedido ou abaixo dele, e quanto comprar.
 //
@@ -528,13 +522,13 @@ func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entit
 	for rows.Next() {
 		var s entity.SugestaoReposicao
 		var ppRaw []byte
-		var minimo, seg, lmin, lmul int64
+		var minimo, seg, lmin, lmul decimal.Decimal
 		if err := rows.Scan(&s.ItemCode, &s.Codigo, &s.Nome, &s.Unidade, &ppRaw, &minimo, &seg, &lmin, &lmul,
 			&s.Disponivel, &s.Reservado, &s.EmPedido, &s.ConsumoMedio); err != nil {
 			return nil, fmt.Errorf("scanning replenishment candidate: %w", err)
 		}
-		s.EstoqueSeguranca = decimal.NewFromInt(seg)
-		s.LoteMinimo, s.LoteMultiplo = decimal.NewFromInt(lmin), decimal.NewFromInt(lmul)
+		s.EstoqueSeguranca = seg
+		s.LoteMinimo, s.LoteMultiplo = lmin, lmul
 		s.PontoPedido, s.Motivo = calcularPontoDePedido(ppRaw, minimo, s.ConsumoMedio)
 		if !s.PontoPedido.IsPositive() {
 			continue
@@ -551,29 +545,29 @@ func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entit
 
 // calcularPontoDePedido: TR × CM / CR + ES do cadastro; CM zerado usa o consumo
 // médio apurado (mensal, levado ao ciclo CR em dias); sem fórmula, o mínimo.
-func calcularPontoDePedido(raw []byte, minimo int64, consumoMensal decimal.Decimal) (decimal.Decimal, string) {
-	var pp pontoDePedido
+func calcularPontoDePedido(raw []byte, minimo decimal.Decimal, consumoMensal decimal.Decimal) (decimal.Decimal, string) {
+	var pp valueobject.ReorderPoint
 	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &pp) == nil && pp.CR > 0 && pp.TR > 0 {
-		cm := decimal.NewFromInt(int64(pp.CM))
+		cm := pp.CM
 		origem := "ponto de pedido do cadastro"
 		if !cm.IsPositive() && consumoMensal.IsPositive() {
 			cm = consumoMensal.Mul(decimal.NewFromInt(int64(pp.CR))).Div(decimal.NewFromInt(30))
 			origem = "ponto de pedido com o consumo médio apurado"
 		}
 		if cm.IsPositive() {
-			v := decimal.NewFromInt(int64(pp.TR)).Mul(cm).Div(decimal.NewFromInt(int64(pp.CR))).Add(decimal.NewFromInt(int64(pp.ES))).Ceil()
-			return v, origem
+			return valueobject.PontoDePedido(pp.TR, cm, pp.CR, pp.ES), origem
 		}
 	}
-	if minimo > 0 {
-		return decimal.NewFromInt(minimo), "estoque mínimo do cadastro"
+	if minimo.IsPositive() {
+		return minimo, "estoque mínimo do cadastro"
 	}
 	return decimal.Zero, ""
 }
 
 // quantidadeDeReposicao: o que leva a projeção de volta ao ponto de pedido mais
 // o estoque de segurança, no mínimo o lote mínimo, arredondado para cima ao
-// múltiplo de compra.
+// múltiplo de compra. Com múltiplo o resultado já é múltiplo exato (barra de
+// 6,35 M sugere 12,7 M, não 13); sem múltiplo sobe para o inteiro, como antes.
 func quantidadeDeReposicao(ponto, seguranca, projetado, loteMin, multiplo decimal.Decimal) decimal.Decimal {
 	q := ponto.Add(seguranca).Sub(projetado)
 	if !q.IsPositive() {
@@ -583,7 +577,7 @@ func quantidadeDeReposicao(ponto, seguranca, projetado, loteMin, multiplo decima
 		q = loteMin
 	}
 	if multiplo.IsPositive() {
-		q = q.Div(multiplo).Ceil().Mul(multiplo)
+		return q.Div(multiplo).Ceil().Mul(multiplo)
 	}
 	return q.Ceil()
 }

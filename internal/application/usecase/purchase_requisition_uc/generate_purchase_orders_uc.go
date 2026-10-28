@@ -28,6 +28,9 @@ type GeneratePurchaseOrdersUseCase struct {
 	ServiceLinker    ports.ProductionServiceLinker
 	// Geracao completa o almoxarifado e passa o pedido pela alçada.
 	Geracao *purchase_order_uc.Geracao
+	// Aprovacoes: requisição com aprovação do centro de custo pendente ou
+	// reprovada não vira pedido (opcional).
+	Aprovacoes AprovacoesDoCentro
 }
 
 type GeneratePurchaseOrdersResult struct {
@@ -77,6 +80,16 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		if err != nil {
 			result.Skipped = append(result.Skipped, fmt.Sprintf("item %d: não encontrado", sel.RequisitionItemID))
 			continue
+		}
+		if uc.Aprovacoes != nil {
+			bloq, err := uc.Aprovacoes.RequisicoesBloqueadas(ctx, []int64{reqItem.RequisitionCode})
+			if err != nil {
+				return nil, err
+			}
+			if motivo := bloq[reqItem.RequisitionCode]; motivo != "" {
+				result.Skipped = append(result.Skipped, fmt.Sprintf("item %d: a requisição %d está %s", sel.RequisitionItemID, reqItem.RequisitionCode, motivo))
+				continue
+			}
 		}
 
 		var supplierCode int64

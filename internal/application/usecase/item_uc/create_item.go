@@ -29,6 +29,11 @@ type CreateItemUseCase struct {
 	// FiscalCatalog valida as classificações fiscais contra o cadastro canônico
 	// (/api/fiscal-classifications). Opcional: sem ele os códigos passam livres.
 	FiscalCatalog fiscalClassificationCatalog
+	// Governanca, quando presente, põe o item novo em cadastro se a empresa
+	// exige a liberação das áreas (Fase 4).
+	Governanca interface {
+		AoCriarItem(ctx context.Context, itemCode int64) error
+	}
 }
 
 func NewCreateItemUseCase(
@@ -108,6 +113,11 @@ func (uc *CreateItemUseCase) Execute(
 	created, err := uc.Repo.Create(ctx, item)
 	if err != nil {
 		return nil, err
+	}
+	if uc.Governanca != nil {
+		if err := uc.Governanca.AoCriarItem(ctx, int64(created.Code)); err != nil {
+			return nil, fmt.Errorf("o item %s foi criado, mas não entrou em cadastro para liberação: %w", created.BusinessCode, err)
+		}
 	}
 
 	return toItemResponse(created), nil

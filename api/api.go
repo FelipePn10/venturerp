@@ -22,13 +22,19 @@ import (
 	appversion "github.com/FelipePn10/panossoerp/internal/version"
 
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/acesso_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/allocation_base_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/amostragem_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/aprovacao_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/aps_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/bom_header_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/capa_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/certificado_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cnpj_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/commercial_commission_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/configurator_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/consumer_service_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/contrato_venda_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
@@ -38,6 +44,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_reschedule_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/devolucao_venda_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/documento_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/drawing_uc"
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
@@ -50,24 +58,30 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/indicadores_pv_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_classification_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_governanca_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_supplier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/location_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/lot_mask_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/lote_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/machine_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/maintenance_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/metrologia_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/modifier_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_calculation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_report_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/nfse_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/notification_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/ordem_servico_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/order_priority_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/parametros_comerciais_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
@@ -80,6 +94,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_requisition_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_tolerance_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/quality_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/recuperacao_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/recurring_sales_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representative_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/restriction_uc"
@@ -90,8 +105,10 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_goal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/sales_quotation_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/serie_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipping_carrier_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/sla_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_movement_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/structure_uc"
@@ -103,6 +120,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
+	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
@@ -117,11 +135,17 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/notification"
 	planningsched "github.com/FelipePn10/panossoerp/internal/infrastructure/planning"
 	accountingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
+	acessoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/acesso"
 	allocation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/allocation_base"
+	amostragemRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/amostragem"
+	aprovacaoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aprovacao"
 	apsRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aps"
 	bomHeaderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_header"
+	capaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/capa"
+	certificadoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/certificado"
 	commercialCommissionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/commercial_commission"
 	consumerServiceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/consumer_service"
+	contratoVendaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/contratovenda"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
@@ -130,6 +154,8 @@ import (
 	deliveryPromiseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise"
 	deliveryPromiseParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_promise_params"
 	deliveryReschedule "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/delivery_reschedule"
+	devolucaoVendaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/devolucaovenda"
+	documentoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/documento"
 	employee "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/employee"
 	enterprise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/enterprise"
 	entryOperationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/entry_operation"
@@ -140,22 +166,28 @@ import (
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	ibptRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ibpt"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
+	indicadoresPVRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/indicadorespv"
 	industrialCalendar "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	itemCalendarPromise "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_calendar_promise"
 	itemClassificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_classification"
 	itemConversionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_conversion"
 	itemSupplierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item_supplier"
+	itemGovernancaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/itemgovernanca"
 	locationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/location"
+	loteRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/lote"
 	machine "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/machine"
 	maintenanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/maintenance"
+	metrologiaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/metrologia"
 	modifier "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/modifier"
 	mrpCalculation "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
 	mrpReportRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_report"
 	nfseRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/nfse"
 	notificationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/notification"
+	ordemServicoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ordemservico"
 	op "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/order_priority"
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
+	parametrosComerciaisRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/parametroscomerciais"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
 	planningrunrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_run"
@@ -169,6 +201,7 @@ import (
 	purchaseReqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
 	purchaseToleranceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_tolerance"
 	qualityRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/quality"
+	recuperacaoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/recuperacao"
 	recurringSalesRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/recurring_sales"
 	representativeRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/representative"
 	restrictionRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/restriction"
@@ -179,8 +212,10 @@ import (
 	salesGoalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_goal"
 	salesOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
 	salesQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_quotation"
+	serieRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/serie"
 	shipmentRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipment"
 	shippingCarrierRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/shipping_carrier"
+	slaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/slaassistencia"
 	standardCostRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/standard_cost"
 	stockRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	stockMovementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock_movement"
@@ -292,7 +327,8 @@ func (app *application) mount() chi.Router {
 	})
 
 	// Item
-	itemRepo := item.NewRepositoryItemSQLC(queries)
+	// Com o pool, a alteração do item leva o autor ao histórico do cadastro.
+	itemRepo := item.NewRepositoryItemSQLC(queries).ComPool(app.db.Pool)
 
 	// Catálogo canônico de classificações fiscais usado para validar o cadastro
 	// de item (VENT0200) — os códigos de venda/compra saem daqui.
@@ -347,13 +383,13 @@ func (app *application) mount() chi.Router {
 	)
 
 	// enterprise
-	enterpriseRepo := enterprise.NewRepositoryEnterpriseSQLC(queries)
+	enterpriseRepo := enterprise.NewRepositoryEnterpriseSQLC(queries).ComPool(app.db.Pool)
 	createEnterpriseUc := enterprise_uc.NewCreateEnterpriseUseCase(enterpriseRepo, authService)
 	enterpriseHandler := handler.NewCreateEnterpriseHandler(
 		createEnterpriseUc,
 		&enterprise_uc.GetEnterpriseUseCase{Repo: enterpriseRepo, Auth: authService},
 		&enterprise_uc.ListEnterprisesUseCase{Repo: enterpriseRepo, Auth: authService},
-	)
+	).ComIdentificacao(&enterprise_uc.IdentificacaoUseCase{Repo: enterpriseRepo, Auth: authService})
 	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjinfra.New(cnpjinfra.Config{})))
 
 	// The generic report export brands its output with the company's fiscal data.
@@ -456,7 +492,8 @@ func (app *application) mount() chi.Router {
 
 	// cost center
 	costCenterRepo := cost_center.NewCostCenterRepositorySQLC(queries)
-	createCostCenterUC := &cost_center_uc.CreateCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
+	createCostCenterUC := &cost_center_uc.CreateCostCenterUseCase{Repo: costCenterRepo, Auth: authService,
+		Proximo: cost_center.NewManutencaoPG(app.db.Pool).ProximoCodigo}
 	listCostCenterUC := &cost_center_uc.ListCostCentersUseCase{Repo: costCenterRepo, Auth: authService}
 	getCostCenterUC := &cost_center_uc.GetCostCenterUseCase{Repo: costCenterRepo, Auth: authService}
 	costCenterHandler := handler.NewCostCenterHandler(createCostCenterUC, listCostCenterUC, getCostCenterUC)
@@ -467,6 +504,8 @@ func (app *application) mount() chi.Router {
 		Update: &cost_center_uc.UpdateCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
 		Delete: &cost_center_uc.DeleteCostCenterUseCase{Repo: costCenterRepo, Manut: costCenterManut, Auth: authService},
 	}
+	costCenterGestaoRepo := cost_center.NewGestaoPG(app.db.Pool)
+	costCenterGestaoHandler := &handler.CostCenterGestaoHandler{UC: &cost_center_uc.GestaoUseCase{Repo: costCenterGestaoRepo, Auth: authService}}
 
 	// delivery promise params
 	deliveryPromiseParamsRepo := deliveryPromiseParams.NewDeliveryPromiseParamsRepositorySQLC(queries)
@@ -613,6 +652,33 @@ func (app *application) mount() chi.Router {
 	// quality
 	qRepo := qualityRepo.New(queries)
 	qualityUC := quality_uc.New(qRepo)
+	// Lote de inspeção (migração 000418): recebimento, processo e final num só
+	// objeto; as rotas antigas de procurement e de quality/records são
+	// adaptadores sobre ele.
+	metrologiaRepository := metrologiaRepo.New(app.db.Pool)
+	// Pós-venda 3.1: número de série e base instalada.
+	serieRepository := serieRepo.New(app.db.Pool)
+	serieUC := &serie_uc.UseCase{Repo: serieRepository, Auth: authService, Items: itemRepo}
+	serieHandler := handler.NewSerieHandler(serieUC)
+	// Pós-venda 3.4: SLA da assistência (prazos do chamado).
+	slaUC := &sla_uc.UseCase{Repo: slaRepo.New(app.db.Pool), Auth: authService}
+	slaHandler := handler.NewSLAHandler(slaUC)
+	// Pós-venda 3.3: ordem de serviço da assistência.
+	osHandler := handler.NewOrdemServicoHandler(&ordem_servico_uc.UseCase{Repo: ordemServicoRepo.New(app.db.Pool), Auth: authService,
+		SalesOrders: salesOrderRepo.NewSalesOrderRepositorySQLC(queries), Items: itemRepo, SLA: slaUC})
+	metrologiaHandler := handler.NewMetrologiaHandler(&metrologia_uc.UseCase{Repo: metrologiaRepository, Auth: authService})
+	loteUC := &lote_uc.UseCase{Repo: loteRepo.New(app.db.Pool), Fontes: loteRepo.NewFontes(app.db.Pool), Amostragem: amostragemRepo.New(app.db.Pool), Auth: authService,
+		Metrologia: metrologiaRepository}
+	qualityUC.Lotes = loteUC
+	loteHandler := handler.NewLoteHandler(loteUC)
+	qualidadeDocsHandler := handler.NewQualidadeDocsHandler(
+		&certificado_uc.UseCase{Repo: certificadoRepo.New(app.db.Pool), Fontes: certificadoRepo.New(app.db.Pool), Lotes: loteRepo.New(app.db.Pool), Auth: authService},
+		&documento_uc.UseCase{Repo: documentoRepo.New(app.db.Pool), Auth: authService})
+	capaUC := &capa_uc.UseCase{Repo: capaRepo.New(app.db.Pool), Auth: authService}
+	capaHandler := handler.NewCapaHandler(capaUC)
+	// Pós-venda 3.5: indicadores, chamado → CAPA e recuperação junto ao fornecedor.
+	posVendaQualidadeHandler := handler.NewPosVendaQualidadeHandler(&indicadores_pv_uc.UseCase{Repo: indicadoresPVRepo.New(app.db.Pool)},
+		&recuperacao_uc.UseCase{Repo: recuperacaoRepo.New(app.db.Pool), Auth: authService, CAPA: capaUC})
 	qualityHandler := handler.NewQualityHandler(qualityUC)
 
 	// standard cost
@@ -720,7 +786,7 @@ func (app *application) mount() chi.Router {
 	prodOrderCloseUC.SettleUC = prodOrderSettleCostUC
 	// Scrap return (sucata valorizada). StockRepo is wired below once available.
 	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
-	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo, Auth: authService, Routing: rRepo,
+	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo, Auth: authService, Routing: rRepo, Lotes: loteUC,
 		WithinTransaction: func(ctx context.Context, fn func(*sqlc.Queries) error) error {
 			tx, err := app.db.Pool.Begin(ctx)
 			if err != nil {
@@ -769,10 +835,14 @@ func (app *application) mount() chi.Router {
 
 	// fiscal classifications (Cadastro de Classificações Fiscais)
 	fiscalClassUC := fiscal_classification_uc.NewFiscalClassificationUseCase(fiscalClassRepo.New(queries, app.db.Pool), authService)
+	reformaRepo := fiscalRepo.NewReformaPG(app.db.Pool)
+	reformaTributariaUC := &fiscalUC.ReformaTributariaUseCase{Repo: reformaRepo, Auth: authService}
+	fiscalClassUC.ClassTrib = reformaTributariaUC
 	fiscalClassHandler := handler.NewFiscalClassificationHandler(fiscalClassUC)
 
 	// entry operation types + state groups (Cadastro de Tipos de Operação de Entrada)
-	entryOperationUC := entry_operation_uc.NewEntryOperationUseCase(entryOperationRepo.New(queries, app.db.Pool))
+	entryOperationUC := entry_operation_uc.NewEntryOperationUseCase(entryOperationRepo.New(queries, app.db.Pool)).
+		ComCFOPs(fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool))
 	entryOperationHandler := handler.NewEntryOperationHandler(entryOperationUC)
 
 	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
@@ -807,6 +877,7 @@ func (app *application) mount() chi.Router {
 		StockRepo:      stockRepository,
 		Auth:           authService,
 		Transferencias: stockRepository,
+		Lotes:          loteUC,
 	}
 	procurementHandler := handler.NewProcurementHandler(procurementUC)
 
@@ -827,7 +898,7 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		// Inspection gate wires FINS0212: material with an active inspection route is
 		// received into the inspection warehouse and an inspection order is opened.
-		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: procurementUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade},
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: loteUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		poApproveUC,
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
@@ -861,12 +932,14 @@ func (app *application) mount() chi.Router {
 	// Wire the subcontracting hook: firming a production order raises a service
 	// requisition for its external operations (R4).
 	plannedFirmUC.ReqRepo = purchaseReqRepository
+	plannedFirmUC.AprovacoesDoCentro = costCenterGestaoRepo
 	plannedFirmUC.ExternalOps = rRepo
 	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
 	wireAtomicPlannedRelease(app.db.Pool, queries, plannedFirmUC, orderOpsUC)
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
-		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
+		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
+			Aprovacoes:       costCenterGestaoRepo,
 			Geracao:          poGeracao,
 			Reqs:             purchaseReqRepository,
 			POs:              poRepo,
@@ -897,6 +970,14 @@ func (app *application) mount() chi.Router {
 	// Captured so the automatic credit check and stock reservation (ATP) can be
 	// attached once the customer/financial/stock repositories are available below.
 	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo}
+	// Motor de aprovação: os módulos pedem aprovação e os efetivadores de cada
+	// tipo são ligados mais abaixo, quando os repositórios existem.
+	aprovacaoUC := &aprovacao_uc.UseCase{Repo: aprovacaoRepo.New(app.db.Pool), Auth: authService}
+	amostragemUC := &amostragem_uc.UseCase{Repo: amostragemRepo.New(app.db.Pool), Auth: authService}
+	amostragemHandler := handler.NewAmostragemHandler(amostragemUC)
+	aprovacaoHandler := handler.NewAprovacaoHandler(aprovacaoUC)
+	changeStatusSalesOrderUC.Aprovacoes = aprovacaoUC
+	unblockSalesOrderUC := &sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService, Aprovacoes: aprovacaoUC}
 	createSalesOrderUC := &sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
 	updateSalesOrderUC := &sales_order_uc.UpdateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
 	createSalesOrderItemUC := &sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo}
@@ -908,9 +989,9 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.ListSalesOrdersUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrdersByCustomerUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrdersByStatusUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		&sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService, Titulos: financialRepo.NewFinancialRepositoryPG(app.db.Pool).(sales_order_uc.RecebiveisDoPedido)},
 		&sales_order_uc.BlockSalesOrderUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService},
+		unblockSalesOrderUC,
 		changeStatusSalesOrderUC,
 		&sales_order_uc.ListSalesOrdersAdvancedUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.SalesOrderReportUseCase{Repo: soRepo, Auth: authService},
@@ -947,10 +1028,12 @@ func (app *application) mount() chi.Router {
 	salesCommissionHandler := handler.NewSalesCommissionHandler(&sales_commission_uc.UseCase{Repo: salesCommissionRepo.New(app.db.Pool)})
 	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
 	custRepo := customerRepo.New(queries, app.db.Pool)
-	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository}
+	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository, Aprovacoes: aprovacaoUC}
+	aprovacaoUC.Registrar(aprovacao.OrcamentoPoliticaComercial, &sales_quotation_uc.LiberacaoDeOrcamento{Repo: salesQuotationRepository})
+	salesQuotationConvertUC := &sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool)}
 	salesQuotationHandler := handler.NewSalesQuotationHandler(
 		salesQuotationUC,
-		&sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool)},
+		salesQuotationConvertUC,
 	)
 	representativeHandler := handler.NewRepresentativeHandler(&representative_uc.UseCase{Repo: representativeRepository, Auth: authService})
 
@@ -965,6 +1048,8 @@ func (app *application) mount() chi.Router {
 		ProductionOrders: prodOrderRepo,
 		Items:            itemRepo,
 		Auth:             authService,
+		Garantia:         serieUC,
+		SLA:              slaUC,
 	})
 	consumerServiceRepository := consumerServiceRepo.New(app.db.Pool)
 	consumerServiceHandler := handler.NewConsumerServiceHandler(&consumer_service_uc.UseCase{
@@ -1023,7 +1108,7 @@ func (app *application) mount() chi.Router {
 	}
 	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
 		Ops: stockRepository, Auth: authService,
-		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService),
+		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
 	}}
 	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService, Tipos: stockRepository}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
@@ -1064,6 +1149,8 @@ func (app *application) mount() chi.Router {
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
+	// CIAP: o crédito do ICMS do ativo imobilizado, em parcelas (VFIS0345).
+	ciapHandler := &handler.CIAPHandler{UC: &fiscalUC.CIAPUseCase{Repo: fiscalRepo.NewCIAPPG(app.db.Pool), Fiscal: fiscalRepository, Auth: authService}}
 	// Parâmetros e vínculos da contabilização automática (entrada, pagamentos,
 	// recebimentos e saídas leem do mesmo lugar).
 	contabilRepo := fiscalRepo.NewFiscalEntryDocumentRepositoryPG(fiscalRepository)
@@ -1181,8 +1268,11 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
 	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
-	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool)}
-	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo}
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool), Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool)}
+	reformaTributariaHandler := handler.NewReformaTributariaHandler(reformaTributariaUC)
+	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
+	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
+	previaNFeUC := &fiscalUC.PreviaNFeUseCase{CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
 	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
 	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com
 	// o cadastro, plano de contas por item e parcelas distribuídas por plano —
@@ -1217,6 +1307,11 @@ func (app *application) mount() chi.Router {
 	fornecedorDaNotaHandler := handler.NewFornecedorDaNotaHandler(&fiscalUC.FornecedorDaNotaUseCase{
 		Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Cadastro: supplierUC, Auth: authService})
 	// Devolução de compra: NF-e de saída (finalidade 4) referenciando a entrada.
+	// Fase 5.1: devolução de venda (NF-e de entrada própria ou NF do cliente).
+	devolucaoVendaUC := &devolucao_venda_uc.UseCase{Repo: devolucaoVendaRepo.New(app.db.Pool), Fiscal: fiscalRepository, FinancialRepo: fRepo, Auth: authService}
+	devolucaoVendaHandler := handler.NewDevolucaoVendaHandler(devolucaoVendaUC)
+	// Fase 5.2: contrato de venda.
+	contratoVendaHandler := handler.NewContratoVendaHandler(&contrato_venda_uc.UseCase{Repo: contratoVendaRepo.New(app.db.Pool), Auth: authService, Items: itemRepo})
 	devolucaoUC := &fiscalUC.DevolucaoCompraUseCase{
 		Repo: fiscalRepository, Docs: fiscalEntryDocs, Devolucoes: fiscalRepo.NewDevolucaoRepositoryPG(fiscalRepository),
 		Estoque: saidaContabil, FinancialRepo: fRepo, Auth: authService,
@@ -1233,6 +1328,18 @@ func (app *application) mount() chi.Router {
 	// NF-e de saída a partir do pedido de venda (total ou parcial): cliente,
 	// itens, preços, frete, condição de pagamento e representante vêm do pedido.
 	faturamentoDoPedido := fiscalRepo.NewSalesOrderInvoicingRepositoryPG(fiscalRepository)
+	// Simulador de tributação: o mesmo cálculo da nota (Tributador), sem gravar.
+	// Serve ao fiscal (conferir a parametrização) e ao orçamento/pedido (sugerir
+	// IPI, ICMS e ST antes de faturar).
+	tributador := &fiscalUC.Tributador{Repo: fiscalRepository, Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool)}
+	simularTributacaoHandler := handler.NewSimularTributacaoHandler(&fiscalUC.SimularTributacaoUseCase{
+		Tributador: tributador, Customers: custRepo, Orders: soRepo, Itens: fiscalEntryDocs, ItemsRepo: itemRepo, Auth: authService,
+	})
+	// Orçamento e pedido: linha sem imposto informado é tributada pela regra.
+	sugestorTributos := &fiscalUC.SugestorTributos{Tributador: tributador, Customers: custRepo, Orders: soRepo, Itens: fiscalEntryDocs}
+	createSalesOrderItemUC.Tributos = sugestorTributos
+	updateSalesOrderItemUC.Tributos = sugestorTributos
+	salesQuotationUC.Tributos = sugestorTributos
 	faturarPedidoHandler := handler.NewFaturarPedidoHandler(&fiscalUC.FaturarPedidoUseCase{
 		Create:      createFiscalExitUC,
 		Fiscal:      fiscalRepository,
@@ -1265,6 +1372,7 @@ func (app *application) mount() chi.Router {
 				Pedidos:     salesOrderRepo.NewSalesOrderRepositorySQLC(sqlc.New(tx)),
 				Faturamento: fiscalRepo.NewFiscalRepositoryTx(tx),
 				Pendencias:  fiscalRepo.NewPendenciasTx(tx),
+				Series:      serieRepo.NewTx(tx),
 			}); err != nil {
 				return err
 			}
@@ -1281,7 +1389,7 @@ func (app *application) mount() chi.Router {
 		uploadNFeEntryUC,
 		// Inspecao: o mesmo portão do recebimento físico (FINS0212) — material com
 		// roteiro de inspeção ativo entra no depósito de inspeção e abre a ordem.
-		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, Docs: fiscalEntryDocs, FinancialRepo: fRepo, Tolerancias: purchaseToleranceUC, Inspecao: procurementUC, Auth: authService},
+		&fiscalUC.ApproveFiscalEntryUseCase{FiscalRepo: fiscalRepository, Docs: fiscalEntryDocs, FinancialRepo: fRepo, Tolerancias: purchaseToleranceUC, Inspecao: loteUC, Auth: authService},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Tolerancias: purchaseToleranceUC, Auth: authService},
 		createFiscalExitUC,
@@ -1291,10 +1399,10 @@ func (app *application) mount() chi.Router {
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC},
+		&fiscalUC.AuthorizeFiscalExitUseCase{CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
-		&fiscalUC.CancelFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC},
+		&fiscalUC.CancelFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
@@ -1310,7 +1418,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListICMSInterstateUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.UpsertICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.ListICMSInternalUseCase{Repo: fiscalRepository, Auth: authService},
-		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService, Efeitos: efeitosNFe},
+		&fiscalUC.ConsultarNFeUseCase{Repo: fiscalRepository, Auth: authService, Efeitos: efeitosNFe, DevolucaoVenda: devolucaoVendaUC},
 		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
@@ -1392,6 +1500,15 @@ func (app *application) mount() chi.Router {
 	customerUC := customer_uc.NewCustomerUseCase(custRepo)
 	createSalesOrderItemUC.Prices = custRepo
 	updateSalesOrderItemUC.Prices = custRepo
+	// Políticas comerciais e alçada de desconto no pedido (Fase 5.3): a mesma
+	// política do orçamento; acima da alçada o pedido vai à aprovação.
+	parametrosComerciais := parametrosComerciaisRepo.New(app.db.Pool)
+	politicaDoPedido := &sales_order_uc.PoliticaDoPedido{Repo: soRepo, Customers: custRepo, Aprovacoes: aprovacaoUC, Parametros: parametrosComerciais}
+	createSalesOrderItemUC.Politica = politicaDoPedido
+	salesQuotationConvertUC.Alcada = politicaDoPedido
+	updateSalesOrderItemUC.Politica = politicaDoPedido
+	updateSalesOrderItemUC.Contratos = contratoVendaRepo.New(app.db.Pool)
+	parametrosComerciaisHandler := handler.NewParametrosComerciaisHandler(&parametros_comerciais_uc.UseCase{Repo: parametrosComerciais, Auth: authService})
 	customerHandler := handler.NewCustomerHandler(customerUC)
 
 	// Romaneio export enrichment: real company (with branding), parties, carrier
@@ -1437,6 +1554,14 @@ func (app *application) mount() chi.Router {
 		}
 		return tx.Commit(ctx)
 	}
+	// O desbloqueio (manual ou pela aprovação de crédito) termina a confirmação
+	// que o bloqueio interrompeu, na mesma transação da confirmação.
+	conclusaoDoDesbloqueio := &sales_order_uc.ConclusaoDoDesbloqueio{
+		Transacao: changeStatusSalesOrderUC.Transacao, ComDemanda: true, Reserver: changeStatusSalesOrderUC.Reserver,
+	}
+	unblockSalesOrderUC.Conclusao = conclusaoDoDesbloqueio
+	aprovacaoUC.Registrar(aprovacao.LiberacaoCredito, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusaoDoDesbloqueio, Tipo: aprovacao.LiberacaoCredito, Aprovacoes: aprovacaoUC})
+	aprovacaoUC.Registrar(aprovacao.PedidoPoliticaComercial, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusaoDoDesbloqueio, Tipo: aprovacao.PedidoPoliticaComercial, Aprovacoes: aprovacaoUC})
 
 	// fiscal params (legal devices, CFOPs, ICMS/IPI tax params + ICMS apuração + Simples Nacional)
 	fpRepo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
@@ -1462,7 +1587,7 @@ func (app *application) mount() chi.Router {
 	spedUC := &fiscalUC.SPEDUseCase{FiscalParamsRepo: fpRepo}
 	spedHandler := handler.NewSPEDHandler(spedUC)
 	spedAutomaticoHandler := handler.NewSpedAutomaticoHandler(&fiscalUC.SpedAutomaticoUseCase{
-		Periodo: fiscalRepo.NewSpedRepositoryPG(fiscalRepository), Config: fiscalRepository})
+		Periodo: fiscalRepo.NewSpedRepositoryPG(fiscalRepository), Config: fiscalRepository, CIAP: fiscalRepo.NewCIAPPG(app.db.Pool)})
 
 	// accounting / SPED ECD
 	acctRepo := accountingRepo.New(queries, app.db.Pool)
@@ -1502,14 +1627,45 @@ func (app *application) mount() chi.Router {
 
 	// routes
 	idempotencyStore := httpmw.NewIdempotencyStore(24*time.Hour, app.db.Pool)
+	// Perfis de acesso da empresa: restringem, por módulo e ação, o que o papel
+	// já permite. Usuário sem perfil segue só com o papel.
+	acessoRepository := acessoRepo.New(app.db.Pool)
+	controleDeAcesso := httpmw.NewControleDeAcesso(acessoRepository)
+	acessoHandler := handler.NewAcessoHandler(&acesso_uc.UseCase{Repo: acessoRepository, Auth: authService, Cache: controleDeAcesso}, controleDeAcesso)
+	// Fase 4: governança do cadastro de item (cada área libera a sua visão).
+	itemGovernancaUC := &item_governanca_uc.UseCase{Repo: itemGovernancaRepo.New(app.db.Pool), Auth: authService, Items: itemRepo, Areas: controleDeAcesso}
+	createItemUc.Governanca = itemGovernancaUC
+	itemGovernancaHandler := handler.NewItemGovernancaHandler(itemGovernancaUC)
 	r.Group(func(r chi.Router) {
 		r.Use(httpmw.JWTForEnvironment(app.config.JWTSecret, app.config.DataEnvironment, app.logger, userRepo))
 		r.Use(httpmw.TenantBodyGuard)
+		r.Use(controleDeAcesso.Middleware)
 		r.Use(httpmw.ItemBusinessCodeCompatibility(app.db.Pool))
 		// Audit trail for authenticated mutations (after JWT so the actor is known).
 		r.Use(httpmw.Audit(app.auditSink))
 		// Idempotency-Key support for mutating requests (safe retries).
 		r.Use(httpmw.Idempotency(idempotencyStore))
+
+		r.Route("/api/acesso", func(r chi.Router) {
+			r.Get("/minhas-permissoes", acessoHandler.MinhasPermissoes)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/catalogo", acessoHandler.Catalogo)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/perfis", acessoHandler.ListarPerfis)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/perfis", acessoHandler.CriarPerfil)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/perfis/{id}", acessoHandler.AtualizarPerfil)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/perfis/{id}", acessoHandler.ExcluirPerfil)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/usuarios", acessoHandler.ListarUsuarios)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/usuarios/{userId}/perfis", acessoHandler.DefinirPerfisDoUsuario)
+		})
+		// Aprovações: quem aprova é decidido pela alçada (perfil/usuário do
+		// nível), não pela rota; políticas são configuração (ADMIN).
+		r.Route("/api/aprovacoes", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/solicitacoes", aprovacaoHandler.ListarSolicitacoes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/solicitacoes/{id}", aprovacaoHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/solicitacoes/{id}/aprovar", aprovacaoHandler.Aprovar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/solicitacoes/{id}/reprovar", aprovacaoHandler.Reprovar)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/politicas", aprovacaoHandler.ListarPoliticas)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/politicas/{tipo}", aprovacaoHandler.SalvarPolitica)
+		})
 
 		// Audit trail (read): who changed what, when. Restricted to ADMIN.
 		r.With(httpmw.RequireRole("ADMIN")).Get("/api/audit-log", auditHandler.List)
@@ -1544,11 +1700,26 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/password-change-requests", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", passwordChangeHandler.Request)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/", passwordChangeHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/mine", passwordChangeHandler.Mine)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/{requestID}/approve", passwordChangeHandler.Approve)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/{requestID}/reject", passwordChangeHandler.Reject)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{requestID}/complete", passwordChangeHandler.Complete)
 		})
 		r.Route("/api/items", func(r chi.Router) {
+			r.Route("/governanca", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parametros", itemGovernancaHandler.Parametros)
+				r.With(httpmw.RequireRole("ADMIN")).Put("/parametros", itemGovernancaHandler.SalvarParametros)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/regras", itemGovernancaHandler.Regras)
+				r.With(httpmw.RequireRole("ADMIN")).Put("/regras/{campo}", itemGovernancaHandler.SalvarRegra)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pendentes", itemGovernancaHandler.Pendentes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/duplicados", itemGovernancaHandler.Duplicados)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/itens/{item}", itemGovernancaHandler.Painel)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/itens/{item}/liberacoes", itemGovernancaHandler.Liberar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/itens/{item}/estorno", itemGovernancaHandler.Estornar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/itens/{item}/status", itemGovernancaHandler.MudarStatus)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/itens/{item}/historico", itemGovernancaHandler.Historico)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/itens/{item}/uso", itemGovernancaHandler.Uso)
+			})
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", itemHandler.CreateItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", itemHandler.UpdateItem)
 			// Leitura do catálogo: é o que resolve a descrição do item na tela do
@@ -1584,6 +1755,16 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", costCenterHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", costCenterHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cadastro", costCenterManutHandler.ListCadastro)
+			// Cadastro único com gestão, orçamento, árvore e aprovação de requisição.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/gestao", costCenterGestaoHandler.Centros)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/usuarios", costCenterGestaoHandler.Usuarios)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orcamento", costCenterGestaoHandler.Orcamento)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/orcamento", costCenterGestaoHandler.SalvarOrcamento)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/arvore", costCenterGestaoHandler.Arvore)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/aprovacoes", costCenterGestaoHandler.Aprovacoes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/aprovacoes/{id}/aprovar", costCenterGestaoHandler.Aprovar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/aprovacoes/{id}/reprovar", costCenterGestaoHandler.Reprovar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{costCenterCode}/gestao", costCenterGestaoHandler.SalvarGestao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}", costCenterHandler.Get)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{costCenterCode}/uso", costCenterManutHandler.UsoCentro)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{costCenterCode}", costCenterManutHandler.UpdateCentro)
@@ -1775,6 +1956,9 @@ func (app *application) mount() chi.Router {
 			// Criar empresa é ato de administrador; o criador fica vinculado a ela.
 			r.With(httpmw.RequireRole("ADMIN")).Post("/create", enterpriseHandler.CreateEnterprise)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", enterpriseHandler.ListEnterprises)
+			// Identificação da empresa da sessão — o único lugar dela (VEMP0100).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/identificacao", enterpriseHandler.Identificacao)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/identificacao", enterpriseHandler.AtualizarIdentificacao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", enterpriseHandler.GetEnterprise)
 		})
 		r.Route("/api/cnpj", func(r chi.Router) {
@@ -1868,6 +2052,8 @@ func (app *application) mount() chi.Router {
 
 		r.Route("/api/sales-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesOrderHandler.Create)
+			// Sugestão de IPI/ICMS/ST para orçamento e pedido (mesmo cálculo da nota).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tributacao/simular", simularTributacaoHandler.Simular)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesOrderHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/search", salesOrderHandler.Search)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/report", salesOrderHandler.Report)
@@ -1929,6 +2115,70 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{itemCode}", salesQuotationHandler.UpdateItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{itemCode}/cancel", salesQuotationHandler.CancelItem)
 			})
+		})
+		// Pós-venda: perfil do item, número de série e base instalada.
+		r.Route("/api/contratos-venda", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", contratoVendaHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", contratoVendaHandler.Criar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", contratoVendaHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/situacao", contratoVendaHandler.Situacao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/programacao", contratoVendaHandler.Programar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}/programacao/{parcela}", contratoVendaHandler.RemoverParcela)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/chamadas", contratoVendaHandler.Chamar)
+		})
+		r.Route("/api/parametros-comerciais", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", parametrosComerciaisHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/", parametrosComerciaisHandler.Salvar)
+		})
+		r.Route("/api/devolucoes-venda", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/previa", devolucaoVendaHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", devolucaoVendaHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", devolucaoVendaHandler.Criar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", devolucaoVendaHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/nf", devolucaoVendaHandler.GerarNF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/efetivar", devolucaoVendaHandler.Efetivar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelamento", devolucaoVendaHandler.Cancelar)
+		})
+		r.Route("/api/pos-venda", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/perfis", serieHandler.Perfis)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/perfis/{item}", serieHandler.Perfil)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/perfis/{item}", serieHandler.SalvarPerfil)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/series", serieHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/series", serieHandler.Cadastrar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/series/{id}", serieHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/series/{id}/instalacao", serieHandler.Instalar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/series/{id}/transferencia", serieHandler.Transferir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/series/{id}/baixa", serieHandler.Baixar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/series/{id}/garantia-estendida", serieHandler.EstenderGarantia)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/garantia", serieHandler.ConsultarGarantia)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/indicadores", posVendaQualidadeHandler.Indicadores)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/chamados/{code}/capa", posVendaQualidadeHandler.AbrirCAPA)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recuperacoes", posVendaQualidadeHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recuperacoes", posVendaQualidadeHandler.Abrir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/recuperacoes/{id}", posVendaQualidadeHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/recuperacoes/{id}/situacao", posVendaQualidadeHandler.Mudar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sla/regras", slaHandler.Regras)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/sla/regras", slaHandler.Criar)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/sla/regras/{id}", slaHandler.Alterar)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/sla/regras/{id}", slaHandler.Excluir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sla/painel", slaHandler.Painel)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sla/expediente", slaHandler.Expediente)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/sla/expediente", slaHandler.SalvarExpediente)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/os-parametros", osHandler.Parametros)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/os-parametros", osHandler.SalvarParametros)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/os", osHandler.Listar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os", osHandler.Abrir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/os/{id}", osHandler.Obter)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/agenda", osHandler.Agendar())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/inicio", osHandler.Iniciar())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/conclusao", osHandler.Concluir())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/reabertura", osHandler.Reabrir())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/cancelamento", osHandler.Cancelar())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/faturamento", osHandler.Faturar())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/horas", osHandler.AddHora())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/pecas", osHandler.AddPeca())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/os/{id}/despesas", osHandler.AddDespesa())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/os/{id}/{tipo}/{lancamento}", osHandler.Remover)
 		})
 		r.Route("/api/technical-assistance", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/defect-groups", technicalAssistanceHandler.CreateDefectGroup)
@@ -2292,6 +2542,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-load", fiscalHandler.CreateExitFromLoad)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/sales-order/{code}/previa", faturarPedidoHandler.Previa)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-sales-order", faturarPedidoHandler.Faturar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tributacao/simular", simularTributacaoHandler.Simular)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/authorize", fiscalHandler.AuthorizeExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/cancel", fiscalHandler.CancelExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/carta-correcao", fiscalHandler.EmitirCCe)
@@ -2320,6 +2571,21 @@ func (app *application) mount() chi.Router {
 			// Prévia da nota: monta o documento que iria para a SEFAZ e lista as
 			// pendências, sem transmitir nada.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa", previaNFeHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/exits/{id}/itens/{itemId}/cclass-trib", reformaTributariaHandler.DefinirClassTribDaLinha)
+			// Número de série das linhas de item que controla série.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/series", serieHandler.LinhasDaNota)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/exits/{id}/itens/{itemId}/series", serieHandler.DefinirSeriesDaLinha)
+			// Reforma tributária (IBS/CBS): tabela oficial, alíquotas por ano e
+			// cClassTrib padrão por CFOP. Gravar é configuração fiscal (ADMIN).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reforma/classificacoes", reformaTributariaHandler.ListarClassificacoes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reforma/aliquotas", reformaTributariaHandler.ListarAliquotas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reforma/modo", reformaTributariaHandler.Modo)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/reforma/modo", reformaTributariaHandler.SalvarModo)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/reforma/aliquotas/{ano}", reformaTributariaHandler.SalvarAliquotas)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/reforma/aliquotas/{ano}", reformaTributariaHandler.ExcluirAliquotas)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/reforma/cfop", reformaTributariaHandler.ListarCFOP)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/reforma/cfop/{cfop}", reformaTributariaHandler.SalvarCFOP)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/reforma/cfop/{cfop}", reformaTributariaHandler.ExcluirCFOP)
 			// NCM tax table management
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tabelas/ncm", fiscalHandler.UpsertNcmTax)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas/ncm", fiscalHandler.ListNcmTaxes)
@@ -2401,6 +2667,20 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		// ICMS Reduction / Substitution / Deferral
+		r.Route("/api/fiscal/ciap", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parametros", ciapHandler.Parametros)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/parametros", ciapHandler.SalvarParametros)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/bens", ciapHandler.Bens)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/bens", ciapHandler.CriarBem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/bens/{id}", ciapHandler.AtualizarBem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/bens/{id}/baixa", ciapHandler.BaixarBem)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/bens/{id}", ciapHandler.ExcluirBem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/apuracao", ciapHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/apuracao", ciapHandler.Apurar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/apuracao/fechar", ciapHandler.Fechar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/apuracoes", ciapHandler.Apuracoes)
+		})
+
 		r.Route("/api/fiscal/icms-reducao", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", icmsReductionHandler.CreateReduction)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsReductionHandler.UpdateReduction)
@@ -2526,6 +2806,7 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", routingHandler.GetRouteDetail)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", routingHandler.UpdateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/", routingHandler.DeactivateRoute)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/reativar", routingHandler.ReactivateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lead-time", routingHandler.GetLeadTime)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/readiness", routingHandler.RouteReadiness)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/edges", routingHandler.GetNetworkEdges)
@@ -2931,6 +3212,77 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", qualityHandler.GetNC)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/by-item/{itemCode}", qualityHandler.ListNCsByItem)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/disposition", qualityHandler.DispositionNC)
+			})
+			// Certificado de qualidade ao cliente (cancelar = EXCLUIR).
+			r.Route("/certificados", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", qualidadeDocsHandler.ListarCertificados)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", qualidadeDocsHandler.EmitirCertificado)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", qualidadeDocsHandler.ObterCertificado)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/pdf", qualidadeDocsHandler.PDFCertificado)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelar", qualidadeDocsHandler.CancelarCertificado)
+			})
+			// Documentos controlados (aprovar revisão = APROVAR).
+			r.Route("/documentos", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", qualidadeDocsHandler.ListarDocumentos)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", qualidadeDocsHandler.CriarDocumento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/revisoes/{rev}/arquivo", qualidadeDocsHandler.ArquivoDaRevisao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", qualidadeDocsHandler.ObterDocumento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", qualidadeDocsHandler.AtualizarDocumento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/rascunho", qualidadeDocsHandler.GravarRascunho)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}/rascunho", qualidadeDocsHandler.DescartarRascunho)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/aprovar", qualidadeDocsHandler.AprovarDocumento)
+			})
+			// Metrologia: instrumentos, calibrações e impacto da reprovação.
+			r.Route("/instrumentos", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", metrologiaHandler.Listar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", metrologiaHandler.Criar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", metrologiaHandler.Obter)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", metrologiaHandler.Atualizar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/calibracoes", metrologiaHandler.Calibrar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/baixar", metrologiaHandler.Baixar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/impacto", metrologiaHandler.Impacto)
+			})
+			// CAPA/8D: encerramento pela eficácia é APROVAR; cancelamento, EXCLUIR.
+			r.Route("/capas", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", capaHandler.Listar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", capaHandler.Abrir)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/acoes-pendentes", capaHandler.AcoesPendentes)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/usuarios", capaHandler.Usuarios)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", capaHandler.Obter)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/analise", capaHandler.Analisar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/avancar", capaHandler.Avancar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/encerrar", capaHandler.Encerrar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelar", capaHandler.Cancelar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/acoes", capaHandler.AdicionarAcao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/acoes/{acao}", capaHandler.AtualizarAcao)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/ncs", capaHandler.VincularNC)
+			})
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/ncs", capaHandler.NCs)
+			// Lote de inspeção: abertura manual, resultados, decisão de uso
+			// (APROVAR no catálogo), cancelamento (EXCLUIR) e laudos.
+			r.Route("/lotes", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", loteHandler.Listar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", loteHandler.Abrir)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", loteHandler.Obter)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/resultados", loteHandler.GravarResultados)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/decisao", loteHandler.Decidir)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelar", loteHandler.Cancelar)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/laudos", loteHandler.VincularLaudo)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}/laudos/{laudo}", loteHandler.DesvincularLaudo)
+			})
+			// Amostragem NBR 5426: procedimentos, calculadora, plano do lote e
+			// estado de severidade por item × fornecedor/operação.
+			r.Route("/amostragem", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/tabelas", amostragemHandler.Tabelas)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/calcular", amostragemHandler.Calcular)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/procedimentos", amostragemHandler.ListarProcedimentos)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/procedimentos", amostragemHandler.CriarProcedimento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/procedimentos/{id}", amostragemHandler.ObterProcedimento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/procedimentos/{id}", amostragemHandler.AtualizarProcedimento)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-do-lote", amostragemHandler.PlanoDoLote)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/estados", amostragemHandler.Estados)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/eventos", amostragemHandler.Eventos)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/estados/liberar", amostragemHandler.LiberarSuspensao)
 			})
 		})
 		r.Route("/api/maintenance", func(r chi.Router) {

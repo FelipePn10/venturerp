@@ -22,6 +22,11 @@ func (uc *UpdatePlanningParamUseCase) Execute(
 	if !uc.Auth.CanManagePlanningParams(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	autor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.UpdatedBy = autor
 	p, err := uc.Repo.Update(ctx, dto.ParamNumber, dto.Value, dto.UpdatedBy)
 	if err != nil {
 		return nil, err

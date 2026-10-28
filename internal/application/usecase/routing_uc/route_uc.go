@@ -260,11 +260,24 @@ func toResourceResponse(r *entity.RouteOpResource) response.RouteOpResourceRespo
 }
 
 func (uc *RouteUseCase) ListByItem(ctx context.Context, publicCode request.TextCode) ([]*response.ManufacturingRouteResponse, error) {
+	return uc.listByItem(ctx, publicCode, false)
+}
+
+// ListByItemWithInactive traz também os roteiros desativados (para reativar).
+func (uc *RouteUseCase) ListByItemWithInactive(ctx context.Context, publicCode request.TextCode) ([]*response.ManufacturingRouteResponse, error) {
+	return uc.listByItem(ctx, publicCode, true)
+}
+
+func (uc *RouteUseCase) listByItem(ctx context.Context, publicCode request.TextCode, inativos bool) ([]*response.ManufacturingRouteResponse, error) {
 	itemCode, err := uc.resolveItemCode(ctx, publicCode)
 	if err != nil {
 		return nil, err
 	}
-	routes, err := uc.repo.ListRoutesByItem(ctx, itemCode)
+	listar := uc.repo.ListRoutesByItem
+	if inativos {
+		listar = uc.repo.ListRoutesByItemWithInactive
+	}
+	routes, err := listar(ctx, itemCode)
 	if err != nil {
 		return nil, err
 	}
@@ -292,6 +305,23 @@ func (uc *RouteUseCase) resolveItemCode(ctx context.Context, publicCode request.
 
 func (uc *RouteUseCase) Deactivate(ctx context.Context, id int64) error {
 	return uc.repo.DeactivateRoute(ctx, id)
+}
+
+// Reactivate devolve o roteiro desativado ao planejamento. Se outro roteiro
+// ativo do item já é o padrão, o reativado volta como alternativo.
+func (uc *RouteUseCase) Reactivate(ctx context.Context, id int64) (*response.ManufacturingRouteResponse, error) {
+	ok, err := uc.repo.ReactivateRoute(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("roteiro %d não encontrado nesta empresa ou já está ativo", id))
+	}
+	rt, err := uc.repo.GetRouteByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return toRouteResponse(rt), nil
 }
 
 func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOperationDTO) (*response.RouteOperationResponse, error) {

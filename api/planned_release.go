@@ -9,6 +9,7 @@ import (
 	productionuc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	costcenterrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/mrp_calculation"
 	plannedrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
@@ -59,6 +60,7 @@ func wireAtomicPlannedRelease(pool *pgxpool.Pool, q *sqlc.Queries, uc *planned_o
 		inner.ServiceLinker = production
 		inner.ReleaseValidator = production
 		inner.ReqRepo = reqrepo.New(bound, pool)
+		inner.AprovacoesDoCentro = costcenterrepo.AprovacoesNaTransacao(tx)
 		inner.ServiceOrders = servicerepo.New(tx)
 		inner.Routing = routingrepo.New(bound)
 		inner.ExternalOps = routingrepo.New(bound)

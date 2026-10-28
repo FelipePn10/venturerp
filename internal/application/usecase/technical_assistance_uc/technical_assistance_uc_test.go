@@ -2,6 +2,7 @@ package technical_assistance_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -183,7 +184,7 @@ func TestUpdateStatusRequiresReturnNoteFromReason(t *testing.T) {
 			Status: entity.CallStatusPending, Priority: "NORMAL", OpenedAt: time.Now(), Subject: "Falha",
 			CreatedBy: uuid.Nil,
 		},
-		items: []*entity.CallItem{{Code: 1, CallCode: 1, ItemCode: 100, Quantity: 1, DefectReasonCode: &reasonCode}},
+		items: []*entity.CallItem{{Code: 1, CallCode: 1, ItemCode: 100, Quantity: decimal.NewFromInt(1), DefectReasonCode: &reasonCode}},
 	}
 	uc := &UseCase{Repo: repo, Auth: taAllowAuth{}}
 

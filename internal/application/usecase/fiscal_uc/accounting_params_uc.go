@@ -109,7 +109,8 @@ func contasOpcionais(p *repository.AccountingPostingParams) []**int64 {
 		&p.BancoPadraoAccountID, &p.JurosPagosAccountID, &p.DescontosObtidosAccountID, &p.ClientesAccountID,
 		&p.JurosRecebidosAccountID, &p.DescontosConcedidosAccountID, &p.ReceitaVendasAccountID, &p.ICMSVendasAccountID,
 		&p.ICMSRecolherAccountID, &p.ICMSSTRecolherAccountID, &p.IPIRecolherAccountID, &p.PISVendasAccountID,
-		&p.PISRecolherAccountID, &p.COFINSVendasAccountID, &p.COFINSRecolherAccountID, &p.CMVAccountID, &p.EstoqueAccountID}
+		&p.PISRecolherAccountID, &p.COFINSVendasAccountID, &p.COFINSRecolherAccountID, &p.CMVAccountID, &p.EstoqueAccountID,
+		&p.IBSVendasAccountID, &p.IBSRecolherAccountID, &p.CBSVendasAccountID, &p.CBSRecolherAccountID}
 }
 
 // VincularContaBancaria liga a conta bancária à conta contábil do banco (nil desliga).

@@ -96,6 +96,8 @@ func Generate(p EFDParams) string {
 			line("0220", cv.UnidConv, fmtFator(cv.FatConv), "")
 		}
 	}
+	linhas0CIAP(line, p.CIAP)
+	linhas0500e0600(line, p.CIAP)
 	line("0990", fmt.Sprint(bloco("0")+1))
 
 	// ── Bloco B (ISS do DF): sem dados ───────────────────────────────────────
@@ -120,6 +122,9 @@ func Generate(p EFDParams) string {
 			fmtVal(doc.VlMerc), firstNonBlank(doc.IndFrt, "9"), fmtVal(doc.VlFrt), fmtVal(doc.VlSeg), fmtVal(doc.VlOutDa),
 			fmtVal(doc.VlBcIcms), fmtVal(doc.VlIcms), fmtVal(doc.VlBcIcmsSt), fmtVal(doc.VlIcmsSt), fmtVal(doc.VlIpi),
 			fmtVal(doc.VlPis), fmtVal(doc.VlCofins), fmtVal(doc.VlPisSt), fmtVal(doc.VlCofinsSt))
+		if c := doc.C101; c != nil {
+			line("C101", fmtVal(c.VlFcpUfDest), fmtVal(c.VlIcmsUfDest), fmtVal(c.VlIcmsUfRem))
+		}
 		for _, it := range doc.Itens {
 			line("C170", fmt.Sprint(it.NumItem), it.CodItem, it.DescCompl, fmtQtd(it.Qtd), it.UnCom, fmtVal(it.VlUnt),
 				fmtVal(it.VlDesc), firstNonBlank(it.IndMov, "0"), it.CstIcms, it.CfopC170, it.CodNat, fmtVal(it.VlBcIcms),
@@ -170,6 +175,33 @@ func Generate(p EFDParams) string {
 	for _, o := range a.Obrigacoes {
 		line("E116", firstNonBlank(o.CodOr, "000"), fmtVal(o.VlOr), fmtDate(o.DtVcto), o.CodRec, "", "", "", o.TxtCompl, o.MesRef)
 	}
+	obrigacao := func(reg string, o EFDObrigacao) {
+		line(reg, firstNonBlank(o.CodOr, "000"), fmtVal(o.VlOr), fmtDate(o.DtVcto), o.CodRec, "", "", "", o.TxtCompl, o.MesRef)
+	}
+	for _, st := range p.ApuracoesST {
+		line("E200", st.UF, dtIni, dtFin)
+		// IND_MOV_ST, saldo credor anterior, devoluções, ressarcimentos, outros
+		// créditos, ajustes de crédito, RETENÇÃO, outros débitos, ajustes de
+		// débito, saldo devedor antes das deduções, deduções, A RECOLHER, saldo
+		// credor a transportar, débitos especiais.
+		line("E210", "1", fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(st.Retencao), fmtVal(0), fmtVal(0),
+			fmtVal(st.Retencao), fmtVal(0), fmtVal(st.Recolher), fmtVal(0), fmtVal(0))
+		if st.Recolher > 0 {
+			obrigacao("E250", st.Obrigacao)
+		}
+	}
+	for _, df := range p.ApuracoesDIFAL {
+		line("E300", df.UF, dtIni, dtFin)
+		// DIFAL: IND_MOV, saldo credor anterior, débitos, outros débitos,
+		// créditos, outros créditos, saldo devedor, deduções, A RECOLHER, saldo
+		// credor a transportar, débitos especiais; e os mesmos campos do FCP.
+		line("E310", "1",
+			fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(0),
+			fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(0))
+		for _, o := range df.Obrigacoes {
+			obrigacao("E316", o)
+		}
+	}
 	if ipi := p.ApuracaoIPI; ipi != nil {
 		line("E500", firstNonBlank(ipi.IndApur, "0"), dtIni, dtFin)
 		for _, l := range ipi.Linhas {
@@ -186,9 +218,9 @@ func Generate(p EFDParams) string {
 	}
 	line("E990", fmt.Sprint(bloco("E")+1))
 
-	// ── Bloco G (CIAP): sem dados ────────────────────────────────────────────
-	line("G001", "1")
-	line("G990", "2")
+	// ── Bloco G (CIAP) ───────────────────────────────────────────────────────
+	linhasG(line, dtIni, dtFin, p.CIAP)
+	line("G990", fmt.Sprint(bloco("G")+1))
 
 	// ── Bloco H ──────────────────────────────────────────────────────────────
 	if len(p.Inventario) == 0 {

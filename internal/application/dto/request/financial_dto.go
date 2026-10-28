@@ -186,6 +186,8 @@ type UpdatePlanoContasDTO struct {
 	ParentCode *string `json:"parent_code,omitempty"`
 	// Nulo mantém a situação atual.
 	IsActive *bool `json:"is_active,omitempty"`
+	// ExigeCentroCusto: nulo mantém.
+	ExigeCentroCusto *bool `json:"exige_centro_custo,omitempty"`
 }
 
 // UpdateCentroCustoDTO segue a mesma regra do plano de contas.

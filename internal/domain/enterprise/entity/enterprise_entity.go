@@ -7,4 +7,6 @@ type Enterprise struct {
 	Code      int
 	Name      string
 	CreatedBy uuid.UUID
+	// Fiscal: identidade fiscal informada no cadastro (opcional).
+	Fiscal *DadosFiscais
 }

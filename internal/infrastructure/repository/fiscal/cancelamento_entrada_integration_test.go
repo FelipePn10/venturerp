@@ -56,7 +56,13 @@ func cancelarNotaComAjuste(t *testing.T, linhas []string, ajuste string, estorno
 		VALUES(78402,'1',$1::date,$1::date,'27785001000145','TUBOS LTDA',723.89,723.89,'APPROVED','CONCLUIDO',$2,$3) RETURNING id`, time.Now(), ator, emp).Scan(&nota); err != nil {
 		t.Fatal(err)
 	}
+	var titulo int64
+	if err := pool.QueryRow(bg, `INSERT INTO contas_pagar(numero_documento,data_emissao,data_vencimento,valor_bruto,status,fiscal_entry_id,criado_por,enterprise_id)
+		VALUES('78402/1',$1::date,$1::date + 30,723.89,'ABERTO',$2,$3,$4) RETURNING id`, time.Now(), nota, ator, emp).Scan(&titulo); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
+		testutil.Exec(t, pool, `DELETE FROM contas_pagar WHERE enterprise_id=$1`, emp)
 		testutil.Exec(t, pool, `DELETE FROM fiscal_entries WHERE enterprise_id=$1`, emp)
 		testutil.Exec(t, pool, `DELETE FROM stock_movements WHERE enterprise_id=$1`, emp)
 		testutil.Exec(t, pool, `DELETE FROM stock_balances WHERE enterprise_id=$1`, emp)
@@ -114,6 +120,16 @@ func cancelarNotaComAjuste(t *testing.T, linhas []string, ajuste string, estorno
 	}
 	if res.MovimentosEstorno != len(estornos) {
 		t.Fatalf("movimentos de estorno = %d, quer %d", res.MovimentosEstorno, len(estornos))
+	}
+	// O título da nota sai do contas a pagar: cancelado E inativo (a lista do
+	// financeiro filtra is_active; antes ficava "cancelado" mas visível).
+	var st string
+	var ativo bool
+	if err := pool.QueryRow(bg, `SELECT status, is_active FROM contas_pagar WHERE id=$1`, titulo).Scan(&st, &ativo); err != nil {
+		t.Fatal(err)
+	}
+	if st != "CANCELADO" || ativo || res.TitulosCancelados != 1 {
+		t.Fatalf("título da nota: status=%s ativo=%v cancelados=%d, quer CANCELADO/false/1", st, ativo, res.TitulosCancelados)
 	}
 	if s := saldo(); !s.IsZero() {
 		t.Fatalf("saldo depois do estorno = %s, quer 0", s)

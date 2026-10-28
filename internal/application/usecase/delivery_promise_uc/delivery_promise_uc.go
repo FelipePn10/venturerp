@@ -87,8 +87,8 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 				ItemCode:       line.ItemCode,
 				Mask:           line.Mask,
 				AllocationDate: truncateDate(*lineDate),
-				Quantity:       math.Max(0, line.RequestedQty-line.AttendedQty-line.CancelledQty),
-				UnitPrice:      line.UnitPrice,
+				Quantity:       math.Max(0, line.RequestedQty.Sub(line.AttendedQty).Sub(line.CancelledQty).InexactFloat64()),
+				UnitPrice:      line.UnitPrice.InexactFloat64(),
 				Source:         "SALES_ORDER",
 				ReferenceCode:  &order.Code,
 			}

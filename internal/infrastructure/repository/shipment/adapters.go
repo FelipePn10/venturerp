@@ -31,16 +31,16 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 		CustomerCode: so.CustomerCode,
 		TotalVolumes: int(so.VolumeQuantity),
 		TotalWeight:  so.TotalWeightGross,
-		TotalGross:   so.TotalGross,
-		TotalNet:     so.TotalNet,
+		TotalGross:   so.TotalGross.InexactFloat64(),
+		TotalNet:     so.TotalNet.InexactFloat64(),
 	}
 	for _, it := range items {
 		h.Items = append(h.Items, shipment_uc.SalesOrderItemHeader{
 			ItemCode:        it.ItemCode,
-			RequestedQty:    it.RequestedQty,
-			UnitPrice:       it.UnitPrice,
-			TotalGross:      it.TotalGross,
-			TotalNet:        it.TotalNet,
+			RequestedQty:    it.RequestedQty.InexactFloat64(),
+			UnitPrice:       it.UnitPrice.InexactFloat64(),
+			TotalGross:      it.TotalGross.InexactFloat64(),
+			TotalNet:        it.TotalNet.InexactFloat64(),
 			IPIPct:          it.IPIPct,
 			ICMSPct:         it.ICMSPct,
 			PISPct:          it.PISPct,
@@ -98,8 +98,8 @@ func (a *ProductionOrderAdapter) GetByCode(ctx context.Context, code int64) (*sh
 	h := &shipment_uc.ProductionOrderHeader{
 		Code:        po.ID,
 		ItemCode:    po.ItemCode,
-		PlannedQty:  po.PlannedQty,
-		ProducedQty: po.ProducedQty,
+		PlannedQty:  po.PlannedQty.InexactFloat64(),
+		ProducedQty: po.ProducedQty.InexactFloat64(),
 	}
 	return h, nil
 }

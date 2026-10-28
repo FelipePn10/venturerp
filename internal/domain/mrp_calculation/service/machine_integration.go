@@ -69,7 +69,7 @@ func minutosDeTroca(mt *entity.MachineTimeInfo, usinagemMin float64) float64 {
 		return 0
 	}
 	gasto := usinagemMin / 60 * *mt.ConsumptionPerHour
-	if cargas := math.Ceil(gasto / *mt.ConsumableCapacity); cargas > 1 {
+	if cargas := divisoesParaCima(gasto, *mt.ConsumableCapacity); cargas > 1 {
 		return (cargas - 1) * *mt.ConsumableSwapMinutes
 	}
 	return 0
