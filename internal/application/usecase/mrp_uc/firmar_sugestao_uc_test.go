@@ -200,6 +200,28 @@ func TestFirmarSugestao_IsIdempotentBySuggestion(t *testing.T) {
 	}
 }
 
+type fakeDemandas struct{ ligadas [][2]int64 }
+
+func (d *fakeDemandas) VincularSugestao(_ context.Context, sugestao, ordem int64, _ uuid.UUID) error {
+	d.ligadas = append(d.ligadas, [2]int64{sugestao, ordem})
+	return nil
+}
+
+// A sugestão já firmada refaz a ligação às demandas: se ela falhou na primeira
+// tentativa, a segunda não devolve a ordem sem o vínculo.
+func TestFirmarSugestao_RefazLigacaoDasDemandasQuandoJaFirmada(t *testing.T) {
+	dem := &fakeDemandas{}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()}, Demandas: dem,
+		PlannedRepo: &fakePlannedRepo{existing: &plannedentity.PlannedOrder{Code: 77, OrderNumber: 88, ItemCode: 2001, IsFirm: true}},
+		Auth:        &fakeAuth{canCreate: true}}
+	if _, err := uc.Execute(context.Background(), 42); err != nil {
+		t.Fatal(err)
+	}
+	if len(dem.ligadas) != 1 || dem.ligadas[0] != [2]int64{42, 77} {
+		t.Fatalf("ligação refeita: %v", dem.ligadas)
+	}
+}
+
 func TestAutoRelease_OnlyEligibleInterFactorySuggestion(t *testing.T) {
 	suggestion := baseSuggestion()
 	suggestion.InterFactory = true

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/shopspring/decimal"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
@@ -419,6 +420,8 @@ func (r *MRPCalculationRepositorySQLC) CreateConfiguredItemRule(
 			Sequence:     int32(rule.Sequence),
 			CreatedBy:    pgutil.ToPgUUID(rule.CreatedBy),
 			EnterpriseID: enterpriseID,
+			CondicaoMascara: pgtype.Text{String: strings.TrimSpace(rule.CondicaoMascara),
+				Valid: strings.TrimSpace(rule.CondicaoMascara) != ""},
 		},
 	)
 
@@ -658,15 +661,32 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	}
 	// stock_snapshots is a manual freeze mechanism that may be empty;
 	// fall back to stock_balances which always reflects the live position.
+	// A reserva ativa de pedido de venda vem à parte: o MRP não a desconta,
+	// porque o pedido já é demanda (DisponivelParaNecessidade). Só a do pedido
+	// que o MRP lê (P/A, ativo, não bloqueado): a reserva de um pedido
+	// bloqueado continua tirando o estoque, já que ele não entra como demanda.
 	rows, err := r.db.Query(ctx, `
+		WITH venda AS (
+			SELECT r.item_code, SUM(r.quantity) AS qtd
+			  FROM stock_reservations r
+			  JOIN sales_orders so ON so.code = r.reference_code
+			  JOIN enterprise e ON e.code = so.enterprise_code AND e.id = r.enterprise_id
+			 WHERE r.enterprise_id = $1 AND r.status = 'ACTIVE' AND r.reference_type = 'SALES_ORDER'
+			   AND so.is_active AND NOT so.is_blocked AND so.status IN ('P', 'A')
+			   AND NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id = r.warehouse_id AND w.enterprise_id = r.enterprise_id
+			                   AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))
+			 GROUP BY r.item_code
+		)
 		SELECT
-			item_code,
-			COALESCE(SUM(quantity), 0)      AS quantity,
-			COALESCE(SUM(reserved_qty), 0)  AS reserved_qty,
-			COALESCE(SUM(safety_stock), 0)  AS safety_stock
+			b.item_code,
+			COALESCE(SUM(b.quantity), 0)      AS quantity,
+			COALESCE(SUM(b.reserved_qty), 0)  AS reserved_qty,
+			COALESCE(MAX(v.qtd), 0)           AS sales_reserved_qty,
+			COALESCE(SUM(b.safety_stock), 0)  AS safety_stock
 		FROM stock_balances b
-		WHERE enterprise_id = $1 AND `+saldoPlanejavel+`
-		GROUP BY item_code
+		LEFT JOIN venda v ON v.item_code = b.item_code
+		WHERE b.enterprise_id = $1 AND `+saldoPlanejavel+`
+		GROUP BY b.item_code
 	`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("loading stock balances for MRP: %w", err)
@@ -676,15 +696,16 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	m := make(map[int64]*entity.StockSnapshot)
 	for rows.Next() {
 		var itemCode int64
-		var qty, reservedQty, safetyStock decimal.Decimal
-		if err := rows.Scan(&itemCode, &qty, &reservedQty, &safetyStock); err != nil {
+		var qty, reservedQty, salesReserved, safetyStock decimal.Decimal
+		if err := rows.Scan(&itemCode, &qty, &reservedQty, &salesReserved, &safetyStock); err != nil {
 			return nil, fmt.Errorf("scanning stock balance: %w", err)
 		}
 		m[itemCode] = &entity.StockSnapshot{
-			ItemCode:    itemCode,
-			Quantity:    qty,
-			ReservedQty: reservedQty,
-			SafetyStock: safetyStock,
+			ItemCode:         itemCode,
+			Quantity:         qty,
+			ReservedQty:      reservedQty,
+			SalesReservedQty: salesReserved,
+			SafetyStock:      safetyStock,
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -846,17 +867,18 @@ func ruleToEntity(
 ) *entity.ConfiguredItemRule {
 
 	return &entity.ConfiguredItemRule{
-		Code:      row.Code.Int64,
-		ItemCode:  row.ItemCode,
-		TableType: row.TableType,
-		FieldName: row.FieldName,
-		RuleType:  row.RuleType,
-		RuleValue: row.RuleValue,
-		Sequence:  int(row.Sequence),
-		IsActive:  row.IsActive,
-		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
-		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
-		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),
+		Code:            row.Code.Int64,
+		ItemCode:        row.ItemCode,
+		TableType:       row.TableType,
+		FieldName:       row.FieldName,
+		RuleType:        row.RuleType,
+		RuleValue:       row.RuleValue,
+		Sequence:        int(row.Sequence),
+		IsActive:        row.IsActive,
+		CreatedAt:       pgutil.FromPgTimestamptz(row.CreatedAt),
+		UpdatedAt:       pgutil.FromPgTimestamptz(row.UpdatedAt),
+		CreatedBy:       pgutil.FromPgUUID(row.CreatedBy),
+		CondicaoMascara: row.CondicaoMascara.String,
 	}
 }
 
@@ -915,4 +937,33 @@ func rulesToEntities(
 	}
 
 	return out
+}
+
+// PrazoDeCompra é o prazo de entrega (dias) do fornecedor do item comprado: o
+// marcado como preferencial, depois o de melhor ranking, entre os vínculos
+// ativos e vigentes hoje. Sem fornecedor, zero. A data vai como parâmetro (o
+// processo e o banco podem estar em fusos diferentes).
+func (r *MRPCalculationRepositorySQLC) PrazoDeCompra(ctx context.Context, itemCode int64) (int, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, err
+	}
+	hoje := time.Now()
+	var dias int
+	err = r.db.QueryRow(ctx, `
+		SELECT lead_time_days FROM item_preferred_suppliers
+		 WHERE enterprise_id = $1 AND item_code = $2 AND is_active
+		   AND (valid_from IS NULL OR valid_from <= $3::date) AND (valid_until IS NULL OR valid_until >= $3::date)
+		 ORDER BY is_preferred DESC, ranking, id
+		 LIMIT 1`, enterpriseID, itemCode, time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, time.UTC)).Scan(&dias)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("lendo o prazo do fornecedor do item %d: %w", itemCode, err)
+	}
+	if dias < 0 {
+		dias = 0
+	}
+	return dias, nil
 }

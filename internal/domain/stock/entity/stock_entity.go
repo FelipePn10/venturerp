@@ -44,6 +44,8 @@ const (
 	ReferenceTypeReversal        = "ESTORNO"
 	ReferenceTypeRequisition     = "REQUISICAO_MATERIAL"
 	ReferenceTypeManual          = "MANUAL"
+	// Saída para a finalidade de uma demanda independente (VPLA0102).
+	ReferenceTypeIndependentDemand = "DEMANDA_INDEPENDENTE"
 )
 
 // SignedQuantity returns the delta that a movement of the given type applies to

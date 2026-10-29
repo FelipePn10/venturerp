@@ -3936,6 +3936,65 @@ type Cfop struct {
 	IndExcIbscbs    bool
 }
 
+type CiapApuracaoParcela struct {
+	ApuracaoID    int64
+	BemID         int64
+	TipoMov       string
+	NumeroParcela pgtype.Int2
+	ValorParcela  pgtype.Numeric
+}
+
+type CiapApuraco struct {
+	ID               int64
+	EnterpriseID     int64
+	Ano              int16
+	Mes              int16
+	SaldoInicial     pgtype.Numeric
+	SomaParcelas     pgtype.Numeric
+	SaidasTribExp    pgtype.Numeric
+	SaidasTotal      pgtype.Numeric
+	Indice           pgtype.Numeric
+	IcmsApropriado   pgtype.Numeric
+	SaidasInformadas bool
+	Fechada          bool
+	ApuradoEm        pgtype.Timestamptz
+	ApuradoPor       pgtype.UUID
+}
+
+type CiapBen struct {
+	ID                int64
+	EnterpriseID      int64
+	Codigo            string
+	Descricao         string
+	Funcao            pgtype.Text
+	VidaUtilMeses     pgtype.Int2
+	ContaAtivoID      *int64
+	CostCenterID      *int64
+	Origem            string
+	FiscalEntryItemID *int64
+	DataEntrada       pgtype.Date
+	IcmsOp            pgtype.Numeric
+	IcmsSt            pgtype.Numeric
+	IcmsFrete         pgtype.Numeric
+	IcmsDifal         pgtype.Numeric
+	NumeroParcelas    int16
+	Situacao          string
+	DataBaixa         pgtype.Date
+	TipoBaixa         pgtype.Text
+	MotivoBaixa       pgtype.Text
+	CreatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
+}
+
+type CiapParametro struct {
+	EnterpriseID   int64
+	CodigoAjuste   pgtype.Text
+	ContaAtivoID   *int64
+	NumeroParcelas int16
+	UpdatedAt      pgtype.Timestamptz
+	UpdatedBy      pgtype.UUID
+}
+
 type CommercialCommissionEvent struct {
 	ID             pgtype.UUID
 	EnterpriseID   int64
@@ -4107,19 +4166,20 @@ type CondicoesPagamento struct {
 }
 
 type ConfiguredItemRule struct {
-	ID           int64
-	ItemCode     int64
-	TableType    string
-	FieldName    string
-	RuleType     string
-	RuleValue    string
-	Sequence     int32
-	IsActive     bool
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	CreatedBy    pgtype.UUID
-	Code         pgtype.Int8
-	EnterpriseID *int64
+	ID              int64
+	ItemCode        int64
+	TableType       string
+	FieldName       string
+	RuleType        string
+	RuleValue       string
+	Sequence        int32
+	IsActive        bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+	CreatedBy       pgtype.UUID
+	Code            pgtype.Int8
+	EnterpriseID    *int64
+	CondicaoMascara pgtype.Text
 }
 
 type ConsumerServiceCall struct {
@@ -6308,18 +6368,41 @@ type ImportProcessItem struct {
 }
 
 type IndependentDemand struct {
-	ID             int64
-	Code           int64
-	ItemCode       int64
-	Mask           pgtype.Text
-	CostCenterCode pgtype.Int8
-	Quantity       pgtype.Numeric
-	DemandDate     pgtype.Date
-	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	CreatedBy      pgtype.UUID
-	EnterpriseID   *int64
+	ID                 int64
+	Code               int64
+	ItemCode           int64
+	Mask               pgtype.Text
+	CostCenterCode     pgtype.Int8
+	Quantity           pgtype.Numeric
+	DemandDate         pgtype.Date
+	IsActive           bool
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+	EnterpriseID       *int64
+	Motivo             string
+	WarehouseID        *int64
+	CustomerCode       *int64
+	Projeto            pgtype.Text
+	Prioridade         int16
+	Observacao         pgtype.Text
+	Programacao        pgtype.UUID
+	Situacao           string
+	EncerradaEm        pgtype.Timestamptz
+	EncerradaPor       pgtype.UUID
+	MotivoEncerramento pgtype.Text
+	UpdatedBy          pgtype.UUID
+}
+
+type IndependentDemandOrder struct {
+	ID                int64
+	EnterpriseID      int64
+	DemandID          int64
+	PlannedOrderID    *int64
+	ProductionOrderID *int64
+	Quantity          pgtype.Numeric
+	CreatedAt         pgtype.Timestamptz
+	CreatedBy         pgtype.UUID
 }
 
 type IndustrialCalendar struct {
@@ -8261,6 +8344,23 @@ type PlanoConta struct {
 	EnterpriseID        *int64
 	AccountingAccountID *int64
 	ExigeCentroCusto    bool
+}
+
+type PoliticasPlanejamento struct {
+	ID                 int64
+	EnterpriseID       int64
+	ItemCode           *int64
+	ClassificationID   *int64
+	Estrategia         pgtype.Text
+	ConsumoDiasAntes   pgtype.Int2
+	ConsumoDiasDepois  pgtype.Int2
+	HorizonteFirmeDias pgtype.Int2
+	TempoSegurancaDias pgtype.Int2
+	Observacao         pgtype.Text
+	CreatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
+	UpdatedAt          pgtype.Timestamptz
+	UpdatedBy          pgtype.UUID
 }
 
 type PreventiveService struct {

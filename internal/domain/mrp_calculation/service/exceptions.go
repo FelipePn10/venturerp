@@ -34,6 +34,8 @@ type exceptionBasis struct {
 	// labels: código de negócio do item, para o texto das mensagens. Item sem
 	// rótulo aparece pelo código interno.
 	labels map[int64]string
+	// horizonte: sugestões que o horizonte firme empurrou para o fim dele.
+	horizonte []*entity.PlannedOrderSuggestion
 }
 
 // rotulo é como o item aparece na mensagem: o código de negócio que o
@@ -78,7 +80,7 @@ func newExceptionBasis(snapshots map[int64]*entity.StockSnapshot, supply map[int
 		}
 		// Mesma conta do netting (calcNetReqFast): o estoque de segurança não
 		// cobre necessidade.
-		if avail := snap.Quantity.Sub(snap.ReservedQty).Sub(snap.SafetyStock); avail.IsPositive() {
+		if avail := snap.DisponivelParaNecessidade(); avail.IsPositive() {
 			b.stock[item] = avail
 		}
 	}
@@ -101,6 +103,56 @@ func (b *exceptionBasis) addSuggestion(s *entity.PlannedOrderSuggestion) {
 		return
 	}
 	b.suggestions[s.ItemCode] = append(b.suggestions[s.ItemCode], suggestedSupply{code: s.Code, needDate: s.NeedDate, quantity: s.Quantity})
+}
+
+// addFirmFence registra a sugestão gravada que o horizonte firme empurrou.
+func (b *exceptionBasis) addFirmFence(s *entity.PlannedOrderSuggestion) {
+	if b == nil || s == nil || s.Code <= 0 || s.InicioPedido == nil || s.StartDate == nil {
+		return
+	}
+	b.horizonte = append(b.horizonte, s)
+}
+
+// itens são os itens que as mensagens citam (para ler os rótulos).
+func (b *exceptionBasis) itens() []int64 {
+	vistos := map[int64]bool{}
+	out := make([]int64, 0, len(b.supply)+len(b.horizonte))
+	for item := range b.supply {
+		vistos[item] = true
+		out = append(out, item)
+	}
+	for _, s := range b.horizonte {
+		if !vistos[s.ItemCode] {
+			vistos[s.ItemCode] = true
+			out = append(out, s.ItemCode)
+		}
+	}
+	return out
+}
+
+// firmFenceMessages: uma mensagem por sugestão empurrada pelo horizonte firme.
+// Não reprograma nada (a sugestão já está no primeiro dia possível): avisa que
+// ela chega depois do que a necessidade pedia, para o planejador decidir
+// (firmar dentro do horizonte à mão, acelerar o fornecedor, avisar o cliente).
+func (b *exceptionBasis) firmFenceMessages() []*entity.MRPExceptionMessage {
+	out := make([]*entity.MRPExceptionMessage, 0, len(b.horizonte))
+	for _, s := range b.horizonte {
+		code, tipo := s.Code, "MRP_SUGGESTION"
+		pedida := *s.InicioPedido
+		atraso := int(math.Ceil(s.NeedDate.Sub(s.Necessidade).Hours() / 24))
+		texto := fmt.Sprintf(
+			"%s: a sugestão de %s un. precisava começar em %s, dentro do horizonte firme. Começa em %s e chega em %s",
+			b.rotulo(s.ItemCode), qtd(s.Quantity), pedida.Format("02/01/2006"), s.StartDate.Format("02/01/2006"), s.NeedDate.Format("02/01/2006"))
+		if atraso > 0 {
+			texto += fmt.Sprintf(", %d dia(s) depois da necessidade de %s", atraso, s.Necessidade.Format("02/01/2006"))
+		}
+		texto += ". Para atender antes, firme a ordem à mão dentro do horizonte."
+		out = append(out, &entity.MRPExceptionMessage{
+			ItemCode: s.ItemCode, MessageType: entity.ExceptionFirmFence, SourceCode: &code, SourceType: &tipo,
+			SuggestedDate: &pedida, Description: texto,
+		})
+	}
+	return out
 }
 
 // messages faz o pegging de cada item: o estoque inicial cobre as primeiras

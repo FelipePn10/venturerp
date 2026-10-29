@@ -100,29 +100,66 @@ func TestRuleMatchesMask(t *testing.T) {
 		{"unknown type applies always", "WHATEVER", "x", "y", true},
 		{"lowercase type normalized", "equal", "0010", "0010", true},
 	}
+	// value é a condição de máscara (a coluna própria, migração 452); o
+	// valor da regra (dias, lote) não entra na comparação.
 	for _, c := range cases {
-		rule := &entity.ConfiguredItemRule{RuleType: c.ruleType, RuleValue: c.value}
+		rule := &entity.ConfiguredItemRule{RuleType: c.ruleType, RuleValue: "15", CondicaoMascara: c.value}
 		if got := s.ruleMatchesMask(rule, c.mask); got != c.want {
 			t.Errorf("%s: ruleMatchesMask = %v, want %v", c.name, got, c.want)
 		}
 	}
 }
 
+func TestRegraSemCondicaoValeParaTodaMascara(t *testing.T) {
+	// A regra "lead_time Igual 15" cadastrada pela tela: antes só valia para a
+	// máscara "15"; sem condição de máscara, vale para o item inteiro.
+	rule := &entity.ConfiguredItemRule{FieldName: "lead_time", RuleType: "EQUAL", RuleValue: "15"}
+	for _, mask := range []string{"", "AZUL", "15"} {
+		if !rule.CasaComMascara(mask) {
+			t.Fatalf("sem condição a regra vale para a máscara %q", mask)
+		}
+	}
+	s := &MRPServiceImpl{}
+	if got, err := s.prazoDoItem(context.Background(), map[int64][]*entity.ConfiguredItemRule{7: {rule}}, nil, 7, "AZUL"); err != nil || got != 15 {
+		t.Fatalf("prazo da regra = %d (%v), esperado 15", got, err)
+	}
+}
+
+func TestValidarRegraConfigurada(t *testing.T) {
+	casos := map[string][4]string{
+		"prazo não numérico": {"lead_time", "EQUAL", "x", ""},
+		"prazo negativo":     {"lead_time", "EQUAL", "-1", ""},
+		"lote negativo":      {"lote_minimo", "EQUAL", "-2", ""},
+		"faixa malformada":   {"lead_time", "RANGE", "5", "10..20"},
+	}
+	for nome, c := range casos {
+		if entity.ValidarRegraConfigurada(c[0], c[1], c[2], c[3]) == "" {
+			t.Errorf("%s: deveria recusar", nome)
+		}
+	}
+	if msg := entity.ValidarRegraConfigurada("lote_minimo", "EQUAL", "12,5", ""); msg != "" {
+		t.Fatal(msg)
+	}
+	if msg := entity.ValidarRegraConfigurada("lead_time", "RANGE", "5", "100-200"); msg != "" {
+		t.Fatal(msg)
+	}
+}
+
 func TestGetLeadTimeDays_FallbackToConfiguredRule(t *testing.T) {
-	// RoutingRepo nil → uses the configured-rule fallback (max lead_time value).
+	// RoutingRepo nil → a regra configurada; a última válida da sequência vence.
 	s := &MRPServiceImpl{}
 	rulesMap := map[int64][]*entity.ConfiguredItemRule{
 		7: {
 			{FieldName: "lead_time", RuleValue: "3"},
-			{FieldName: "lead_time", RuleValue: "5"}, // max wins
+			{FieldName: "lead_time", RuleValue: "5"}, // última válida vence
 			{FieldName: "other", RuleValue: "99"},    // ignored
 			{FieldName: "lead_time", RuleValue: "x"}, // unparsable → ignored
 		},
 	}
-	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, 7); err != nil || got != 5 {
-		t.Fatalf("lead time = %d, want 5 (max configured)", got)
+	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, nil, 7); err != nil || got != 5 {
+		t.Fatalf("lead time = %d, want 5 (última válida)", got)
 	}
-	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, 999); err != nil || got != 0 {
+	if got, err := s.getLeadTimeDays(context.Background(), rulesMap, nil, 999); err != nil || got != 0 {
 		t.Fatalf("unknown item lead time = %d, want 0", got)
 	}
 }

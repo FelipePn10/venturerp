@@ -27,6 +27,37 @@ type TypedPlanningParams struct {
 	FormulaPerdasEstrutura          int
 	NumeracaoOrdens                 string
 	ObrigarControleEstoqueTerceiros bool
+	// Janela de consumo pela venda (46 e 47): a venda na data V consome a
+	// previsão e a demanda de estoque com data entre V − antes e V + depois.
+	ConsumoDiasAntes  int
+	ConsumoDiasDepois int
+	// Horizonte firme (48, dias corridos, 0 = desligado) e tempo de segurança
+	// (49, dias úteis) da empresa; a política do item sobrepõe os dois.
+	HorizonteFirmeDias int
+	TempoSegurancaDias int
+	// Politicas é a política de planejamento efetiva dos itens que têm regra
+	// (item ou classificação). Item fora do mapa segue os parâmetros acima.
+	// Preenchida pelo cálculo (por execução), não pelo LoadFromDB.
+	Politicas map[int64]PoliticaEfetiva
+}
+
+// Politica devolve a política de planejamento do item: a efetiva da regra ou,
+// sem regra, os parâmetros da empresa.
+func (p *TypedPlanningParams) Politica(item int64) PoliticaEfetiva {
+	if pol, ok := p.Politicas[item]; ok {
+		return pol
+	}
+	return p.PoliticaDaEmpresa()
+}
+
+// PoliticaDaEmpresa é a política que os parâmetros da empresa dão a um item
+// sem regra própria.
+func (p *TypedPlanningParams) PoliticaDaEmpresa() PoliticaEfetiva {
+	return PoliticaEfetiva{
+		Estrategia: EstrategiaConsumo, ConsumoDiasAntes: p.ConsumoDiasAntes, ConsumoDiasDepois: p.ConsumoDiasDepois,
+		HorizonteFirmeDias: p.HorizonteFirmeDias, TempoSegurancaDias: p.TempoSegurancaDias,
+		Origem: OrigemPolitica{Estrategia: OrigemEmpresa, Janela: OrigemEmpresa, HorizonteFirme: OrigemEmpresa, TempoSeguranca: OrigemEmpresa},
+	}
 }
 
 func DefaultTypedPlanningParams() *TypedPlanningParams {
@@ -41,6 +72,7 @@ func DefaultTypedPlanningParams() *TypedPlanningParams {
 		ValidaRestricoesEstrutura:    true,
 		FormulaPerdasEstrutura:       2,
 		NumeracaoOrdens:              "AUTO",
+		ConsumoDiasAntes:             30,
 	}
 }
 
@@ -110,6 +142,25 @@ func (p *TypedPlanningParams) LoadFromDB(raw map[int]string) {
 	if v, ok := raw[45]; ok {
 		p.ObrigarControleEstoqueTerceiros = parseBool(v)
 	}
+	if v, ok := raw[46]; ok {
+		p.ConsumoDiasAntes = naoNegativo(parseInt(v, 30))
+	}
+	if v, ok := raw[47]; ok {
+		p.ConsumoDiasDepois = naoNegativo(parseInt(v, 0))
+	}
+	if v, ok := raw[48]; ok {
+		p.HorizonteFirmeDias = naoNegativo(parseInt(v, 0))
+	}
+	if v, ok := raw[49]; ok {
+		p.TempoSegurancaDias = naoNegativo(parseInt(v, 0))
+	}
+}
+
+func naoNegativo(v int) int {
+	if v < 0 {
+		return 0
+	}
+	return v
 }
 
 func parseBool(v string) bool {

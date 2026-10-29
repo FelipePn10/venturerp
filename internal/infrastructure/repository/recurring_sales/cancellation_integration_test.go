@@ -31,7 +31,8 @@ func TestCancellationIsAtomicAuditedAndTenantSafe(t *testing.T) {
 	if err := pool.QueryRow(base, `INSERT INTO enterprise(code,name) VALUES($1,'Recurring B') RETURNING id`, codeB).Scan(&idB); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(base, `INSERT INTO recurring_sales(enterprise_code,customer_code,item_code,movement_type,term_type,sale_date,next_adjustment_date,quantity,unit_value,generated_order_code,created_by) VALUES($1,10,20,'SALE','INDEFINITE',CURRENT_DATE,CURRENT_DATE+INTERVAL '1 year',1,100,999,$2) RETURNING code`, codeA, actor).Scan(&recurringCode); err != nil {
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(codeA), int64(codeB)) })
+	if err := pool.QueryRow(base, `INSERT INTO recurring_sales(enterprise_code,customer_code,item_code,movement_type,term_type,sale_date,next_adjustment_date,quantity,unit_value,generated_order_code,created_by) VALUES($1,$3,20,'SALE','INDEFINITE',CURRENT_DATE,CURRENT_DATE+INTERVAL '1 year',1,100,999,$2) RETURNING code`, codeA, actor, clienteInexistente()).Scan(&recurringCode); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -59,3 +60,8 @@ func TestCancellationIsAtomicAuditedAndTenantSafe(t *testing.T) {
 		t.Fatalf("auditoria incompleta: count=%d err=%v", count, err)
 	}
 }
+
+// clienteInexistente: código de cliente que não existe em nenhuma empresa. O 10
+// fixo colidia com cliente real num banco de teste com dados, e a conferência
+// de empresa recusava a venda recorrente.
+func clienteInexistente() int64 { return testutil.UniqueCode() }

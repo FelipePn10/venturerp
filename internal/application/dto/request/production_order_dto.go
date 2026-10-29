@@ -3,6 +3,8 @@ package request
 import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+
+	prodentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 )
 
 // CreateProductionOrderDTO: o item chega pelo código de negócio (texto), como a
@@ -22,6 +24,8 @@ type CreateProductionOrderDTO struct {
 	Priority       *string         `json:"priority,omitempty"`
 	Notes          *string         `json:"notes,omitempty"`
 	CreatedBy      uuid.UUID       `json:"-"`
+	// VinculoDemanda: só a demanda independente preenche (não vem da tela).
+	VinculoDemanda *prodentity.VinculoDemanda `json:"-"`
 }
 
 type StartProductionOrderDTO struct {

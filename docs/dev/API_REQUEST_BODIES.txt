@@ -391,37 +391,83 @@ MÓDULO: INDEPENDENT DEMAND (DEMANDA INDEPENDENTE)
 ============================================================
 
 POST /api/independent-demand/create
+-- item_code: código de negócio (texto). code_demand 0/ausente = primeiro número
+-- livre da empresa. entregas > 1 divide a quantidade (programação). Devolve a
+-- lista das demandas criadas.
 {
-  "code_demand": 1,
-  "item_code": 10001,
+  "item_code": "RN-01001",
   "mask": "100#100#50",
+  "motivo": "ESTOQUE",
+  "quantity": "500",
+  "demand_date": "2026-11-15",
+  "warehouse_id": 8,
   "cost_center_code": 10,
-  "quantity": 500.0,
-  "demand_date": "2025-06-15",
-  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+  "customer_code": 120,
+  "projeto": "Obra Ponte Norte",
+  "prioridade": 3,
+  "observacao": "campanha de fim de ano",
+  "entregas": 4,
+  "intervalo_dias": 7
 }
+-- motivo: ESTOQUE | REPOSICAO | ANTECIPACAO_VENDA (a venda consome)
+--         AMOSTRA | FEIRA | CONSUMO_INTERNO | ASSISTENCIA | PROJETO (atendida pela saída)
+-- projeto é obrigatório quando motivo = PROJETO.
 
 PUT /api/independent-demand/update/{code}
-{
-  "code_demand": 1,
-  "item_code": 10001,
-  "mask": "100#100#50",
-  "cost_center_code": 10,
-  "quantity": 750.0,
-  "demand_date": "2025-06-20"
-}
+-- Só demanda ABERTA. Mesmo corpo do create, sem programação. Campo omitido
+-- fica como está (o desktop até a 1.8.0 não manda motivo, destino, cliente,
+-- projeto, prioridade nem observação); para limpar, mande 0 (warehouse_id,
+-- customer_code) ou "" (projeto, observacao). warehouse_id tem de ser da
+-- empresa.
 
-DELETE /api/independent-demand/delete/{code}
--- Parâmetro na URL: code (int64)
--- Exemplo: DELETE /api/independent-demand/delete/1
+POST /api/independent-demand/{code}/cancelar   { "motivo": "não vai mais" }
+-- Só sem saída para a finalidade.
+POST /api/independent-demand/{code}/encerrar   { "motivo": "saldo não vai sair" }
+POST /api/independent-demand/{code}/atender
+{ "quantidade": "2", "warehouse_id": 8, "movement_type_code": "SAM", "observacao": "feira de Joinville" }
+-- Só finalidade própria. Lança a saída OUT com referência DEMANDA_INDEPENDENTE.
+POST /api/independent-demand/{code}/gerar-of
+{ "quantidade": "10", "start_date": "2026-11-01", "end_date": "2026-11-15", "priority": "HIGH" }
+-- quantidade ausente = sem_ordem (a planejar menos o já coberto por ordens).
+-- Recusa quando sem_ordem = 0. Quantidade maior (lote) vale, mas o vínculo
+-- conta só o sem_ordem. A OF e o vínculo gravam na mesma transação.
 
+DELETE /api/independent-demand/delete/{code}?motivo=...
+-- Igual a /cancelar. Sem motivo (desktop até a 1.8.0), registra
+-- "Excluída pela tela de demanda independente (sem motivo informado)".
+
+GET /api/independent-demand/list?item=RN-01001&motivo=ESTOQUE&situacao=ABERTA&de=2026-11-01&ate=2026-12-31
+-- Todos os filtros são opcionais. Sem situacao, só as ABERTAS (o desktop
+-- até a 1.8.0 não filtra); situacao=TODAS traz as três. Cada demanda vem com
+-- a posição: consumida, atendida, a_planejar, coberta, sem_ordem, posicao
+-- (ABERTA|PARCIAL|ATENDIDA|CONSUMIDA|VENCIDA) e vence_em, além de
+-- warehouse_nome e customer_nome.
+GET /api/independent-demand/get-by-code/{code}
+-- Mais as ordens que cobrem a demanda (ordens[]).
 GET /api/independent-demand/list-from-date/{date}
--- Parâmetro na URL: date (string, YYYY-MM-DD)
--- Exemplo: GET /api/independent-demand/list-from-date/2025-06-01
-
 GET /api/independent-demand/list-by-item/{itemCode}
--- Parâmetro na URL: itemCode (int64)
--- Exemplo: GET /api/independent-demand/list-by-item/10001
+-- Abertas; itemCode é a chave interna do item.
+GET /api/independent-demand/consumo?item=RN-01001
+-- Visão do consumo do item: previsoes[] (semana, quantidade, consumida, resto,
+-- consumo[]), demandas[] (expectativa de venda, com consumo[]), vendas[]
+-- (pedido, sequencia, cliente, data, quantidade, consumiu, acima) e totais.
+-- O detalhe da demanda (get-by-code) traz consumo[] da própria demanda.
+
+-- ── Política de planejamento por item/classificação (VPLA0310) ──
+GET    /api/planning-policy/?escopo=ITEM|CLASSIFICACAO&busca=texto
+GET    /api/planning-policy/{id}
+POST   /api/planning-policy/
+{ "item_code": "RN-01001", "estrategia": "SOB_ENCOMENDA", "consumo_dias_antes": 0,
+  "consumo_dias_depois": 15, "horizonte_firme_dias": 10, "tempo_seguranca_dias": 2,
+  "observacao": "linha sob encomenda" }
+-- Ou "classification_id": 42 no lugar de item_code (um dos dois). Campo ausente
+-- herda (classificação → parâmetros 46-49). estrategia: CONSUMO | SOB_ENCOMENDA.
+-- Dias de 0 a 365. 409 se o item/classificação já tem política.
+PUT    /api/planning-policy/{id}     -- mesmos campos; o escopo não muda
+DELETE /api/planning-policy/{id}
+GET    /api/planning-policy/efetiva?item=RN-01001
+-- Valor final de cada campo e a origem ("do item", "da classificação 10.100",
+-- "parâmetro da empresa").
 
 GET /api/independent-demand/list
 -- Sem corpo de requisição
@@ -655,13 +701,17 @@ GET /api/mrp-calculation/profile/{item_code}/{plan_code}
 POST /api/mrp-calculation/configured-rules
 {
   "item_code": 10001,
-  "table_type": "SUPPLY",
+  "table_type": "PLANNING_DATA",
   "field_name": "lead_time",
-  "rule_type": "FIXED",
+  "rule_type": "EQUAL",
   "rule_value": "10",
-  "sequence": 1,
-  "created_by": "550e8400-e29b-41d4-a716-446655440000"
+  "condicao_mascara": "AZUL",
+  "sequence": 1
 }
+-- rule_value é o valor (lead_time: dias úteis, inteiro 0-3650; lote_minimo:
+-- número >= 0). condicao_mascara vazia = vale para todas as máscaras; com ela,
+-- rule_type (EQUAL | DIFFERENT | RANGE "a-b") compara a máscara. O autor vem
+-- do token.
 
 GET /api/mrp-calculation/configured-rules/{item_code}
 -- Parâmetro na URL: item_code (int64)

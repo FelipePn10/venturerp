@@ -236,24 +236,8 @@ func NewDeliveryRescheduleHandler(
 	}
 }
 
-func NewIndependentDemandHandler(
-	createUC *independent_demand_uc.CreateIndependentDemandUseCase,
-	updateUC *independent_demand_uc.UpdateIndependentDemandUseCase,
-	deleteUC *independent_demand_uc.DeleteIndependentDemandUseCase,
-	listFromDateUC *independent_demand_uc.ListIndependentDemandFromDateUseCase,
-	listByItemCodeUC *independent_demand_uc.ListIndependentDemandByItemUseCase,
-	listUC *independent_demand_uc.ListIndependentDemandsUseCase,
-	getByCodeUC *independent_demand_uc.GetIndependentDemandByCodeUseCase,
-) *IndependentDemandHandler {
-	return &IndependentDemandHandler{
-		createUC:       createUC,
-		updateUC:       updateUC,
-		deleteUC:       deleteUC,
-		listFromDateUC: listFromDateUC,
-		listByItemUC:   listByItemCodeUC,
-		listUC:         listUC,
-		getByCodeUC:    getByCodeUC,
-	}
+func NewIndependentDemandHandler(uc *independent_demand_uc.DemandaUseCase) *IndependentDemandHandler {
+	return &IndependentDemandHandler{uc: uc}
 }
 
 func NewIndustrialCalendarHandler(

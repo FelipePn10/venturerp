@@ -137,7 +137,7 @@ func TestAjustesDoCenario(t *testing.T) {
 	regras := map[int64][]*entity.ConfiguredItemRule{5: {{FieldName: "lead_time", RuleValue: "3"}}}
 	applyScenarioLeadTimes(adj, regras)
 	s := &MRPServiceImpl{}
-	if got, err := s.getLeadTimeDays(context.Background(), regras, 5); err != nil || got != 12 {
+	if got, err := s.getLeadTimeDays(context.Background(), regras, nil, 5); err != nil || got != 12 {
 		t.Fatalf("prazo do cenário = %d, esperado 12", got)
 	}
 }

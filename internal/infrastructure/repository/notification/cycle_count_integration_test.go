@@ -36,6 +36,7 @@ func TestCycleCountUsesBusinessCodeAndWritesAuditTransactionally(t *testing.T) {
 	if err = pool.QueryRow(ctx, `INSERT INTO enterprise(code,name,created_by) VALUES($1,'Tenant contagem',$2) RETURNING id`, code, actor).Scan(&enterpriseID); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, enterpriseID) })
 	if err = pool.QueryRow(ctx, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed,enterprise_id) VALUES($1,'Contagem',$2,'INTERNO','NORMAL',TRUE,TRUE,$3) RETURNING id`, fmt.Sprintf("WC-%d", code), actor, enterpriseID).Scan(&warehouseID); err != nil {
 		t.Fatal(err)
 	}

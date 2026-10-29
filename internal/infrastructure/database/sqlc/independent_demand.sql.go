@@ -11,10 +11,42 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const closeIndependentDemand = `-- name: CloseIndependentDemand :execrows
+UPDATE independent_demands
+   SET situacao = $1, is_active = FALSE,
+       encerrada_em = NOW(), encerrada_por = $2, motivo_encerramento = $3,
+       updated_by = $2, updated_at = NOW()
+ WHERE code = $4 AND enterprise_id = $5 AND situacao = 'ABERTA'
+`
+
+type CloseIndependentDemandParams struct {
+	Situacao           string
+	EncerradaPor       pgtype.UUID
+	MotivoEncerramento pgtype.Text
+	Code               int64
+	EnterpriseID       *int64
+}
+
+func (q *Queries) CloseIndependentDemand(ctx context.Context, arg CloseIndependentDemandParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeIndependentDemand,
+		arg.Situacao,
+		arg.EncerradaPor,
+		arg.MotivoEncerramento,
+		arg.Code,
+		arg.EnterpriseID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createIndependentDemand = `-- name: CreateIndependentDemand :one
-INSERT INTO independent_demands (code, item_code, mask, cost_center_code, quantity, demand_date, created_by, enterprise_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id
+INSERT INTO independent_demands (code, item_code, mask, cost_center_code, quantity, demand_date, created_by, enterprise_id,
+                                 motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, updated_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, $13, $14, $15, $7)
+    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by
 `
 
 type CreateIndependentDemandParams struct {
@@ -26,6 +58,13 @@ type CreateIndependentDemandParams struct {
 	DemandDate     pgtype.Date
 	CreatedBy      pgtype.UUID
 	EnterpriseID   *int64
+	Motivo         string
+	WarehouseID    *int64
+	CustomerCode   *int64
+	Projeto        pgtype.Text
+	Prioridade     int16
+	Observacao     pgtype.Text
+	Programacao    pgtype.UUID
 }
 
 func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndependentDemandParams) (IndependentDemand, error) {
@@ -38,6 +77,13 @@ func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndepen
 		arg.DemandDate,
 		arg.CreatedBy,
 		arg.EnterpriseID,
+		arg.Motivo,
+		arg.WarehouseID,
+		arg.CustomerCode,
+		arg.Projeto,
+		arg.Prioridade,
+		arg.Observacao,
+		arg.Programacao,
 	)
 	var i IndependentDemand
 	err := row.Scan(
@@ -53,12 +99,25 @@ func (q *Queries) CreateIndependentDemand(ctx context.Context, arg CreateIndepen
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.Motivo,
+		&i.WarehouseID,
+		&i.CustomerCode,
+		&i.Projeto,
+		&i.Prioridade,
+		&i.Observacao,
+		&i.Programacao,
+		&i.Situacao,
+		&i.EncerradaEm,
+		&i.EncerradaPor,
+		&i.MotivoEncerramento,
+		&i.UpdatedBy,
 	)
 	return i, err
 }
 
 const deleteIndependentDemand = `-- name: DeleteIndependentDemand :exec
-UPDATE independent_demands SET is_active = FALSE, updated_at = NOW() WHERE code = $1 AND enterprise_id = $2
+UPDATE independent_demands SET is_active = FALSE, situacao = 'CANCELADA', updated_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
 `
 
 type DeleteIndependentDemandParams struct {
@@ -72,7 +131,7 @@ func (q *Queries) DeleteIndependentDemand(ctx context.Context, arg DeleteIndepen
 }
 
 const getIndependentDemandByCode = `-- name: GetIndependentDemandByCode :one
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by FROM independent_demands WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetIndependentDemandByCodeParams struct {
@@ -96,12 +155,24 @@ func (q *Queries) GetIndependentDemandByCode(ctx context.Context, arg GetIndepen
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.Motivo,
+		&i.WarehouseID,
+		&i.CustomerCode,
+		&i.Projeto,
+		&i.Prioridade,
+		&i.Observacao,
+		&i.Programacao,
+		&i.Situacao,
+		&i.EncerradaEm,
+		&i.EncerradaPor,
+		&i.MotivoEncerramento,
+		&i.UpdatedBy,
 	)
 	return i, err
 }
 
 const listDemandsByItem = `-- name: ListDemandsByItem :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by FROM independent_demands WHERE item_code = $1 AND enterprise_id = $2 AND situacao = 'ABERTA' ORDER BY demand_date
 `
 
 type ListDemandsByItemParams struct {
@@ -131,6 +202,18 @@ func (q *Queries) ListDemandsByItem(ctx context.Context, arg ListDemandsByItemPa
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.Motivo,
+			&i.WarehouseID,
+			&i.CustomerCode,
+			&i.Projeto,
+			&i.Prioridade,
+			&i.Observacao,
+			&i.Programacao,
+			&i.Situacao,
+			&i.EncerradaEm,
+			&i.EncerradaPor,
+			&i.MotivoEncerramento,
+			&i.UpdatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -143,7 +226,7 @@ func (q *Queries) ListDemandsByItem(ctx context.Context, arg ListDemandsByItemPa
 }
 
 const listDemandsFromDate = `-- name: ListDemandsFromDate :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE demand_date >= $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by FROM independent_demands WHERE demand_date >= $1 AND enterprise_id = $2 AND situacao = 'ABERTA' ORDER BY demand_date
 `
 
 type ListDemandsFromDateParams struct {
@@ -173,6 +256,18 @@ func (q *Queries) ListDemandsFromDate(ctx context.Context, arg ListDemandsFromDa
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.Motivo,
+			&i.WarehouseID,
+			&i.CustomerCode,
+			&i.Projeto,
+			&i.Prioridade,
+			&i.Observacao,
+			&i.Programacao,
+			&i.Situacao,
+			&i.EncerradaEm,
+			&i.EncerradaPor,
+			&i.MotivoEncerramento,
+			&i.UpdatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -185,7 +280,7 @@ func (q *Queries) ListDemandsFromDate(ctx context.Context, arg ListDemandsFromDa
 }
 
 const listIndependentDemands = `-- name: ListIndependentDemands :many
-SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id FROM independent_demands WHERE enterprise_id = $1 AND is_active = TRUE ORDER BY demand_date
+SELECT id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by FROM independent_demands WHERE enterprise_id = $1 AND situacao = 'ABERTA' ORDER BY demand_date
 `
 
 func (q *Queries) ListIndependentDemands(ctx context.Context, enterpriseID *int64) ([]IndependentDemand, error) {
@@ -210,6 +305,18 @@ func (q *Queries) ListIndependentDemands(ctx context.Context, enterpriseID *int6
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.Motivo,
+			&i.WarehouseID,
+			&i.CustomerCode,
+			&i.Projeto,
+			&i.Prioridade,
+			&i.Observacao,
+			&i.Programacao,
+			&i.Situacao,
+			&i.EncerradaEm,
+			&i.EncerradaPor,
+			&i.MotivoEncerramento,
+			&i.UpdatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -221,6 +328,22 @@ func (q *Queries) ListIndependentDemands(ctx context.Context, enterpriseID *int6
 	return items, nil
 }
 
+const nextIndependentDemandCode = `-- name: NextIndependentDemandCode :one
+SELECT COALESCE(MIN(d.code + 1), 1)::bigint
+  FROM (SELECT i.code FROM independent_demands i WHERE i.enterprise_id = $1::bigint AND i.code > 0
+        UNION ALL SELECT 0::bigint) d
+ WHERE NOT EXISTS (SELECT 1 FROM independent_demands x WHERE x.enterprise_id = $1::bigint AND x.code = d.code + 1)
+`
+
+// O primeiro número livre da empresa: as demandas antigas geradas pelo pedido
+// de venda (pedido × 100000) não empurram a numeração para 200001.
+func (q *Queries) NextIndependentDemandCode(ctx context.Context, enterpriseID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, nextIndependentDemandCode, enterpriseID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const updateIndependentDemand = `-- name: UpdateIndependentDemand :one
 UPDATE independent_demands
 SET item_code = $1,
@@ -228,9 +351,16 @@ SET item_code = $1,
     cost_center_code = $3,
     quantity = $4,
     demand_date = $5,
+    motivo = $7,
+    warehouse_id = $8,
+    customer_code = $9,
+    projeto = $10,
+    prioridade = $11,
+    observacao = $12,
+    updated_by = $13,
     updated_at = NOW()
-WHERE code = $6 AND enterprise_id = $7
-    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id
+WHERE code = $6 AND enterprise_id = $14 AND situacao = 'ABERTA'
+    RETURNING id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by, enterprise_id, motivo, warehouse_id, customer_code, projeto, prioridade, observacao, programacao, situacao, encerrada_em, encerrada_por, motivo_encerramento, updated_by
 `
 
 type UpdateIndependentDemandParams struct {
@@ -240,6 +370,13 @@ type UpdateIndependentDemandParams struct {
 	Quantity       pgtype.Numeric
 	DemandDate     pgtype.Date
 	Code           int64
+	Motivo         string
+	WarehouseID    *int64
+	CustomerCode   *int64
+	Projeto        pgtype.Text
+	Prioridade     int16
+	Observacao     pgtype.Text
+	UpdatedBy      pgtype.UUID
 	EnterpriseID   *int64
 }
 
@@ -251,6 +388,13 @@ func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndepen
 		arg.Quantity,
 		arg.DemandDate,
 		arg.Code,
+		arg.Motivo,
+		arg.WarehouseID,
+		arg.CustomerCode,
+		arg.Projeto,
+		arg.Prioridade,
+		arg.Observacao,
+		arg.UpdatedBy,
 		arg.EnterpriseID,
 	)
 	var i IndependentDemand
@@ -267,6 +411,18 @@ func (q *Queries) UpdateIndependentDemand(ctx context.Context, arg UpdateIndepen
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.Motivo,
+		&i.WarehouseID,
+		&i.CustomerCode,
+		&i.Projeto,
+		&i.Prioridade,
+		&i.Observacao,
+		&i.Programacao,
+		&i.Situacao,
+		&i.EncerradaEm,
+		&i.EncerradaPor,
+		&i.MotivoEncerramento,
+		&i.UpdatedBy,
 	)
 	return i, err
 }

@@ -26,11 +26,12 @@ func TestRMAIsTransactionalIdempotentAndTenantSafe(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name) VALUES($1,'RMA B') RETURNING id`, enterpriseCodeB).Scan(&enterpriseB); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(enterpriseCodeA), int64(enterpriseCodeB)) })
 	actor := uuid.New()
 	if _, err := pool.Exec(ctx, `INSERT INTO users(id,name,email,password) VALUES($1,'RMA Evidence',$2,'x')`, actor, actor.String()+"@example.test"); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO technical_assistance_calls(call_number,enterprise_code,customer_code,subject,created_by) VALUES(1,$1,10,'Teste RMA',$2) RETURNING code`, enterpriseCodeA, actor).Scan(&callCode); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO technical_assistance_calls(call_number,enterprise_code,customer_code,subject,created_by) VALUES(1,$1,$3,'Teste RMA',$2) RETURNING code`, enterpriseCodeA, actor, testutil.UniqueCode()).Scan(&callCode); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `INSERT INTO technical_assistance_call_items(call_code,sequence,item_code,quantity) VALUES($1,1,99,1) RETURNING code`, callCode).Scan(&itemCode); err != nil {

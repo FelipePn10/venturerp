@@ -5,13 +5,10 @@ import (
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	"strings"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	demandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
-	demandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
@@ -110,17 +107,15 @@ func (uc *UnblockSalesOrderUseCase) Execute(ctx context.Context, code int64) err
 type ChangeStatusSalesOrderUseCase struct {
 	Repo repository.SalesOrderRepository
 	Auth ports.AuthService
-	// DemandRepo is optional. When set, moving the order to "Pedido" (confirmed)
-	// automatically feeds the MRP by creating an independent demand per order
-	// line, so the planner no longer has to register demand by hand.
-	DemandRepo demandrepo.IndependentDemandRepository
 	// CreditChecker is optional. When set, confirming an order runs an automatic
 	// credit-limit check; an order that exceeds the customer's limit is blocked
 	// (and does not feed the MRP) instead of flowing through unchecked.
 	CreditChecker *CreditChecker
-	// Transacao roda a confirmação inteira (status, crédito, demandas e
-	// reservas) numa transação só: ou tudo grava, ou nada — o pedido nunca fica
-	// confirmado sem a demanda do MRP ou sem a reserva.
+	// Transacao roda a confirmação inteira (status, crédito e reservas) numa
+	// transação só: ou tudo grava, ou nada — o pedido nunca fica confirmado sem
+	// a reserva. O MRP lê o pedido confirmado direto (saldo aberto da linha);
+	// a confirmação não cria demanda independente, que contava o pedido duas
+	// vezes.
 	Transacao EmTransacao
 	// Reserver is optional. When set, confirming an order reserves available
 	// stock per line (ATP) so the promise is backed by real availability.
@@ -142,7 +137,7 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 	if emTransacao == nil {
 		// Sem transação configurada (testes), roda direto nos repositórios.
 		emTransacao = func(ctx context.Context, fn func(ConfirmacaoRepos) error) error {
-			r := ConfirmacaoRepos{Pedidos: uc.Repo, Demandas: uc.DemandRepo}
+			r := ConfirmacaoRepos{Pedidos: uc.Repo}
 			if uc.Reserver != nil {
 				r.Estoque = uc.Reserver.StockRepo
 			}
@@ -165,11 +160,6 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 				return nil
 			}
 		}
-		if uc.DemandRepo != nil {
-			if err := generateDemands(ctx, dto.Code, r.Pedidos, r.Demandas); err != nil {
-				return err
-			}
-		}
 		if uc.Reserver != nil {
 			if err := uc.Reserver.Reserve(ctx, dto.Code, r.Pedidos, r.Estoque); err != nil {
 				return err
@@ -187,9 +177,8 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 
 // ConfirmacaoRepos são os repositórios ligados à transação da confirmação.
 type ConfirmacaoRepos struct {
-	Pedidos  repository.SalesOrderRepository
-	Demandas demandrepo.IndependentDemandRepository
-	Estoque  stockrepo.StockRepository
+	Pedidos repository.SalesOrderRepository
+	Estoque stockrepo.StockRepository
 }
 
 // EmTransacao roda fn numa transação com os repositórios ligados a ela; erro
@@ -315,62 +304,4 @@ func (uc *SaveSalesOrderDelayReasonUseCase) Execute(ctx context.Context, dto req
 		return errorsuc.ErrUnauthorized
 	}
 	return uc.Repo.SaveDelayReason(ctx, dto.Code, strings.TrimSpace(dto.Reason), strings.TrimSpace(dto.Action), actor)
-}
-
-// generateDemands cria uma demanda independente por linha aberta do pedido.
-// O código da demanda deriva da linha, então reconfirmar mantém a que já
-// existe; qualquer outra falha desfaz a confirmação (antes era ignorada e o
-// pedido ficava confirmado sem alimentar o MRP).
-func generateDemands(ctx context.Context, code int64, pedidos repository.SalesOrderRepository, demandas demandrepo.IndependentDemandRepository) error {
-	order, err := pedidos.GetByCode(ctx, code)
-	if err != nil {
-		return fmt.Errorf("lendo o pedido: %w", err)
-	}
-	items, err := pedidos.ListItems(ctx, code)
-	if err != nil {
-		return fmt.Errorf("lendo os itens do pedido: %w", err)
-	}
-	for _, it := range items {
-		if !it.IsActive || it.Status == entity.SalesOrderItemStatusCancelled {
-			continue
-		}
-		qty := it.RequestedQty
-		if !qty.IsPositive() {
-			continue
-		}
-
-		demandDate := time.Now()
-		switch {
-		case it.DeliveryDate != nil:
-			demandDate = *it.DeliveryDate
-		case order.DeliveryDate != nil:
-			demandDate = *order.DeliveryDate
-		}
-
-		var mask *string
-		if it.Mask != "" {
-			m := it.Mask
-			mask = &m
-		}
-
-		// Deterministic, order-line-scoped code keeps re-confirmation idempotent.
-		demandCode := code*100000 + int64(it.Sequence)
-		demand := &demandentity.IndependentDemand{
-			CodeDemand: demandCode,
-			ItemCode:   it.ItemCode,
-			Mask:       mask,
-			Quantity:   qty,
-			DemandDate: demandDate,
-			CreatedBy:  order.CreatedBy,
-		}
-		if _, err := demandas.GetByCode(ctx, demandCode); err == nil {
-			continue // reconfirmação: a demanda desta linha já existe
-		} else if !errorsuc.EhNaoEncontrado(err) {
-			return fmt.Errorf("conferindo a demanda da linha %d: %w", it.Sequence, err)
-		}
-		if _, err := demandas.Create(ctx, demand); err != nil {
-			return fmt.Errorf("gerando a demanda do MRP da linha %d: %w", it.Sequence, err)
-		}
-	}
-	return nil
 }

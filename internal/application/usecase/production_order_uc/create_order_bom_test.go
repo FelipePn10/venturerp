@@ -81,3 +81,41 @@ func TestCriarOFRespeitaMascaraVigenciaEFormula(t *testing.T) {
 		t.Errorf("componente paramétrico: esperado 10 (fórmula), obtido %s", qtd[50])
 	}
 }
+
+// repoComAlmoxarifados é o fakePORepo que diz quais almoxarifados são da
+// empresa, como o repositório real.
+type repoComAlmoxarifados struct {
+	*fakePORepo
+	daEmpresa map[int64]bool
+}
+
+func (r repoComAlmoxarifados) AlmoxarifadoDaEmpresa(_ context.Context, id int64) (bool, error) {
+	return r.daEmpresa[id], nil
+}
+
+// A OF não nasce com início depois do término nem com o almoxarifado de outra
+// empresa (VPRO0900 passou a informar os dois).
+func TestCriarOFConfereDatasEAlmoxarifado(t *testing.T) {
+	repo := repoComAlmoxarifados{fakePORepo: &fakePORepo{automatic: map[int64]int64{}}, daEmpresa: map[int64]bool{7: true}}
+	uc := CreateProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: &estruturaPorMascara{},
+		Items: &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "MOVEL-10"}}}
+	ini, fim := "2026-11-20", "2026-11-10"
+	base := request.CreateProductionOrderDTO{ItemCode: "MOVEL-10", PlannedQty: decimal.NewFromInt(1), CreatedBy: uuid.New()}
+
+	dto := base
+	dto.StartDate, dto.EndDate = &ini, &fim
+	if _, err := uc.Execute(context.Background(), dto); err == nil {
+		t.Error("início depois do término foi aceito")
+	}
+	outro, meu := int64(8), int64(7)
+	dto = base
+	dto.WarehouseID = &outro
+	if _, err := uc.Execute(context.Background(), dto); err == nil {
+		t.Error("almoxarifado de outra empresa foi aceito")
+	}
+	dto = base
+	dto.StartDate, dto.EndDate, dto.WarehouseID = &fim, &ini, &meu
+	if _, err := uc.Execute(context.Background(), dto); err != nil {
+		t.Fatalf("OF válida recusada: %v", err)
+	}
+}

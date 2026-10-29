@@ -130,13 +130,7 @@ type DeliveryRescheduleHandler struct {
 
 type IndependentDemandHandler struct {
 	*security.BaseHandler
-	createUC       *independent_demand_uc.CreateIndependentDemandUseCase
-	updateUC       *independent_demand_uc.UpdateIndependentDemandUseCase
-	deleteUC       *independent_demand_uc.DeleteIndependentDemandUseCase
-	listFromDateUC *independent_demand_uc.ListIndependentDemandFromDateUseCase
-	listByItemUC   *independent_demand_uc.ListIndependentDemandByItemUseCase
-	listUC         *independent_demand_uc.ListIndependentDemandsUseCase
-	getByCodeUC    *independent_demand_uc.GetIndependentDemandByCodeUseCase
+	uc *independent_demand_uc.DemandaUseCase
 }
 
 type IndustrialCalendarHandler struct {

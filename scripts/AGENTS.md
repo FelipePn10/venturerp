@@ -63,6 +63,11 @@ scripts/
 - `seed-demo.sql`: Inserts SQL puros para o ambiente de demonstração.
 - Use IDs UUIDs fixos para referências consistentes entre tabelas.
 - Deve ser idempotente (usar `ON CONFLICT DO NOTHING` ou verificar existência).
+- `limpar-empresas-de-teste.sql`: faxina do banco da suíte de integração. Apaga
+  as empresas que os testes criaram e não conseguiram apagar (fica só a semeada,
+  código 1), com tudo o que as referencia. Aborta em banco cujo nome não contém
+  "test". A mesma função é usada por `testutil.ApagarEmpresas` (e pelo
+  `testutil.DuasEmpresas`) — teste novo que cria empresa deve limpá-la por ela.
 
 ## Regras importantes
 

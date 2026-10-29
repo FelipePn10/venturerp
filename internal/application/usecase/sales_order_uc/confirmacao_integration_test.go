@@ -20,7 +20,6 @@ import (
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
-	demandpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
 	salesorderpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
 	stockpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
@@ -67,10 +66,9 @@ func TestConfirmacaoDoPedidoTudoOuNada(t *testing.T) {
 	q, _ := testutil.Queries(t)
 	falhar := true
 	uc := &sales_order_uc.ChangeStatusSalesOrderUseCase{
-		Repo:       salesorderpg.NewSalesOrderRepositorySQLC(q),
-		Auth:       &auth.AuthService{},
-		DemandRepo: demandpg.NewIndependentDemandRepositorySQLC(q),
-		Reserver:   &sales_order_uc.OrderStockReserver{},
+		Repo:     salesorderpg.NewSalesOrderRepositorySQLC(q),
+		Auth:     &auth.AuthService{},
+		Reserver: &sales_order_uc.OrderStockReserver{},
 		Transacao: func(ctx context.Context, fn func(sales_order_uc.ConfirmacaoRepos) error) error {
 			tx, err := pool.Begin(ctx)
 			if err != nil {
@@ -83,9 +81,8 @@ func TestConfirmacaoDoPedidoTudoOuNada(t *testing.T) {
 				estoque = reservaQueFalha{estoque}
 			}
 			if err := fn(sales_order_uc.ConfirmacaoRepos{
-				Pedidos:  salesorderpg.NewSalesOrderRepositorySQLC(txq),
-				Demandas: demandpg.NewIndependentDemandRepositorySQLC(txq),
-				Estoque:  estoque,
+				Pedidos: salesorderpg.NewSalesOrderRepositorySQLC(txq),
+				Estoque: estoque,
 			}); err != nil {
 				return err
 			}
@@ -118,7 +115,7 @@ func TestConfirmacaoDoPedidoTudoOuNada(t *testing.T) {
 	if err := uc.Execute(ctx, request.ChangeStatusDTO{Code: pedido, Status: "P"}); err != nil {
 		t.Fatal(err)
 	}
-	if st, d, r := situacao(); st != "P" || d != 1 || r != 1 {
-		t.Fatalf("confirmado: status=%s demandas=%d reservas=%d, quer P/1/1", st, d, r)
+	if st, d, r := situacao(); st != "P" || d != 0 || r != 1 {
+		t.Fatalf("confirmado: status=%s demandas=%d reservas=%d, quer P/0/1 (o MRP lê o pedido direto; a confirmação não cria demanda)", st, d, r)
 	}
 }

@@ -41,6 +41,7 @@ func TestIntegration_ReformaContabilizacaoEApuracao(t *testing.T) {
 	if err := pool.QueryRow(bg, `INSERT INTO enterprise(code,name) VALUES($1,'Reforma contábil') RETURNING id`, code).Scan(&empresa); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, empresa) })
 	ctx := context.WithValue(bg, contextkey.UserKey, &appsecurity.AuthUser{ID: actor.String(), Role: "ADMIN", EnterpriseID: empresa, EnterpriseCode: code})
 
 	var plano int64

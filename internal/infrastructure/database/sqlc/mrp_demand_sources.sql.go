@@ -34,7 +34,9 @@ LEFT JOIN production_plan_inter_factories pif
 WHERE (e.id = $1 OR (so.origin = 'INTER_FACTORY' AND pif.source_enterprise_id IS NOT NULL))
   AND so.is_active = TRUE
   AND so.is_blocked = FALSE
-  AND so.status NOT IN ('F', 'CANCELLED')
+  -- Só pedido (P) e pedido em análise (A) são demanda: rascunho e orçamento
+  -- ainda não são venda, e o faturado já saiu.
+  AND so.status IN ('P', 'A')
   AND soi.is_active = TRUE
   AND soi.status IN ('OPEN', 'PARTIAL')
   AND soi.requested_qty > soi.attended_qty + soi.cancelled_qty

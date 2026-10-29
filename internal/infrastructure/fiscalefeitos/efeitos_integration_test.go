@@ -60,6 +60,7 @@ func novaNotaAutorizada(t *testing.T) cenario {
 		`INSERT INTO enterprise(code, name, created_by) VALUES ($1, 'EFEITOS NFE', $2) RETURNING id`, code, c.ator).Scan(&c.empresa); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(code)) })
 	c.ctx = context.WithValue(context.Background(), contextkey.UserKey,
 		&security.AuthUser{ID: c.ator.String(), Role: "ADMIN", EnterpriseID: c.empresa, EnterpriseCode: code})
 

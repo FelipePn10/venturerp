@@ -18,13 +18,12 @@ type Aprovacoes interface {
 }
 
 // ConclusaoDoDesbloqueio desbloqueia o pedido e, se ele já está confirmado,
-// termina a confirmação que o bloqueio interrompeu: demanda do MRP e reserva de
-// estoque. Antes o desbloqueio só limpava o sinal — o pedido liberado nunca
-// entrava no MRP nem reservava estoque. As duas etapas são idempotentes.
+// termina a confirmação que o bloqueio interrompeu: a reserva de estoque
+// (idempotente). O MRP passa a ver o pedido assim que ele deixa de estar
+// bloqueado.
 type ConclusaoDoDesbloqueio struct {
-	Transacao  EmTransacao
-	ComDemanda bool
-	Reserver   *OrderStockReserver
+	Transacao EmTransacao
+	Reserver  *OrderStockReserver
 }
 
 func (c *ConclusaoDoDesbloqueio) Concluir(ctx context.Context, code int64) error {
@@ -43,11 +42,6 @@ func (c *ConclusaoDoDesbloqueio) Concluir(ctx context.Context, code int64) error
 		}
 		if order.Status != entity.SalesOrderStatusOrder {
 			return nil
-		}
-		if c.ComDemanda && r.Demandas != nil {
-			if err := generateDemands(ctx, code, r.Pedidos, r.Demandas); err != nil {
-				return err
-			}
 		}
 		if c.Reserver != nil && r.Estoque != nil {
 			if err := c.Reserver.Reserve(ctx, code, r.Pedidos, r.Estoque); err != nil {

@@ -171,7 +171,7 @@ func TestReorderPointTraversesReleasedAndBlockedSalesOrderStructures(t *testing.
 		blocked     bool
 	}{{order1, 2, false}, {order2, 3, true}} {
 		var code int64
-		if err := pool.QueryRow(ctx, "INSERT INTO sales_orders(order_number,enterprise_code,is_blocked,created_by) VALUES($1,$2,$3,$4) RETURNING code", order.number, enterpriseCode, order.blocked, userID).Scan(&code); err != nil {
+		if err := pool.QueryRow(ctx, "INSERT INTO sales_orders(order_number,enterprise_code,status,is_blocked,created_by) VALUES($1,$2,'P',$3,$4) RETURNING code", order.number, enterpriseCode, order.blocked, userID).Scan(&code); err != nil {
 			t.Fatal(err)
 		}
 		testutil.Exec(t, pool, "INSERT INTO sales_order_items(sales_order_code,item_code,requested_qty,status) VALUES($1,$2,$3,'OPEN')", code, parent, order.qty)

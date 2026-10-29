@@ -26,6 +26,9 @@ type manualOrderRepository interface {
 type manualOrderDefaultsReader interface {
 	GetManualOrderPlanner(context.Context, int64) (*int64, error)
 }
+type warehouseChecker interface {
+	AlmoxarifadoDaEmpresa(context.Context, int64) (bool, error)
+}
 type productionRouteReader interface {
 	GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error)
 }
@@ -119,12 +122,32 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		Notes:          dto.Notes,
 		IsActive:       true,
 		CreatedBy:      dto.CreatedBy,
+		VinculoDemanda: dto.VinculoDemanda,
 	}
 
 	order.StartDate = datetime.ParseDatePtr(dto.StartDate)
 	order.EndDate = datetime.ParseDatePtr(dto.EndDate)
+	if order.StartDate != nil && order.EndDate != nil && order.StartDate.After(*order.EndDate) {
+		return nil, errorsuc.NewValidationError("o início da ordem não pode ser depois do término")
+	}
+	// O almoxarifado que recebe a produção é da empresa da sessão: sem isso a
+	// OF nasceria com um destino que só falharia na entrega.
+	if dto.WarehouseID != nil {
+		if conf, ok := uc.Repo.(warehouseChecker); ok {
+			daEmpresa, err := conf.AlmoxarifadoDaEmpresa(ctx, *dto.WarehouseID)
+			if err != nil {
+				return nil, err
+			}
+			if !daEmpresa {
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("almoxarifado %d não é desta empresa", *dto.WarehouseID))
+			}
+		}
+	}
 
 	if uc.Structure == nil {
+		if order.VinculoDemanda != nil {
+			return nil, errorsuc.NewValidationError("a OF ligada à demanda exige a criação com materiais numa transação")
+		}
 		return uc.Repo.Create(ctx, order)
 	}
 	children, err := uc.componentesDaOrdem(ctx, itemCode, dto.Mask)
