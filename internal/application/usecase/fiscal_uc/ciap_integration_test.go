@@ -40,6 +40,7 @@ func TestCIAPDaNotaDeEntradaAApuracao(t *testing.T) {
 		t.Fatal(err)
 	}
 	emp := int64(criada.ID)
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, emp) })
 	t.Cleanup(func() {
 		for _, q := range []string{
 			`DELETE FROM ciap_apuracoes WHERE enterprise_id=$1`, `DELETE FROM ciap_bens WHERE enterprise_id=$1`, `DELETE FROM ciap_parametros WHERE enterprise_id=$1`,

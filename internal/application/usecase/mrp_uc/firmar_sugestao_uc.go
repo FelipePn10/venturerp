@@ -3,6 +3,7 @@ package mrp_uc
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 
@@ -62,6 +63,12 @@ func mapMRPDemandType(mrpDemand string) types.DemandType {
 	}
 }
 
+// DemandasDaSugestao liga a ordem planejada às demandas independentes que a
+// sugestão cobre (pegging DEMANDA_INDEPENDENTE → SUGESTAO).
+type DemandasDaSugestao interface {
+	VincularSugestao(ctx context.Context, suggestionCode, plannedOrderCode int64, por uuid.UUID) error
+}
+
 // FirmarSugestaoMRPUseCase converts a single mrp_planned_suggestions row into
 // a firm planned_order. This is the "accept MRP suggestion" step that bridges
 // the two tables: the MRP engine writes to mrp_planned_suggestions; the
@@ -80,6 +87,9 @@ type FirmarSugestaoMRPUseCase struct {
 	// PRODUCTION orders and the service requisition for external operations —
 	// mirroring SAP's "convert planned order → production order" in one step.
 	Firmer orderFirmer
+	// Demandas grava, pelo pegging, que demanda independente a sugestão
+	// firmada cobre (VPLA0102 mostra a ordem da demanda). Opcional.
+	Demandas DemandasDaSugestao
 }
 
 type FirmarSugestaoMRPResponse struct {
@@ -118,6 +128,17 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		}
 	}
 	if existing, existingErr := uc.PlannedRepo.GetByMRPSuggestionCode(ctx, suggestionCode); existingErr == nil {
+		// Já firmada: refaz a ligação às demandas (idempotente), que pode ter
+		// falhado na primeira tentativa.
+		if uc.Demandas != nil {
+			userID, errUsuario := uc.Auth.UserID(ctx)
+			if errUsuario != nil {
+				return nil, errorsuc.ErrUnauthorized
+			}
+			if err := uc.Demandas.VincularSugestao(ctx, sugg.Code, existing.Code, userID); err != nil {
+				return nil, fmt.Errorf("ligando a ordem planejada %d às demandas da sugestão %d: %w", existing.Code, suggestionCode, err)
+			}
+		}
 		return suggestionResponse(sugg.Code, existing), nil
 	} else if !errorsuc.EhNaoEncontrado(existingErr) {
 		return nil, fmt.Errorf("conferindo se a sugestão já foi firmada: %w", existingErr)
@@ -182,6 +203,12 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 	created, err := uc.PlannedRepo.Create(ctx, order)
 	if err != nil {
 		return nil, fmt.Errorf("creating planned order from suggestion %d: %w", suggestionCode, err)
+	}
+
+	if uc.Demandas != nil {
+		if err := uc.Demandas.VincularSugestao(ctx, sugg.Code, created.Code, userID); err != nil {
+			return nil, fmt.Errorf("ligando a ordem planejada %d às demandas da sugestão %d: %w", created.Code, suggestionCode, err)
+		}
 	}
 
 	var firmedResponse *response.PlannedOrderResponse

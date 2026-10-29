@@ -42,6 +42,19 @@ type ProductionOrder struct {
 	// CostPending: a OF foi encerrada, mas a apuração do custo real falhou
 	// (motivo). Vazio quando o custo foi apurado.
 	CostPending *string
+	// VinculoDemanda liga a OF nova à demanda independente que ela cobre,
+	// na mesma transação da criação ("Gerar OF agora" da VPLA0102). Só na
+	// criação; a leitura não o preenche.
+	VinculoDemanda *VinculoDemanda
+}
+
+// VinculoDemanda é a demanda que a OF cobre e quanto dela. OrdensVistas é
+// quantas ordens a demanda tinha quando a quantidade foi decidida: se outra
+// ordem foi ligada nesse meio tempo, a criação é recusada (sem OF em dobro).
+type VinculoDemanda struct {
+	DemandID     int64
+	Quantidade   decimal.Decimal
+	OrdensVistas int
 }
 
 type ProductionAppointment struct {

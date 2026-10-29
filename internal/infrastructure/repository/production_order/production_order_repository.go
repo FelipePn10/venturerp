@@ -899,6 +899,19 @@ func (r *ProductionOrderRepositoryPGX) GetCost(ctx context.Context, productionOr
 	return &c, nil
 }
 
+// AlmoxarifadoDaEmpresa diz se o almoxarifado é da empresa da sessão.
+func (r *ProductionOrderRepositoryPGX) AlmoxarifadoDaEmpresa(ctx context.Context, id int64) (bool, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	var ok bool
+	if err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM warehouse WHERE id = $1 AND enterprise_id = $2)`, id, enterpriseID).Scan(&ok); err != nil {
+		return false, fmt.Errorf("checking warehouse %d: %w", id, err)
+	}
+	return ok, nil
+}
+
 func (r *ProductionOrderRepositoryPGX) GetNextOrderNumber(ctx context.Context) (int64, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {

@@ -143,3 +143,48 @@ func TestCalculoDoCenario(t *testing.T) {
 }
 
 var _ = mrp_report_uc.CoverageOK
+
+type repoPromover struct {
+	cenarioRepoFalso
+	promovido bool
+}
+
+func (r *repoPromover) Changes(context.Context, int64) ([]ScenarioChange, error) {
+	return r.changes, nil
+}
+func (r *repoPromover) Promote(context.Context, int64, uuid.UUID) (*PromoteResult, error) {
+	r.promovido = true
+	return &PromoteResult{}, nil
+}
+
+type politicaFalsa map[int64]string
+
+func (p politicaFalsa) PoliticaDoItem(_ context.Context, item int64, empresa mrpentity.PoliticaEfetiva) (mrpentity.PoliticaEfetiva, error) {
+	if e, ok := p[item]; ok {
+		empresa.Estrategia = e
+	}
+	return empresa, nil
+}
+
+func TestPromoverRecusaDemandaNovaDeItemSobEncomenda(t *testing.T) {
+	item, outro := int64(9), int64(10)
+	qtd := decimal.NewFromInt(5)
+	repo := &repoPromover{cenarioRepoFalso: cenarioRepoFalso{changes: []ScenarioChange{
+		{Kind: ChangeDemand, DemandRefKind: DemandRefNew, ItemCode: &item, ItemDescription: "MTO-1", Quantity: &qtd},
+		{Kind: ChangeDemand, DemandRefKind: DemandRefNew, ItemCode: &outro, Quantity: &qtd},
+	}}}
+	uc := &ScenarioUseCase{Repo: repo, Auth: &authFalsa{empresa: 7, ator: uuid.New(), pode: true},
+		Politicas: politicaFalsa{item: mrpentity.EstrategiaSobEncomenda}}
+	if _, err := uc.Promote(context.Background(), 1); err == nil || repo.promovido {
+		t.Fatalf("demanda nova de item sob encomenda não se promove: %v (promovido=%v)", err, repo.promovido)
+	}
+	if _, ok := errorsuc.AsValidation(err0(uc)); !ok {
+		t.Fatal("a recusa é erro de validação (422)")
+	}
+	uc.Politicas = politicaFalsa{}
+	if _, err := uc.Promote(context.Background(), 1); err != nil || !repo.promovido {
+		t.Fatalf("sem item sob encomenda promove: %v", err)
+	}
+}
+
+func err0(uc *ScenarioUseCase) error { _, err := uc.Promote(context.Background(), 1); return err }

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/shopspring/decimal"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -101,6 +102,9 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 		}
 	}
 	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
+		return nil, err
+	}
+	if err := vincularDemandaTx(ctx, tx, enterpriseID, created.ID, order); err != nil {
 		return nil, err
 	}
 	if complete != nil {
@@ -1132,4 +1136,41 @@ func opcional(err error) error {
 		return nil
 	}
 	return err
+}
+
+// vincularDemandaTx liga a OF à demanda independente que ela cobre ("Gerar OF
+// agora"), na transação da OF: ou nascem as duas, ou nenhuma. A demanda fica
+// travada até o fim; se outra ordem foi ligada a ela depois de a quantidade
+// ser decidida, a OF é recusada em vez de cobrir a demanda em dobro.
+func vincularDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, productionOrderID int64, order *entity.ProductionOrder) error {
+	v := order.VinculoDemanda
+	if v == nil {
+		return nil
+	}
+	var situacao string
+	err := tx.QueryRow(ctx, `SELECT situacao FROM independent_demands WHERE id = $1 AND enterprise_id = $2 FOR UPDATE`,
+		v.DemandID, enterpriseID).Scan(&situacao)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError("demanda independente não encontrada nesta empresa")
+	}
+	if err != nil {
+		return fmt.Errorf("travando a demanda da OF: %w", err)
+	}
+	if situacao != "ABERTA" {
+		return errorsuc.NewValidationError("a demanda não está mais aberta")
+	}
+	var ordens int
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM independent_demand_orders WHERE demand_id = $1 AND enterprise_id = $2`,
+		v.DemandID, enterpriseID).Scan(&ordens); err != nil {
+		return fmt.Errorf("contando as ordens da demanda: %w", err)
+	}
+	if ordens != v.OrdensVistas {
+		return errorsuc.NewValidationError("outra ordem foi ligada a esta demanda agora há pouco: abra a demanda de novo e confira o saldo sem ordem")
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO independent_demand_orders (enterprise_id, demand_id, production_order_id, quantity, created_by)
+		VALUES ($1, $2, $3, $4, $5)`, enterpriseID, v.DemandID, productionOrderID, pgutil.ToPgNumericFromDecimal(v.Quantidade),
+		pgutil.ToPgUUID(order.CreatedBy)); err != nil {
+		return fmt.Errorf("ligando a OF à demanda: %w", err)
+	}
+	return nil
 }

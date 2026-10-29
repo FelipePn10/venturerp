@@ -23,10 +23,9 @@ func TestStockMovementAndBalanceAreTenantIsolated(t *testing.T) {
 	if err := pool.QueryRow(base, "SELECT MIN(id) FROM enterprise").Scan(&first); err != nil {
 		t.Fatal(err)
 	}
-	var enterpriseCode int32
-	if err := pool.QueryRow(base, "SELECT COALESCE(MAX(code),0)+1 FROM enterprise").Scan(&enterpriseCode); err != nil {
-		t.Fatal(err)
-	}
+	// Código único: MAX(code)+1 colidia com a empresa criada em paralelo por
+	// outro pacote (enterprise_code_key).
+	enterpriseCode := int32(1_620_000_000 + testutil.UniqueCode()%10_000_000)
 	var second int64
 	if err := pool.QueryRow(base, "INSERT INTO enterprise(code,name) VALUES($1,$2) RETURNING id", enterpriseCode, "Tenant stock test").Scan(&second); err != nil {
 		t.Fatal(err)

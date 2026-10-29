@@ -25,7 +25,6 @@ import (
 	aprovacaopg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/aprovacao"
 	customerpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
 	financialpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/financial"
-	demandpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
 	salesorderpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/sales_order"
 	stockpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
@@ -100,16 +99,15 @@ func TestLiberacaoDeCreditoPelaAprovacao(t *testing.T) {
 		defer func() { _ = tx.Rollback(ctx) }()
 		txq := sqlc.New(tx)
 		if err := fn(sales_order_uc.ConfirmacaoRepos{
-			Pedidos:  salesorderpg.NewSalesOrderRepositorySQLC(txq),
-			Demandas: demandpg.NewIndependentDemandRepositorySQLC(txq),
-			Estoque:  stockpg.NewStockRepositoryTx(tx),
+			Pedidos: salesorderpg.NewSalesOrderRepositorySQLC(txq),
+			Estoque: stockpg.NewStockRepositoryTx(tx),
 		}); err != nil {
 			return err
 		}
 		return tx.Commit(ctx)
 	}
 	aprov := &aprovacao_uc.UseCase{Repo: aprovacaopg.New(pool), Auth: &auth.AuthService{}}
-	conclusao := &sales_order_uc.ConclusaoDoDesbloqueio{Transacao: transacao, ComDemanda: true, Reserver: &sales_order_uc.OrderStockReserver{}}
+	conclusao := &sales_order_uc.ConclusaoDoDesbloqueio{Transacao: transacao, Reserver: &sales_order_uc.OrderStockReserver{}}
 	aprov.Registrar(aprovacao.LiberacaoCredito, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusao})
 	if err := aprov.SalvarPolitica(vendedor, string(aprovacao.LiberacaoCredito), aprovacao_uc.PoliticaDTO{
 		Ativa: true, Segregacao: true, Niveis: []aprovacao_uc.NivelDTO{{PerfilID: &perfil}},
@@ -117,7 +115,7 @@ func TestLiberacaoDeCreditoPelaAprovacao(t *testing.T) {
 		t.Fatal(err)
 	}
 	confirmar := &sales_order_uc.ChangeStatusSalesOrderUseCase{
-		Repo: repo, Auth: &auth.AuthService{}, DemandRepo: demandpg.NewIndependentDemandRepositorySQLC(q),
+		Repo: repo, Auth: &auth.AuthService{},
 		Reserver: &sales_order_uc.OrderStockReserver{}, Transacao: transacao, Aprovacoes: aprov,
 		CreditChecker: &sales_order_uc.CreditChecker{SalesRepo: repo, CustomerRepo: customerpg.New(q, pool), FinancialRepo: financialpg.NewFinancialRepositoryPG(pool)},
 	}
@@ -174,8 +172,8 @@ func TestLiberacaoDeCreditoPelaAprovacao(t *testing.T) {
 	if feita.Status != "APROVADA" || len(feita.Eventos) != 2 || feita.Eventos[1].Evento != "APROVADA" {
 		t.Fatalf("aprovação concluída: %+v", feita)
 	}
-	if b, d, r := situacao(); b || d != 1 || r != 1 {
-		t.Fatalf("liberado pela aprovação: bloqueado=%v demandas=%d reservas=%d, quer false/1/1", b, d, r)
+	if b, d, r := situacao(); b || d != 0 || r != 1 {
+		t.Fatalf("liberado pela aprovação: bloqueado=%v demandas=%d reservas=%d, quer false/0/1 (o MRP lê o pedido direto)", b, d, r)
 	}
 	if _, err := aprov.Aprovar(credito, pendente.ID, aprovacao_uc.DecisaoDTO{}); err == nil {
 		t.Fatal("aprovação concluída não se aprova de novo")

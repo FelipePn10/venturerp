@@ -61,8 +61,8 @@ SELECT * FROM sales_order_demands WHERE item_code = $1 AND enterprise_id = @ente
 UPDATE sales_order_demands SET status = $1, delivered_qty = $2, updated_at = NOW() WHERE code = $3 AND enterprise_id = @enterprise_id RETURNING *;
 
 -- name: CreateConfiguredItemRule :one
-INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, @enterprise_id)
+INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id, condicao_mascara)
+VALUES ($1, $2, $3, $4, $5, $6, $7, @enterprise_id, sqlc.narg(condicao_mascara))
     RETURNING *;
 
 -- name: GetConfiguredItemRules :many

@@ -1,0 +1,12 @@
+-- Regra configurada do item (prazo, lote mínimo): a condição de máscara ganha
+-- coluna própria.
+--
+-- A regra tinha um valor só, e o MRP comparava a MÁSCARA do item com ele: a
+-- regra "lead_time Igual 15" só valia para a máscara "15". Na prática a regra de
+-- prazo e de lote mínimo cadastrada pela tela nunca valia no cálculo. Agora:
+--   condicao_mascara vazia  → a regra vale para todas as máscaras do item;
+--   preenchida              → rule_type (EQUAL, DIFFERENT, RANGE "a-b") compara
+--                             a máscara com ela; rule_value é só o valor.
+-- As regras existentes ficam sem condição: passam a valer para o item inteiro,
+-- que era o que a tela prometia.
+ALTER TABLE configured_item_rules ADD COLUMN condicao_mascara VARCHAR(200);

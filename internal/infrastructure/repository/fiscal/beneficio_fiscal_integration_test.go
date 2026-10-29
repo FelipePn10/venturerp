@@ -59,7 +59,9 @@ func TestBeneficioFiscalPrioridade(t *testing.T) {
 	if got, _ := r.BeneficioFiscal(ctx, &item, &ncm, "PR", nil); got == nil || *got != "PR830001" {
 		t.Fatalf("parâmetro do item tem de vencer o do NCM: %v", got)
 	}
-	cliente := int64(77)
+	// Código único: o 77 fixo colidia com cliente real de outra empresa num
+	// banco de teste com dados, e a conferência de empresa recusava.
+	cliente := testutil.UniqueCode()
 	testutil.Exec(t, pool, ins, emp, "PR", "SAIDA", nil, item, cliente, "PR830077")
 	if got, _ := r.BeneficioFiscal(ctx, &item, &ncm, "PR", &cliente); got == nil || *got != "PR830077" {
 		t.Fatalf("parâmetro do cliente tem de vencer o geral: %v", got)

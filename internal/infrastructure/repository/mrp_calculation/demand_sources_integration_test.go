@@ -23,8 +23,8 @@ func TestDemandSourcesAreTenantFilteredAndResolveClassificationDescendants(t *te
 		_, _ = pool.Exec(ctx, `DELETE FROM item_classification_assignments WHERE item_code IN ($1,$2)`, itemCode, otherItemCode)
 		_, _ = pool.Exec(ctx, `DELETE FROM item_classifications WHERE mask_id IN (SELECT id FROM item_classification_masks WHERE code=$1)`, maskCode)
 		_, _ = pool.Exec(ctx, `DELETE FROM item_classification_masks WHERE code=$1`, maskCode)
-		_, _ = pool.Exec(ctx, `DELETE FROM sales_order_items WHERE sales_order_code IN (SELECT code FROM sales_orders WHERE order_number=$1 AND enterprise_code IN ($2,$3))`, orderNumber, enterpriseCode, otherCode)
-		_, _ = pool.Exec(ctx, `DELETE FROM sales_orders WHERE order_number=$1 AND enterprise_code IN ($2,$3)`, orderNumber, enterpriseCode, otherCode)
+		_, _ = pool.Exec(ctx, `DELETE FROM sales_order_items WHERE sales_order_code IN (SELECT code FROM sales_orders WHERE order_number BETWEEN $1 AND $1+2 AND enterprise_code IN ($2,$3))`, orderNumber, enterpriseCode, otherCode)
+		_, _ = pool.Exec(ctx, `DELETE FROM sales_orders WHERE order_number BETWEEN $1 AND $1+2 AND enterprise_code IN ($2,$3)`, orderNumber, enterpriseCode, otherCode)
 		_, _ = pool.Exec(ctx, `DELETE FROM sales_divisions WHERE code=$1`, divisionCode)
 		_, _ = pool.Exec(ctx, `DELETE FROM production_plans WHERE code=$1`, planCode)
 		_, _ = pool.Exec(ctx, `DELETE FROM enterprise WHERE code IN ($1,$2)`, enterpriseCode, otherCode)
@@ -45,7 +45,10 @@ func TestDemandSourcesAreTenantFilteredAndResolveClassificationDescendants(t *te
 	if err := pool.QueryRow(ctx, `INSERT INTO sales_divisions (code,description,is_technical_assistance,created_by,enterprise_id) VALUES ($1,'Technical assistance',TRUE,$2,$3) RETURNING id`, divisionCode, userID, enterpriseID).Scan(&divisionID); err != nil {
 		t.Fatal(err)
 	}
-	testutil.Exec(t, pool, `INSERT INTO sales_orders (order_number,enterprise_code,status,origin,delivery_date,sales_division_code,created_by) VALUES ($1,$2,'R','NORMAL','2026-08-10',$4,$5),($1,$3,'R','INTER_FACTORY','2026-08-10',NULL,$5)`, orderNumber, enterpriseCode, otherCode, divisionID, userID)
+	testutil.Exec(t, pool, `INSERT INTO sales_orders (order_number,enterprise_code,status,origin,delivery_date,sales_division_code,created_by) VALUES ($1,$2,'P','NORMAL','2026-08-10',$4,$5),($1,$3,'P','INTER_FACTORY','2026-08-10',NULL,$5)`, orderNumber, enterpriseCode, otherCode, divisionID, userID)
+	// Rascunho e orçamento do mesmo item não são demanda: só pedido (P/A).
+	testutil.Exec(t, pool, `INSERT INTO sales_orders (order_number,enterprise_code,status,origin,delivery_date,created_by) VALUES ($1+1,$2,'R','NORMAL','2026-08-10',$3),($1+2,$2,'OF','NORMAL','2026-08-10',$3)`, orderNumber, enterpriseCode, userID)
+	testutil.Exec(t, pool, `INSERT INTO sales_order_items (sales_order_code,item_code,requested_qty) SELECT code,$3,50 FROM sales_orders WHERE enterprise_code=$2 AND order_number IN ($1+1,$1+2)`, orderNumber, enterpriseCode, itemCode)
 	var orderCode, otherOrderCode int64
 	if err := pool.QueryRow(ctx, `SELECT code FROM sales_orders WHERE order_number=$1 AND enterprise_code=$2`, orderNumber, enterpriseCode).Scan(&orderCode); err != nil {
 		t.Fatal(err)

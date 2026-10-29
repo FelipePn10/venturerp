@@ -73,6 +73,7 @@ var rotasPorModulo = []struct {
 	{"/api/mrp-reports", acesso.Planejamento},
 	{"/api/planning", acesso.Planejamento},
 	{"/api/planning-params", acesso.Planejamento},
+	{"/api/planning-policy", acesso.Planejamento},
 	{"/api/planned-order", acesso.Planejamento},
 	{"/api/independent-demand", acesso.Planejamento},
 	{"/api/forecast", acesso.Planejamento},

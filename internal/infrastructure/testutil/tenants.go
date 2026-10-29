@@ -42,8 +42,9 @@ func DuasEmpresas(t *testing.T, pool *pgxpool.Pool, limpar func(a, b Empresa)) (
 		if limpar != nil {
 			limpar(a, b)
 		}
-		_, _ = pool.Exec(base, `DELETE FROM user_enterprises WHERE enterprise_id = ANY($1)`, []int64{a.ID, b.ID})
-		_, _ = pool.Exec(base, `DELETE FROM enterprise WHERE id = ANY($1)`, []int64{a.ID, b.ID})
+		// Apaga também o que o teste gerou e não limpou (parâmetros semeados,
+		// notificações, ordens): antes a empresa ficava presa por essas linhas.
+		ApagarEmpresas(t, pool, a.ID, b.ID)
 	})
 	return a, b
 }

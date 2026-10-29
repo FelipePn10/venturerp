@@ -314,7 +314,7 @@ func (r *Repository) ReorderPoint(ctx context.Context, filter mrp_report_uc.Filt
 	rows, err := r.pool.Query(ctx, `WITH RECURSIVE sales_needs AS (
 		SELECT line.item_code,GREATEST(line.requested_qty-line.attended_qty-line.cancelled_qty,0)::numeric quantity,ARRAY[line.item_code] path
 		FROM sales_order_items line JOIN sales_orders header ON header.code=line.sales_order_code JOIN enterprise company ON company.code=header.enterprise_code
-		WHERE company.id=$1 AND header.is_active AND header.status NOT IN ('F','CANCELLED') AND line.is_active AND line.status IN ('OPEN','PARTIAL')
+		WHERE company.id=$1 AND header.is_active AND header.status IN ('P','A') AND line.is_active AND line.status IN ('OPEN','PARTIAL')
 		AND ($12='LIBERADOS_E_BLOQUEADOS' OR NOT header.is_blocked) AND ($9::date IS NULL OR COALESCE(line.delivery_date,header.delivery_date)>=$9) AND ($10::date IS NULL OR COALESCE(line.delivery_date,header.delivery_date)<=$10)
 		UNION ALL SELECT structure.child_code,needs.quantity*structure.quantity*(1+structure.loss_percentage/100),needs.path||structure.child_code
 		FROM sales_needs needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active WHERE NOT structure.child_code=ANY(needs.path)

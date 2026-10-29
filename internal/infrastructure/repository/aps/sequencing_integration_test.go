@@ -28,15 +28,14 @@ func TestSequencingConfigurationIsTenantIsolated(t *testing.T) {
 	if err := pool.QueryRow(base, "SELECT MIN(id) FROM enterprise").Scan(&first); err != nil {
 		t.Fatal(err)
 	}
-	var code int64
-	if err := pool.QueryRow(base, "SELECT COALESCE(MAX(code),0)+1 FROM enterprise").Scan(&code); err != nil {
-		t.Fatal(err)
-	}
+	// Código único: MAX(code)+1 colidia com a empresa que outro pacote, em
+	// paralelo, criava no mesmo instante (enterprise_code_key).
+	code := int64(1_600_000_000) + testutil.UniqueCode()%10_000_000
 	var second int64
 	if err := pool.QueryRow(base, "INSERT INTO enterprise(code,name) VALUES($1,'APS tenant test') RETURNING id", code).Scan(&second); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { pool.Exec(base, "DELETE FROM enterprise WHERE id=$1", second) })
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, second) })
 	ctx1 := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: first})
 	ctx2 := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: second})
 	repo := apsrepo.New(sqlc.New(pool), pool).(apsdomain.ConfigurationRepository)

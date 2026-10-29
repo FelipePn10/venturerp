@@ -66,20 +66,21 @@ func (q *Queries) CalculoEmAndamentoDesde(ctx context.Context, arg CalculoEmAnda
 }
 
 const createConfiguredItemRule = `-- name: CreateConfiguredItemRule :one
-INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    RETURNING id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id
+INSERT INTO configured_item_rules (item_code, table_type, field_name, rule_type, rule_value, sequence, created_by, enterprise_id, condicao_mascara)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id, condicao_mascara
 `
 
 type CreateConfiguredItemRuleParams struct {
-	ItemCode     int64
-	TableType    string
-	FieldName    string
-	RuleType     string
-	RuleValue    string
-	Sequence     int32
-	CreatedBy    pgtype.UUID
-	EnterpriseID *int64
+	ItemCode        int64
+	TableType       string
+	FieldName       string
+	RuleType        string
+	RuleValue       string
+	Sequence        int32
+	CreatedBy       pgtype.UUID
+	EnterpriseID    *int64
+	CondicaoMascara pgtype.Text
 }
 
 func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfiguredItemRuleParams) (ConfiguredItemRule, error) {
@@ -92,6 +93,7 @@ func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfig
 		arg.Sequence,
 		arg.CreatedBy,
 		arg.EnterpriseID,
+		arg.CondicaoMascara,
 	)
 	var i ConfiguredItemRule
 	err := row.Scan(
@@ -108,6 +110,7 @@ func (q *Queries) CreateConfiguredItemRule(ctx context.Context, arg CreateConfig
 		&i.CreatedBy,
 		&i.Code,
 		&i.EnterpriseID,
+		&i.CondicaoMascara,
 	)
 	return i, err
 }
@@ -542,7 +545,7 @@ func (q *Queries) FinishMRPCalculation(ctx context.Context, arg FinishMRPCalcula
 }
 
 const getConfiguredItemRules = `-- name: GetConfiguredItemRules :many
-SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id FROM configured_item_rules WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY sequence
+SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id, condicao_mascara FROM configured_item_rules WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE ORDER BY sequence
 `
 
 type GetConfiguredItemRulesParams struct {
@@ -573,6 +576,7 @@ func (q *Queries) GetConfiguredItemRules(ctx context.Context, arg GetConfiguredI
 			&i.CreatedBy,
 			&i.Code,
 			&i.EnterpriseID,
+			&i.CondicaoMascara,
 		); err != nil {
 			return nil, err
 		}
@@ -748,7 +752,7 @@ func (q *Queries) GetStockSnapshot(ctx context.Context, arg GetStockSnapshotPara
 }
 
 const listAllActiveConfiguredRules = `-- name: ListAllActiveConfiguredRules :many
-SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id FROM configured_item_rules
+SELECT id, item_code, table_type, field_name, rule_type, rule_value, sequence, is_active, created_at, updated_at, created_by, code, enterprise_id, condicao_mascara FROM configured_item_rules
 WHERE enterprise_id = $1 AND is_active = TRUE
 ORDER BY item_code, sequence
 `
@@ -776,6 +780,7 @@ func (q *Queries) ListAllActiveConfiguredRules(ctx context.Context, enterpriseID
 			&i.CreatedBy,
 			&i.Code,
 			&i.EnterpriseID,
+			&i.CondicaoMascara,
 		); err != nil {
 			return nil, err
 		}

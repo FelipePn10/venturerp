@@ -31,6 +31,9 @@ func (uc *ManageConfiguredItemRulesUseCase) Create(
 	if dto.ItemCode <= 0 || strings.TrimSpace(dto.TableType) == "" || strings.TrimSpace(dto.FieldName) == "" || strings.TrimSpace(dto.RuleType) == "" || strings.TrimSpace(dto.RuleValue) == "" || dto.Sequence <= 0 {
 		return nil, errorsuc.NewValidationError("item, tabela, campo, tipo, valor da regra e sequência positiva são obrigatórios")
 	}
+	if msg := entity.ValidarRegraConfigurada(dto.FieldName, dto.RuleType, dto.RuleValue, dto.CondicaoMascara); msg != "" {
+		return nil, errorsuc.NewValidationError(msg)
+	}
 	if uc.Items == nil {
 		return nil, errors.New("repositório de itens não configurado")
 	}
@@ -51,13 +54,14 @@ func (uc *ManageConfiguredItemRulesUseCase) Create(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	rule := &entity.ConfiguredItemRule{
-		ItemCode:  dto.ItemCode,
-		TableType: dto.TableType,
-		FieldName: dto.FieldName,
-		RuleType:  dto.RuleType,
-		RuleValue: dto.RuleValue,
-		Sequence:  dto.Sequence,
-		CreatedBy: actor,
+		ItemCode:        dto.ItemCode,
+		TableType:       dto.TableType,
+		FieldName:       dto.FieldName,
+		RuleType:        dto.RuleType,
+		RuleValue:       dto.RuleValue,
+		Sequence:        dto.Sequence,
+		CreatedBy:       actor,
+		CondicaoMascara: strings.TrimSpace(dto.CondicaoMascara),
 	}
 	created, err := uc.Repo.CreateConfiguredItemRule(ctx, rule)
 	if err != nil {

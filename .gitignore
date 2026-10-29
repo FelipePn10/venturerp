@@ -55,6 +55,9 @@ scripts/*
 !scripts/test-product-sequencing.sh
 !scripts/test-third-party-services.sh
 !scripts/test-comercial-*.sh
+# Faxina das empresas de teste do banco de integração: só roda em banco cujo nome
+# contém "test"; não tem token, CNPJ nem credencial.
+!scripts/limpar-empresas-de-teste.sql
 !scripts/loadtest/
 scripts/test-e2e.sh
 scripts/test-flow.sh

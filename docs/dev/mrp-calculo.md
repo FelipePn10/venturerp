@@ -20,6 +20,94 @@ Quando `order_item_code` é informado, somente o saldo aberto desse item de pedi
 
 Com `group_same_date_orders=true`, demandas de mesmo item, máscara e data são somadas. Desabilitado, cada demanda passa separadamente pelo cálculo, sem reutilizar estoque ou suprimento firme já consumido.
 
+### Demanda independente e consumo pela venda
+
+A demanda independente (VPLA0102) é o que se quer produzir ou comprar sem pedido
+de venda. O motivo decide como ela se encerra:
+
+- **Expectativa de venda** (`ESTOQUE`, `REPOSICAO`, `ANTECIPACAO_VENDA`): é venda
+  futura. O pedido de venda do mesmo item e máscara — pedido (`P`), em análise
+  (`A`) ou faturado (`F`), aberto ou já atendido; nunca rascunho, orçamento,
+  cancelado ou bloqueado — a **consome** (SAP, estratégia 40): planeja-se
+  o maior dos dois, nunca a soma. Uma venda na data V consome a demanda com data
+  entre V − parâmetro 46 (padrão 30) e V + parâmetro 47 (padrão 0), primeiro para
+  trás (da mais próxima para a mais antiga) e depois para a frente. A previsão de
+  vendas é consumida pela mesma regra, junto com a demanda (a demanda antes da
+  previsão no mesmo dia). Quando nenhuma venda pode mais consumi-la (data + 46 <
+  hoje), ela **vence** e sai do cálculo.
+- **Finalidade própria** (`AMOSTRA`, `FEIRA`, `CONSUMO_INTERNO`, `ASSISTENCIA`,
+  `PROJETO`): a venda não consome. A demanda segura o estoque até a saída de
+  estoque com referência `DEMANDA_INDEPENDENTE` (ação *Atender*); estornada a
+  saída, o saldo volta.
+
+Só entram demandas com situação `ABERTA` (`ENCERRADA` e `CANCELADA` saem). A
+regra é `entity.Posicionar`, usada pelo MRP e pela tela, para os dois mostrarem o
+mesmo número. A previsão das semanas que já passaram não entra (parâmetro 11).
+
+Só o pedido **confirmado** é demanda: status `P` (pedido) ou `A` (pedido em
+análise), ativo e não bloqueado, linha `OPEN`/`PARTIAL` com saldo aberto.
+Rascunho (`R`) e orçamento (`OF`/`OA`) ainda não são venda — antes desta correção o
+MRP os planejava como pedido firme (e o relatório de ponto de reposição também).
+Até a migração 449 a confirmação também criava uma demanda independente por linha
+(código = pedido × 100000 + sequência), e o pedido contava duas vezes; essas
+demandas foram canceladas (a 450 pega as de linha alterada depois da
+confirmação) e a confirmação não as cria mais.
+
+No plano de **cenário**, os ajustes de demanda entram **antes** do consumo: a
+demanda alterada é consumida pela quantidade nova, e o pedido alterado consome
+pela quantidade e data novas (`ajustarVendasDoCenario`).
+
+*Gerar OF agora* só vale para item **fabricado**: o comprado é atendido pela
+compra que o MRP sugere, e o de terceiro ou serviço não gera ordem (a recusa diz
+o motivo). Promover cenário com **demanda nova de item sob encomenda** é
+recusado: no plano real ela viraria demanda de estoque fora do cálculo. A
+promoção segue as regras da VPLA0102: trava a demanda como o *Atender*, a
+demanda zerada é cancelada (ou encerrada, se já teve saída) e a quantidade nova
+não fica abaixo do atendido (a promoção inteira é recusada).
+
+Firmar a sugestão grava, pelo pegging, a ordem planejada de cada demanda que ela
+cobre (`independent_demand_orders`); firmar de novo a mesma sugestão refaz a
+ligação sem duplicá-la. *Gerar OF agora* grava a OF e o vínculo na mesma
+transação. A demanda mostra `coberta` (o que as ordens ligadas não canceladas
+cobrem; a OF cancelada e a ordem planejada excluída sem OF viva não cobrem) e
+`sem_ordem` (o que o MRP vai planejar menos a coberta).
+*Gerar OF agora* só abre OF quando há `sem_ordem`; a quantidade pode passar dele
+(lote), mas o vínculo conta só o `sem_ordem`, e se outra ordem foi ligada entre a
+leitura e a gravação a OF é recusada (não nasce OF em dobro). *Atender* trava a
+demanda e grava a saída de estoque na mesma transação.
+
+### Política de planejamento por item (VPLA0310)
+
+`politicas_planejamento` (migração 451) guarda, por item **ou** por
+classificação, quatro campos; o vazio herda, campo a campo: item → classificação
+mais profunda que alcança o item (a atribuída a ele ou ancestral; empate de nível,
+a de menor id) → parâmetros da empresa. `entity.ResolverPoliticas` monta a
+efetiva; o cálculo a carrega em `params.Politicas` (falha de leitura = cálculo em
+ERROR, nunca política errada em silêncio) e a demanda independente usa a mesma.
+Do mesmo jeito, se as vendas que consomem a previsão não puderem ser lidas o
+cálculo termina em ERROR (`consumo_pela_venda`): sem elas a previsão e a demanda
+de estoque somariam com o pedido.
+
+| Campo | Parâmetro da empresa | Efeito |
+|---|---|---|
+| Estratégia | — (`CONSUMO`) | `CONSUMO`: venda consome previsão e demanda de estoque (SAP 40). `SOB_ENCOMENDA`: só o pedido gera necessidade; previsão e demanda de expectativa de venda do item saem do cálculo (posição `SOB_ENCOMENDA`), e o cadastro recusa demanda nova desse tipo (SAP 20). Finalidade própria continua |
+| Janela de consumo | 46 / 47 | Dias antes/depois da venda (por item) |
+| Horizonte firme | 48 (0 = desligado) | Dias corridos a partir de hoje: a sugestão cujo início cairia antes de hoje + N começa em hoje + N e o recebimento anda junto (o prazo fica igual). Vale no MRP/MPS e nos modos mínimo/máximo, ponto de reposição e kanban. Cada sugestão empurrada gera a exceção `FIRM_FENCE` (fonte `MRP_SUGGESTION`; só se trata, não reprograma) |
+| Tempo de segurança | 49 | Dias úteis (calendário industrial): recebimento = necessidade − N; início = recebimento − prazo. Só no netting do MRP/MPS |
+
+Rotas: `GET/POST /api/planning-policy/`, `GET/PUT/DELETE /api/planning-policy/{id}`,
+`GET /api/planning-policy/efetiva?item=` (valor final e origem de cada campo).
+Permissão: a de parâmetros do planejamento.
+
+### Rastreio do consumo
+
+`ConsumirComPolitica` devolve, além do consumido, as alocações venda →
+consumível e a sobra de cada venda. A demanda traz `consumo[]` (pedido, linha,
+cliente, data, quantidade) e `GET /api/independent-demand/consumo?item=` dá a
+visão do item (SAP MD73): previsão por semana com o consumido e quem consumiu,
+demandas de expectativa de venda, vendas com `consumiu`/`acima` (venda além da
+expectativa) e os totais.
+
 ### Assistência técnica
 
 Um item de pedido gera sugestão `TECHNICAL_ASSISTANCE` somente quando a divisão
@@ -146,12 +234,39 @@ Se preciso de 200 assentos, tenho 30 em estoque e já tenho uma ordem de fabrica
 
 Se a necessidade líquida for negativa (tenho mais do que preciso), o MRP não sugere nenhuma ordem.
 
+O estoque disponível é o saldo menos as reservas e o estoque de segurança — mas a
+**reserva feita para o próprio pedido de venda não sai**: o pedido já entra como
+demanda, e descontar os dois contava o pedido duas vezes
+(`StockSnapshot.DisponivelParaNecessidade`). Vale só para a reserva do pedido que
+o MRP lê (`P`/`A`, ativo, não bloqueado): a do pedido bloqueado continua tirando
+o estoque, porque ele não entra como demanda. Os modos mínimo/máximo, ponto de
+reposição e kanban, que não contam o pedido como demanda, descontam a reserva
+inteira.
+
+Item **comprado** gera sugestão de compra e **não explode a estrutura**: ele chega
+pronto do fornecedor, e a estrutura dele (cadastro antigo ou engano) não vira
+necessidade de componente.
+
 ### Passo 5 — Aplica as Regras do Item (Configured Item Rules)
 
 Cada item pode ter regras que modificam como o MRP calcula. Por exemplo:
 
 - **Lote mínimo**: "Esse parafuso só pode ser comprado em caixas de 500." Se a necessidade for 120, o MRP arredonda para 500.
 - **Lead time**: "Esse tecido leva 15 dias para chegar." O MRP recua a data de início do pedido em 15 dias.
+
+**De onde vem o prazo** (`prazoDoItem`, o mesmo no MRP/MPS e nos modos mínimo/máximo,
+ponto de reposição e kanban), em dias úteis:
+
+1. o prazo do cenário de simulação;
+2. a regra configurada `lead_time` que casa com a máscara (a última da sequência vence);
+3. item **comprado**: o `lead_time_days` do fornecedor do item (`item_preferred_suppliers`
+   ativo e vigente: o marcado como preferencial, depois o de melhor ranking);
+4. item **fabricado**: o caminho crítico do roteiro (8 h = 1 dia útil);
+5. zero.
+
+Até a migração 452 o netting só lia a regra (e a regra quase nunca casava, ver
+abaixo): item sem regra era planejado com prazo zero, enquanto o mínimo/máximo
+usava o roteiro.
 - **Estoque de segurança**: "Sempre manter pelo menos 100 unidades em estoque." O MRP adiciona isso à demanda.
 
 ### Passo 6 — Gera as Sugestões de Ordens
@@ -279,11 +394,19 @@ Regras flexíveis que personalizam o comportamento do MRP para itens específico
 
 - **Tipo de tabela** (PLANNING_DATA ou PLANNER_DATA): qual conjunto de dados da configuração do item essa regra se aplica
 - **Campo** (field_name): qual atributo está sendo sobrescrito (ex: "lead_time", "lote_minimo")
-- **Tipo de regra** (EQUAL, DIFFERENT, RANGE): como comparar o valor
-- **Valor da regra**: o valor que define o comportamento
-- **Sequência**: ordem de aplicação quando há várias regras
+- **Valor da regra**: o valor (dias úteis do prazo, quantidade do lote mínimo)
+- **Condição de máscara** (`condicao_mascara`, migração 452): vazia, a regra vale
+  para todas as máscaras do item; preenchida, o **tipo de regra** (EQUAL,
+  DIFFERENT, RANGE "a-b") compara a máscara com ela
+- **Sequência**: ordem de aplicação quando há várias regras (a última que casa vence)
 
-Exemplo: "Para o item 1042, se o campo `lead_time` for EQUAL a 0, usar 15 dias." Isso permite ajustar o comportamento do MRP sem alterar o cadastro do item.
+Exemplo: "Item 1042, `lead_time` = 15" vale para o item inteiro; "Item 1042,
+`lead_time` = 20, máscara EQUAL `AZUL`" vale só para a máscara AZUL.
+
+Até a migração 452 a regra tinha um valor só, e o MRP comparava a máscara com
+ele: a regra "lead_time EQUAL 15" que a tela cadastrava só valia para a máscara
+"15" — na prática, nunca. As regras existentes ficaram sem condição (valem para
+o item inteiro). `lead_time` aceita inteiro de 0 a 3650; `lote_minimo`, número ≥ 0.
 
 ---
 
@@ -437,9 +560,11 @@ Uma sugestão do MRP é apenas uma proposta. Quando o planejador "firma" (aprova
 
 | Tipo | Significado |
 |---|---|
-| EQUAL | O campo deve ser exatamente igual ao valor informado |
-| DIFFERENT | O campo deve ser diferente do valor informado |
-| RANGE | O campo deve estar dentro de um intervalo de valores |
+| EQUAL | A máscara do item é igual à condição de máscara |
+| DIFFERENT | A máscara é diferente da condição |
+| RANGE | A máscara (numérica) está na faixa "mínimo-máximo" da condição |
+
+Sem condição de máscara o tipo não importa: a regra vale para o item inteiro.
 
 ---
 
@@ -679,8 +804,8 @@ da primeira alteração.
 CLIENTE FAZ PEDIDO
         │
         ▼
-Pedido de Venda confirmado
-→ Demanda de Pedido de Venda gerada automaticamente
+Pedido de Venda confirmado (P/A, não bloqueado)
+→ O MRP lê o saldo aberto da linha (rascunho e orçamento não entram)
         │
         ▼
 PLANEJADOR ACIONA O MRP
@@ -719,7 +844,7 @@ GET /api/mrp-calculation/suggestions/{plan_code}
 |---|---|
 | Motor de cálculo (BFS + LLC + time-phased netting) | ✅ Completo |
 | Explosão de BOM multi-nível | ✅ Completo |
-| Integração com Pedido de Venda → Demanda | ✅ Completo (automático ao confirmar pedido) |
+| Integração com Pedido de Venda → Demanda | ✅ Completo (o MRP lê o pedido confirmado, P/A) |
 | Sugestões `mrp_planned_suggestions` | ✅ Completo |
 | Perfil MRP por item | ✅ Completo |
 | Log de execução | ✅ Completo |

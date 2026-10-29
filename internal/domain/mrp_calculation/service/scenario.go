@@ -101,6 +101,51 @@ func applyScenarioDemands(adj *entity.ScenarioAdjustments, demands []*inddemande
 	return outD, outI
 }
 
+// ajustarVendasDoCenario leva a alteração de pedido do cenário para a venda
+// que consome a previsão e a demanda de estoque. A venda é a quantidade
+// vendida (atendida + aberta) e o cenário altera a aberta: a diferença entre
+// a aberta nova e a lida do banco vai para a venda; a data nova também.
+func ajustarVendasDoCenario(adj *entity.ScenarioAdjustments, pedidosLidos []*entity.MRPInput, vendas []inddemandentity.Venda) []inddemandentity.Venda {
+	if adj == nil || len(adj.Demands) == 0 || len(vendas) == 0 {
+		return vendas
+	}
+	porLinha := map[int64]entity.ScenarioDemandChange{}
+	for _, c := range adj.Demands {
+		if c.RefKind == entity.ScenarioDemandSalesOrder && c.RefCode != nil {
+			porLinha[*c.RefCode] = c
+		}
+	}
+	if len(porLinha) == 0 {
+		return vendas
+	}
+	abertaLida := map[int64]decimal.Decimal{}
+	for _, in := range pedidosLidos {
+		if in.DemandType == "SALES_ORDER" && in.SourceCode != nil {
+			abertaLida[*in.SourceCode] = abertaLida[*in.SourceCode].Add(in.Quantity)
+		}
+	}
+	out := make([]inddemandentity.Venda, 0, len(vendas))
+	for _, v := range vendas {
+		if v.Linha == nil {
+			out = append(out, v)
+			continue
+		}
+		c, ok := porLinha[*v.Linha]
+		if !ok {
+			out = append(out, v)
+			continue
+		}
+		if c.Quantity != nil {
+			v.Quantidade = decimal.Max(decimal.Zero, v.Quantidade.Sub(abertaLida[*v.Linha]).Add(*c.Quantity))
+		}
+		if c.NeedDate != nil {
+			v.Data = *c.NeedDate
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
 // applyScenarioStock soma a entrada/baixa simulada ao saldo do item. O mapa é
 // do cálculo em curso; o snapshot é copiado para não alterar o lido do banco.
 func applyScenarioStock(adj *entity.ScenarioAdjustments, snapshots map[int64]*entity.StockSnapshot) {

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/ports"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -27,6 +28,12 @@ type externalRoutingStub struct {
 
 func (s *externalRoutingStub) GetExternalOpsByItem(context.Context, int64) ([]*routingentity.ExternalOp, error) {
 	return s.operations, nil
+}
+
+// GetRouteForItem: o item do teste não tem roteiro (o netting lê o roteiro
+// para o prazo de fabricação).
+func (s *externalRoutingStub) GetRouteForItem(context.Context, int64, string) (*routingentity.ManufacturingRoute, error) {
+	return nil, domainerr.NewNotFound("sem roteiro")
 }
 
 func (r *numberedSuggestionRepo) CreatePlannedOrderSuggestion(_ context.Context, suggestion *entity.PlannedOrderSuggestion) (*entity.PlannedOrderSuggestion, error) {

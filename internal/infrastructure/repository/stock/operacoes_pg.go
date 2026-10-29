@@ -143,7 +143,9 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 		ref = *orig.refTipo
 	}
 	switch ref {
-	case "", entity.ReferenceTypeManual:
+	// A saída que atende a demanda independente é lançamento manual com
+	// referência: estornada, a demanda volta a ter o saldo.
+	case "", entity.ReferenceTypeManual, entity.ReferenceTypeIndependentDemand:
 	case entity.ReferenceTypeTransfer:
 		if orig.refCodigo == nil {
 			return nil, errorsuc.NewValidationError("transferência sem a outra perna: estorne lançando a transferência de volta")

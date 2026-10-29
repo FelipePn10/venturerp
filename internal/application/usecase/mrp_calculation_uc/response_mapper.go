@@ -84,17 +84,18 @@ func toConfiguredItemRuleResponse(r *entity.ConfiguredItemRule) *response.Config
 		return nil
 	}
 	return &response.ConfiguredItemRuleResponse{
-		Code:      r.Code,
-		ItemCode:  r.ItemCode,
-		TableType: r.TableType,
-		FieldName: r.FieldName,
-		RuleType:  r.RuleType,
-		RuleValue: r.RuleValue,
-		Sequence:  r.Sequence,
-		IsActive:  r.IsActive,
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
-		CreatedBy: r.CreatedBy,
+		Code:            r.Code,
+		ItemCode:        r.ItemCode,
+		TableType:       r.TableType,
+		FieldName:       r.FieldName,
+		RuleType:        r.RuleType,
+		RuleValue:       r.RuleValue,
+		Sequence:        r.Sequence,
+		IsActive:        r.IsActive,
+		CondicaoMascara: r.CondicaoMascara,
+		CreatedAt:       r.CreatedAt,
+		UpdatedAt:       r.UpdatedAt,
+		CreatedBy:       r.CreatedBy,
 	}
 }
 

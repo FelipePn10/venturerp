@@ -473,7 +473,7 @@ func (r *Repository) DemandRefExists(ctx context.Context, kind string, code int6
 	}
 	switch kind {
 	case planning_uc.DemandRefIndependent:
-		return r.exists(ctx, `SELECT EXISTS(SELECT 1 FROM independent_demands WHERE code=$1 AND enterprise_id=$2 AND is_active)`, code, e)
+		return r.exists(ctx, `SELECT EXISTS(SELECT 1 FROM independent_demands WHERE code=$1 AND enterprise_id=$2 AND situacao='ABERTA')`, code, e)
 	case planning_uc.DemandRefSalesOrder:
 		return r.exists(ctx, `SELECT EXISTS(SELECT 1 FROM sales_order_items soi JOIN sales_orders so ON so.code=soi.sales_order_code
 			JOIN enterprise en ON en.code=so.enterprise_code WHERE soi.code=$1 AND en.id=$2)`, code, e)
@@ -532,26 +532,53 @@ func (r *Repository) Promote(ctx context.Context, id int64, actor uuid.UUID) (*p
 		for _, a := range ajustes {
 			switch a.kind {
 			case planning_uc.DemandRefNew:
+				// Mesma numeração da tela (VPLA0102): a trava da empresa e o
+				// primeiro número livre.
 				var code int64
-				if err := tx.QueryRow(ctx, `SELECT COALESCE(MAX(code), 0) + 1 FROM independent_demands`).Scan(&code); err != nil {
+				if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('independent_demands.code'), $1::int)`, e); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(ctx, `INSERT INTO independent_demands (code, item_code, mask, quantity, demand_date, created_by, enterprise_id)
-					VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7)`, code, a.item, a.mask, a.qtd, a.need, actor, e); err != nil {
+				if err := tx.QueryRow(ctx, `SELECT COALESCE(MIN(d.code + 1), 1)::bigint
+					  FROM (SELECT i.code FROM independent_demands i WHERE i.enterprise_id = $1 AND i.code > 0 UNION ALL SELECT 0::bigint) d
+					 WHERE NOT EXISTS (SELECT 1 FROM independent_demands x WHERE x.enterprise_id = $1 AND x.code = d.code + 1)`, e).Scan(&code); err != nil {
+					return err
+				}
+				if _, err := tx.Exec(ctx, `INSERT INTO independent_demands (code, item_code, mask, quantity, demand_date, created_by, enterprise_id, observacao)
+					VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, 'Promovida do cenário de simulação')`, code, a.item, a.mask, a.qtd, a.need, actor, e); err != nil {
 					return fmt.Errorf("criando a demanda independente: %w", err)
 				}
 				out.Created++
 			case planning_uc.DemandRefIndependent:
+				// Mesmas regras da tela (VPLA0102): trava a demanda como o
+				// "Atender" e confere o que já saiu para a finalidade.
+				if a.code == nil {
+					out.Skipped++
+					continue
+				}
+				atendida, err := atendidaTravada(ctx, tx, *a.code, e)
+				if err != nil {
+					return err
+				}
 				if a.qtd != nil && a.qtd.IsZero() {
-					tag, err := tx.Exec(ctx, `UPDATE independent_demands SET is_active=FALSE, updated_at=NOW() WHERE code=$1 AND enterprise_id=$2 AND is_active`, a.code, e)
+					// Com saída, a demanda não se cancela: encerra o saldo.
+					situacao := "CANCELADA"
+					if atendida.IsPositive() {
+						situacao = "ENCERRADA"
+					}
+					tag, err := tx.Exec(ctx, `UPDATE independent_demands SET is_active=FALSE, situacao=$4, encerrada_em=NOW(), encerrada_por=$3,
+						motivo_encerramento='Removida pelo cenário de simulação', updated_at=NOW()
+					WHERE code=$1 AND enterprise_id=$2 AND situacao='ABERTA'`, a.code, e, actor, situacao)
 					if err != nil {
 						return err
 					}
 					out.Removed += int(tag.RowsAffected())
 					continue
 				}
+				if a.qtd != nil && a.qtd.LessThan(atendida) {
+					return errorsuc.NewValidationError(fmt.Sprintf("a demanda %d já teve %s de saída: o cenário não baixa a quantidade para %s", *a.code, atendida.String(), a.qtd.String()))
+				}
 				tag, err := tx.Exec(ctx, `UPDATE independent_demands SET quantity=COALESCE($3, quantity), demand_date=COALESCE($4, demand_date), updated_at=NOW()
-					WHERE code=$1 AND enterprise_id=$2 AND is_active`, a.code, e, a.qtd, a.need)
+					WHERE code=$1 AND enterprise_id=$2 AND situacao='ABERTA'`, a.code, e, a.qtd, a.need)
 				if err != nil {
 					return err
 				}
@@ -606,4 +633,19 @@ func (r *Repository) LastCalculatedAt(ctx context.Context, planCode int64) (*tim
 		return nil, nil
 	}
 	return at, err
+}
+
+// atendidaTravada trava a demanda até o fim da transação e devolve o que já
+// saiu do estoque para ela (saídas não estornadas).
+func atendidaTravada(ctx context.Context, tx pgx.Tx, code, enterpriseID int64) (decimal.Decimal, error) {
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM independent_demands WHERE code=$1 AND enterprise_id=$2 FOR UPDATE`, code, enterpriseID); err != nil {
+		return decimal.Zero, fmt.Errorf("travando a demanda %d: %w", code, err)
+	}
+	var atendida decimal.Decimal
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(SUM(ABS(quantity)), 0) FROM stock_movements
+		 WHERE enterprise_id=$1 AND reference_type='DEMANDA_INDEPENDENTE' AND reference_code=$2
+		   AND movement_type='OUT' AND reversed_by_movement_id IS NULL`, enterpriseID, code).Scan(&atendida); err != nil {
+		return decimal.Zero, fmt.Errorf("lendo o atendido da demanda %d: %w", code, err)
+	}
+	return atendida, nil
 }

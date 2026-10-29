@@ -26,6 +26,7 @@ func TestPolicyCycleCountSchedulerLifecycleAndTenantIsolation(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name,created_by) VALUES($1,'Policy A',$3),($2,'Policy B',$3) RETURNING id`, base, base+1, actor).Scan(&tenantA); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(base), int64(base+1)) })
 	if err := pool.QueryRow(ctx, `SELECT id FROM enterprise WHERE code=$1`, base+1).Scan(&tenantB); err != nil {
 		t.Fatal(err)
 	}

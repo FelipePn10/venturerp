@@ -45,6 +45,9 @@ type CreateConfiguredItemRuleDTO struct {
 	RuleValue string    `json:"rule_value"`
 	Sequence  int       `json:"sequence"`
 	CreatedBy uuid.UUID `json:"created_by"`
+	// CondicaoMascara: vazia vale para todas as máscaras; preenchida, o tipo
+	// da regra compara a máscara com ela.
+	CondicaoMascara string `json:"condicao_mascara,omitempty"`
 }
 
 // HandleMRPExceptionDTO é a ação do planejador sobre uma exceção do MRP:

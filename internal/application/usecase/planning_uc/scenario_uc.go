@@ -68,6 +68,14 @@ type ScenarioUseCase struct {
 	Plans    planCalculatedAt
 	Auth     ports.AuthService
 	Now      func() time.Time
+	// Politicas diz a estratégia do item (VPLA0310). Opcional: sem ela, o
+	// promover não confere item sob encomenda.
+	Politicas politicaDoItem
+}
+
+// politicaDoItem é a política de planejamento efetiva do item.
+type politicaDoItem interface {
+	PoliticaDoItem(ctx context.Context, item int64, empresa mrpentity.PoliticaEfetiva) (mrpentity.PoliticaEfetiva, error)
 }
 
 func (uc *ScenarioUseCase) now() time.Time {
@@ -423,5 +431,45 @@ func (uc *ScenarioUseCase) Promote(ctx context.Context, id int64) (*PromoteResul
 	if err != nil {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	if err := uc.conferirSobEncomenda(ctx, id); err != nil {
+		return nil, err
+	}
 	return uc.Repo.Promote(ctx, id, ator)
+}
+
+// conferirSobEncomenda: a demanda nova do cenário vira demanda de estoque no
+// plano real, e item sob encomenda não planeja demanda de estoque — ela
+// ficaria cadastrada e fora do cálculo, sem aviso. Recusa antes de promover.
+func (uc *ScenarioUseCase) conferirSobEncomenda(ctx context.Context, id int64) error {
+	if uc.Politicas == nil {
+		return nil
+	}
+	changes, err := uc.Repo.Changes(ctx, id)
+	if err != nil {
+		return err
+	}
+	var itens []string
+	vistos := map[int64]bool{}
+	for _, c := range changes {
+		if c.Kind != ChangeDemand || c.DemandRefKind != DemandRefNew || c.ItemCode == nil || vistos[*c.ItemCode] {
+			continue
+		}
+		vistos[*c.ItemCode] = true
+		pol, err := uc.Politicas.PoliticaDoItem(ctx, *c.ItemCode, mrpentity.PoliticaEfetiva{Estrategia: mrpentity.EstrategiaConsumo})
+		if err != nil {
+			return err
+		}
+		if pol.SobEncomenda() {
+			rotulo := c.ItemDescription
+			if rotulo == "" {
+				rotulo = fmt.Sprintf("item %d", *c.ItemCode)
+			}
+			itens = append(itens, rotulo)
+		}
+	}
+	if len(itens) > 0 {
+		return errorsuc.NewValidationError("o cenário tem demanda nova de item planejado sob encomenda (" + strings.Join(itens, ", ") +
+			"): no plano real ela não entraria no MRP. Lance o pedido de venda, retire o ajuste do cenário ou mude a política do item (VPLA0310)")
+	}
+	return nil
 }

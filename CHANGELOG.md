@@ -6,6 +6,27 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(planejamento): demanda independente (VPLA0102) refeita — motivos de
+  expectativa de venda e de finalidade própria, programação de entregas,
+  numeração por empresa, atendimento pela saída de estoque, "Gerar OF agora" e
+  acompanhamento das ordens ligadas
+- fix(mrp): o pedido de venda deixava de contar duas vezes (demanda gerada na
+  confirmação e reserva de estoque); a venda consome a previsão e a demanda de
+  estoque (janela dos parâmetros 46/47); só pedido P/A entra no MRP
+- feat(planejamento): política de planejamento por item ou classificação
+  (VPLA0310) — consumo pela venda ou sob encomenda, janela de consumo, horizonte
+  firme (exceção FIRM_FENCE) e tempo de segurança (parâmetros 48/49)
+- feat(planejamento): rastreio do consumo — quais pedidos consumiram cada
+  demanda e cada semana de previsão
+- fix(mrp): regra configurada de prazo e lote mínimo passa a valer (condição de
+  máscara em coluna própria); prazo único em todos os modos: regra → fornecedor
+  preferencial → roteiro
+- fix(mrp): falha ao ler as vendas do consumo encerra o cálculo em erro, em vez
+  de gravar um plano inflado
+- fix(ordens): OF manual confere datas e almoxarifado da empresa; promover
+  cenário respeita o que já saiu da demanda
+- Migrações 000449–000452.
+
 ## [v1.8.0] — 2026-10-28
 
 - feat: fundação enterprise (F1–F5), cadastros fiscais unificados e CIAP (`8a8c3a5d`)

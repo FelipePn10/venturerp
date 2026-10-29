@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_policy_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	pedidocompraExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/pedidocompra"
 	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
+	planningPolicyRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_policy"
 	"github.com/jackc/pgx/v5"
 	"net/http"
 	"os"
@@ -535,15 +537,14 @@ func (app *application) mount() chi.Router {
 	deliveryRescheduleHandler := handler.NewDeliveryRescheduleHandler(createDeliveryRescheduleUC, listDeliveryRescheduleUC, deliveryReschedulePlanningUC)
 
 	// independent demand
-	independentDemandRepo := independentDemand.NewIndependentDemandRepositorySQLC(queries)
-	createIndependentDemandUC := &independent_demand_uc.CreateIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
-	updateIndependentDemandUC := &independent_demand_uc.UpdateIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
-	deleteIndependentDemandUC := &independent_demand_uc.DeleteIndependentDemandUseCase{Repo: independentDemandRepo, Auth: authService}
-	listFromDateIndependentDemandUC := &independent_demand_uc.ListIndependentDemandFromDateUseCase{Repo: independentDemandRepo, Auth: authService}
-	listByItemIndependentDemandUC := &independent_demand_uc.ListIndependentDemandByItemUseCase{Repo: independentDemandRepo, Auth: authService}
-	listIndependentDemandUC := &independent_demand_uc.ListIndependentDemandsUseCase{Repo: independentDemandRepo, Auth: authService}
-	getByCodeDemandUC := &independent_demand_uc.GetIndependentDemandByCodeUseCase{Repo: independentDemandRepo, Auth: authService}
-	independentDemandHandler := handler.NewIndependentDemandHandler(createIndependentDemandUC, updateIndependentDemandUC, deleteIndependentDemandUC, listFromDateIndependentDemandUC, listByItemIndependentDemandUC, listIndependentDemandUC, getByCodeDemandUC)
+	// O repositório lê o atendido (saídas para a finalidade), as ordens
+	// vinculadas e as vendas que consomem a demanda.
+	independentDemandRepo := independentDemand.NewIndependentDemandRepositorySQLC(queries).ComDB(app.db.Pool)
+	// Saida (lançamento de estoque) e OF (abertura de OF) entram mais abaixo,
+	// quando os casos de uso deles existem.
+	demandaUC := &independent_demand_uc.DemandaUseCase{Repo: independentDemandRepo, Acomp: independentDemandRepo, Auth: authService,
+		Items: itemRepo, Previsoes: sfRepo}
+	independentDemandHandler := handler.NewIndependentDemandHandler(demandaUC)
 
 	// industrial calendar
 	industrialCalendarRepo := industrialCalendar.NewIndustrialCalendarRepositorySQLC(queries)
@@ -705,7 +706,18 @@ func (app *application) mount() chi.Router {
 	scenarioRepo := planningscenariorepo.New(app.db.Pool)
 	if impl, ok := mrpService.(*mrpservice.MRPServiceImpl); ok {
 		impl.Scenarios = scenarioRepo
+		// Os pedidos de venda consomem a previsão e a demanda de estoque.
+		impl.Vendas = independentDemandRepo
 	}
+	demandaUC.Params = mrpRepo
+	// Política de planejamento por item/classificação (VPLA0310): o MRP e a
+	// demanda independente leem a mesma.
+	politicaRepo := planningPolicyRepo.New(app.db.Pool)
+	demandaUC.Politicas = politicaRepo
+	if impl, ok := mrpService.(*mrpservice.MRPServiceImpl); ok {
+		impl.Politicas = politicaRepo
+	}
+	planningPolicyHandler := handler.NewPlanningPolicyHandler(&planning_policy_uc.UseCase{Repo: politicaRepo, Params: mrpRepo, Auth: authService, Items: itemRepo})
 	mrpRunUC := &mrp_calculation_uc.RunMRPCalculationUseCase{Service: mrpService, Auth: authService, Plans: productionPlanRepo}
 	mrpGetProfileUC := &mrp_calculation_uc.GetItemProfileUseCase{Repo: mrpRepo, Auth: authService}
 	mrpCreateConfiguredRule := &mrp_calculation_uc.ManageConfiguredItemRulesUseCase{Repo: mrpRepo, Auth: authService, Items: itemRepo}
@@ -748,7 +760,8 @@ func (app *application) mount() chi.Router {
 
 	// Firmer=plannedFirmUC: accepting an MRP suggestion also fires the firm step,
 	// generating the OF (production) / service requisition — one-step conversion.
-	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService, Firmer: plannedFirmUC}
+	mrpFirmarSugestaoUC := &mrp_uc.FirmarSugestaoMRPUseCase{MRPRepo: mrpRepo, PlannedRepo: plannedRepo, Auth: authService, Firmer: plannedFirmUC,
+		Demandas: independentDemandRepo}
 	mrpRunUC.AutoReleaser = mrpFirmarSugestaoUC
 	peggingHandler := handler.NewPeggingHandler(peggingUC)
 	mrpHandler := handler.NewMRPCalculationHandler(mrpRunUC, mrpGetProfileUC, mrpCreateConfiguredRule, mrpListExceptionsUC, mrpFirmarSugestaoUC)
@@ -758,6 +771,7 @@ func (app *application) mount() chi.Router {
 		Repo: scenarioRepo, MRP: mrpService, CRP: crpUC, Coverage: mrpReportUC, Results: mrpRepo,
 		Pegging: peggingUC,
 		Lock:    planningRunRepo, Plans: scenarioRepo, Auth: authService,
+		Politicas: politicaRepo,
 	})
 
 	// production order
@@ -801,6 +815,7 @@ func (app *application) mount() chi.Router {
 	}
 	prodOrderCreateUC.Routing = rRepo
 	prodOrderCreateUC.OrderOps = orderOpsUC
+	demandaUC.OF = prodOrderCreateUC
 	prodOrderCreateUC.CreateAtomically = func(ctx context.Context, order *productionentity.ProductionOrder, materials []*productionentity.ProductionOrderMaterial, routeID int64) (*productionentity.ProductionOrder, error) {
 		return prodOrderRepo.CreateWithMaterialsAndCallback(ctx, order, materials, func(ctx context.Context, tx pgx.Tx, created *productionentity.ProductionOrder) error {
 			inner := *orderOpsUC
@@ -969,7 +984,7 @@ func (app *application) mount() chi.Router {
 	soRepo := salesOrderRepo.NewSalesOrderRepositorySQLC(queries)
 	// Captured so the automatic credit check and stock reservation (ATP) can be
 	// attached once the customer/financial/stock repositories are available below.
-	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService, DemandRepo: independentDemandRepo}
+	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService}
 	// Motor de aprovação: os módulos pedem aprovação e os efetivadores de cada
 	// tipo são ligados mais abaixo, quando os repositórios existem.
 	aprovacaoUC := &aprovacao_uc.UseCase{Repo: aprovacaoRepo.New(app.db.Pool), Auth: authService}
@@ -1111,6 +1126,23 @@ func (app *application) mount() chi.Router {
 		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
 	}}
 	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService, Tipos: stockRepository}
+	demandaUC.Saida = createStockMovementUC
+	// A transação da demanda leva junto a saída de estoque: o "Atender" trava
+	// a demanda e grava a saída na mesma transação.
+	demandaUC.Transacao = func(ctx context.Context, fn func(independent_demand_uc.Repos) error) error {
+		tx, err := app.db.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		r := independentDemand.NewIndependentDemandRepositorySQLC(queries.WithTx(tx)).ComDB(tx)
+		estoqueTx := stockRepo.NewStockRepositoryTx(tx)
+		saidaTx := &stock_uc.CreateStockMovementUseCase{Repo: estoqueTx, Auth: authService, Tipos: estoqueTx}
+		if err := fn(independent_demand_uc.Repos{Demandas: r, Acomp: r, Saida: saidaTx}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 	listStockMovementsUC := &stock_uc.ListStockMovementsUseCase{Repo: stockRepository, Auth: authService}
 	getStockBalanceUC := &stock_uc.GetStockBalanceUseCase{Repo: stockRepository, Auth: authService}
 	reserveStockUC := &stock_uc.ReserveStockUseCase{Repo: stockRepository, Auth: authService}
@@ -1546,9 +1578,8 @@ func (app *application) mount() chi.Router {
 		defer tx.Rollback(ctx)
 		q := sqlc.New(tx)
 		if err := fn(sales_order_uc.ConfirmacaoRepos{
-			Pedidos:  salesOrderRepo.NewSalesOrderRepositorySQLC(q),
-			Demandas: independentDemand.NewIndependentDemandRepositorySQLC(q),
-			Estoque:  stockRepo.NewStockRepositoryTx(tx),
+			Pedidos: salesOrderRepo.NewSalesOrderRepositorySQLC(q),
+			Estoque: stockRepo.NewStockRepositoryTx(tx),
 		}); err != nil {
 			return err
 		}
@@ -1557,7 +1588,7 @@ func (app *application) mount() chi.Router {
 	// O desbloqueio (manual ou pela aprovação de crédito) termina a confirmação
 	// que o bloqueio interrompeu, na mesma transação da confirmação.
 	conclusaoDoDesbloqueio := &sales_order_uc.ConclusaoDoDesbloqueio{
-		Transacao: changeStatusSalesOrderUC.Transacao, ComDemanda: true, Reserver: changeStatusSalesOrderUC.Reserver,
+		Transacao: changeStatusSalesOrderUC.Transacao, Reserver: changeStatusSalesOrderUC.Reserver,
 	}
 	unblockSalesOrderUC.Conclusao = conclusaoDoDesbloqueio
 	aprovacaoUC.Registrar(aprovacao.LiberacaoCredito, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusaoDoDesbloqueio, Tipo: aprovacao.LiberacaoCredito, Aprovacoes: aprovacaoUC})
@@ -1788,13 +1819,19 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/batch", deliveryRescheduleHandler.CreateBatch)
 		})
 		r.Route("/api/independent-demand", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", independentDemandHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", independentDemandHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", independentDemandHandler.CreateUma)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update/{code}", independentDemandHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/delete/{code}", independentDemandHandler.Delete)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list-from-date/{date}", independentDemandHandler.ListFromDate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list-by-item/{itemCode}", independentDemandHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", independentDemandHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/get-by-code/{code}", independentDemandHandler.GetByCode)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consumo", independentDemandHandler.Consumo)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancelar", independentDemandHandler.Cancelar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/encerrar", independentDemandHandler.Encerrar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/atender", independentDemandHandler.Atender)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/gerar-of", independentDemandHandler.GerarOF)
 		})
 		r.Route("/api/industrial-calendar", func(r chi.Router) {
 			r.Use(httpmw.RequireRole("ADMIN", "USER"))
@@ -1975,6 +2012,15 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", employeeHandler.GetEmployee)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/update", employeeHandler.UpdateEmployee)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/deactivate", employeeHandler.DeactivateEmployee)
+		})
+		r.Route("/api/planning-policy", func(r chi.Router) {
+			r.Use(httpmw.RequireRole("ADMIN", "USER"))
+			r.Get("/", planningPolicyHandler.List)
+			r.Post("/", planningPolicyHandler.Create)
+			r.Get("/efetiva", planningPolicyHandler.Effective)
+			r.Get("/{id}", planningPolicyHandler.Get)
+			r.Put("/{id}", planningPolicyHandler.Update)
+			r.Delete("/{id}", planningPolicyHandler.Delete)
 		})
 		r.Route("/api/planning-params", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", planningParamsHandler.List)

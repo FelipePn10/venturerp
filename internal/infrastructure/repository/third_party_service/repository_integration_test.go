@@ -197,10 +197,9 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	if e != nil || len(globals) == 0 {
 		t.Fatalf("global conversions=%+v err=%v", globals, e)
 	}
-	var otherCode int64
-	if e = pool.QueryRow(base, `SELECT COALESCE(MAX(code),0)+1 FROM enterprise`).Scan(&otherCode); e != nil {
-		t.Fatal(e)
-	}
+	// Código único: MAX(code)+1 colidia com a empresa criada em paralelo por
+	// outro pacote (enterprise_code_key).
+	otherCode := int64(1_610_000_000) + testutil.UniqueCode()%10_000_000
 	var otherID int64
 	if e = pool.QueryRow(base, `INSERT INTO enterprise(code,name) VALUES($1,'Other third party tenant') RETURNING id`, otherCode).Scan(&otherID); e != nil {
 		t.Fatal(e)

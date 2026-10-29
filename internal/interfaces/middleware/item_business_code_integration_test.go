@@ -47,6 +47,7 @@ func TestItemBusinessCodeHTTPAcrossOperationalDomains(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name,created_by) VALUES($1,'Compat A',$3),($2,'Compat B',$3) RETURNING id`, enterpriseCodeA, enterpriseCodeB, userID).Scan(&enterpriseA); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(enterpriseCodeA), int64(enterpriseCodeB)) })
 	if err := pool.QueryRow(ctx, `SELECT id FROM enterprise WHERE code=$1`, enterpriseCodeB).Scan(&enterpriseB); err != nil {
 		t.Fatal(err)
 	}

@@ -41,6 +41,7 @@ func TestMachineProductivityMRPAndCRPIntegration(t *testing.T) {
 	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name,created_by) VALUES($1,'Capacity test',$2) RETURNING id`, code%1000000000, actor).Scan(&enterprise); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, enterprise) })
 	ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterprise})
 	q := sqlc.New(pool)
 	machines := machinerepo.NewMachineRepositorySQLC(q, pool)

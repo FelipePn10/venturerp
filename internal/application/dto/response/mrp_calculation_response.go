@@ -67,15 +67,17 @@ type MRPItemProfileConsultationResponse struct {
 
 // ConfiguredItemRuleResponse is the API representation of a configured item rule.
 type ConfiguredItemRuleResponse struct {
-	Code      int64     `json:"code"`
-	ItemCode  int64     `json:"item_code"`
-	TableType string    `json:"table_type"`
-	FieldName string    `json:"field_name"`
-	RuleType  string    `json:"rule_type"`
-	RuleValue string    `json:"rule_value"`
-	Sequence  int       `json:"sequence"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedBy uuid.UUID `json:"created_by"`
+	Code      int64  `json:"code"`
+	ItemCode  int64  `json:"item_code"`
+	TableType string `json:"table_type"`
+	FieldName string `json:"field_name"`
+	RuleType  string `json:"rule_type"`
+	RuleValue string `json:"rule_value"`
+	Sequence  int    `json:"sequence"`
+	IsActive  bool   `json:"is_active"`
+	// CondicaoMascara vazia: a regra vale para todas as máscaras.
+	CondicaoMascara string    `json:"condicao_mascara,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	CreatedBy       uuid.UUID `json:"created_by"`
 }

@@ -26,6 +26,7 @@ func TestCancelamentoDoPedidoDeCompraCancelaOsTitulos(t *testing.T) {
 	if err := pool.QueryRow(bg, `INSERT INTO enterprise(code,name) VALUES($1,'Cancelamento do pedido de compra') RETURNING id`, empresaCode).Scan(&emp); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.ApagarEmpresasPorCodigo(t, pool, int64(empresaCode)) })
 	ctx := context.WithValue(bg, contextkey.UserKey, &appsecurity.AuthUser{ID: ator.String(), Role: "ADMIN", EnterpriseID: emp, EnterpriseCode: empresaCode})
 	t.Cleanup(func() {
 		_, _ = pool.Exec(bg, `DELETE FROM contas_pagar WHERE enterprise_id=$1`, emp)
