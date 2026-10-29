@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.9.0] — 2026-10-29
+
+- feat(planejamento): demanda independente enterprise, política de planejamento e correções do MRP (`f2bae0d5`)
+
 - feat(planejamento): demanda independente (VPLA0102) refeita — motivos de
   expectativa de venda e de finalidade própria, programação de entregas,
   numeração por empresa, atendimento pela saída de estoque, "Gerar OF agora" e
