@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,18 @@ func (uc *UploadNFEEntryUseCase) ExecuteFile(ctx context.Context, conteudo []byt
 		}
 	}
 
+	// Lançada antes à mão, sem a chave, a nota só se reconhece por emitente, série e número.
+	if numero, errNumero := strconv.ParseInt(strings.TrimSpace(nfe.Numero), 10, 64); errNumero == nil {
+		existente, err := uc.Docs.FindEntryByNumero(ctx, nfe.EmitenteCNPJ, nfe.Serie, numero)
+		if err != nil {
+			return nil, err
+		}
+		if existente != nil {
+			return nil, errorsuc.NewConflictError(fmt.Sprintf(
+				"a nota %d, série %s, de %s já foi lançada como entrada %d", numero, nfe.Serie, existente.RazaoSocialEmitente, existente.ID))
+		}
+	}
+
 	dataEntrada := nfe.DataEmissao
 	if nfe.DataSaidaEntrada != nil {
 		dataEntrada = *nfe.DataSaidaEntrada
@@ -95,12 +108,14 @@ func (uc *UploadNFEEntryUseCase) ExecuteFile(ctx context.Context, conteudo []byt
 	if err != nil && !errors.As(err, &semConfig) {
 		return nil, err
 	}
-	if err == nil && cfg != nil && cfg.CnpjEmpresa != "" && nfe.DestinatarioCNPJ != "" &&
-		soDigitos(cfg.CnpjEmpresa) != nfe.DestinatarioCNPJ {
-		warnings = append(warnings, fmt.Sprintf(
-			"o destinatário da nota (%s) não é o CNPJ desta empresa (%s): confira se a nota é mesmo para esta empresa",
-			nfe.DestinatarioCNPJ, soDigitos(cfg.CnpjEmpresa)))
+	if err != nil {
+		cfg = nil
 	}
+	avisosDoXML, err := conferirXMLDaEntrada(nfe, cfg)
+	if err != nil {
+		return nil, err
+	}
+	warnings = append(warnings, avisosDoXML...)
 
 	// Fornecedor pelo CNPJ do emitente.
 	fornecedor, err := uc.Docs.FindSupplierByDocument(ctx, nfe.EmitenteCNPJ)

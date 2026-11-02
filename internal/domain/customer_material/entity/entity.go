@@ -72,6 +72,7 @@ type Remessa struct {
 	ID           int64
 	EnterpriseID int64
 	CustomerCode int64
+	CustomerName string
 	NFeNumber    int64
 	NFeSeries    string
 	NFeKey       *string
@@ -86,16 +87,31 @@ type Remessa struct {
 	// Pedido de beneficiamento. Nulo é caso previsto: material chega sem pedido e
 	// entra bloqueado até regularizar.
 	SalesOrderCode *int64
-	Blocked        bool
-	BlockReason    *string
-	ClosedAt       *time.Time
-	ClosedBy       *string
-	CloseReason    *string
-	Notes          *string
-	CreatedBy      string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	Itens          []*ItemRemessa
+	// Número do pedido, o que o cliente e o comercial conhecem. Só leitura: o
+	// vínculo é pelo código.
+	SalesOrderNumber *int64
+	// NotaPendente é a nota da remessa que ainda não foi autorizada. O saldo baixa ao
+	// criar a nota, mas o material só sai de fato com a autorização.
+	NotaPendente *NotaPendente
+	Blocked      bool
+	BlockReason  *string
+	ClosedAt     *time.Time
+	ClosedBy     *string
+	CloseReason  *string
+	Notes        *string
+	CreatedBy    string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Itens        []*ItemRemessa
+}
+
+// NotaPendente resume a nota em rascunho, rejeitada ou aguardando a SEFAZ.
+type NotaPendente struct {
+	ID             int64
+	Numero         int64
+	Serie          string
+	Status         string
+	MotivoRejeicao *string
 }
 
 // SaldoTotal soma o saldo em poder da empresa em todas as linhas.

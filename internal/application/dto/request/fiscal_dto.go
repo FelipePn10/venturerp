@@ -37,6 +37,10 @@ type CreateFiscalEntryDTO struct {
 	SupplierCode *int64 `json:"supplier_code,omitempty"`
 	// Parcelas da nota. Vazias, a nota nasce com uma parcela única para 30 dias.
 	Parcelas []FiscalEntryInstallmentDTO `json:"parcelas,omitempty"`
+	// ICMS-ST e outras despesas compõem o total da nota do fornecedor, mesmo sem
+	// sair por item. Sem eles, a nota com ST não fecha na conta.
+	ValorICMSST decimal.Decimal `json:"valor_icms_st"`
+	ValorOutras decimal.Decimal `json:"valor_outras"`
 	// Tipo de operação de entrada da nota (padrão dos itens).
 	EntryOperationCode *int64 `json:"entry_operation_code,omitempty"`
 	// Retenções na fonte (nota de serviço / prestação com retenção).
@@ -49,9 +53,12 @@ type CreateFiscalEntryDTO struct {
 }
 
 type CreateFiscalEntryItemDTO struct {
-	Sequence              int     `json:"sequence"`
-	ItemCode              *int64  `json:"item_code,omitempty"`
-	SupplierItemCode      *string `json:"supplier_item_code,omitempty"`
+	Sequence         int     `json:"sequence"`
+	ItemCode         *int64  `json:"item_code,omitempty"`
+	SupplierItemCode *string `json:"supplier_item_code,omitempty"`
+	// LembrarVinculo memoriza o código do fornecedor para este item: a próxima
+	// nota dele já vem conciliada.
+	LembrarVinculo        bool    `json:"lembrar_vinculo,omitempty"`
 	UOM                   *string `json:"uom,omitempty"`
 	Ncm                   *string `json:"ncm,omitempty"`
 	Cfop                  string  `json:"cfop"`
@@ -191,7 +198,7 @@ type CreateFiscalExitDTO struct {
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// pedido e a do cliente; vazia = a deles, ou deduzida do destinatário.
 	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
-	// InvoiceTypeID: tipo de nota (VFIS0110) da saída; os indicadores dele
+	// InvoiceTypeID: tipo de nota (VCLI0530) da saída; os indicadores dele
 	// (calcula ST, diferimento, PIS/COFINS, DIFAL, ICMS isento) entram no cálculo.
 	InvoiceTypeID *int64 `json:"invoice_type_id,omitempty"`
 	// InformacoesComplementares: texto livre do usuário; o sistema acrescenta o
@@ -201,11 +208,15 @@ type CreateFiscalExitDTO struct {
 }
 
 type CreateFiscalExitItemDTO struct {
-	Sequence         int     `json:"sequence"`
-	ItemCode         *int64  `json:"item_code,omitempty"`
-	Ncm              *string `json:"ncm,omitempty"`
-	Cfop             string  `json:"cfop"`
-	Quantity         float64 `json:"quantity"`
+	Sequence int     `json:"sequence"`
+	ItemCode *int64  `json:"item_code,omitempty"`
+	Ncm      *string `json:"ncm,omitempty"`
+	Cfop     string  `json:"cfop"`
+	Quantity float64 `json:"quantity"`
+	// Quantidade é o nome que o desktop até a 1.9 envia. A API ignorava esse
+	// campo e gravava a linha com quantidade zero; continua aceito porque o
+	// desktop e o backend são atualizados em momentos diferentes.
+	Quantidade       float64 `json:"quantidade,omitempty"`
 	UnitPrice        float64 `json:"unit_price"`
 	TotalPrice       float64 `json:"total_price"`
 	OrigemMercadoria string  `json:"origem_mercadoria"`
@@ -237,6 +248,7 @@ type CreateFiscalExitFromLoadDTO struct {
 	IEDestinatario          *string                      `json:"ie_destinatario,omitempty"`
 	UFDestinatario          *string                      `json:"uf_destinatario,omitempty"`
 	TipoPessoa              *string                      `json:"tipo_pessoa,omitempty"`
+	CustomerCode            *int64                       `json:"customer_code,omitempty"`
 	Cfop                    string                       `json:"cfop"`
 	NaturezaOperacao        string                       `json:"natureza_operacao"`
 	ValorFrete              float64                      `json:"valor_frete"`
@@ -290,6 +302,11 @@ type UpdateFiscalConfigDTO struct {
 	// CBenefDiferimento: cBenef do diferimento (PR830001 no PR). Ausente mantém;
 	// vazio ("") limpa.
 	CBenefDiferimento *string `json:"cbenef_diferimento,omitempty"`
+	// ObsRetornoIndustrializacao: texto legal da nota de retorno do beneficiamento.
+	// Ausente mantém; vazio limpa.
+	ObsRetornoIndustrializacao *string `json:"obs_retorno_industrializacao,omitempty"`
+	// CBenefSuspensao: cBenef do CST 50 na nota de retorno. Ausente mantém; vazio limpa.
+	CBenefSuspensao *string `json:"cbenef_suspensao,omitempty"`
 }
 
 type UpsertNcmTaxDTO struct {

@@ -34,7 +34,7 @@ func moedaF(v float64) decimal.Decimal { return decimal.NewFromFloat(v).Round(2)
 // contabilizarSaida lança a venda depois da autorização. A NF-e já existe na
 // SEFAZ e não se desfaz: falta de conta ou erro viram aviso na resposta, para
 // alguém completar a configuração e lançar.
-func contabilizarSaida(ctx context.Context, c SaidaContabil, exit *entity.FiscalExit, geraReceita bool) []string {
+func contabilizarSaida(ctx context.Context, c SaidaContabil, exit *entity.FiscalExit, items []*entity.FiscalExitItem, geraReceita bool) []string {
 	if c == nil {
 		return nil
 	}
@@ -58,7 +58,9 @@ func contabilizarSaida(ctx context.Context, c SaidaContabil, exit *entity.Fiscal
 		}
 	}
 	ls, faltando := contabilizacao.NotaSaida(contabilizacao.Saida{
-		Total: moedaF(exit.ValorTotal), IPI: moedaF(exit.ValorIPI), ICMSST: moedaF(exit.ValorICMSST),
+		// O material do cliente que volta (5902/5903) não é receita nem conta a
+		// receber: a venda é só o que a nota cobra.
+		Total: entity.ValorCobrado(exit, items), IPI: moedaF(exit.ValorIPI), ICMSST: moedaF(exit.ValorICMSST),
 		ICMS: moedaF(exit.ValorICMS), PIS: moedaF(exit.ValorPIS), COFINS: moedaF(exit.ValorCOFINS), CMV: cmv.Round(2),
 		IBS: ibs.Round(2), CBS: cbs.Round(2),
 		GeraReceita: geraReceita, Historico: fmt.Sprintf("NF-e %d/%s", exit.NumeroNF, exit.Serie),

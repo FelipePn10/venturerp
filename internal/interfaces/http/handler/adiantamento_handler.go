@@ -13,10 +13,11 @@ import (
 
 // AdiantamentoHandler exposes the advance-payment (adiantamentos) endpoints.
 type AdiantamentoHandler struct {
-	createUC  *financial_uc.CreateAdiantamentoUseCase
-	listUC    *financial_uc.ListAdiantamentosUseCase
-	getUC     *financial_uc.GetAdiantamentoUseCase
-	aplicarUC *financial_uc.AplicarAdiantamentoUseCase
+	createUC   *financial_uc.CreateAdiantamentoUseCase
+	listUC     *financial_uc.ListAdiantamentosUseCase
+	getUC      *financial_uc.GetAdiantamentoUseCase
+	aplicarUC  *financial_uc.AplicarAdiantamentoUseCase
+	cancelarUC *financial_uc.CancelarAdiantamentoUseCase
 }
 
 func NewAdiantamentoHandler(
@@ -24,8 +25,9 @@ func NewAdiantamentoHandler(
 	listUC *financial_uc.ListAdiantamentosUseCase,
 	getUC *financial_uc.GetAdiantamentoUseCase,
 	aplicarUC *financial_uc.AplicarAdiantamentoUseCase,
+	cancelarUC *financial_uc.CancelarAdiantamentoUseCase,
 ) *AdiantamentoHandler {
-	return &AdiantamentoHandler{createUC: createUC, listUC: listUC, getUC: getUC, aplicarUC: aplicarUC}
+	return &AdiantamentoHandler{createUC: createUC, listUC: listUC, getUC: getUC, aplicarUC: aplicarUC, cancelarUC: cancelarUC}
 }
 
 func (h *AdiantamentoHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +95,28 @@ func (h *AdiantamentoHandler) Aplicar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.aplicarUC.Execute(r.Context(), id, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// Cancelar desfaz o adiantamento ainda não aplicado.
+func (h *AdiantamentoHandler) Cancelar(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var dto struct {
+		Motivo string `json:"motivo"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+		return
+	}
+	result, err := h.cancelarUC.Execute(r.Context(), id, dto.Motivo)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

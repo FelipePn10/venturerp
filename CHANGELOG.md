@@ -6,6 +6,29 @@ pipeline de release.
 
 ## Unreleased
 
+- feat(financeiro): adiantamentos contabilizados — entrada (D adiantamento a fornecedor / C banco; D banco / C adiantamento de cliente), aplicação (transfere para Fornecedores/Clientes ou para a despesa/receita do título avulso) e estorno no cancelamento, na mesma transação do caixa. Migração 000456 (`adiantamento_fornecedores_account_id`, `adiantamento_clientes_account_id` em `accounting_posting_params`).
+- feat(financeiro): `POST /api/financial/adiantamentos/{id}/cancelar` (motivo obrigatório; só sem aplicação) com fluxo de caixa inverso e saldo bancário restaurado.
+- fix(financeiro): aplicação de adiantamento recusa título de outro parceiro, título quitado/cancelado e devolve erros tipados (422/409) no lugar de 500; o UPDATE do adiantamento filtra a empresa; adiantamento cancelado tem saldo zero.
+- fix(fiscal): o ICMS interno da nota vem da tabela por UF do emitente (VFIS0110) antes da alíquota da configuração fiscal; precedência regra VFIS0320 > tabela VFIS0110 > VFIS0100. **Muda a alíquota de empresas cuja configuração divergia da tabela.**
+- fix(fiscal): tabelas legais (NCM, ICMS interno e interestadual) passam a ser alteradas só por administrador — são globais a todas as empresas da instalação.
+- fix(fiscal): inutilização valida série, faixa e justificativa (15–255) antes de ir à SEFAZ; manifestação envia a chave só com dígitos; falta de permissão devolve 403 em vez de 422.
+
+- feat(fiscal): conferência do documento na prévia e na transmissão da NF-e (emitente, destinatário, datas, nota referenciada, linhas e totais) e da nota de entrada (XML e lançamento manual: chave de acesso com dígito verificador e coerência com a nota, protocolo, ambiente, destinatário, somas).
+- feat(fiscal): o tipo de nota passa a decidir título, estoque, baixa do pedido e receita na autorização; sem título, a NF-e sai sem pagamento.
+- fix(fiscal): a API só devolve o número da NF-e depois da autorização: o número provisório aparecia como se fosse o da nota, que é dado pela Focus. Duplicatas saem com `nDup` de três dígitos em sequência.
+- fix(fiscal): a conferência da nota de entrada mostra todas as pendências que impedem a aprovação.
+- feat(fiscal): lançamento manual aceita ICMS-ST e outras despesas no total da nota.
+- fix(estoque): cancelar nota de entrada e estornar movimento tiram do saldo o valor do próprio movimento; antes saía o custo médio e o valor da nota cancelada ficava no estoque, inflando o custo do item
+- feat(fiscal): sugestão de preço, ICMS, IPI e CFOP no lançamento manual da entrada, resolvendo o item pelo código do fornecedor
+- feat(fiscal): nota manual memoriza o vínculo código do fornecedor × item (`lembrar_vinculo`)
+- feat(financeiro): título a pagar parcelado por plano, tudo ou nada, repartindo desconto e rateio sem perder centavos
+- fix(fiscal): distribuir parcelas menores que a nota não joga mais o total na última parcela
+- chore(demo): operações de entrada, tipos de fornecedor, parcelas das condições, plano de contas e vínculos fornecedor × item no seed; `demo-sync` aplica esse seed
+- test(fiscal): frete sobre compras não depende mais da data do XML, que venceu e passou a gerar juros no pagamento
+- fix(fiscal): nota da carga passa a levar descrição, NCM, unidade e origem do cadastro do item; item sem NCM recusa antes de criar
+- fix(fiscal): item de PDM sem `name` usa a descrição técnica nas notas e na conferência da entrada
+- fix(fiscal): entrada manual e XML recusam número, série e emitente já lançados
+
 ## [v1.9.0] — 2026-10-29
 
 - feat(planejamento): demanda independente enterprise, política de planejamento e correções do MRP (`f2bae0d5`)

@@ -82,6 +82,7 @@ type ItemStructureResponse struct {
 	StartDate              *time.Time `json:"start_date,omitempty"`
 	EndDate                *time.Time `json:"end_date,omitempty"`
 	IsCoproduct            bool       `json:"is_coproduct"`
+	CustomerSupplied       bool       `json:"customer_supplied"`
 	IsFixedQty             bool       `json:"is_fixed_qty"`
 	SubstituteGroup        int16      `json:"substitute_group"`
 	SubstitutePriority     int16      `json:"substitute_priority"`

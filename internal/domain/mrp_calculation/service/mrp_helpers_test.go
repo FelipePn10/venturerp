@@ -443,3 +443,26 @@ func TestBuildLLCFromBOM_SkipsCoproduct(t *testing.T) {
 		t.Errorf("LLC do filho normal = %d, want 1", llc[2])
 	}
 }
+
+// Beneficiamento: o material que o cliente manda (CFOP 5901) está na estrutura
+// para a produção saber o que usar, mas o MRP não pode sugerir comprá-lo.
+func TestExplodeFromBOM_IgnoraMaterialDoCliente(t *testing.T) {
+	bomMap := map[int64][]*structentity.ItemStructure{
+		1: {
+			{ChildCode: 2, Quantity: 1},
+			{ChildCode: 3, Quantity: 2, CustomerSupplied: true},
+		},
+		3: {{ChildCode: 9, Quantity: 1}},
+	}
+	inputs := explodeFromBOMWithFormula(bomMap, 1, "", decimal.NewFromFloat(10), 1, 1)
+	if len(inputs) != 1 || inputs[0].ItemCode != 2 {
+		t.Fatalf("só o material próprio gera necessidade, veio %+v", inputs)
+	}
+	llc := buildLLCFromBOM(bomMap, []int64{1})
+	if _, ok := llc[3]; ok {
+		t.Error("material do cliente não recebe nível pela estrutura do beneficiado")
+	}
+	if _, ok := llc[9]; ok {
+		t.Error("nem o que está abaixo dele")
+	}
+}

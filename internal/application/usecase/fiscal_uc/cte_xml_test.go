@@ -26,7 +26,7 @@ func TestLerCTe(t *testing.T) {
 	if !c.ValorPrestacao.Equal(decimal.NewFromInt(1200)) || !c.ValorICMS.Equal(decimal.NewFromInt(144)) || !c.AliqICMS.Equal(decimal.NewFromInt(12)) {
 		t.Fatalf("valores: %s %s %s", c.ValorPrestacao, c.ValorICMS, c.AliqICMS)
 	}
-	if len(c.ChavesNFe) != 1 || c.ChavesNFe[0] != "41261012345678000190550010000123451000123459" {
+	if len(c.ChavesNFe) != 1 || c.ChavesNFe[0] != "41261012345678000190550010000123451000123450" {
 		t.Fatalf("notas transportadas: %v", c.ChavesNFe)
 	}
 	if c.DataEmissao.Format("2006-01-02") != "2026-10-02" {

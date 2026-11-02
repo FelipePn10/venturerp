@@ -3419,47 +3419,49 @@ type AccountingPlan struct {
 }
 
 type AccountingPostingParam struct {
-	EnterpriseID                 int64
-	PlanID                       int64
-	FornecedoresAccountID        int64
-	IcmsRecuperarAccountID       *int64
-	IpiRecuperarAccountID        *int64
-	PisRecuperarAccountID        *int64
-	CofinsRecuperarAccountID     *int64
-	IbsRecuperarAccountID        *int64
-	CbsRecuperarAccountID        *int64
-	IrrfRecolherAccountID        *int64
-	PccRecolherAccountID         *int64
-	InssRecolherAccountID        *int64
-	IssRecolherAccountID         *int64
-	DespesaPadraoAccountID       *int64
-	ContabilizarEntrada          bool
-	UpdatedAt                    pgtype.Timestamptz
-	UpdatedBy                    pgtype.UUID
-	ContabilizarPagamentos       bool
-	ContabilizarRecebimentos     bool
-	ContabilizarSaidas           bool
-	BancoPadraoAccountID         *int64
-	JurosPagosAccountID          *int64
-	DescontosObtidosAccountID    *int64
-	ClientesAccountID            *int64
-	JurosRecebidosAccountID      *int64
-	DescontosConcedidosAccountID *int64
-	ReceitaVendasAccountID       *int64
-	IcmsVendasAccountID          *int64
-	IcmsRecolherAccountID        *int64
-	IcmsStRecolherAccountID      *int64
-	IpiRecolherAccountID         *int64
-	PisVendasAccountID           *int64
-	PisRecolherAccountID         *int64
-	CofinsVendasAccountID        *int64
-	CofinsRecolherAccountID      *int64
-	CmvAccountID                 *int64
-	EstoqueAccountID             *int64
-	IbsVendasAccountID           *int64
-	IbsRecolherAccountID         *int64
-	CbsVendasAccountID           *int64
-	CbsRecolherAccountID         *int64
+	EnterpriseID                      int64
+	PlanID                            int64
+	FornecedoresAccountID             int64
+	IcmsRecuperarAccountID            *int64
+	IpiRecuperarAccountID             *int64
+	PisRecuperarAccountID             *int64
+	CofinsRecuperarAccountID          *int64
+	IbsRecuperarAccountID             *int64
+	CbsRecuperarAccountID             *int64
+	IrrfRecolherAccountID             *int64
+	PccRecolherAccountID              *int64
+	InssRecolherAccountID             *int64
+	IssRecolherAccountID              *int64
+	DespesaPadraoAccountID            *int64
+	ContabilizarEntrada               bool
+	UpdatedAt                         pgtype.Timestamptz
+	UpdatedBy                         pgtype.UUID
+	ContabilizarPagamentos            bool
+	ContabilizarRecebimentos          bool
+	ContabilizarSaidas                bool
+	BancoPadraoAccountID              *int64
+	JurosPagosAccountID               *int64
+	DescontosObtidosAccountID         *int64
+	ClientesAccountID                 *int64
+	JurosRecebidosAccountID           *int64
+	DescontosConcedidosAccountID      *int64
+	ReceitaVendasAccountID            *int64
+	IcmsVendasAccountID               *int64
+	IcmsRecolherAccountID             *int64
+	IcmsStRecolherAccountID           *int64
+	IpiRecolherAccountID              *int64
+	PisVendasAccountID                *int64
+	PisRecolherAccountID              *int64
+	CofinsVendasAccountID             *int64
+	CofinsRecolherAccountID           *int64
+	CmvAccountID                      *int64
+	EstoqueAccountID                  *int64
+	IbsVendasAccountID                *int64
+	IbsRecolherAccountID              *int64
+	CbsVendasAccountID                *int64
+	CbsRecolherAccountID              *int64
+	AdiantamentoFornecedoresAccountID *int64
+	AdiantamentoClientesAccountID     *int64
 }
 
 type AccountingReferenceAccount struct {
@@ -5374,46 +5376,48 @@ type FiscalClassificationLanguage struct {
 }
 
 type FiscalConfig struct {
-	ID                        int64
-	CnpjEmpresa               string
-	RazaoSocial               string
-	IeEmpresa                 pgtype.Text
-	RegimeTributario          string
-	UfEmpresa                 string
-	IcmsInternoAliquota       pgtype.Numeric
-	IcmsDiferimentoPercentual pgtype.Numeric
-	FocusNfeToken             pgtype.Text
-	FocusNfeAmbiente          string
-	JurosMes                  pgtype.Numeric
-	MultaAtraso               pgtype.Numeric
-	VencimentoIcmsDia         int32
-	VencimentoIpiDia          int32
-	VencimentoPisCofinsDia    int32
-	CreatedAt                 pgtype.Timestamptz
-	UpdatedAt                 pgtype.Timestamptz
-	UpdatedBy                 pgtype.UUID
-	Logradouro                string
-	Numero                    string
-	Complemento               pgtype.Text
-	Bairro                    string
-	Municipio                 string
-	CodigoMunicipio           string
-	Cep                       string
-	Telefone                  pgtype.Text
-	Logo                      []byte
-	LogoMime                  pgtype.Text
-	BrandColor                pgtype.Text
-	EnterpriseID              int64
-	TradeName                 pgtype.Text
-	Email                     pgtype.Text
-	DfeUltimaVersao           int64
-	DfeSincronizadoEm         pgtype.Timestamptz
-	DfeSyncAutomatico         bool
-	DfeUltimaTentativa        pgtype.Timestamptz
-	DfeUltimoErro             pgtype.Text
-	ExigirRegraIcmsIpi        bool
-	AliquotaCreditoSimples    pgtype.Numeric
-	CbenefDiferimento         pgtype.Text
+	ID                         int64
+	CnpjEmpresa                string
+	RazaoSocial                string
+	IeEmpresa                  pgtype.Text
+	RegimeTributario           string
+	UfEmpresa                  string
+	IcmsInternoAliquota        pgtype.Numeric
+	IcmsDiferimentoPercentual  pgtype.Numeric
+	FocusNfeToken              pgtype.Text
+	FocusNfeAmbiente           string
+	JurosMes                   pgtype.Numeric
+	MultaAtraso                pgtype.Numeric
+	VencimentoIcmsDia          int32
+	VencimentoIpiDia           int32
+	VencimentoPisCofinsDia     int32
+	CreatedAt                  pgtype.Timestamptz
+	UpdatedAt                  pgtype.Timestamptz
+	UpdatedBy                  pgtype.UUID
+	Logradouro                 string
+	Numero                     string
+	Complemento                pgtype.Text
+	Bairro                     string
+	Municipio                  string
+	CodigoMunicipio            string
+	Cep                        string
+	Telefone                   pgtype.Text
+	Logo                       []byte
+	LogoMime                   pgtype.Text
+	BrandColor                 pgtype.Text
+	EnterpriseID               int64
+	TradeName                  pgtype.Text
+	Email                      pgtype.Text
+	DfeUltimaVersao            int64
+	DfeSincronizadoEm          pgtype.Timestamptz
+	DfeSyncAutomatico          bool
+	DfeUltimaTentativa         pgtype.Timestamptz
+	DfeUltimoErro              pgtype.Text
+	ExigirRegraIcmsIpi         bool
+	AliquotaCreditoSimples     pgtype.Numeric
+	CbenefDiferimento          pgtype.Text
+	ObsRetornoIndustrializacao pgtype.Text
+	CbenefSuspensao            pgtype.Text
 }
 
 type FiscalCte struct {
@@ -6924,6 +6928,8 @@ type ItemStructure struct {
 	QuantityStockUom pgtype.Numeric
 	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Dez casas porque a inversa de um fator grande (1/6000) não cabe em seis.
 	ConversionFactor pgtype.Numeric
+	// Componente fornecido pelo cliente (beneficiamento): fora do MRP, da baixa automática e do custo; a OF do pai não dá entrada no estoque próprio.
+	CustomerSupplied bool
 }
 
 // Quem alterou o quê na estrutura de produto, com o antes e o depois.
@@ -8537,6 +8543,7 @@ type ProductionOrder struct {
 	TemporaryLotExpiresOn      pgtype.Date
 	RoutingSnapshotAt          pgtype.Timestamptz
 	CustoPendente              pgtype.Text
+	SalesOrderCode             *int64
 }
 
 type ProductionOrderCost struct {
@@ -10315,6 +10322,16 @@ type SalesOrderItem struct {
 	IsActive         bool
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
+}
+
+type SalesOrderPlannedOrder struct {
+	ID                 int64
+	EnterpriseID       int64
+	SalesOrderItemCode int64
+	PlannedOrderID     int64
+	Quantity           pgtype.Numeric
+	CreatedAt          pgtype.Timestamptz
+	CreatedBy          pgtype.UUID
 }
 
 type SalesOrderRepresentative struct {

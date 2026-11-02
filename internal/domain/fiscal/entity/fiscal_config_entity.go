@@ -25,7 +25,12 @@ type FiscalConfig struct {
 	AliquotaCreditoSimples float64
 	// CBenefDiferimento: cBenef do diferimento da configuração (PR830001 no PR),
 	// usado no CST 51 quando a linha e a regra não trazem outro.
-	CBenefDiferimento      *string
+	CBenefDiferimento *string
+	// ObsRetornoIndustrializacao: texto legal da nota de retorno do beneficiamento.
+	// Vazio em SP usa a Portaria CAT 22/2007; nas demais UFs a nota é recusada.
+	ObsRetornoIndustrializacao *string
+	// CBenefSuspensao: cBenef do material que volta (CST 50), na UF que o exige.
+	CBenefSuspensao        *string
 	FocusNfeToken          *string
 	FocusNfeAmbiente       string
 	JurosMes               float64
@@ -51,7 +56,7 @@ type FiscalConfig struct {
 	UpdatedBy  uuid.UUID
 }
 
-// TipoNotaFiscal: os indicadores do tipo de nota (VFIS0110) que mudam a
+// TipoNotaFiscal: os indicadores do tipo de nota (VCLI0530) que mudam a
 // tributação da saída.
 type TipoNotaFiscal struct {
 	ID                 int64
@@ -64,4 +69,18 @@ type TipoNotaFiscal struct {
 	CalculaDiferimento bool
 	CalculaPISCOFINS   bool
 	CalculaDIFAL       bool
+}
+
+// EfeitosDoTipoNota: o que o tipo de nota diz que a autorização faz. Bonificação,
+// remessa e transferência não cobram; o cadastro é quem manda.
+type EfeitosDoTipoNota struct {
+	GeraTitulo       bool
+	MovimentaEstoque bool
+	BaixaPedido      bool
+	GeraReceita      bool
+}
+
+// EfeitosPadraoDaNota: sem tipo de nota, a nota é uma venda comum.
+func EfeitosPadraoDaNota() EfeitosDoTipoNota {
+	return EfeitosDoTipoNota{GeraTitulo: true, MovimentaEstoque: true, BaixaPedido: true, GeraReceita: true}
 }

@@ -17,6 +17,8 @@ type FiscalRepository interface {
 	ListEntriesByStatus(ctx context.Context, status entity.FiscalEntryStatus) ([]*entity.FiscalEntry, error)
 	UpdateEntryStatus(ctx context.Context, id int64, status entity.FiscalEntryStatus) (*entity.FiscalEntry, error)
 	GetNextNFNumber(ctx context.Context) (int64, error)
+	// NFNumberExists diz se a empresa já usou esse número na série (série 1 e 001 são a mesma).
+	NFNumberExists(ctx context.Context, numero int64, serie string) (bool, error)
 
 	// Fiscal Exits
 	CreateExit(ctx context.Context, e *entity.FiscalExit) (*entity.FiscalExit, error)

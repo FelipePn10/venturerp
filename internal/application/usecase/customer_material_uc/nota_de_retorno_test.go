@@ -44,7 +44,7 @@ func servicoDaNF5911() ServicoFaturado {
 // TestNotaReproduzANF5911 é o teste que ancora tudo: as mesmas entradas da nota
 // real têm de produzir as mesmas linhas, CFOPs, CSTs e valores.
 func TestNotaReproduzANF5911(t *testing.T) {
-	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{
 			{RemittanceItemID: 10, Quantidade: "3.848", Tipo: entity.MovimentoRetorno},
 			{RemittanceItemID: 11, Quantidade: "1.304", Tipo: entity.MovimentoRetorno},
@@ -112,7 +112,7 @@ func TestNotaReproduzANF5911(t *testing.T) {
 // TestPISeCOFINSDoServico confere a conta que a contadora mandou por escrito:
 // sobre R$ 230,00, PIS R$ 1,50 e COFINS R$ 6,90.
 func TestPISeCOFINSDoServico(t *testing.T) {
-	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
 	if err != nil {
 		t.Fatalf("MontarNotaDeRetorno() error = %v", err)
@@ -156,7 +156,7 @@ func TestPISeCOFINSDoServico(t *testing.T) {
 // valor de três dígitos chegava ao provedor e causava rejeição na autorização.
 func TestSobraESucataSaemPor5903(t *testing.T) {
 	for _, tipo := range []entity.TipoMovimento{entity.MovimentoSobra, entity.MovimentoSucata} {
-		nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+		nota, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 			[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: tipo}})
 		if err != nil {
 			t.Fatalf("%s: error = %v", tipo, err)
@@ -176,7 +176,7 @@ func TestSobraESucataSaemPor5903(t *testing.T) {
 
 // TestAjusteNaoVaiNaNota: ajuste é correção interna, não documento fiscal.
 func TestAjusteNaoVaiNaNota(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoAjuste}})
 	if err == nil {
 		t.Fatal("ajuste foi aceito na nota fiscal")
@@ -189,7 +189,7 @@ func TestAjusteNaoVaiNaNota(t *testing.T) {
 // TestInterestadualEhRecusado: 6124/6902/6903 não foram validados pelo responsável
 // fiscal. Emitir com CFOP interno para outra UF é nota errada, não nota a menos.
 func TestInterestadualEhRecusado(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "MG", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "MG", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
 	if err == nil {
 		t.Fatal("destinatário em outra UF foi aceito com CFOP interno")
@@ -198,7 +198,7 @@ func TestInterestadualEhRecusado(t *testing.T) {
 		t.Fatalf("a mensagem não diz qual CFOP seria: %v", err)
 	}
 	// Mesma UF passa.
-	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), "sp", servicoDaNF5911(),
+	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "sp", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}}); err != nil {
 		t.Fatalf("destinatário em SP foi recusado: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestInterestadualEhRecusado(t *testing.T) {
 // TestNaoDevolveMaisQueOSaldo: a nota é o documento que baixa o saldo, então o
 // limite tem de ser conferido aqui também — não só no movimento.
 func TestNaoDevolveMaisQueOSaldo(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "11", Tipo: entity.MovimentoRetorno}})
 	if err == nil {
 		t.Fatal("devolver 11 de um saldo de 10 foi aceito")
@@ -221,7 +221,7 @@ func TestNaoDevolveMaisQueOSaldo(t *testing.T) {
 // mesma nota não podem passar do saldo somadas — conferir uma por uma deixaria
 // passar 6+6 sobre um saldo de 10.
 func TestDuasLinhasDoMesmoItemSomamContraOSaldo(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{
 			{RemittanceItemID: 10, Quantidade: "6", Tipo: entity.MovimentoRetorno},
 			{RemittanceItemID: 10, Quantidade: "6", Tipo: entity.MovimentoSobra},
@@ -230,7 +230,7 @@ func TestDuasLinhasDoMesmoItemSomamContraOSaldo(t *testing.T) {
 		t.Fatal("6+6 sobre um saldo de 10 foi aceito")
 	}
 	// E 6+4 fecha exatamente.
-	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{
 			{RemittanceItemID: 10, Quantidade: "6", Tipo: entity.MovimentoRetorno},
 			{RemittanceItemID: 10, Quantidade: "4", Tipo: entity.MovimentoSobra},
@@ -246,7 +246,7 @@ func TestRemessaBloqueadaNaoFatura(t *testing.T) {
 	motivo := "material sem pedido"
 	remessa.BlockReason = &motivo
 
-	_, err := MontarNotaDeRetorno(remessa, "SP", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessa, emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
 	if err == nil {
 		t.Fatal("remessa bloqueada foi faturada")
@@ -256,10 +256,55 @@ func TestRemessaBloqueadaNaoFatura(t *testing.T) {
 	}
 }
 
+var emitenteSP = EmitenteDaNota{UF: "SP"}
+
+// TestOutraUFUsaOTextoDaConfiguracao: fora de SP a nota sai na UF da empresa, com o
+// texto e o cBenef dela; sem texto, é recusada em vez de citar a portaria paulista.
+func TestOutraUFUsaOTextoDaConfiguracao(t *testing.T) {
+	devolucao := []DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}}
+
+	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), EmitenteDaNota{UF: "PR"}, "PR", servicoDaNF5911(), devolucao); err == nil {
+		t.Fatal("empresa do PR sem texto legal saiu com a portaria de SP")
+	}
+	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), EmitenteDaNota{}, "PR", servicoDaNF5911(), devolucao); err == nil {
+		t.Fatal("empresa sem UF foi faturada")
+	}
+	pr := EmitenteDaNota{UF: "pr", ObservacaoLegal: "TEXTO DO PR", CBenefDiferimento: "pr830001", CBenefSuspensao: "pr840007"}
+	if _, err := MontarNotaDeRetorno(remessaDaNF5911(), pr, "SP", servicoDaNF5911(), devolucao); err == nil {
+		t.Fatal("destinatário em outra UF foi aceito")
+	}
+	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), pr, "PR", servicoDaNF5911(), devolucao)
+	if err != nil {
+		t.Fatalf("nota interna no PR: %v", err)
+	}
+	if nota.UF != "PR" || nota.Observacao != "TEXTO DO PR" {
+		t.Fatalf("UF/texto = %q/%q", nota.UF, nota.Observacao)
+	}
+	if nota.Linhas[0].CBenef != "PR830001" || nota.Linhas[1].CBenef != "PR840007" {
+		t.Fatalf("cBenef do serviço/material: %q/%q", nota.Linhas[0].CBenef, nota.Linhas[1].CBenef)
+	}
+}
+
+// TestRemessaEncerradaNaoFatura: encerrar com saldo é a decisão registrada de que
+// o material não volta; a tela esconde o botão, mas a regra é daqui.
+func TestRemessaEncerradaNaoFatura(t *testing.T) {
+	remessa := remessaDaNF5911()
+	remessa.Status = entity.StatusEncerrada
+
+	_, err := MontarNotaDeRetorno(remessa, emitenteSP, "SP", servicoDaNF5911(),
+		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
+	if err == nil {
+		t.Fatal("remessa encerrada foi faturada")
+	}
+	if _, ok := errorsuc.AsConflict(err); !ok {
+		t.Fatalf("erro deveria ser de conflito: %v", err)
+	}
+}
+
 // TestNotaSemMaterialEhRecusada: a nota de beneficiamento devolve o material JUNTO
 // com o serviço. Só o serviço deixaria o material do cliente aqui sem documento.
 func TestNotaSemMaterialEhRecusada(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(), nil)
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(), nil)
 	if err == nil {
 		t.Fatal("nota sem material foi aceita")
 	}
@@ -270,7 +315,7 @@ func TestNotaSemMaterialEhRecusada(t *testing.T) {
 
 // TestItemDeOutraRemessaEhRecusado evita faturar contra o saldo errado.
 func TestItemDeOutraRemessaEhRecusado(t *testing.T) {
-	_, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	_, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 999, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
 	if err == nil {
 		t.Fatal("item de outra remessa foi aceito")
@@ -280,7 +325,7 @@ func TestItemDeOutraRemessaEhRecusado(t *testing.T) {
 // TestObservacaoTrazODiferimento: o ICMS zero na linha do serviço se sustenta no
 // diferimento, e isso precisa estar escrito na nota.
 func TestObservacaoTrazODiferimento(t *testing.T) {
-	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 10, Quantidade: "1", Tipo: entity.MovimentoRetorno}})
 	if err != nil {
 		t.Fatalf("error = %v", err)
@@ -296,7 +341,7 @@ func TestObservacaoTrazODiferimento(t *testing.T) {
 // TestValorDoMaterialUsaOValorDaEntrada: devolver com outro valor mudaria o valor
 // do material do cliente no documento fiscal.
 func TestValorDoMaterialUsaOValorDaEntrada(t *testing.T) {
-	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), "SP", servicoDaNF5911(),
+	nota, err := MontarNotaDeRetorno(remessaDaNF5911(), emitenteSP, "SP", servicoDaNF5911(),
 		[]DevolucaoDeMaterial{{RemittanceItemID: 11, Quantidade: "2", Tipo: entity.MovimentoRetorno}})
 	if err != nil {
 		t.Fatalf("error = %v", err)

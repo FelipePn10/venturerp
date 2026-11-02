@@ -219,7 +219,7 @@ type ConsultaParametroICMSIPI struct {
 	Simples bool
 	// Finalidade da compra; vazio = só regras sem finalidade.
 	Finalidade string
-	// TipoNotaID: tipo de nota (VFIS0110) da saída; nil = só regras sem tipo.
+	// TipoNotaID: tipo de nota (VCLI0530) da saída; nil = só regras sem tipo.
 	TipoNotaID *int64
 	// Entrada busca regras de ENTRADA/AMBAS; o padrão é a saída (SAIDA/AMBAS).
 	Entrada bool

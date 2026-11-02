@@ -100,3 +100,29 @@ func TestEmitirNFeClassificaRejeicaoEProcessamento(t *testing.T) {
 		t.Fatalf("erro = %v, quer EmProcessamentoError (não é rejeição)", err)
 	}
 }
+
+// A recusa da Focus vai para a tela e fica gravada na nota: só a mensagem, sem HTTP,
+// código nem o corpo em JSON.
+func TestRecusaDaFocusMostraSoAMensagem(t *testing.T) {
+	casos := []struct{ corpo, motivo string }{
+		{`{"codigo":"permissao_negada","mensagem":"CNPJ do emitente não autorizado."}`, "CNPJ do emitente não autorizado."},
+		{`{"codigo":"requisicao_invalida","mensagem":"Erro","erros":[{"codigo":"x","mensagem":"Campo cep inválido"}]}`, "Campo cep inválido"},
+		{`{"formato":"desconhecido"}`, "o motivo não foi informado"},
+		{`<html>erro</html>`, "o motivo não foi informado"},
+	}
+	for _, c := range casos {
+		if got := recusaDaFocus(422, []byte(c.corpo)).Motivo; got != c.motivo {
+			t.Errorf("corpo %s: motivo = %q, esperado %q", c.corpo, got, c.motivo)
+		}
+	}
+}
+
+func TestTokenRecusadoNaoECulpaDaSEFAZ(t *testing.T) {
+	r := recusaDaFocus(http.StatusUnauthorized, []byte(`{"codigo":"permissao_negada","mensagem":"Access token inválido (host: homologacao.focusnfe.com.br)"}`))
+	if !r.DaFocus() || strings.Contains(r.Motivo, "host") || !strings.Contains(r.Motivo, "VFIS0100") {
+		t.Fatalf("recusa do token: %+v", r)
+	}
+	if (&RejeicaoError{Status: "erro_autorizacao", Motivo: "930"}).DaFocus() {
+		t.Fatal("rejeição da SEFAZ tratada como recusa da Focus")
+	}
+}

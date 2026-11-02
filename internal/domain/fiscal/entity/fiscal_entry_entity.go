@@ -107,12 +107,14 @@ func (e *FiscalEntry) ValorAPagar() decimal.Decimal {
 }
 
 type FiscalEntryItem struct {
-	ID                 int64
-	FiscalEntryID      int64
-	Sequence           int
-	ItemCode           *int64
-	ItemSupplierID     *int64
-	SupplierItemCode   *string
+	ID               int64
+	FiscalEntryID    int64
+	Sequence         int
+	ItemCode         *int64
+	ItemSupplierID   *int64
+	SupplierItemCode *string
+	// LembrarVinculo: ao gravar, memoriza o código do fornecedor para este item.
+	LembrarVinculo     bool
 	ResolutionStrategy *string
 	ResolvedAt         *time.Time
 	UOM                *string

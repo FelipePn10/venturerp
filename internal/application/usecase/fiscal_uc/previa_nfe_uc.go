@@ -6,6 +6,7 @@ import (
 	"fmt"
 	seriedom "github.com/FelipePn10/panossoerp/internal/domain/posvenda/serie"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -38,6 +39,8 @@ type PreviaNFeUseCase struct {
 	// Devolucao, quando presente, liga os itens da devolução de compra à nota
 	// de origem (DFeReferenciado), como na transmissão.
 	Devolucao *DevolucaoCompraUseCase
+	// TiposNota: a prévia mostra a mesma cobrança que a transmissão vai enviar.
+	TiposNota LeitorEfeitosTipoNota
 	// Efeitos confere, antes da transmissão, se a baixa de estoque vai conseguir
 	// converter a unidade da nota para a de estoque. Sem isso a nota seria
 	// autorizada na SEFAZ e só a baixa falharia, depois.
@@ -78,10 +81,15 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		return nil, err
 	}
 
-	plano, err := resolverPlanoDaNota(ctx, exit, uc.Customers, uc.Orders)
+	plano, err := resolverPlanoDaNota(ctx, exit, items, uc.Customers, uc.Orders)
 	if err != nil {
 		return nil, err
 	}
+	efeitosTipo, err := efeitosDaNota(ctx, uc.TiposNota, exit)
+	if err != nil {
+		return nil, err
+	}
+	plano = planoDoTipoNota(plano, efeitosTipo)
 	rt, errReforma := resolverReformaDaNota(ctx, uc.Reforma, exit, items, cfg)
 	if errReforma != nil {
 		if _, ok := errorsuc.AsValidation(errReforma); !ok {
@@ -106,8 +114,8 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 
 	out := &response.PreviaNFeResponse{
 		FiscalExitID:     exit.ID,
-		NumeroNF:         exit.NumeroNF,
-		Serie:            exit.Serie,
+		NumeroNF:         numeroDefinitivo(exit),
+		Serie:            serieDefinitiva(exit),
 		Status:           string(exit.Status),
 		DataEmissao:      exit.DataEmissao.Format("2006-01-02"),
 		NaturezaOperacao: exit.NaturezaOperacao,
@@ -199,6 +207,7 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	out.Pendencias = conferirNota(exit, items, cfg, plano)
+	out.Pendencias = append(out.Pendencias, conferirDocumentoDaNota(exit, items, cfg, time.Now())...)
 	out.Pendencias = append(out.Pendencias, conferirTributacao(exit, items, cfg)...)
 	pendCFOP, err := conferirCFOPs(ctx, uc.CFOPs, exit, items, &payload)
 	if err != nil {
@@ -239,14 +248,14 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 				ComoResolver: "gere a nota a partir do pedido de venda ou informe o cliente do cadastro"})
 		}
 	}
-	if uc.Efeitos != nil && uc.Saldos != nil {
+	if uc.Efeitos != nil && uc.Saldos != nil && efeitosTipo.MovimentaEstoque {
 		faltas, err := uc.faltasDeEstoque(ctx, exit, items)
 		if err != nil {
 			return nil, err
 		}
 		out.Pendencias = append(out.Pendencias, faltas...)
 	}
-	if uc.Efeitos != nil {
+	if uc.Efeitos != nil && efeitosTipo.MovimentaEstoque {
 		if _, err := uc.Efeitos.quantidadesEmEstoque(ctx, items); err != nil {
 			if _, ok := errorsuc.AsValidation(err); !ok {
 				return nil, err
@@ -355,7 +364,7 @@ func conferirNota(
 
 	// ── Situação da nota
 	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization && exit.Status != entity.ExitStatusRejected {
-		impede("status", fmt.Sprintf("a nota está em %s e só rascunho ou rejeitada pode ser transmitida", exit.Status),
+		impede("status", fmt.Sprintf("a nota está %s e só rascunho ou rejeitada pode ser transmitida", situacaoDaNota(exit.Status)),
 			"gere uma nova nota; nota autorizada se resolve por cancelamento ou carta de correção")
 	}
 
@@ -371,13 +380,14 @@ func conferirNota(
 
 	// ── Emitente
 	exigir := func(valor, campo, rotulo, tela string) {
-		if strings.TrimSpace(valor) == "" {
+		if campoSemValor(valor) {
 			impede(campo, fmt.Sprintf("%s não está preenchido e a NF-e exige esse campo", rotulo), tela)
 		}
 	}
 	telaFiscal := "preencha em VFIS0100 — Configuração Fiscal"
 	exigir(cfg.CnpjEmpresa, "emitente.cnpj", "o CNPJ da empresa", telaFiscal)
 	exigir(cfg.RazaoSocial, "emitente.razao_social", "a razão social da empresa", telaFiscal)
+	exigir(derefStr(cfg.IEEmpresa), "emitente.ie", "a inscrição estadual da empresa", telaFiscal)
 	exigir(cfg.Logradouro, "emitente.logradouro", "o logradouro da empresa", telaFiscal)
 	exigir(cfg.Numero, "emitente.numero", "o número do endereço da empresa", telaFiscal)
 	exigir(cfg.Bairro, "emitente.bairro", "o bairro da empresa", telaFiscal)
@@ -548,3 +558,11 @@ func reais(v float64) string {
 // ufExigeBeneficioFiscal: UFs em que a SEFAZ exige o cBenef nos CSTs com
 // benefício (NT 2019.001 e regras próprias de cada estado).
 var ufExigeBeneficioFiscal = map[string]bool{"PR": true, "RS": true, "RJ": true, "SC": true, "GO": true, "DF": true}
+
+// campoSemValor reconhece também o que o cadastro da empresa grava enquanto
+// ninguém preencheu ("A preencher", CEP zerado): a SEFAZ aceitaria, e o endereço
+// de mentira sairia impresso na nota.
+func campoSemValor(valor string) bool {
+	v := strings.TrimSpace(valor)
+	return v == "" || strings.EqualFold(v, "A preencher") || v == "00000000"
+}

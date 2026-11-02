@@ -58,6 +58,11 @@ scripts/*
 # Faxina das empresas de teste do banco de integração: só roda em banco cujo nome
 # contém "test"; não tem token, CNPJ nem credencial.
 !scripts/limpar-empresas-de-teste.sql
+# Demo sempre atualizado (make demo-sync / make demo-app): só a senha pública do demo.
+!scripts/demo-app.sh
+!scripts/demo-sync.sh
+!scripts/seed-demo-beneficiamento.sh
+!scripts/seed-demo-cadastros-fiscais.sql
 !scripts/loadtest/
 scripts/test-e2e.sh
 scripts/test-flow.sh

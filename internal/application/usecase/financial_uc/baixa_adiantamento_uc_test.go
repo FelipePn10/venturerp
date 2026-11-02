@@ -64,7 +64,7 @@ func (f *fakeFinRepo) BaixarContaPagarAtomico(_ context.Context, _ int64, params
 	return nil
 }
 
-func (f *fakeFinRepo) AplicarAdiantamentoAtomico(_ context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, _ uuid.UUID, data time.Time) (*entity.AdiantamentoAplicacao, error) {
+func (f *fakeFinRepo) AplicarAdiantamentoAtomico(_ context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, _ uuid.UUID, data time.Time, _ *contabilizacao.Lote) (*entity.AdiantamentoAplicacao, error) {
 	f.adv = &advCall{advID: advID, contaTipo: contaTipo, contaID: contaID, valor: valor, data: data}
 	return &entity.AdiantamentoAplicacao{ID: 1, AdiantamentoID: advID, ContaID: contaID, ValorAplicado: valor}, nil
 }

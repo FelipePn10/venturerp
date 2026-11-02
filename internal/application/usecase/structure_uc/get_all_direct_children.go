@@ -80,6 +80,7 @@ func toItemStructureResponse(s *entity.ItemStructure) *response.ItemStructureRes
 		EndDate:                s.EndDate,
 		IsCoproduct:            s.IsCoproduct,
 		IsFixedQty:             s.IsFixedQty,
+		CustomerSupplied:       s.CustomerSupplied,
 		SubstituteGroup:        s.SubstituteGroup,
 		SubstitutePriority:     s.SubstitutePriority,
 		IsActive:               s.IsActive,

@@ -63,3 +63,48 @@ func TestFiscalConfigAndBrandingAreIsolatedByTenant(t *testing.T) {
 		t.Fatalf("tenant B recebeu dados do A: %+v", gotB)
 	}
 }
+
+// A configuração do beneficiamento em outra UF é por empresa e sobrevive à regravação.
+func TestConfiguracaoDoRetornoDeIndustrializacao(t *testing.T) {
+	pool := testutil.Pool(t)
+	ctx := context.Background()
+	code := int64(1_700_000_000 + testutil.UniqueCode()%100_000_000)
+	var a, b int64
+	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name) VALUES($1,'Retorno A') RETURNING id`, code).Scan(&a); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO enterprise(code,name) VALUES($1,'Retorno B') RETURNING id`, code+1).Scan(&b); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM fiscal_configs WHERE enterprise_id=ANY($1)`, []int64{a, b})
+		_, _ = pool.Exec(ctx, `DELETE FROM enterprise WHERE id=ANY($1)`, []int64{a, b})
+	})
+	repo := repository.NewFiscalRepositoryPG(pool)
+	base := func() *entity.FiscalConfig {
+		return &entity.FiscalConfig{CnpjEmpresa: "12345678000199", RazaoSocial: "Empresa", TradeName: "Empresa", Email: "a@example.test", RegimeTributario: "lucro_real", UFEmpresa: "PR"}
+	}
+	texto, cbenef := "Suspensao conforme regulamento do Estado", "PR840007"
+	cfg := base()
+	cfg.ObsRetornoIndustrializacao, cfg.CBenefSuspensao = &texto, &cbenef
+	if _, err := repo.UpdateFiscalConfig(fiscalTenantContext(a), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.UpdateFiscalConfig(fiscalTenantContext(b), base()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetFiscalConfig(fiscalTenantContext(a))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ObsRetornoIndustrializacao == nil || *got.ObsRetornoIndustrializacao != texto || got.CBenefSuspensao == nil || *got.CBenefSuspensao != cbenef {
+		t.Fatalf("configuração lida errada: %+v", got)
+	}
+	outra, err := repo.GetFiscalConfig(fiscalTenantContext(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outra.ObsRetornoIndustrializacao != nil || outra.CBenefSuspensao != nil {
+		t.Fatalf("texto legal vazou para outra empresa: %+v", outra)
+	}
+}

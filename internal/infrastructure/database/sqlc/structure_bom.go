@@ -9,12 +9,14 @@ import (
 // StructureBOMEdge is a lightweight BOM row used for full-tree pre-loading.
 // Written manually; will be absorbed by sqlc generate once the query is added.
 type StructureBOMEdge struct {
-	ParentCode         int64
-	ChildCode          int64
-	Quantity           pgtype.Numeric
-	LossPercentage     pgtype.Numeric
-	ParentMask         pgtype.Text
-	IsCoproduct        bool
+	ParentCode     int64
+	ChildCode      int64
+	Quantity       pgtype.Numeric
+	LossPercentage pgtype.Numeric
+	ParentMask     pgtype.Text
+	IsCoproduct    bool
+	// CustomerSupplied: componente do cliente (beneficiamento) — o MRP não o planeja.
+	CustomerSupplied   bool
 	IsFixedQty         bool
 	SubstituteGroup    int16
 	SubstitutePriority int16
@@ -39,18 +41,18 @@ type StructureBOMEdge struct {
 // cycle accidentally exists in the data.
 const loadBOMForRoots = `
 WITH RECURSIVE bom_tree AS (
-    SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale
+    SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied
     FROM item_structures
     WHERE parent_code = ANY($1::bigint[]) AND is_active = TRUE
 
     UNION
 
-    SELECT s.parent_code, s.child_code, s.quantity, s.loss_percentage, s.parent_mask, s.is_coproduct, s.is_fixed_qty, s.substitute_group, s.substitute_priority, s.start_date, s.end_date, s.conversion_factor, s.quantity_formula, s.quantity_rounding, s.quantity_scale
+    SELECT s.parent_code, s.child_code, s.quantity, s.loss_percentage, s.parent_mask, s.is_coproduct, s.is_fixed_qty, s.substitute_group, s.substitute_priority, s.start_date, s.end_date, s.conversion_factor, s.quantity_formula, s.quantity_rounding, s.quantity_scale, s.customer_supplied
     FROM item_structures s
     INNER JOIN bom_tree bt ON s.parent_code = bt.child_code
     WHERE s.is_active = TRUE
 )
-SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale FROM bom_tree
+SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied FROM bom_tree
 `
 
 func (q *Queries) LoadBOMForRoots(ctx context.Context, rootCodes []int64) ([]StructureBOMEdge, error) {
@@ -79,6 +81,7 @@ func (q *Queries) LoadBOMForRoots(ctx context.Context, rootCodes []int64) ([]Str
 			&e.QuantityFormula,
 			&e.QuantityRounding,
 			&e.QuantityScale,
+			&e.CustomerSupplied,
 		); err != nil {
 			return nil, err
 		}

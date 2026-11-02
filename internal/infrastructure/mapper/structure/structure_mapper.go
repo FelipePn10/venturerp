@@ -34,6 +34,7 @@ func MapNodeToResponse(node *valueobject.StructureNode) *response.StructureTreeN
 		StartDate:          comp.StartDate,
 		EndDate:            comp.EndDate,
 		IsCoproduct:        comp.IsCoproduct,
+		CustomerSupplied:   comp.CustomerSupplied,
 		IsFixedQty:         comp.IsFixedQty,
 		SubstituteGroup:    comp.SubstituteGroup,
 		SubstitutePriority: comp.SubstitutePriority,

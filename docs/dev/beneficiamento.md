@@ -62,11 +62,17 @@ empresa e exigem `ADMIN`.
 | GET | `/{id}` | remessa com as linhas e o saldo de cada uma |
 | GET | `/items/{itemId}/movements` | trilha do item |
 | GET | `/{id}/audit` | histórico e auditoria da remessa (`?limit=`, teto 500, padrão 200) |
+| GET | `/movements` | relatório de movimentação (entrada e saída), com filtro de cliente, período, tipo e estornados |
+| GET | `/hours` | relatório de horas por OF de beneficiamento, com filtro de cliente, pedido e período |
+| GET | `/{id}/invoice-proposal` | proposta de faturamento: linhas do pedido com saldo e devolução proposta |
 | POST | `/notes/{fiscalExitId}/reverse` | estornar a baixa de uma nota cancelada (idempotente) |
 | POST | `/` | receber a NF-e de remessa do cliente |
 | POST | `/items/{itemId}/movements` | retorno, sobra, sucata ou ajuste |
 | POST | `/{id}/block` · `/{id}/unblock` | reter ou liberar material |
 | POST | `/{id}/close` | encerrar (com saldo, exige motivo) |
+| POST | `/{id}/sales-order` | vincular ou trocar o pedido de beneficiamento (ADMIN) |
+| POST | `/notes/{fiscalExitId}/discard` | descartar a nota em rascunho ou rejeitada: devolve o saldo e tira o atendido do pedido (ADMIN) |
+| POST | `/hours/{ofId}/sales-order` | ligar a OF aberta à mão a um pedido de venda (ADMIN; só OF com componente do cliente) |
 
 Quantidades e valores viajam como **texto** no JSON: passar por float perderia
 centavo e a nota de retorno sairia divergente da de entrada.
@@ -82,11 +88,73 @@ da máquina do usuário.
 `GET /?with_balance=true&due_until=AAAA-MM-DD` é a fila que evita perder os 30
 dias: remessas com material ainda aqui, ordenadas pelo prazo mais próximo.
 
-## Apontamento sem consumir estoque
+## Pedido de beneficiamento
 
-Já funcionava: `AddAppointmentUseCase.shouldBackflush` exige
-`BackflushWarehouseID != nil`. O fluxo de beneficiamento **não deve informá-lo** —
-o apontamento reporta só horas, porque o item tem de voltar fiscalmente.
+O pedido é um **pedido de venda** do cliente, com a natureza de beneficiamento. A
+remessa guarda `sales_order_code`; a API devolve também `sales_order_number`, que é
+o que a tela mostra, porque é o número que o cliente conhece.
+
+- **Receber ou vincular** confere se o pedido existe nesta empresa, é do mesmo
+  cliente e não está cancelado nem faturado. Sem pedido, a remessa entra bloqueada.
+- **Faturar** traz o serviço da linha do pedido. Com mais de uma linha com saldo, o
+  usuário escolhe qual a nota fatura. A linha é dada por atendida **ao autorizar** a
+  nota, não ao criar o rascunho.
+- ⚠️ `sales_orders` usa `enterprise_code` (`tenant.Code`); o razão de terceiros usa
+  `enterprise_id` (`tenant.ID`). O banco ainda recusa vínculo com pedido de outra
+  empresa por gatilho.
+
+## Componente fornecido pelo cliente
+
+`item_structures.customer_supplied` (migração 000453) marca o componente que é do
+cliente. A OF cujo item tem um componente assim é **OF de beneficiamento**
+(`entity.TemMaterialDoCliente`). O componente marcado:
+
+- não gera necessidade no MRP nem sugestão de compra;
+- não entra no custo padrão, na ficha técnica nem na demanda do plano de corte;
+- não vira material da OF nem sofre baixa automática no apontamento.
+
+Ao concluir a OF de beneficiamento, o produto **não entra no estoque próprio**: ele
+volta ao cliente pela nota de retorno. O apontamento registra só horas.
+
+### Como o MRP enxerga a OF de beneficiamento
+
+O produto pronto não entra em `stock_balances` e o pedido só é atendido quando a nota
+é autorizada. Entre uma coisa e outra a linha do pedido continua aberta, sem estoque
+que a cubra. Por isso:
+
+- a peça pronta que a nota ainda não levou **conta como estoque do cálculo**
+  (`ProducaoAguardandoRetorno`: produzido nas OFs não canceladas − atendido nos
+  pedidos, só para item com componente do cliente);
+- a ordem firme é suprimento só **pelo que falta chegar**
+  (`ListFirmPlannedOrdersByItems`, regra geral do MRP): com a OF concluída ou
+  cancelada ela deixa de contar. Antes ela cobria para sempre os pedidos seguintes do
+  item, e o segundo pedido não era planejado. Na ordem de compra, o que abate é o
+  recebido e o cancelado das linhas do pedido de compra ligadas à ordem.
+
+A OF aberta à mão não tem pedido de origem: **Vincular pedido** em VBEN0300 grava
+`production_orders.sales_order_code`, que tem prioridade na ligação das horas ao
+cliente. Vale também para subconjunto em nível dependente.
+
+## Relatórios
+
+- **Movimentação** (`/movements`): razão de terceiros mais uma linha sintética
+  `RECEIPT` por item recebido, porque o recebimento não é movimento do razão. O `id`
+  dessa linha é o da linha da remessa: a chave única na tela é tipo + id. Remessa
+  cancelada e, por padrão, movimento estornado ficam de fora.
+- **Inventário** (`/balance`): saldo atual por cliente e item, sem remessa encerrada
+  ou cancelada: quem encerra com saldo declara que aquele material não volta. O saldo
+  segue visível na própria remessa, como "Saldo ao encerrar", e ela não aceita mais
+  baixa nem faturamento.
+- **Horas** (`/hours`): a OF gerada pelo MRP chega ao cliente por
+  `planned_orders → sales_order_planned_orders → sales_order_items → sales_orders`
+  (migração 000454). O vínculo é gravado ao firmar a sugestão, a partir do pegging,
+  que é refeito a cada cálculo. Se ele não existir, vale
+  `planned_orders.sales_order_code → sales_order_demands`. Uma OF que atende vários
+  pedidos mostra o de maior quantidade. OF aberta à mão, sem pedido, aparece sem
+  cliente.
+
+Movimento avulso (sobra, sucata, ajuste) sem valor informado grava o valor unitário da
+nota do cliente; a tela não pede esse valor.
 
 ## Regras fiscais da nota de saída
 
@@ -106,10 +174,37 @@ real está certa e que **não há hoje situação em que os 5,93% sejam destacad
   coisa diferente do PIS/COFINS destacado.
 - **Somente CFOP interno.** A Usimac não faz industrialização interestadual hoje, e
   os CFOPs 6124/6902/6903 exigem nova validação fiscal antes do primeiro uso. O
-  construtor RECUSA destinatário fora de SP em vez de inventar o CFOP — emitir com
+  construtor RECUSA destinatário de outra UF em vez de inventar o CFOP: emitir com
   CFOP interno para outra UF seria nota errada, não nota a menos.
-- A observação da nota carrega o diferimento por escrito: é o que sustenta o ICMS
-  zero na linha do serviço.
+- **A UF vem da empresa** (`uf_empresa` na configuração fiscal); sem ela a nota é
+  recusada. Em SP, a observação padrão é a da Portaria CAT 22/2007. Em outra UF, a nota
+  só sai com o **texto legal** que a contadora daquele estado definir
+  (`obs_retorno_industrializacao`): o sistema não inventa fundamento legal.
+- **cBenef por empresa.** Nas UFs que exigem o código (o PR, por exemplo), a linha do
+  serviço leva `cbenef_diferimento` e a de retorno leva `cbenef_suspensao`. O código
+  correto é decisão da contadora.
+- **Destinatário com IE.** CST 51 exige contribuinte; sem inscrição estadual a nota é
+  recusada antes de existir, com a mensagem pedindo o cadastro.
+- A observação da nota carrega o fundamento por escrito (é o que sustenta o ICMS zero
+  no serviço), e a remessa do cliente entra em `NFref` quando a chave foi informada.
+
+### Validação em homologação
+
+Notas transmitidas à SEFAZ-PR de homologação pela Focus NF-e em 31/10/2026 (Tecnofer,
+`tpAmb 2`). Cada rejeição virou correção no código:
+
+| Retorno | Causa | Correção |
+|---|---|---|
+| 508 | CST 51 para destinatário sem IE | recusa antes de gerar a nota |
+| 930 | CST 51 e CST 50 sem cBenef | `cbenef_diferimento` e `cbenef_suspensao` |
+| 929 | CST 51 com ICMS diferido zero não enviava o grupo `pDif` | envia `pDif` 100 também com valor zero |
+| — | a rejeição prendia o saldo do cliente | `DescartarNota` |
+| — | o texto legal não chegava à nota | `InformacoesComplementares` |
+
+Resultado: cStat 100 (5124/CST 51/`pDif` 100 e 5902/CST 50), título só do serviço,
+pedido atendido, nenhum movimento em estoque próprio. Cancelamento real: cStat 135,
+com saldo, pedido e título revertidos. **SP não foi transmitida**: a homologação usou a
+empresa do PR, e os códigos cBenef usados foram só de teste.
 
 Código: `internal/application/usecase/customer_material_uc/nota_de_retorno.go`.
 O teste `TestNotaReproduzANF5911` reconstrói a nota real linha por linha — mesmos
@@ -118,9 +213,9 @@ CFOPs, CSTs, NCMs e os valores 230,00 + 182,60 = 412,60.
 ## Testes
 
 ```bash
-go test ./internal/application/usecase/customer_material_uc/     # 35 regras de negócio
+go test ./internal/application/usecase/customer_material_uc/
 TEST_DATABASE_URL=... go test -tags=integration \
-  ./internal/infrastructure/repository/customer_material/        # 40 invariantes
+  ./internal/infrastructure/repository/customer_material/
 ```
 
 O teste `TestFaturamentosSimultaneosNaoEstouramOSaldo` dispara dois faturamentos
@@ -129,8 +224,13 @@ o mesmo saldo e o material do cliente somava mais saída do que entrada.
 
 ## Faturamento
 
+**Valor cobrado** (`fiscal/entity/valor_cobrado.go`): duplicata, conta a receber e
+receita consideram só o serviço; as linhas de retorno (x902/x903) ficam de fora. Se
+nada é cobrado, a nota sai sem cobrança (`tPag 90`). O total da nota continua somando
+serviço e material, como a SEFAZ exige.
+
 `POST /api/customer-material/{id}/invoice` (ADMIN) cria a nota e baixa o saldo. A
-tela VBEN0100 tem o botão **Faturar beneficiamento**, que propõe devolver o saldo
+tela VBEN0100 tem a aba **Faturamento**, que propõe devolver o saldo
 inteiro de cada linha e deixa escolher, por linha, entre processado (5902), sobra e
 sucata (5903).
 
@@ -262,8 +362,41 @@ Na tela, VBEN0100 mostra o histórico da remessa selecionada em
 **Histórico e auditoria**: uma linha por campo alterado, com valor anterior, novo,
 usuário, data e motivo.
 
+### Mensagens ao usuário
+
+Motivo de recusa vira texto da tela, e fica gravado na nota: só a mensagem, sem status
+HTTP, código ou corpo em JSON (`recusaDaFocus`). Recusa da Focus não é rejeição da
+SEFAZ (`RejeicaoError.DaFocus`), e o token recusado aponta para a VFIS0100. Falha de
+rede vai para o log; a tela diz que a nota ficou aguardando e o que fazer.
+
+### Conferências do recebimento
+
+Emissão no futuro (um dia de folga, a data vem sem fuso), CFOP fora de 4 dígitos, NCM
+fora de 8 ou 2 dígitos e chave de acesso com dígito verificador errado são recusados no
+recebimento: esses dados voltam na nota de retorno, e a recusa viria só da SEFAZ.
+
+### Pedido com nota pendente
+
+Com nota pendente, a remessa não troca de pedido: a linha da nota aponta para o pedido
+atual, e a autorização atenderia um pedido que a remessa não tem mais. Descarte a nota
+antes. Faturamentos simultâneos podem tirar o mesmo número (maior + 1): quem perde tenta
+de novo, e a disputa pela própria remessa diz que a nota já existe. Ainda sem proteção no
+banco: dois faturamentos da mesma remessa no mesmo instante podem repetir a linha do
+rascunho, porque `fiscal_exit_items` não tem índice único por sequência.
+
+### Nota pendente
+
+A baixa acontece ao gerar a nota, então a remessa pode ficar sem saldo com a nota ainda
+em rascunho. O `pending_exit` da remessa traz a nota em `DRAFT`, `REJECTED` ou
+`AGUARDANDO_AUTORIZACAO`; a tela mostra essa situação em vez de "Encerrada", permite
+**Transmitir** e **Descartar**. Rejeitada por dado do cliente: descartar e faturar de
+novo, porque a nota guarda o destinatário de quando foi gerada.
+
 ## Pendente
 
+- Transmitir uma nota real de SP em homologação, com a Usimac (a validação foi no PR).
+- Confirmar com a contabilidade o que fazer com o número da nota rejeitada e descartada
+  (inutilização).
 - Preencher o código IBGE do município no endereço do cliente (lacuna que vem de
   antes deste módulo e afeta toda emissão, não só o beneficiamento).
 - Confirmar com a Usimac se o encerramento de remessa com saldo deve exigir a

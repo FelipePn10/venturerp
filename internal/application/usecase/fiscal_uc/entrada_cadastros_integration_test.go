@@ -5,6 +5,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"testing"
@@ -74,8 +75,8 @@ func TestIntegration_NotaDeFornecedorEItensSemCadastro(t *testing.T) {
 	itemUC := item_uc.NewCreateItemUseCase(itemrepo.NewRepositoryItemSQLC(q), auth)
 
 	base, _ := os.ReadFile("testdata/nfe_mp_epi.xml")
-	chave := fmt.Sprintf("41%042d", u+11)
-	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", chave)
+	chave := validation.MontarChaveNFe("41", "2610", cnpj, 1, 12345, u+11)
+	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", chave)
 	s = strings.ReplaceAll(s, "12345678000190", cnpj)
 	s = strings.Replace(s, "<enderEmit><xLgr>RUA A</xLgr><nro>1</nro><xMun>CURITIBA</xMun><UF>PR</UF></enderEmit>",
 		"<enderEmit><xLgr>RUA A</xLgr><nro>1</nro><xBairro>CENTRO</xBairro><cMun>4106902</cMun><xMun>CURITIBA</xMun><UF>PR</UF><CEP>80000000</CEP></enderEmit>", 1)
@@ -163,9 +164,9 @@ func TestIntegration_NotaDeFornecedorEItensSemCadastro(t *testing.T) {
 	testutil.Exec(t, pool, `UPDATE suppliers SET blocked=FALSE WHERE code=$1 AND enterprise_id=$2`, *r.SupplierCode, empresa)
 
 	// Fornecedor cadastrado por fora (VSUP0500) depois da importação: a nota se liga sozinha.
-	chave2 := fmt.Sprintf("41%042d", u+12)
 	cnpj2 := cnpjComDV(fmt.Sprintf("%012d", (u+92)%1_000_000_000_000))
-	s2 := strings.ReplaceAll(strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", chave2), "12345678000190", cnpj2)
+	chave2 := validation.MontarChaveNFe("41", "2610", cnpj2, 1, 12345, u+12)
+	s2 := strings.ReplaceAll(strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", chave2), "12345678000190", cnpj2)
 	nota2, err := (&UploadNFEEntryUseCase{Repo: fiscalRepo, Docs: docs, Auth: auth}).ExecuteFile(ctx, []byte(s2), request.UploadNFEDTO{})
 	if err != nil {
 		t.Fatal(err)

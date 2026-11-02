@@ -146,7 +146,7 @@ func TestIntegration_FreteSobreCompras(t *testing.T) {
 	cte, _ := os.ReadFile("testdata/cte_frete.xml")
 
 	// CT-e antes da aprovação: liga a nota, mas o lançamento espera a aprovação.
-	fr, err := uc.ImportarXML(ctx, cte, "", "")
+	fr, err := uc.ImportarXML(ctx, cte, time.Now().AddDate(0, 0, 15).Format("2006-01-02"), "")
 	if err != nil {
 		t.Fatalf("importando o CT-e: %v", err)
 	}
@@ -159,14 +159,14 @@ func TestIntegration_FreteSobreCompras(t *testing.T) {
 	if _, err := uc.Lancar(ctx, fr.ID); err == nil || !strings.Contains(err.Error(), "aprove") {
 		t.Fatalf("lançar com a nota pendente deveria pedir a aprovação: %v", err)
 	}
-	if _, err := uc.ImportarXML(ctx, cte, "", ""); err == nil {
+	if _, err := uc.ImportarXML(ctx, cte, time.Now().AddDate(0, 0, 15).Format("2006-01-02"), ""); err == nil {
 		t.Fatal("o mesmo CT-e duas vezes deveria ser recusado")
 	} else if _, ok := err.(*errorsuc.ConflictError); !ok {
 		t.Fatalf("esperava conflito: %T %v", err, err)
 	}
 	outroTomador := strings.Replace(string(cte), "<toma3><toma>3</toma></toma3>", "<toma3><toma>0</toma></toma3>", 1)
 	outroTomador = strings.Replace(outroTomador, "4561000004560", "4571000004570", -1)
-	if _, err := uc.ImportarXML(ctx, []byte(outroTomador), "", ""); err == nil || !strings.Contains(err.Error(), "tomador") {
+	if _, err := uc.ImportarXML(ctx, []byte(outroTomador), time.Now().AddDate(0, 0, 15).Format("2006-01-02"), ""); err == nil || !strings.Contains(err.Error(), "tomador") {
 		t.Fatalf("CT-e pago pelo remetente não é da empresa: %v", err)
 	}
 

@@ -110,7 +110,7 @@ func TestIntegration_ReformaContabilizacaoEApuracao(t *testing.T) {
 
 	// Dezembro/2026: só a receita.
 	dez := saida(9101, time.Date(2026, 12, 15, 0, 0, 0, 0, time.UTC), "1.00", "9.00")
-	if avisos := contabilizarSaida(ctx, pg, dez, true); len(avisos) > 0 {
+	if avisos := contabilizarSaida(ctx, pg, dez, nil, true); len(avisos) > 0 {
 		t.Fatalf("contabilização de 2026: %v", avisos)
 	}
 	m := saldo()
@@ -120,7 +120,7 @@ func TestIntegration_ReformaContabilizacaoEApuracao(t *testing.T) {
 
 	// Janeiro/2027: IBS 0,1% (UF + Mun) e CBS 8,8% sobre 1.000.
 	jan := saida(9102, time.Date(2027, 1, 15, 0, 0, 0, 0, time.UTC), "1.00", "88.00")
-	if avisos := contabilizarSaida(ctx, pg, jan, true); len(avisos) > 0 {
+	if avisos := contabilizarSaida(ctx, pg, jan, nil, true); len(avisos) > 0 {
 		t.Fatalf("contabilização de 2027: %v", avisos)
 	}
 	m = saldo()

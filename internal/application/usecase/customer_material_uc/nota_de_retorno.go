@@ -62,9 +62,34 @@ var (
 	AliquotaCOFINS = decimal.RequireFromString("0.03")   // 3,00%
 )
 
-// UFEmitente é a UF da Usimac. Destinatário em outra UF muda todos os CFOPs e
-// exige validação fiscal nova, então o construtor para em vez de adivinhar.
-const UFEmitente = "SP"
+// EmitenteDaNota é o que a nota de retorno precisa da empresa, lido da configuração
+// fiscal dela. Destinatário em outra UF muda todos os CFOPs e exige validação fiscal
+// nova, então o construtor para em vez de adivinhar.
+type EmitenteDaNota struct {
+	UF string
+	// ObservacaoLegal é o texto da legislação da UF. Vazio só é aceito em SP.
+	ObservacaoLegal string
+	// CBenefDiferimento vai na linha do serviço (CST 51), quando a UF exige.
+	CBenefDiferimento string
+	// CBenefSuspensao vai nas linhas do material que volta (CST 50).
+	CBenefSuspensao string
+}
+
+// ObservacaoCAT22 é o texto da nota em São Paulo.
+const ObservacaoCAT22 = "DIFERIMENTO DO ICMS - PORTARIA CAT 22/2007 INDUSTRIALIZACAO COM SAIDA"
+
+// observacaoDaNota devolve o texto legal: nenhum dispositivo é presumido fora de SP.
+func (e EmitenteDaNota) observacaoDaNota() (string, error) {
+	if texto := strings.TrimSpace(e.ObservacaoLegal); texto != "" {
+		return texto, nil
+	}
+	if e.UF == "SP" {
+		return ObservacaoCAT22, nil
+	}
+	return "", errorsuc.NewValidationError(fmt.Sprintf(
+		"informe na Configuração Fiscal o texto legal da nota de retorno de industrialização em %s: "+
+			"a Portaria CAT 22/2007 vale só em São Paulo", e.UF))
+}
 
 // NCMServico é o NCM da linha de serviço na nota real: serviço não tem NCM de
 // mercadoria, e a nota sai com zeros.
@@ -97,6 +122,10 @@ type LinhaDaNota struct {
 	// Movimento diz qual baixa esta linha representa, para o faturamento gravar o
 	// movimento certo no razão do material de terceiro.
 	Movimento entity.TipoMovimento
+	// SalesOrderItemCode liga a linha de serviço à linha do pedido de venda.
+	SalesOrderItemCode *int64
+	// CBenef é o código de benefício fiscal do diferimento, na UF que o exige.
+	CBenef string
 }
 
 // ServicoFaturado é o que a Usimac cobra pelo beneficiamento.
@@ -107,6 +136,10 @@ type ServicoFaturado struct {
 	Unidade    string
 	Quantidade string
 	ValorUnit  string
+	// SalesOrderItemCode é a linha do pedido de beneficiamento que este serviço
+	// fatura. Vai para a linha da nota, e a autorização soma ao atendido do
+	// pedido — é o que fecha o pedido quando todo o serviço foi faturado.
+	SalesOrderItemCode *int64
 }
 
 // DevolucaoDeMaterial é uma linha de material do cliente voltando.
@@ -137,9 +170,10 @@ type NotaDeRetorno struct {
 // cobrado e do material que volta.
 //
 // Recusa em vez de adivinhar, em três situações que dariam nota errada: saldo
-// insuficiente, remessa bloqueada e destinatário fora de SP.
+// insuficiente, remessa bloqueada e destinatário fora da UF da empresa.
 func MontarNotaDeRetorno(
 	remessa *entity.Remessa,
+	emitente EmitenteDaNota,
 	ufDestinatario string,
 	servico ServicoFaturado,
 	devolucoes []DevolucaoDeMaterial,
@@ -154,12 +188,20 @@ func MontarNotaDeRetorno(
 	if remessa.Status == entity.StatusCancelada {
 		return nil, errorsuc.NewConflictError("a remessa está cancelada")
 	}
+	// Encerrar com saldo é a decisão registrada de que esse material não volta.
+	if remessa.Status == entity.StatusEncerrada {
+		return nil, errorsuc.NewConflictError("a remessa está encerrada")
+	}
 
 	// Interestadual muda 5124/5902/5903 para 6124/6902/6903 e exige validação
 	// fiscal nova. A contadora confirmou que hoje não se aplica; emitir com CFOP
 	// interno para outra UF é nota rejeitada ou, pior, aceita e errada.
+	emitente.UF = strings.ToUpper(strings.TrimSpace(emitente.UF))
+	if emitente.UF == "" {
+		return nil, errorsuc.NewValidationError("informe a UF da empresa na Configuração Fiscal antes de faturar o beneficiamento")
+	}
 	uf := strings.ToUpper(strings.TrimSpace(ufDestinatario))
-	if uf != "" && uf != UFEmitente {
+	if uf != "" && uf != emitente.UF {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf(
 			"destinatário em %s: a industrialização interestadual usa os CFOPs 6124/6902/6903 "+
 				"e ainda não foi validada pelo responsável fiscal", uf))
@@ -170,12 +212,17 @@ func MontarNotaDeRetorno(
 			"informe o material que retorna: a nota de beneficiamento devolve o material do cliente junto com o serviço")
 	}
 
+	observacao, err := emitente.observacaoDaNota()
+	if err != nil {
+		return nil, err
+	}
+
 	nota := &NotaDeRetorno{
 		// A natureza é a que a nota real usa. Manter o texto igual evita divergência
 		// entre o que o cliente conhece e o que o sistema emite.
 		NaturezaOperacao: "Venda de mercadoria para industrializacao",
-		UF:               UFEmitente,
-		Observacao:       "DIFERIMENTO DO ICMS - PORTARIA CAT 22/2007 INDUSTRIALIZACAO COM SAIDA",
+		UF:               emitente.UF,
+		Observacao:       observacao,
 	}
 
 	sequencia := 1
@@ -185,6 +232,7 @@ func MontarNotaDeRetorno(
 	if err != nil {
 		return nil, err
 	}
+	linhaServico.CBenef = strings.ToUpper(strings.TrimSpace(emitente.CBenefDiferimento))
 	nota.Linhas = append(nota.Linhas, *linhaServico)
 	nota.ValorServico = linhaServico.ValorTotal
 	nota.ValorPIS = linhaServico.ValorPIS
@@ -204,7 +252,7 @@ func MontarNotaDeRetorno(
 		item, achou := itens[dev.RemittanceItemID]
 		if !achou {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf(
-				"o item %d não pertence à remessa %d", dev.RemittanceItemID, remessa.NFeNumber))
+				"um dos itens escolhidos não pertence à remessa %d: atualize a tela e tente de novo", remessa.NFeNumber))
 		}
 		quantidade, err := decimal.NewFromString(strings.TrimSpace(dev.Quantidade))
 		if err != nil {
@@ -272,6 +320,13 @@ func MontarNotaDeRetorno(
 	}
 
 	nota.ValorTotal = nota.ValorServico.Add(nota.ValorMaterial)
+	suspensao := strings.ToUpper(strings.TrimSpace(emitente.CBenefSuspensao))
+	for i := range nota.Linhas {
+		if nota.Linhas[i].ItemDaRemessa != nil && nota.Linhas[i].CSTICMS == CSTICMSRetorno {
+			nota.Linhas[i].CBenef = suspensao
+		}
+	}
+
 	return nota, nil
 }
 
@@ -280,12 +335,18 @@ func montarLinhaDeServico(servico ServicoFaturado, sequencia int) (*LinhaDaNota,
 		return nil, errorsuc.NewValidationError("informe a descrição do serviço de industrialização")
 	}
 	quantidade, err := decimal.NewFromString(strings.TrimSpace(servico.Quantidade))
-	if err != nil || !quantidade.IsPositive() {
+	if err != nil {
 		return nil, errorsuc.NewValidationError("quantidade do serviço inválida")
 	}
+	if !quantidade.IsPositive() {
+		return nil, errorsuc.NewValidationError("informe a quantidade do serviço: ela tem de ser maior que zero")
+	}
 	valorUnit, err := decimal.NewFromString(strings.TrimSpace(servico.ValorUnit))
-	if err != nil || !valorUnit.IsPositive() {
+	if err != nil {
 		return nil, errorsuc.NewValidationError("valor do serviço inválido")
+	}
+	if !valorUnit.IsPositive() {
+		return nil, errorsuc.NewValidationError("informe o valor do serviço: ele tem de ser maior que zero")
 	}
 
 	total := quantidade.Mul(valorUnit).Round(2)
@@ -319,5 +380,9 @@ func montarLinhaDeServico(servico ServicoFaturado, sequencia int) (*LinhaDaNota,
 		CSTPIS:        CSTPISCOFINS,
 		CSTCOFINS:     CSTPISCOFINS,
 		Movimento:     "",
+		// Linha do pedido: a autorização soma ao atendido. A linha NÃO leva
+		// item_code — serviço não tem estoque, e com ele a autorização baixaria
+		// o serviço do almoxarifado.
+		SalesOrderItemCode: servico.SalesOrderItemCode,
 	}, nil
 }

@@ -18,6 +18,9 @@ import (
 type FiscalEntryDocumentRepository interface {
 	// FindEntryByChave devolve a nota ativa (não cancelada) da empresa com a chave, ou nil.
 	FindEntryByChave(ctx context.Context, chave string) (*entity.FiscalEntry, error)
+	// FindEntryByNumero devolve a nota ativa (não cancelada) da empresa com o mesmo
+	// emitente, série e número, ou nil. É o que segura a nota sem chave lançada duas vezes.
+	FindEntryByNumero(ctx context.Context, cnpjEmitente, serie string, numero int64) (*entity.FiscalEntry, error)
 	// CreateEntryDocument grava cabeçalho, itens e parcelas numa transação. A
 	// mesma chave importada ao mesmo tempo por duas pessoas entra uma vez só.
 	CreateEntryDocument(ctx context.Context, e *entity.FiscalEntry) (*entity.FiscalEntry, error)
@@ -75,6 +78,9 @@ type FiscalEntryDocumentRepository interface {
 	// OpenPurchaseOrderLines lista as linhas do fornecedor para o item ainda
 	// com saldo a faturar (para vincular a nota ao pedido na conferência).
 	OpenPurchaseOrderLines(ctx context.Context, supplierCode, itemCode int64) ([]PurchaseOrderLine, error)
+	// UltimoPrecoDeCompra: o preço da última compra do item (nota aprovada; sem
+	// nota, o último pedido do fornecedor). Nil quando nunca foi comprado.
+	UltimoPrecoDeCompra(ctx context.Context, supplierCode *int64, itemCode int64) (*PrecoDeCompra, error)
 	NCMIPIRates(ctx context.Context, ncms []string) (map[string]decimal.Decimal, error)
 	// Contabilização.
 	AccountingParams(ctx context.Context) (*AccountingPostingParams, error)
@@ -127,6 +133,15 @@ type ItemConciliation struct {
 
 // SupplierItemLink é o vínculo produto × fornecedor (o "de/para") a memorizar
 // para a próxima nota do mesmo fornecedor vir conciliada sozinha.
+// PrecoDeCompra é a referência de preço sugerida no lançamento manual.
+type PrecoDeCompra struct {
+	Preco  decimal.Decimal
+	Data   time.Time
+	Numero int64
+	// DoPedido: veio de um pedido de compra, não de uma nota aprovada.
+	DoPedido bool
+}
+
 type SupplierItemLink struct {
 	SupplierCode        int64
 	ItemCode            int64
@@ -323,43 +338,46 @@ func (l PurchaseOrderLine) FatorEstoque() decimal.Decimal {
 
 // AccountingPostingParams são as contas da contabilização automática.
 type AccountingPostingParams struct {
-	PlanID                       int64      `json:"plan_id"`
-	FornecedoresAccountID        int64      `json:"fornecedores_account_id"`
-	ICMSRecuperarAccountID       *int64     `json:"icms_recuperar_account_id,omitempty"`
-	IPIRecuperarAccountID        *int64     `json:"ipi_recuperar_account_id,omitempty"`
-	PISRecuperarAccountID        *int64     `json:"pis_recuperar_account_id,omitempty"`
-	COFINSRecuperarAccountID     *int64     `json:"cofins_recuperar_account_id,omitempty"`
-	IBSRecuperarAccountID        *int64     `json:"ibs_recuperar_account_id,omitempty"`
-	CBSRecuperarAccountID        *int64     `json:"cbs_recuperar_account_id,omitempty"`
-	IRRFRecolherAccountID        *int64     `json:"irrf_recolher_account_id,omitempty"`
-	PCCRecolherAccountID         *int64     `json:"pcc_recolher_account_id,omitempty"`
-	INSSRecolherAccountID        *int64     `json:"inss_recolher_account_id,omitempty"`
-	ISSRecolherAccountID         *int64     `json:"iss_recolher_account_id,omitempty"`
-	DespesaPadraoAccountID       *int64     `json:"despesa_padrao_account_id,omitempty"`
-	ContabilizarEntrada          bool       `json:"contabilizar_entrada"`
-	ContabilizarPagamentos       bool       `json:"contabilizar_pagamentos"`
-	ContabilizarRecebimentos     bool       `json:"contabilizar_recebimentos"`
-	ContabilizarSaidas           bool       `json:"contabilizar_saidas"`
-	BancoPadraoAccountID         *int64     `json:"banco_padrao_account_id,omitempty"`
-	JurosPagosAccountID          *int64     `json:"juros_pagos_account_id,omitempty"`
-	DescontosObtidosAccountID    *int64     `json:"descontos_obtidos_account_id,omitempty"`
-	ClientesAccountID            *int64     `json:"clientes_account_id,omitempty"`
-	JurosRecebidosAccountID      *int64     `json:"juros_recebidos_account_id,omitempty"`
-	DescontosConcedidosAccountID *int64     `json:"descontos_concedidos_account_id,omitempty"`
-	ReceitaVendasAccountID       *int64     `json:"receita_vendas_account_id,omitempty"`
-	ICMSVendasAccountID          *int64     `json:"icms_vendas_account_id,omitempty"`
-	ICMSRecolherAccountID        *int64     `json:"icms_recolher_account_id,omitempty"`
-	ICMSSTRecolherAccountID      *int64     `json:"icms_st_recolher_account_id,omitempty"`
-	IPIRecolherAccountID         *int64     `json:"ipi_recolher_account_id,omitempty"`
-	PISVendasAccountID           *int64     `json:"pis_vendas_account_id,omitempty"`
-	PISRecolherAccountID         *int64     `json:"pis_recolher_account_id,omitempty"`
-	COFINSVendasAccountID        *int64     `json:"cofins_vendas_account_id,omitempty"`
-	COFINSRecolherAccountID      *int64     `json:"cofins_recolher_account_id,omitempty"`
-	CMVAccountID                 *int64     `json:"cmv_account_id,omitempty"`
-	EstoqueAccountID             *int64     `json:"estoque_account_id,omitempty"`
-	IBSVendasAccountID           *int64     `json:"ibs_vendas_account_id,omitempty"`
-	IBSRecolherAccountID         *int64     `json:"ibs_recolher_account_id,omitempty"`
-	CBSVendasAccountID           *int64     `json:"cbs_vendas_account_id,omitempty"`
-	CBSRecolherAccountID         *int64     `json:"cbs_recolher_account_id,omitempty"`
-	UpdatedBy                    *uuid.UUID `json:"-"`
+	PlanID                       int64  `json:"plan_id"`
+	FornecedoresAccountID        int64  `json:"fornecedores_account_id"`
+	ICMSRecuperarAccountID       *int64 `json:"icms_recuperar_account_id,omitempty"`
+	IPIRecuperarAccountID        *int64 `json:"ipi_recuperar_account_id,omitempty"`
+	PISRecuperarAccountID        *int64 `json:"pis_recuperar_account_id,omitempty"`
+	COFINSRecuperarAccountID     *int64 `json:"cofins_recuperar_account_id,omitempty"`
+	IBSRecuperarAccountID        *int64 `json:"ibs_recuperar_account_id,omitempty"`
+	CBSRecuperarAccountID        *int64 `json:"cbs_recuperar_account_id,omitempty"`
+	IRRFRecolherAccountID        *int64 `json:"irrf_recolher_account_id,omitempty"`
+	PCCRecolherAccountID         *int64 `json:"pcc_recolher_account_id,omitempty"`
+	INSSRecolherAccountID        *int64 `json:"inss_recolher_account_id,omitempty"`
+	ISSRecolherAccountID         *int64 `json:"iss_recolher_account_id,omitempty"`
+	DespesaPadraoAccountID       *int64 `json:"despesa_padrao_account_id,omitempty"`
+	ContabilizarEntrada          bool   `json:"contabilizar_entrada"`
+	ContabilizarPagamentos       bool   `json:"contabilizar_pagamentos"`
+	ContabilizarRecebimentos     bool   `json:"contabilizar_recebimentos"`
+	ContabilizarSaidas           bool   `json:"contabilizar_saidas"`
+	BancoPadraoAccountID         *int64 `json:"banco_padrao_account_id,omitempty"`
+	JurosPagosAccountID          *int64 `json:"juros_pagos_account_id,omitempty"`
+	DescontosObtidosAccountID    *int64 `json:"descontos_obtidos_account_id,omitempty"`
+	ClientesAccountID            *int64 `json:"clientes_account_id,omitempty"`
+	JurosRecebidosAccountID      *int64 `json:"juros_recebidos_account_id,omitempty"`
+	DescontosConcedidosAccountID *int64 `json:"descontos_concedidos_account_id,omitempty"`
+	ReceitaVendasAccountID       *int64 `json:"receita_vendas_account_id,omitempty"`
+	ICMSVendasAccountID          *int64 `json:"icms_vendas_account_id,omitempty"`
+	ICMSRecolherAccountID        *int64 `json:"icms_recolher_account_id,omitempty"`
+	ICMSSTRecolherAccountID      *int64 `json:"icms_st_recolher_account_id,omitempty"`
+	IPIRecolherAccountID         *int64 `json:"ipi_recolher_account_id,omitempty"`
+	PISVendasAccountID           *int64 `json:"pis_vendas_account_id,omitempty"`
+	PISRecolherAccountID         *int64 `json:"pis_recolher_account_id,omitempty"`
+	COFINSVendasAccountID        *int64 `json:"cofins_vendas_account_id,omitempty"`
+	COFINSRecolherAccountID      *int64 `json:"cofins_recolher_account_id,omitempty"`
+	CMVAccountID                 *int64 `json:"cmv_account_id,omitempty"`
+	EstoqueAccountID             *int64 `json:"estoque_account_id,omitempty"`
+	IBSVendasAccountID           *int64 `json:"ibs_vendas_account_id,omitempty"`
+	IBSRecolherAccountID         *int64 `json:"ibs_recolher_account_id,omitempty"`
+	CBSVendasAccountID           *int64 `json:"cbs_vendas_account_id,omitempty"`
+	CBSRecolherAccountID         *int64 `json:"cbs_recolher_account_id,omitempty"`
+	// Adiantamentos (VFIN0600): pago a fornecedor (ativo) e recebido de cliente (passivo).
+	AdiantamentoFornecedoresAccountID *int64     `json:"adiantamento_fornecedores_account_id,omitempty"`
+	AdiantamentoClientesAccountID     *int64     `json:"adiantamento_clientes_account_id,omitempty"`
+	UpdatedBy                         *uuid.UUID `json:"-"`
 }

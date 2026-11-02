@@ -58,10 +58,27 @@ func definirAtorDaAuditoria(ctx context.Context, tx pgx.Tx, usuario string, moti
 // Postgres o tipo de cada parâmetro; com o cast direto o tipo inferido é o ENUM,
 // e o driver não sabe codificar uma string Go num OID de enum que ele não
 // conhece — a gravação falha com erro de domínio em vez de funcionar.
-const colunasRemessa = `r.id, r.enterprise_id, r.customer_code, r.nfe_number, r.nfe_series, r.nfe_key,
+const colunasRemessa = `r.id, r.enterprise_id, r.customer_code, COALESCE((
+	SELECT c.name FROM public.customers c WHERE c.code = r.customer_code AND c.enterprise_id = r.enterprise_id
+), ''), r.nfe_number, r.nfe_series, r.nfe_key,
 r.cfop, r.issue_date, r.received_at, r.fiscal_return_deadline, r.total_value, r.status::text,
-r.sales_order_code, r.blocked, r.block_reason, r.closed_at, r.closed_by::text, r.close_reason,
-r.notes, r.created_by::text, r.created_at, r.updated_at`
+r.sales_order_code, (
+	SELECT so.order_number FROM public.sales_orders so
+	JOIN public.enterprise emp ON emp.code = so.enterprise_code
+	WHERE so.code = r.sales_order_code AND emp.id = r.enterprise_id
+), r.blocked, r.block_reason, r.closed_at, r.closed_by::text, r.close_reason,
+r.notes, r.created_by::text, r.created_at, r.updated_at,
+pendente.id, pendente.numero_nf, pendente.serie, pendente.status, pendente.motivo_rejeicao`
+
+// fromRemessa traz a nota da remessa que ainda não foi autorizada.
+const fromRemessa = `public.customer_material_remittances r
+LEFT JOIN LATERAL (
+	SELECT fe.id, fe.numero_nf, fe.serie, fe.status, fe.motivo_rejeicao
+	  FROM public.fiscal_exits fe
+	 WHERE fe.customer_material_remittance_id = r.id AND fe.enterprise_id = r.enterprise_id
+	   AND fe.is_active AND fe.status IN ('DRAFT', 'REJECTED', 'AGUARDANDO_AUTORIZACAO')
+	 ORDER BY fe.id DESC LIMIT 1
+) pendente ON TRUE`
 
 const colunasItem = `i.id, i.enterprise_id, i.remittance_id, i.line_number, i.customer_item_code,
 i.item_code, i.description, i.ncm, i.cst, i.uom, i.qty_invoiced, i.qty_received, i.unit_value,
@@ -77,13 +94,28 @@ m.reversed_at, m.reversed_by::text, m.reversal_reason`
 func scanRemessa(row pgx.Row) (*entity.Remessa, error) {
 	var r entity.Remessa
 	var status string
-	if err := row.Scan(&r.ID, &r.EnterpriseID, &r.CustomerCode, &r.NFeNumber, &r.NFeSeries, &r.NFeKey,
+	var notaID, notaNumero *int64
+	var notaSerie, notaStatus, notaMotivo *string
+	if err := row.Scan(&r.ID, &r.EnterpriseID, &r.CustomerCode, &r.CustomerName, &r.NFeNumber, &r.NFeSeries, &r.NFeKey,
 		&r.CFOP, &r.IssueDate, &r.ReceivedAt, &r.FiscalReturnDeadline, &r.TotalValue, &status,
-		&r.SalesOrderCode, &r.Blocked, &r.BlockReason, &r.ClosedAt, &r.ClosedBy, &r.CloseReason,
-		&r.Notes, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		&r.SalesOrderCode, &r.SalesOrderNumber, &r.Blocked, &r.BlockReason, &r.ClosedAt, &r.ClosedBy, &r.CloseReason,
+		&r.Notes, &r.CreatedBy, &r.CreatedAt, &r.UpdatedAt,
+		&notaID, &notaNumero, &notaSerie, &notaStatus, &notaMotivo); err != nil {
 		return nil, err
 	}
 	r.Status = entity.StatusRemessa(status)
+	if notaID != nil {
+		r.NotaPendente = &entity.NotaPendente{ID: *notaID, MotivoRejeicao: notaMotivo}
+		if notaNumero != nil {
+			r.NotaPendente.Numero = *notaNumero
+		}
+		if notaSerie != nil {
+			r.NotaPendente.Serie = *notaSerie
+		}
+		if notaStatus != nil {
+			r.NotaPendente.Status = *notaStatus
+		}
+	}
 	return &r, nil
 }
 
@@ -182,8 +214,8 @@ func (r *Repository) BuscarPorID(ctx context.Context, id int64) (*entity.Remessa
 		return nil, err
 	}
 	remessa, err := scanRemessa(r.pool.QueryRow(ctx, fmt.Sprintf(`
-SELECT %s FROM public.customer_material_remittances r
-WHERE r.id = $1 AND r.enterprise_id = $2`, colunasRemessa), id, enterpriseID))
+SELECT %s FROM %s
+WHERE r.id = $1 AND r.enterprise_id = $2`, colunasRemessa, fromRemessa), id, enterpriseID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError("remessa de beneficiamento não encontrada")
 	}
@@ -251,7 +283,8 @@ func (r *Repository) Listar(ctx context.Context, f domrepo.FiltroRemessa) ([]*en
 	if f.SomenteComSaldo {
 		condicoes = append(condicoes, `EXISTS (
 			SELECT 1 FROM public.customer_material_items b
-			WHERE b.remittance_id = r.id AND b.balance_qty > 0)`)
+			WHERE b.remittance_id = r.id AND b.balance_qty > 0)`,
+			"r.status::text NOT IN ('ENCERRADA', 'CANCELADA')")
 	}
 
 	limite := ""
@@ -267,10 +300,10 @@ func (r *Repository) Listar(ctx context.Context, f domrepo.FiltroRemessa) ([]*en
 	// Prazo primeiro: a fila que importa é a de quem está perto de vencer os 30
 	// dias, não a de quem chegou por último.
 	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
-SELECT %s FROM public.customer_material_remittances r
+SELECT %s FROM %s
 WHERE %s
 ORDER BY r.fiscal_return_deadline, r.nfe_number%s`,
-		colunasRemessa, strings.Join(condicoes, " AND "), limite), args...)
+		colunasRemessa, fromRemessa, strings.Join(condicoes, " AND "), limite), args...)
 	if err != nil {
 		return nil, fmt.Errorf("listar remessas: %w", err)
 	}
@@ -333,7 +366,10 @@ func (r *Repository) SaldoPorItem(ctx context.Context, f domrepo.FiltroSaldo) ([
 	if err != nil {
 		return nil, err
 	}
-	condicoes := []string{"r.enterprise_id = $1", "i.balance_qty > 0"}
+	// Remessa encerrada ou cancelada não tem mais material a devolver: sem este
+	// filtro, o saldo de quem encerrou com motivo ficava para sempre no inventário,
+	// sem poder ser movimentado, e acabava como prazo vencido.
+	condicoes := []string{"r.enterprise_id = $1", "i.balance_qty > 0", "r.status::text NOT IN ('ENCERRADA', 'CANCELADA')"}
 	args := []any{enterpriseID}
 	adicionar := func(cond string, valor any) {
 		args = append(args, valor)
@@ -403,7 +439,7 @@ func (r *Repository) RegistrarMovimento(ctx context.Context, mov domrepo.NovoMov
 		return nil, err
 	}
 	if strings.TrimSpace(mov.IdempotencyKey) == "" {
-		return nil, errorsuc.NewValidationError("informe a chave de idempotência do movimento")
+		return nil, errorsuc.NewValidationError("não foi possível identificar este lançamento: atualize a tela e lance de novo")
 	}
 	quantidade, err := decimal.NewFromString(strings.TrimSpace(mov.Quantity))
 	if err != nil {
@@ -444,7 +480,7 @@ WHERE m.enterprise_id = $1 AND m.idempotency_key = $2`, colunasMovimento), enter
 	if err == nil {
 		if existente.RemittanceItemID != mov.RemittanceItemID || !existente.Quantity.Equal(quantidade) ||
 			existente.MovementType != mov.MovementType {
-			return nil, errorsuc.NewConflictError("esta chave de idempotência já foi usada com outro conteúdo")
+			return nil, errorsuc.NewConflictError("este lançamento já foi registrado com outros dados: atualize a tela e confira os movimentos")
 		}
 		return existente, nil
 	}
@@ -456,12 +492,13 @@ WHERE m.enterprise_id = $1 AND m.idempotency_key = $2`, colunasMovimento), enter
 	var bloqueada bool
 	var statusRemessa string
 	var remessaID int64
+	var valorDaNota decimal.Decimal
 	err = tx.QueryRow(ctx, `
-SELECT i.balance_qty, r.blocked, r.status::text, r.id
+SELECT i.balance_qty, r.blocked, r.status::text, r.id, i.unit_value
 FROM public.customer_material_items i
 JOIN public.customer_material_remittances r ON r.id = i.remittance_id
 WHERE i.id = $1 AND i.enterprise_id = $2
-FOR UPDATE OF i`, mov.RemittanceItemID, enterpriseID).Scan(&saldo, &bloqueada, &statusRemessa, &remessaID)
+FOR UPDATE OF i`, mov.RemittanceItemID, enterpriseID).Scan(&saldo, &bloqueada, &statusRemessa, &remessaID, &valorDaNota)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError("item da remessa não encontrado")
 	}
@@ -473,6 +510,9 @@ FOR UPDATE OF i`, mov.RemittanceItemID, enterpriseID).Scan(&saldo, &bloqueada, &
 		return nil, errorsuc.NewConflictError("a remessa está cancelada e não aceita movimento")
 	}
 	if mov.MovementType.ConsomeSaldo() {
+		if entity.StatusRemessa(statusRemessa) == entity.StatusEncerrada {
+			return nil, errorsuc.NewConflictError("a remessa está encerrada e não aceita baixa de saldo")
+		}
 		if bloqueada {
 			return nil, errorsuc.NewConflictError("a remessa está bloqueada; regularize antes de movimentar o material")
 		}
@@ -480,6 +520,12 @@ FOR UPDATE OF i`, mov.RemittanceItemID, enterpriseID).Scan(&saldo, &bloqueada, &
 			return nil, errorsuc.NewValidationError(fmt.Sprintf(
 				"a quantidade %s passa do saldo de %s em poder da empresa", quantidade.String(), saldo.String()))
 		}
+	}
+
+	// A tela não pede valor no movimento avulso: vale o da nota do cliente. Gravar
+	// zero tiraria a sobra e a sucata do valor da movimentação.
+	if strings.TrimSpace(mov.UnitValue) == "" {
+		valorUnitario = valorDaNota
 	}
 
 	var destino *string
@@ -785,7 +831,7 @@ FOR UPDATE OF i`, ids, enterpriseID)
 	}
 	for _, id := range ids {
 		if _, achou := saldos[id]; !achou {
-			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d da remessa não encontrado", id))
+			return nil, errorsuc.NewNotFoundError("um dos itens da nota não foi encontrado na remessa: atualize a tela e tente de novo")
 		}
 	}
 
@@ -809,9 +855,8 @@ FOR UPDATE OF i`, ids, enterpriseID)
 		consumido[linha.RemittanceItemID] = consumido[linha.RemittanceItemID].Add(quantidade)
 		if consumido[linha.RemittanceItemID].GreaterThan(saldos[linha.RemittanceItemID]) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf(
-				"a nota devolve %s do item %d, acima do saldo de %s em poder da empresa",
-				consumido[linha.RemittanceItemID].String(), linha.RemittanceItemID,
-				saldos[linha.RemittanceItemID].String()))
+				"a nota devolve %s de um item, acima do saldo de %s em poder da empresa",
+				consumido[linha.RemittanceItemID].String(), saldos[linha.RemittanceItemID].String()))
 		}
 
 		var cfop *string
@@ -1037,7 +1082,7 @@ FOR UPDATE OF m, i`, fiscalExitID, enterpriseID)
 		}[b.tipo]
 		if coluna == "" {
 			return nil, errorsuc.NewValidationError(
-				fmt.Sprintf("movimento %d é de tipo %s e não se sabe qual consumo devolver", b.movimentoID, b.tipo))
+				"esta nota tem um movimento que não é retorno, sobra nem sucata: o saldo não pôde ser devolvido, fale com o suporte")
 		}
 		// Sem clamp de propósito. Consumo ficando negativo significa que esta nota foi
 		// estornada duas vezes, e o CHECK `qty_returned >= 0` da migração 000370

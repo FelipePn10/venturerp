@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"sync"
@@ -62,8 +63,8 @@ func TestIntegration_NotaDeEntradaEnterprise(t *testing.T) {
 	cnpj := fmt.Sprintf("%014d", (u+7)%100_000_000_000_000)
 	supplierCode := 8_000_000_000 + u%1_000_000_000
 	chapa, luva := u+10, u+11
-	chave := fmt.Sprintf("41%042d", u+3)
-	chaveConcorrente := fmt.Sprintf("41%042d", u+4)
+	chave := validation.MontarChaveNFe("41", "2610", cnpj, 1, 880001, u+3)
+	chaveConcorrente := validation.MontarChaveNFe("41", "2610", cnpj, 1, 880002, u+4)
 
 	testutil.Exec(t, pool, `INSERT INTO fiscal_configs(cnpj_empresa,razao_social,uf_empresa,updated_by,enterprise_id) VALUES('98765432000110','INDUSTRIA CLIENTE','PR',$1,$2)`, actor, empresa)
 	var almox int64
@@ -173,7 +174,7 @@ func TestIntegration_NotaDeEntradaEnterprise(t *testing.T) {
 		t.Fatal(err)
 	}
 	xmlDaNota := func(ch string, numero int) []byte {
-		s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", ch)
+		s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", ch)
 		s = strings.ReplaceAll(s, "12345678000190", cnpj)
 		s = strings.ReplaceAll(s, "<nNF>12345</nNF>", fmt.Sprintf("<nNF>%d</nNF>", numero))
 		// IRRF de 1.500 retido: as duplicatas já vêm pelo líquido (98.500).

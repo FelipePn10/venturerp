@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -147,7 +148,7 @@ var cstICMSSemImpostoProprio = map[string]bool{"40": true, "41": true, "50": tru
 // recusarPendenciasTributarias: a autorização não transmite com IMPEDE.
 func recusarPendenciasTributarias(exit *entity.FiscalExit, items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) error {
 	var msgs []string
-	for _, p := range conferirTributacao(exit, items, cfg) {
+	for _, p := range append(conferirDocumentoDaNota(exit, items, cfg, time.Now()), conferirTributacao(exit, items, cfg)...) {
 		if p.Nivel == NivelImpede {
 			msgs = append(msgs, p.Mensagem+" — "+p.ComoResolver)
 		}

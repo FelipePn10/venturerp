@@ -230,6 +230,13 @@ Antes de calcular o que falta, o MRP tira uma "foto" do estoque no momento do c�
 Necessidade Líquida = Demanda Total − Estoque Disponível − Ordens Já Abertas
 ```
 
+A ordem planejada firme entra em "Ordens Já Abertas" só pelo que falta chegar: quantidade
+menos o produzido nas OFs dela. Com todas as OFs concluídas ou canceladas ela sai do
+suprimento — o que foi entregue já está no estoque. Na ordem de compra, o que abate é
+o recebido e o cancelado das linhas do pedido de compra ligadas a ela. No beneficiamento o produto não
+entra em estoque próprio, e a peça pronta sem nota soma ao snapshot do Passo 3
+(ver `beneficiamento.md`).
+
 Se preciso de 200 assentos, tenho 30 em estoque e já tenho uma ordem de fabricação aberta por 50, então minha necessidade líquida é **120 assentos** (200 − 30 − 50 = 120).
 
 Se a necessidade líquida for negativa (tenho mais do que preciso), o MRP não sugere nenhuma ordem.

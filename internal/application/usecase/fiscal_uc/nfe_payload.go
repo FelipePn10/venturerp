@@ -32,6 +32,10 @@ type PlanoDaNota struct {
 	Origem string
 	// Aviso traz o problema de cadastro que impediu o cálculo, quando houver.
 	Aviso string
+	// SemCobranca: a nota não cobra nada do cliente — só devolve o material
+	// dele (retorno de industrialização sem serviço). Sem duplicata, sem título
+	// e, para a SEFAZ, "sem pagamento" (tPag 90).
+	SemCobranca bool
 }
 
 // resolverPlanoDaNota descobre a condição de pagamento que vale para a nota e a
@@ -43,6 +47,7 @@ type PlanoDaNota struct {
 func resolverPlanoDaNota(
 	ctx context.Context,
 	exit *entity.FiscalExit,
+	items []*entity.FiscalExitItem,
 	customers customerrepo.CustomerRepository,
 	orders salesrepo.SalesOrderRepository,
 ) (PlanoDaNota, error) {
@@ -51,7 +56,14 @@ func resolverPlanoDaNota(
 		return plano, nil
 	}
 
-	total := decimal.NewFromFloat(exit.ValorTotal)
+	// Parcela-se o que o cliente PAGA. Na nota de beneficiamento o material dele
+	// volta junto (CFOP 5902/5903) e não é cobrado: a fatura da NF-e 5.911 é de
+	// R$ 230,00 sobre R$ 412,60 de nota.
+	total := entity.ValorCobrado(exit, items)
+	if total.IsZero() && exit.ValorTotal > 0 {
+		plano.Origem, plano.SemCobranca = "SEM_COBRANCA", true
+		return plano, nil
+	}
 	agora := time.Now()
 	datas := customerentity.DatasBase{Emissao: exit.DataEmissao, Faturamento: &agora}
 	if exit.DataSaida != nil {
@@ -206,7 +218,9 @@ func montarPayloadNFe(
 		if parcelaAPrazo(p) {
 			aPrazo = true
 			duplicatas = append(duplicatas, focusnfe.NFEDuplicata{
-				Numero:         fmt.Sprintf("%d/%d-%d", exit.NumeroNF, len(plano.Parcelas), p.Numero),
+				// nDup: três dígitos, em sequência (001, 002...). Não leva o número da
+				// nota, que só existe depois da autorização: a Focus é quem numera.
+				Numero:         fmt.Sprintf("%03d", len(duplicatas)+1),
 				DataVencimento: p.Vencimento.Format("2006-01-02"),
 				Valor:          valor,
 			})
@@ -214,6 +228,11 @@ func montarPayloadNFe(
 	}
 	if len(formas) == 0 {
 		formas = append(formas, focusnfe.NFEFormaPagamento{FormaPagamento: "01", Valor: exit.ValorTotal})
+	}
+	// Só devolve material do cliente: não há o que pagar.
+	if plano.SemCobranca {
+		formas = []focusnfe.NFEFormaPagamento{{FormaPagamento: "90", Valor: 0}}
+		aPrazo = false
 	}
 	finalidade := exit.Finalidade
 	if finalidade == 0 {
@@ -287,6 +306,25 @@ func montarPayloadNFe(
 		NotasReferenciadas:    refs,
 	}
 	return payload, retrato
+}
+
+// numeroDefinitivo: o número fiscal da nota, ou 0 enquanto ela não foi autorizada.
+// Quem numera é a Focus, na autorização (ela não recebe número nem série no
+// envio); até lá o que está gravado é só controle interno e não vai para o XML.
+func numeroDefinitivo(exit *entity.FiscalExit) int64 {
+	if strings.TrimSpace(derefStr(exit.ChaveAcesso)) == "" &&
+		exit.Status != entity.ExitStatusAuthorized && exit.Status != entity.ExitStatusCancelled {
+		return 0
+	}
+	return exit.NumeroNF
+}
+
+// serieDefinitiva: a série da autorização; antes dela vale a do painel da Focus.
+func serieDefinitiva(exit *entity.FiscalExit) string {
+	if strings.TrimSpace(derefStr(exit.ChaveAcesso)) == "" {
+		return ""
+	}
+	return exit.Serie
 }
 
 // indicadoresDestinatario: indFinal e indIEDest. Com IE é contribuinte (1);

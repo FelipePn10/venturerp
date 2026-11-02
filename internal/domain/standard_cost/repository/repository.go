@@ -36,11 +36,14 @@ type BOMChild struct {
 	// ConversionFactor leva para a unidade de ESTOQUE, que é a única em que o
 	// custo do componente faz sentido — o preço é por quilo, não por metro
 	// quadrado, quando a chapa é estocada em quilo.
-	Quantity           float64
-	ConversionFactor   float64
-	LossPercentage     float64
-	IsCoproduct        bool // OUTPUT (co-produto/sucata) → credita o custo do pai
-	IsFixedQty         bool // quantidade por lote → amortizada pelo lote de referência
+	Quantity         float64
+	ConversionFactor float64
+	LossPercentage   float64
+	IsCoproduct      bool // OUTPUT (co-produto/sucata) → credita o custo do pai
+	IsFixedQty       bool // quantidade por lote → amortizada pelo lote de referência
+	// CustomerSupplied: material do cliente (beneficiamento) — não é custo da
+	// empresa, que cobra só a industrialização.
+	CustomerSupplied   bool
 	SubstituteGroup    int16
 	SubstitutePriority int16
 }

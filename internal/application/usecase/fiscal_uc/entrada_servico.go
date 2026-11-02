@@ -579,31 +579,25 @@ func (s *EntradaServico) Responder(ctx context.Context, e *entity.FiscalEntry) (
 	if e == nil {
 		return nil, nil
 	}
-	pendForn, err := s.Fornecedor(ctx, e)
+	// A tela mostra a MESMA conferência que a aprovação faz. Antes ela via só parte
+	// das pendências (faltavam unidade sem conversão, centro de custo e tributação):
+	// a nota aparecia pronta e a aprovação recusava.
+	pend, divs, err := s.Conferir(ctx, e)
 	if err != nil {
 		return nil, err
 	}
 	r := toFiscalEntryDocumentResponse(e)
 	if e.Status == entity.EntryStatusPending || e.Status == entity.EntryStatusConferred {
-		for _, p := range pendForn {
+		r.Pendencias = r.Pendencias[:0]
+		for _, p := range pend {
 			r.Pendencias = append(r.Pendencias, response.FiscalEntryPendencia{Nivel: p.Nivel, Campo: p.Campo, Mensagem: p.Mensagem})
-			if p.Nivel == entrada.NivelImpede {
-				r.PodeAprovar = false
-			}
 		}
-	}
-	divs, err := s.Divergencias(ctx, e)
-	if err != nil {
-		return nil, err
+		r.PodeAprovar = !entrada.TemImpedimento(pend)
 	}
 	for _, d := range divs {
 		r.Divergencias = append(r.Divergencias, response.FiscalEntryDivergencia{
 			Nivel: d.Nivel, Item: d.Item, Tipo: d.Tipo, Mensagem: d.Mensagem, Esperado: d.Esperado, Informado: d.Informado,
 		})
-		if d.Nivel == entrada.NivelImpede && (e.Status == entity.EntryStatusPending || e.Status == entity.EntryStatusConferred) {
-			r.Pendencias = append(r.Pendencias, response.FiscalEntryPendencia{Nivel: d.Nivel, Campo: fmt.Sprintf("itens[%d].divergencia", d.Item), Mensagem: d.Mensagem})
-			r.PodeAprovar = false
-		}
 	}
 	return r, nil
 }

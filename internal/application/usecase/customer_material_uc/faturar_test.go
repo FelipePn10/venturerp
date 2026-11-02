@@ -3,6 +3,7 @@ package customer_material_uc
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
 	"strings"
 	"testing"
 
@@ -13,11 +14,12 @@ import (
 
 // notasFalsas registra o que o faturamento gravou no módulo fiscal.
 type notasFalsas struct {
-	proximo    int64
-	saida      *fiscalentity.FiscalExit
-	itens      []*fiscalentity.FiscalExitItem
-	falharNum  bool
-	falharNota bool
+	falharDescarte bool
+	proximo        int64
+	saida          *fiscalentity.FiscalExit
+	itens          []*fiscalentity.FiscalExitItem
+	falharNum      bool
+	falharNota     bool
 	// rascunhoPendente simula uma nota que ficou em rascunho porque o faturamento
 	// anterior falhou depois de criá-la. É o cenário em que a repetição tem de
 	// RETOMAR a nota, não criar outra.
@@ -26,6 +28,11 @@ type notasFalsas struct {
 	// reproduzir a parada no meio.
 	falharLinha    int
 	numerosPedidos int
+	// perderNumeros reproduz outra nota levando o número nas primeiras tentativas.
+	perderNumeros int
+	// outraCriouORascunho reproduz outra requisição criando o rascunho desta remessa
+	// entre a procura e a gravação.
+	outraCriouORascunho *fiscalentity.FiscalExit
 }
 
 // RascunhoDeBeneficiamento devolve o rascunho pendente da remessa, quando o cenário
@@ -56,7 +63,31 @@ func (n *notasFalsas) GetNextNFNumber(context.Context) (int64, error) {
 	return n.proximo, nil
 }
 
+func (n *notasFalsas) GetFiscalConfig(context.Context) (*fiscalentity.FiscalConfig, error) {
+	return &fiscalentity.FiscalConfig{UFEmpresa: "SP"}, nil
+}
+
+func (n *notasFalsas) GetExitByID(context.Context, int64) (*fiscalentity.FiscalExit, error) {
+	return n.saida, nil
+}
+
+func (n *notasFalsas) CancelExitWithMotivo(_ context.Context, _ int64, _ string, _ uuid.UUID) (*fiscalentity.FiscalExit, error) {
+	if n.falharDescarte {
+		return nil, errors.New("falha ao cancelar")
+	}
+	n.saida.Status = fiscalentity.ExitStatusCancelled
+	return n.saida, nil
+}
+
 func (n *notasFalsas) CreateExit(_ context.Context, e *fiscalentity.FiscalExit) (*fiscalentity.FiscalExit, error) {
+	if n.perderNumeros > 0 {
+		n.perderNumeros--
+		return nil, errors.New("duplicate key value violates unique constraint")
+	}
+	if n.outraCriouORascunho != nil {
+		n.rascunhoPendente = n.outraCriouORascunho
+		return nil, errors.New("duplicate key value violates unique constraint")
+	}
 	if n.falharNota {
 		return nil, errors.New("falha ao criar a nota")
 	}
@@ -373,5 +404,112 @@ func TestRepetirFaturamentoRetomaARascunhoEmVezDeDuplicar(t *testing.T) {
 	}
 	if len(notas.itens) != 3 {
 		t.Fatalf("a nota ficou com %d linha(s), esperado 3 (serviço + dois materiais)", len(notas.itens))
+	}
+}
+
+// TestClienteSemIENaoGeraNota: a SEFAZ rejeita o CST 51 sem IE (508); a recusa vem
+// antes de baixar o saldo.
+func TestClienteSemIENaoGeraNota(t *testing.T) {
+	uc, _, notas := montarFaturamento()
+	pedido := pedidoPadrao()
+	pedido.Destinatario.IE = "  "
+	if _, err := uc.Faturar(context.Background(), pedido, autorValido); err == nil {
+		t.Fatal("cliente sem IE gerou nota")
+	}
+	if notas.saida != nil {
+		t.Fatal("a recusa veio depois de gravar a nota")
+	}
+}
+
+// TestDescartarNota: rascunho e rejeitada voltam o saldo; autorizada e nota de outra
+// origem não passam por aqui.
+func TestDescartarNota(t *testing.T) {
+	const motivo = "cliente sem IE, nota rejeitada"
+	origem := "BENEFICIAMENTO"
+	outra := "SALES_ORDER"
+	for _, caso := range []struct {
+		nome   string
+		status fiscalentity.FiscalExitStatus
+		fonte  *string
+		aceita bool
+	}{
+		{"rascunho", fiscalentity.ExitStatusDraft, &origem, true},
+		{"rejeitada", fiscalentity.ExitStatusRejected, &origem, true},
+		{"autorizada", fiscalentity.ExitStatusAuthorized, &origem, false},
+		{"aguardando", fiscalentity.ExitStatusAwaitingAuthorization, &origem, false},
+		{"outra origem", fiscalentity.ExitStatusDraft, &outra, false},
+		{"sem origem", fiscalentity.ExitStatusDraft, nil, false},
+	} {
+		t.Run(caso.nome, func(t *testing.T) {
+			uc, _, notas := montarFaturamento()
+			notas.saida = &fiscalentity.FiscalExit{ID: 777, NumeroNF: 42, Status: caso.status, SourceType: caso.fonte}
+			numero, err := uc.DescartarNota(context.Background(), 777, autorValido, motivo)
+			if caso.aceita {
+				if err != nil || numero != 42 || notas.saida.Status != fiscalentity.ExitStatusCancelled {
+					t.Fatalf("numero=%d status=%s err=%v", numero, notas.saida.Status, err)
+				}
+				return
+			}
+			if _, ok := errorsuc.AsConflict(err); !ok {
+				t.Fatalf("esperado conflito, veio %v", err)
+			}
+			if notas.saida.Status != caso.status {
+				t.Fatalf("status mudou para %s", notas.saida.Status)
+			}
+		})
+	}
+}
+
+// TestNotaLevaOTextoLegalEAOrigem: o fundamento do ICMS zero e a NF-e do cliente têm
+// de chegar à nota; montar o texto e não gravar deixava a nota sem nenhum dos dois.
+func TestNotaLevaOTextoLegalEAOrigem(t *testing.T) {
+	uc, repo, notas := montarFaturamento()
+	chave := strings.Repeat("3", 44)
+	repo.remessa.NFeKey = &chave
+	if _, err := uc.Faturar(context.Background(), pedidoPadrao(), autorValido); err != nil {
+		t.Fatalf("faturando: %v", err)
+	}
+	if notas.saida.InformacoesComplementares == nil || !strings.Contains(*notas.saida.InformacoesComplementares, "CAT 22/2007") {
+		t.Fatalf("texto legal fora da nota: %v", notas.saida.InformacoesComplementares)
+	}
+	if len(notas.itens) < 2 || notas.itens[0].ICMSDiferimentoPct != 100 || notas.itens[1].ICMSDiferimentoPct != 0 {
+		t.Fatalf("pDif de 100%% só no serviço: %+v", notas.itens)
+	}
+	if notas.saida.NFeReferenciada == nil || *notas.saida.NFeReferenciada != chave {
+		t.Fatalf("NF-e do cliente fora da nota: %v", notas.saida.NFeReferenciada)
+	}
+}
+
+// Duas notas simultâneas tiram o mesmo número: a que perde tenta com o próximo.
+func TestNotaQuePerdeONumeroTentaComOProximo(t *testing.T) {
+	uc, _, notas := montarFaturamento()
+	notas.perderNumeros = 2
+	if _, err := uc.Faturar(context.Background(), pedidoPadrao(), autorValido); err != nil {
+		t.Fatalf("a terceira tentativa deveria criar a nota: %v", err)
+	}
+	if notas.numerosPedidos != 3 {
+		t.Fatalf("números pedidos = %d, esperado 3", notas.numerosPedidos)
+	}
+}
+
+// Sem saída depois das tentativas, vale o erro original: não se esconde a falha.
+func TestNumeroSempreOcupadoDevolveOErro(t *testing.T) {
+	uc, _, notas := montarFaturamento()
+	notas.perderNumeros = 99
+	if _, err := uc.Faturar(context.Background(), pedidoPadrao(), autorValido); err == nil {
+		t.Fatal("deveria falhar")
+	}
+	if notas.numerosPedidos != tentativasDeNumerar {
+		t.Fatalf("números pedidos = %d, esperado %d", notas.numerosPedidos, tentativasDeNumerar)
+	}
+}
+
+// Duplo clique: a perdedora diz que a nota já existe, e não "já existe um registro".
+func TestDisputaPelaMesmaRemessaExplicaOQueHouve(t *testing.T) {
+	uc, _, notas := montarFaturamento()
+	notas.outraCriouORascunho = &fiscalentity.FiscalExit{ID: 9}
+	_, err := uc.Faturar(context.Background(), pedidoPadrao(), autorValido)
+	if _, conflito := errorsuc.AsConflict(err); !conflito || !strings.Contains(err.Error(), "acabou de ser faturada") {
+		t.Fatalf("erro = %v", err)
 	}
 }

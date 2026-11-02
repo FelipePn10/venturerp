@@ -8,6 +8,8 @@ package customer_material_uc
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,6 +31,10 @@ type UseCase struct {
 	// Clientes resolve o destinatário da nota pelo cadastro. Opcional: sem ele a
 	// tela precisa enviar o destinatário completo.
 	Clientes ResolvedorDeDestinatario
+	// Pedidos confere o pedido de beneficiamento (pedido de venda) da remessa e
+	// traz o serviço para a nota. Opcional: sem ele o número fica sem conferência,
+	// como antes.
+	Pedidos PedidosDeVenda
 	// Agora existe para o cálculo do prazo ser testável sem esperar o relógio.
 	Agora func() time.Time
 }
@@ -84,7 +90,7 @@ func (uc *UseCase) Receber(ctx context.Context, nova NovaRemessa, usuario string
 	// empresa, "quem deu entrada nisso" precisa ter resposta. Sem isso o insert
 	// chegava ao banco com created_by vazio e falhava na conversão para uuid.
 	if strings.TrimSpace(usuario) == "" {
-		return nil, errorsuc.NewValidationError("sessão sem usuário identificado")
+		return nil, errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente")
 	}
 	if len(nova.Itens) == 0 {
 		return nil, errorsuc.NewValidationError("informe ao menos um item da nota de remessa")
@@ -97,6 +103,16 @@ func (uc *UseCase) Receber(ctx context.Context, nova NovaRemessa, usuario string
 	}
 	if nova.IssueDate.IsZero() {
 		return nil, errorsuc.NewValidationError("informe a data de emissão da NF-e")
+	}
+	// Um dia de folga: a data vem sem fuso e o servidor pode estar no dia seguinte.
+	if nova.IssueDate.After(uc.agora().AddDate(0, 0, 1)) {
+		return nil, errorsuc.NewValidationError("a data de emissão da NF-e está no futuro: confira a data da nota")
+	}
+	if nova.NFeKey != nil && !chaveDeAcessoValida(*nova.NFeKey) {
+		return nil, errorsuc.NewValidationError("a chave de acesso da NF-e não confere: confira os 44 dígitos digitados")
+	}
+	if cfop := strings.TrimSpace(nova.CFOP); cfop != "" && !cfopValido.MatchString(cfop) {
+		return nil, errorsuc.NewValidationError("o CFOP da nota tem 4 dígitos: confira o número digitado")
 	}
 
 	recebimento := nova.ReceivedAt
@@ -145,10 +161,30 @@ func (uc *UseCase) Receber(ctx context.Context, nova NovaRemessa, usuario string
 		remessa.Itens = append(remessa.Itens, item)
 	}
 
+	// Sem cadastro, o material ficaria num saldo que nenhuma busca por cliente acha.
+	existe, ativo, err := uc.Repo.SituacaoDoCliente(ctx, nova.CustomerCode)
+	if err != nil {
+		return nil, err
+	}
+	if !existe {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("cliente %d não encontrado nesta empresa", nova.CustomerCode))
+	}
+	if !ativo {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o cliente %d está inativo: reative o cadastro antes de receber o material", nova.CustomerCode))
+	}
+
+	// O pedido informado tem de existir nesta empresa e ser do mesmo cliente:
+	// é ele que libera o material para a produção.
+	if nova.SalesOrderCode != nil {
+		if _, err := uc.conferirPedido(ctx, *nova.SalesOrderCode, nova.CustomerCode, 0); err != nil {
+			return nil, err
+		}
+	}
+
 	switch {
 	case nova.SalesOrderCode == nil:
 		remessa.Blocked = true
-		motivo := "material recebido sem pedido de beneficiamento cadastrado"
+		motivo := MotivoSemPedido
 		remessa.BlockReason = &motivo
 	case divergente:
 		remessa.Blocked = true
@@ -168,8 +204,12 @@ func montarItem(bruto ItemRecebido, indice int) (*entity.ItemRemessa, error) {
 	}
 	// O NCM da entrada é o que volta no retorno fiscal: sem ele a nota de retorno
 	// sai com classificação diferente da que o cliente enviou.
-	if strings.TrimSpace(bruto.NCM) == "" {
+	ncm := strings.ReplaceAll(strings.TrimSpace(bruto.NCM), ".", "")
+	if ncm == "" {
 		return nil, errorsuc.NewValidationError("informe o NCM do item " + bruto.CustomerItemCode + " como consta na nota")
+	}
+	if !ncmValido.MatchString(ncm) {
+		return nil, errorsuc.NewValidationError("o NCM do item " + bruto.CustomerItemCode + " tem 8 dígitos: confira como consta na nota")
 	}
 	if strings.TrimSpace(bruto.UOM) == "" {
 		return nil, errorsuc.NewValidationError("informe a unidade do item " + bruto.CustomerItemCode)
@@ -212,7 +252,7 @@ func montarItem(bruto ItemRecebido, indice int) (*entity.ItemRemessa, error) {
 		CustomerItemCode: strings.TrimSpace(bruto.CustomerItemCode),
 		ItemCode:         bruto.ItemCode,
 		Description:      strings.TrimSpace(bruto.Description),
-		NCM:              strings.TrimSpace(bruto.NCM),
+		NCM:              ncm,
 		CST:              bruto.CST,
 		UOM:              strings.ToUpper(strings.TrimSpace(bruto.UOM)),
 		QtyInvoiced:      faturada,
@@ -269,21 +309,21 @@ func cfopPadrao(tipo entity.TipoMovimento) string {
 // 000371 registra qual.
 func (uc *UseCase) Bloquear(ctx context.Context, id int64, motivo, usuario string) error {
 	if strings.TrimSpace(usuario) == "" {
-		return errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
+		return errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente")
 	}
 	return uc.Repo.Bloquear(ctx, id, motivo, usuario)
 }
 
 func (uc *UseCase) Desbloquear(ctx context.Context, id int64, usuario string) error {
 	if strings.TrimSpace(usuario) == "" {
-		return errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
+		return errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente")
 	}
 	return uc.Repo.Desbloquear(ctx, id, usuario)
 }
 
 func (uc *UseCase) Encerrar(ctx context.Context, id int64, motivo, usuario string) error {
 	if strings.TrimSpace(usuario) == "" {
-		return errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
+		return errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente")
 	}
 	return uc.Repo.Encerrar(ctx, id, motivo, usuario)
 }
@@ -297,10 +337,10 @@ func (uc *UseCase) Encerrar(ctx context.Context, id int64, motivo, usuario strin
 // "erro" escrito no motivo não explica nada a quem conferir seis meses depois.
 func (uc *UseCase) EstornarNota(ctx context.Context, fiscalExitID int64, usuario, motivo string) ([]*entity.Movimento, error) {
 	if strings.TrimSpace(usuario) == "" {
-		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário da sessão")
+		return nil, errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente")
 	}
 	if len(strings.TrimSpace(motivo)) < 15 {
-		return nil, errorsuc.NewValidationError("descreva o motivo do estorno com pelo menos 15 caracteres")
+		return nil, errorsuc.NewValidationError("descreva o motivo com pelo menos 15 caracteres")
 	}
 	return uc.Repo.EstornarMovimentosDaNota(ctx, fiscalExitID, usuario, strings.TrimSpace(motivo))
 }
@@ -327,7 +367,7 @@ func (uc *UseCase) TrilhaDaRemessa(ctx context.Context, id int64, limite int) ([
 func decimalObrigatorio(bruto, campo string) (decimal.Decimal, error) {
 	v, err := decimal.NewFromString(strings.TrimSpace(bruto))
 	if err != nil {
-		return decimal.Zero, errorsuc.NewValidationError(campo + " inválido")
+		return decimal.Zero, errorsuc.NewValidationError(campo + ": valor inválido")
 	}
 	return v, nil
 }
@@ -344,4 +384,48 @@ func primeiroNaoVazio(valor, padrao string) string {
 		return padrao
 	}
 	return strings.TrimSpace(valor)
+}
+
+// O CFOP e o NCM da remessa voltam na nota de retorno. A NF-e aceita NCM de 2
+// dígitos (só o capítulo) em casos previstos; o normal são os 8.
+var (
+	cfopValido = regexp.MustCompile(`^[0-9]{4}$`)
+	ncmValido  = regexp.MustCompile(`^([0-9]{8}|[0-9]{2})$`)
+)
+
+// chaveDeAcessoValida: a chave é opcional, mas a informada vai como referência na
+// nota de retorno, e a SEFAZ recusa a que não tenha os 44 dígitos ou cujo dígito
+// verificador (módulo 11) não feche: é ele que pega o erro de digitação.
+func chaveDeAcessoValida(chave string) bool {
+	chave = strings.TrimSpace(chave)
+	if chave == "" {
+		return true
+	}
+	if len(chave) != 44 {
+		return false
+	}
+	for _, c := range chave {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return digitoDaChave(chave[:43]) == chave[43]
+}
+
+// digitoDaChave calcula o dígito verificador: pesos de 2 a 9, da direita para a
+// esquerda; resto 0 ou 1 dá dígito 0.
+func digitoDaChave(corpo string) byte {
+	soma, peso := 0, 2
+	for i := len(corpo) - 1; i >= 0; i-- {
+		soma += int(corpo[i]-'0') * peso
+		peso++
+		if peso > 9 {
+			peso = 2
+		}
+	}
+	resto := soma % 11
+	if resto < 2 {
+		return '0'
+	}
+	return byte('0' + 11 - resto)
 }

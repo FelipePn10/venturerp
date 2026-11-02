@@ -560,13 +560,30 @@ func (q *Queries) IsPlannedOrderItemKanban(ctx context.Context, arg IsPlannedOrd
 }
 
 const listFirmPlannedOrdersByItems = `-- name: ListFirmPlannedOrdersByItems :many
-SELECT code, item_code, quantity, need_date
-FROM planned_orders
-WHERE item_code = ANY($1::bigint[])
-  AND enterprise_id = $2
-  AND is_firm = TRUE
-  AND is_active = TRUE
-ORDER BY item_code, need_date
+SELECT po.code, po.item_code,
+       GREATEST(po.quantity - COALESCE(prod.entregue, 0) - COALESCE(compra.chegou, 0), 0)::numeric AS quantity,
+       po.need_date
+FROM planned_orders po
+LEFT JOIN LATERAL (
+    SELECT SUM(o.produced_qty) AS entregue,
+           BOOL_AND(o.status IN ('COMPLETED', 'CLOSED', 'CANCELLED')) AS encerrada
+      FROM production_orders o
+     WHERE o.planned_order_id = po.id AND o.enterprise_id = po.enterprise_id
+) prod ON TRUE
+LEFT JOIN LATERAL (
+    SELECT SUM(poi.received_qty + poi.cancelled_qty) AS chegou
+      FROM purchase_order_items poi
+      JOIN purchase_orders pc ON pc.code = poi.purchase_order_code
+      JOIN enterprise emp ON emp.code = pc.enterprise_code
+     WHERE poi.planned_order_code = po.code AND emp.id = po.enterprise_id
+) compra ON TRUE
+WHERE po.item_code = ANY($1::bigint[])
+  AND po.enterprise_id = $2
+  AND po.is_firm = TRUE
+  AND po.is_active = TRUE
+  AND NOT COALESCE(prod.encerrada, FALSE)
+  AND po.quantity > COALESCE(prod.entregue, 0) + COALESCE(compra.chegou, 0)
+ORDER BY po.item_code, po.need_date
 `
 
 type ListFirmPlannedOrdersByItemsParams struct {
@@ -581,6 +598,10 @@ type ListFirmPlannedOrdersByItemsRow struct {
 	NeedDate pgtype.Date
 }
 
+// O suprimento da ordem firme é o que ainda falta chegar. A OF encerrada já virou
+// estoque (ou, no beneficiamento, material a devolver) e a cancelada não vem mais:
+// contá-las cobria para sempre os pedidos seguintes do item, que o MRP não planejava.
+// O mesmo para a compra: o recebido já é estoque e o cancelado não vem mais.
 func (q *Queries) ListFirmPlannedOrdersByItems(ctx context.Context, arg ListFirmPlannedOrdersByItemsParams) ([]ListFirmPlannedOrdersByItemsRow, error) {
 	rows, err := q.db.Query(ctx, listFirmPlannedOrdersByItems, arg.ItemCodes, arg.EnterpriseID)
 	if err != nil {

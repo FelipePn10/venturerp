@@ -169,3 +169,16 @@ func (f *fakeSalesRepo) ChangeStatus(_ context.Context, code int64, status sales
 	f.changed[code] = status
 	return nil
 }
+
+// O diferimento total do beneficiamento tem valor zero: sem o grupo, a SEFAZ recusa
+// o CST 51 (rejeição 929). Foi a transmissão real em homologação que mostrou.
+func TestBuildFocusItems_DiferimentoTotalComValorZero(t *testing.T) {
+	cst := "51"
+	out := buildFocusItems([]*fiscalentity.FiscalExitItem{{Sequence: 1, CstICMS: &cst, ICMSDiferimentoPct: 100, Quantity: 1, UnitPrice: 10, TotalPrice: 10}}, &fiscalentity.FiscalConfig{})
+	if out[0].PercentualDiferimento == nil || *out[0].PercentualDiferimento != 100 {
+		t.Fatalf("pDif = %v, esperado 100", out[0].PercentualDiferimento)
+	}
+	if out[0].ValorICMSDiferido == nil {
+		t.Fatal("vICMSDif tem de ir, mesmo zero")
+	}
+}

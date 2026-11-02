@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -34,8 +35,9 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 		return nil, errorsuc.ErrUnauthorized
 	}
 
-	if len(params.TextoCorrecao) < 15 {
-		return nil, errorsuc.NewValidationError("texto de correção deve ter pelo menos 15 caracteres")
+	params.TextoCorrecao = strings.TrimSpace(params.TextoCorrecao)
+	if n := len([]rune(params.TextoCorrecao)); n < 15 || n > 1000 {
+		return nil, errorsuc.NewValidationError("o texto da carta de correção deve ter de 15 a 1000 caracteres (exigência da SEFAZ)")
 	}
 
 	exit, err := uc.Repo.GetExitByID(ctx, params.FiscalExitID)
@@ -44,11 +46,11 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if exit.Status != entity.ExitStatusAuthorized {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("CC-e só pode ser emitida para NF-e autorizada, status: %s", exit.Status))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("carta de correção só vale para nota autorizada; esta está %s", situacaoDaNota(exit.Status)))
 	}
 
 	if exit.FocusRef == nil {
-		return nil, errorsuc.NewValidationError("esta NF-e não foi autorizada pela Focus NF-e, então não há o que corrigir por carta de correção")
+		return nil, errorsuc.NewValidationError("esta nota não foi transmitida à SEFAZ por este sistema, então não há o que corrigir por carta de correção")
 	}
 
 	cfg, err := uc.Repo.GetFiscalConfig(ctx)
@@ -57,7 +59,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 	}
 
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError(tokenFocusAusente)
 	}
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -71,7 +73,7 @@ func (uc *EmitirCCeUseCase) Execute(ctx context.Context, params EmitirCCeParams)
 
 	resp, err := cli.EmitirCCe(ctx, *exit.FocusRef, params.TextoCorrecao)
 	if err != nil {
-		return nil, errorsuc.NewExternalServiceError("Focus CC-e", err.Error())
+		return nil, erroDaEmissora(ctx, "a carta de correção", params.FiscalExitID, err)
 	}
 
 	userID, errUsuario := uc.Auth.UserID(ctx)

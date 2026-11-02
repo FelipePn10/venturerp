@@ -359,19 +359,21 @@ type FiscalEntryItemResponse struct {
 
 // FiscalConfigResponse is the API representation of the fiscal configuration.
 type FiscalConfigResponse struct {
-	ID                        int64   `json:"id"`
-	CnpjEmpresa               string  `json:"cnpj_empresa"`
-	RazaoSocial               string  `json:"razao_social"`
-	IEEmpresa                 *string `json:"ie_empresa,omitempty"`
-	RegimeTributario          string  `json:"regime_tributario"`
-	UFEmpresa                 string  `json:"uf_empresa"`
-	IcmsInternoAliquota       float64 `json:"icms_interno_aliquota"`
-	IcmsDiferimentoPercentual float64 `json:"icms_diferimento_percentual"`
-	ExigirRegraICMSIPI        bool    `json:"exigir_regra_icms_ipi"`
-	AliquotaCreditoSimples    float64 `json:"aliquota_credito_simples"`
-	CBenefDiferimento         *string `json:"cbenef_diferimento,omitempty"`
-	FocusNfeConfigured        bool    `json:"focus_nfe_configured"`
-	FocusNfeAmbiente          string  `json:"focus_nfe_ambiente"`
+	ID                         int64   `json:"id"`
+	CnpjEmpresa                string  `json:"cnpj_empresa"`
+	RazaoSocial                string  `json:"razao_social"`
+	IEEmpresa                  *string `json:"ie_empresa,omitempty"`
+	RegimeTributario           string  `json:"regime_tributario"`
+	UFEmpresa                  string  `json:"uf_empresa"`
+	IcmsInternoAliquota        float64 `json:"icms_interno_aliquota"`
+	IcmsDiferimentoPercentual  float64 `json:"icms_diferimento_percentual"`
+	ExigirRegraICMSIPI         bool    `json:"exigir_regra_icms_ipi"`
+	AliquotaCreditoSimples     float64 `json:"aliquota_credito_simples"`
+	CBenefDiferimento          *string `json:"cbenef_diferimento,omitempty"`
+	ObsRetornoIndustrializacao *string `json:"obs_retorno_industrializacao,omitempty"`
+	CBenefSuspensao            *string `json:"cbenef_suspensao,omitempty"`
+	FocusNfeConfigured         bool    `json:"focus_nfe_configured"`
+	FocusNfeAmbiente           string  `json:"focus_nfe_ambiente"`
 	// FocusProducaoTravado: em produção o token e o ambiente só mudam pela
 	// Venture ERP (comando no servidor); a tela mostra só para leitura.
 	FocusProducaoTravado   bool      `json:"focus_producao_travado"`
@@ -667,4 +669,23 @@ type DevolucaoItemPrevia struct {
 	Disponivel        float64 `json:"disponivel"`
 	ValorUnitario     float64 `json:"valor_unitario"`
 	CFOPDevolucao     string  `json:"cfop_devolucao"`
+}
+
+// SugestaoItemEntradaResponse é o ponto de partida do item no lançamento manual
+// da nota de entrada. Alíquotas em percentual (18 = 18%).
+type SugestaoItemEntradaResponse struct {
+	Encontrado          bool     `json:"encontrado"`
+	ItemCode            int64    `json:"item_code,omitempty"`
+	Nome                string   `json:"nome,omitempty"`
+	UOM                 string   `json:"uom,omitempty"`
+	NCM                 string   `json:"ncm,omitempty"`
+	CFOP                string   `json:"cfop,omitempty"`
+	CodigoFornecedor    string   `json:"codigo_fornecedor,omitempty"`
+	DescricaoFornecedor string   `json:"descricao_fornecedor,omitempty"`
+	UOMFornecedor       string   `json:"uom_fornecedor,omitempty"`
+	FatorConversao      *float64 `json:"fator_conversao,omitempty"`
+	PrecoUnitario       *float64 `json:"preco_unitario,omitempty"`
+	OrigemPreco         string   `json:"origem_preco,omitempty"`
+	AliqICMS            *float64 `json:"aliq_icms,omitempty"`
+	AliqIPI             *float64 `json:"aliq_ipi,omitempty"`
 }

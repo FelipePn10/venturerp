@@ -133,7 +133,8 @@ func (r *FiscalRepositoryPG) NotasDoPedido(ctx context.Context, salesOrderCode i
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT id, numero_nf, status, valor_total FROM fiscal_exits
+		`SELECT id, CASE WHEN COALESCE(chave_acesso,'') = '' AND status NOT IN ('AUTHORIZED','CANCELLED') THEN 0 ELSE numero_nf END,
+		        status, valor_total FROM fiscal_exits
 		  WHERE enterprise_id=$1 AND sales_order_code=$2 AND is_active ORDER BY id`, empresa, salesOrderCode)
 	if err != nil {
 		return nil, err

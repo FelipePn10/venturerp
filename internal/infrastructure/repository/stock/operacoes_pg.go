@@ -192,7 +192,7 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 			Quantity: qtd, UnitPrice: p.preco, TotalPrice: p.total,
 			ReferenceType: &refEstorno, ReferenceCode: &origID, Lot: p.lote, Address: p.endereco,
 			Notes: &nota, CreatedBy: ator, MovementTypeCode: p.tipoCodigo, CostCenterCode: p.centro,
-			ReversesMovementID: &origID,
+			ReversesMovementID: &origID, SaidaPeloPreco: true,
 		}
 		if err := CreateMovementTx(ctx, tx, empresa, rev); err != nil {
 			return nil, fmt.Errorf("estornando o movimento %d: %w", p.id, err)

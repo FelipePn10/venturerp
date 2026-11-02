@@ -392,6 +392,12 @@ func (uc *StandardCostUseCase) rollupItem(
 		}
 	} else {
 		for _, child := range selectPrimaryCostSubstitutes(children) {
+			// Material do cliente (beneficiamento): chega por remessa e volta na
+			// mesma nota. Somá-lo inflaria o custo do serviço com um valor que a
+			// empresa nunca pagou.
+			if child.CustomerSupplied {
+				continue
+			}
 			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache, regras, quando)
 			if err2 != nil {
 				return nil, err2

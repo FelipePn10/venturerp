@@ -44,7 +44,7 @@ type CadastroTributario interface {
 	FinalidadeDoCliente(ctx context.Context, customerCode int64) (*string, error)
 	// FinalidadeDoPedido: a do pedido de venda, ou a da sua tributação; nil = não informada.
 	FinalidadeDoPedido(ctx context.Context, salesOrderCode int64) (*string, error)
-	// TipoNota: os indicadores do tipo de nota (VFIS0110) da empresa.
+	// TipoNota: os indicadores do tipo de nota (VCLI0530) da empresa.
 	TipoNota(ctx context.Context, id int64) (*entity.TipoNotaFiscal, error)
 }
 

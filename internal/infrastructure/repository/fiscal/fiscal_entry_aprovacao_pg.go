@@ -483,8 +483,8 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repository.CancelamentoEntrada, numero, itemCode, movID int64, pendentes map[[2]int64]decimal.Decimal) (bool, error) {
 	ref := stockentity.ReferenceTypeNFEntry
 	var wh int64
-	var qtd decimal.Decimal
-	if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &qtd); err != nil {
+	var qtd, precoDaEntrada decimal.Decimal
+	if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity, unit_price FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &qtd, &precoDaEntrada); err != nil {
 		return false, fmt.Errorf("lendo movimento de estoque da nota: %w", err)
 	}
 	chave := [2]int64{itemCode, wh}
@@ -521,7 +521,8 @@ func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repo
 	nota := fmt.Sprintf("Estorno da NF %d (cancelamento da nota de entrada %d): %s", numero, c.EntryID, c.Motivo)
 	mov := &stockentity.StockMovement{
 		ItemCode: itemCode, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
-		Quantity: qtd, ReferenceType: &ref, ReferenceCode: &c.EntryID,
+		Quantity: qtd, UnitPrice: precoDaEntrada, SaidaPeloPreco: true,
+		ReferenceType: &ref, ReferenceCode: &c.EntryID,
 		Notes: &nota, CreatedBy: c.UserID,
 	}
 	if err := stockrepo.CreateMovementTx(ctx, tx, empresa, mov); err != nil {
@@ -694,7 +695,7 @@ func (r *FiscalRepositoryPG) NCMIPIRates(ctx context.Context, ncms []string) (ma
 }
 
 // colunasParametrosContabeis: uma lista só para o SELECT, o INSERT e o UPSERT.
-const colunasParametrosContabeis = `plan_id, fornecedores_account_id, icms_recuperar_account_id, ipi_recuperar_account_id, pis_recuperar_account_id, cofins_recuperar_account_id, ibs_recuperar_account_id, cbs_recuperar_account_id, irrf_recolher_account_id, pcc_recolher_account_id, inss_recolher_account_id, iss_recolher_account_id, despesa_padrao_account_id, contabilizar_entrada, contabilizar_pagamentos, contabilizar_recebimentos, contabilizar_saidas, banco_padrao_account_id, juros_pagos_account_id, descontos_obtidos_account_id, clientes_account_id, juros_recebidos_account_id, descontos_concedidos_account_id, receita_vendas_account_id, icms_vendas_account_id, icms_recolher_account_id, icms_st_recolher_account_id, ipi_recolher_account_id, pis_vendas_account_id, pis_recolher_account_id, cofins_vendas_account_id, cofins_recolher_account_id, cmv_account_id, estoque_account_id, ibs_vendas_account_id, ibs_recolher_account_id, cbs_vendas_account_id, cbs_recolher_account_id`
+const colunasParametrosContabeis = `plan_id, fornecedores_account_id, icms_recuperar_account_id, ipi_recuperar_account_id, pis_recuperar_account_id, cofins_recuperar_account_id, ibs_recuperar_account_id, cbs_recuperar_account_id, irrf_recolher_account_id, pcc_recolher_account_id, inss_recolher_account_id, iss_recolher_account_id, despesa_padrao_account_id, contabilizar_entrada, contabilizar_pagamentos, contabilizar_recebimentos, contabilizar_saidas, banco_padrao_account_id, juros_pagos_account_id, descontos_obtidos_account_id, clientes_account_id, juros_recebidos_account_id, descontos_concedidos_account_id, receita_vendas_account_id, icms_vendas_account_id, icms_recolher_account_id, icms_st_recolher_account_id, ipi_recolher_account_id, pis_vendas_account_id, pis_recolher_account_id, cofins_vendas_account_id, cofins_recolher_account_id, cmv_account_id, estoque_account_id, ibs_vendas_account_id, ibs_recolher_account_id, cbs_vendas_account_id, cbs_recolher_account_id, adiantamento_fornecedores_account_id, adiantamento_clientes_account_id`
 
 func (r *FiscalRepositoryPG) AccountingParams(ctx context.Context) (*repository.AccountingPostingParams, error) {
 	empresa, err := tenant.ID(ctx)
@@ -703,7 +704,7 @@ func (r *FiscalRepositoryPG) AccountingParams(ctx context.Context) (*repository.
 	}
 	var p repository.AccountingPostingParams
 	err = r.db.QueryRow(ctx, `SELECT `+colunasParametrosContabeis+` FROM accounting_posting_params WHERE enterprise_id=$1`, empresa).Scan(
-		&p.PlanID, &p.FornecedoresAccountID, &p.ICMSRecuperarAccountID, &p.IPIRecuperarAccountID, &p.PISRecuperarAccountID, &p.COFINSRecuperarAccountID, &p.IBSRecuperarAccountID, &p.CBSRecuperarAccountID, &p.IRRFRecolherAccountID, &p.PCCRecolherAccountID, &p.INSSRecolherAccountID, &p.ISSRecolherAccountID, &p.DespesaPadraoAccountID, &p.ContabilizarEntrada, &p.ContabilizarPagamentos, &p.ContabilizarRecebimentos, &p.ContabilizarSaidas, &p.BancoPadraoAccountID, &p.JurosPagosAccountID, &p.DescontosObtidosAccountID, &p.ClientesAccountID, &p.JurosRecebidosAccountID, &p.DescontosConcedidosAccountID, &p.ReceitaVendasAccountID, &p.ICMSVendasAccountID, &p.ICMSRecolherAccountID, &p.ICMSSTRecolherAccountID, &p.IPIRecolherAccountID, &p.PISVendasAccountID, &p.PISRecolherAccountID, &p.COFINSVendasAccountID, &p.COFINSRecolherAccountID, &p.CMVAccountID, &p.EstoqueAccountID, &p.IBSVendasAccountID, &p.IBSRecolherAccountID, &p.CBSVendasAccountID, &p.CBSRecolherAccountID)
+		&p.PlanID, &p.FornecedoresAccountID, &p.ICMSRecuperarAccountID, &p.IPIRecuperarAccountID, &p.PISRecuperarAccountID, &p.COFINSRecuperarAccountID, &p.IBSRecuperarAccountID, &p.CBSRecuperarAccountID, &p.IRRFRecolherAccountID, &p.PCCRecolherAccountID, &p.INSSRecolherAccountID, &p.ISSRecolherAccountID, &p.DespesaPadraoAccountID, &p.ContabilizarEntrada, &p.ContabilizarPagamentos, &p.ContabilizarRecebimentos, &p.ContabilizarSaidas, &p.BancoPadraoAccountID, &p.JurosPagosAccountID, &p.DescontosObtidosAccountID, &p.ClientesAccountID, &p.JurosRecebidosAccountID, &p.DescontosConcedidosAccountID, &p.ReceitaVendasAccountID, &p.ICMSVendasAccountID, &p.ICMSRecolherAccountID, &p.ICMSSTRecolherAccountID, &p.IPIRecolherAccountID, &p.PISVendasAccountID, &p.PISRecolherAccountID, &p.COFINSVendasAccountID, &p.COFINSRecolherAccountID, &p.CMVAccountID, &p.EstoqueAccountID, &p.IBSVendasAccountID, &p.IBSRecolherAccountID, &p.CBSVendasAccountID, &p.CBSRecolherAccountID, &p.AdiantamentoFornecedoresAccountID, &p.AdiantamentoClientesAccountID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -720,10 +721,10 @@ func (r *FiscalRepositoryPG) SaveAccountingParams(ctx context.Context, p *reposi
 	}
 	_, err = r.db.Exec(ctx,
 		`INSERT INTO accounting_posting_params (enterprise_id, `+colunasParametrosContabeis+`, updated_by, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,NOW())
-		 ON CONFLICT (enterprise_id) DO UPDATE SET fornecedores_account_id=EXCLUDED.fornecedores_account_id, icms_recuperar_account_id=EXCLUDED.icms_recuperar_account_id, ipi_recuperar_account_id=EXCLUDED.ipi_recuperar_account_id, pis_recuperar_account_id=EXCLUDED.pis_recuperar_account_id, cofins_recuperar_account_id=EXCLUDED.cofins_recuperar_account_id, ibs_recuperar_account_id=EXCLUDED.ibs_recuperar_account_id, cbs_recuperar_account_id=EXCLUDED.cbs_recuperar_account_id, irrf_recolher_account_id=EXCLUDED.irrf_recolher_account_id, pcc_recolher_account_id=EXCLUDED.pcc_recolher_account_id, inss_recolher_account_id=EXCLUDED.inss_recolher_account_id, iss_recolher_account_id=EXCLUDED.iss_recolher_account_id, despesa_padrao_account_id=EXCLUDED.despesa_padrao_account_id, contabilizar_entrada=EXCLUDED.contabilizar_entrada, contabilizar_pagamentos=EXCLUDED.contabilizar_pagamentos, contabilizar_recebimentos=EXCLUDED.contabilizar_recebimentos, contabilizar_saidas=EXCLUDED.contabilizar_saidas, banco_padrao_account_id=EXCLUDED.banco_padrao_account_id, juros_pagos_account_id=EXCLUDED.juros_pagos_account_id, descontos_obtidos_account_id=EXCLUDED.descontos_obtidos_account_id, clientes_account_id=EXCLUDED.clientes_account_id, juros_recebidos_account_id=EXCLUDED.juros_recebidos_account_id, descontos_concedidos_account_id=EXCLUDED.descontos_concedidos_account_id, receita_vendas_account_id=EXCLUDED.receita_vendas_account_id, icms_vendas_account_id=EXCLUDED.icms_vendas_account_id, icms_recolher_account_id=EXCLUDED.icms_recolher_account_id, icms_st_recolher_account_id=EXCLUDED.icms_st_recolher_account_id, ipi_recolher_account_id=EXCLUDED.ipi_recolher_account_id, pis_vendas_account_id=EXCLUDED.pis_vendas_account_id, pis_recolher_account_id=EXCLUDED.pis_recolher_account_id, cofins_vendas_account_id=EXCLUDED.cofins_vendas_account_id, cofins_recolher_account_id=EXCLUDED.cofins_recolher_account_id, cmv_account_id=EXCLUDED.cmv_account_id, estoque_account_id=EXCLUDED.estoque_account_id, ibs_vendas_account_id=EXCLUDED.ibs_vendas_account_id, ibs_recolher_account_id=EXCLUDED.ibs_recolher_account_id, cbs_vendas_account_id=EXCLUDED.cbs_vendas_account_id, cbs_recolher_account_id=EXCLUDED.cbs_recolher_account_id,
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,NOW())
+		 ON CONFLICT (enterprise_id) DO UPDATE SET fornecedores_account_id=EXCLUDED.fornecedores_account_id, icms_recuperar_account_id=EXCLUDED.icms_recuperar_account_id, ipi_recuperar_account_id=EXCLUDED.ipi_recuperar_account_id, pis_recuperar_account_id=EXCLUDED.pis_recuperar_account_id, cofins_recuperar_account_id=EXCLUDED.cofins_recuperar_account_id, ibs_recuperar_account_id=EXCLUDED.ibs_recuperar_account_id, cbs_recuperar_account_id=EXCLUDED.cbs_recuperar_account_id, irrf_recolher_account_id=EXCLUDED.irrf_recolher_account_id, pcc_recolher_account_id=EXCLUDED.pcc_recolher_account_id, inss_recolher_account_id=EXCLUDED.inss_recolher_account_id, iss_recolher_account_id=EXCLUDED.iss_recolher_account_id, despesa_padrao_account_id=EXCLUDED.despesa_padrao_account_id, contabilizar_entrada=EXCLUDED.contabilizar_entrada, contabilizar_pagamentos=EXCLUDED.contabilizar_pagamentos, contabilizar_recebimentos=EXCLUDED.contabilizar_recebimentos, contabilizar_saidas=EXCLUDED.contabilizar_saidas, banco_padrao_account_id=EXCLUDED.banco_padrao_account_id, juros_pagos_account_id=EXCLUDED.juros_pagos_account_id, descontos_obtidos_account_id=EXCLUDED.descontos_obtidos_account_id, clientes_account_id=EXCLUDED.clientes_account_id, juros_recebidos_account_id=EXCLUDED.juros_recebidos_account_id, descontos_concedidos_account_id=EXCLUDED.descontos_concedidos_account_id, receita_vendas_account_id=EXCLUDED.receita_vendas_account_id, icms_vendas_account_id=EXCLUDED.icms_vendas_account_id, icms_recolher_account_id=EXCLUDED.icms_recolher_account_id, icms_st_recolher_account_id=EXCLUDED.icms_st_recolher_account_id, ipi_recolher_account_id=EXCLUDED.ipi_recolher_account_id, pis_vendas_account_id=EXCLUDED.pis_vendas_account_id, pis_recolher_account_id=EXCLUDED.pis_recolher_account_id, cofins_vendas_account_id=EXCLUDED.cofins_vendas_account_id, cofins_recolher_account_id=EXCLUDED.cofins_recolher_account_id, cmv_account_id=EXCLUDED.cmv_account_id, estoque_account_id=EXCLUDED.estoque_account_id, ibs_vendas_account_id=EXCLUDED.ibs_vendas_account_id, ibs_recolher_account_id=EXCLUDED.ibs_recolher_account_id, cbs_vendas_account_id=EXCLUDED.cbs_vendas_account_id, cbs_recolher_account_id=EXCLUDED.cbs_recolher_account_id, adiantamento_fornecedores_account_id=EXCLUDED.adiantamento_fornecedores_account_id, adiantamento_clientes_account_id=EXCLUDED.adiantamento_clientes_account_id,
 			updated_by=EXCLUDED.updated_by, updated_at=NOW()`,
-		empresa, p.PlanID, p.FornecedoresAccountID, p.ICMSRecuperarAccountID, p.IPIRecuperarAccountID, p.PISRecuperarAccountID, p.COFINSRecuperarAccountID, p.IBSRecuperarAccountID, p.CBSRecuperarAccountID, p.IRRFRecolherAccountID, p.PCCRecolherAccountID, p.INSSRecolherAccountID, p.ISSRecolherAccountID, p.DespesaPadraoAccountID, p.ContabilizarEntrada, p.ContabilizarPagamentos, p.ContabilizarRecebimentos, p.ContabilizarSaidas, p.BancoPadraoAccountID, p.JurosPagosAccountID, p.DescontosObtidosAccountID, p.ClientesAccountID, p.JurosRecebidosAccountID, p.DescontosConcedidosAccountID, p.ReceitaVendasAccountID, p.ICMSVendasAccountID, p.ICMSRecolherAccountID, p.ICMSSTRecolherAccountID, p.IPIRecolherAccountID, p.PISVendasAccountID, p.PISRecolherAccountID, p.COFINSVendasAccountID, p.COFINSRecolherAccountID, p.CMVAccountID, p.EstoqueAccountID, p.IBSVendasAccountID, p.IBSRecolherAccountID, p.CBSVendasAccountID, p.CBSRecolherAccountID, p.UpdatedBy)
+		empresa, p.PlanID, p.FornecedoresAccountID, p.ICMSRecuperarAccountID, p.IPIRecuperarAccountID, p.PISRecuperarAccountID, p.COFINSRecuperarAccountID, p.IBSRecuperarAccountID, p.CBSRecuperarAccountID, p.IRRFRecolherAccountID, p.PCCRecolherAccountID, p.INSSRecolherAccountID, p.ISSRecolherAccountID, p.DespesaPadraoAccountID, p.ContabilizarEntrada, p.ContabilizarPagamentos, p.ContabilizarRecebimentos, p.ContabilizarSaidas, p.BancoPadraoAccountID, p.JurosPagosAccountID, p.DescontosObtidosAccountID, p.ClientesAccountID, p.JurosRecebidosAccountID, p.DescontosConcedidosAccountID, p.ReceitaVendasAccountID, p.ICMSVendasAccountID, p.ICMSRecolherAccountID, p.ICMSSTRecolherAccountID, p.IPIRecolherAccountID, p.PISVendasAccountID, p.PISRecolherAccountID, p.COFINSVendasAccountID, p.COFINSRecolherAccountID, p.CMVAccountID, p.EstoqueAccountID, p.IBSVendasAccountID, p.IBSRecolherAccountID, p.CBSVendasAccountID, p.CBSRecolherAccountID, p.AdiantamentoFornecedoresAccountID, p.AdiantamentoClientesAccountID, p.UpdatedBy)
 	if err != nil {
 		return fmt.Errorf("gravando parâmetros contábeis: %w", err)
 	}
@@ -859,4 +860,47 @@ func (r *FiscalRepositoryPG) RetencaoTipo(ctx context.Context, contaPagarID int6
 		return "", err
 	}
 	return *tipo, nil
+}
+
+func (r *FiscalRepositoryPG) UltimoPrecoDeCompra(ctx context.Context, supplierCode *int64, itemCode int64) (*repository.PrecoDeCompra, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var p repository.PrecoDeCompra
+	err = r.db.QueryRow(ctx,
+		`SELECT i.unit_price, e.data_entrada, e.numero_nf
+		   FROM fiscal_entry_items i
+		   JOIN fiscal_entries e ON e.id = i.fiscal_entry_id
+		  WHERE e.enterprise_id = $1 AND i.item_code = $2 AND e.status = 'APPROVED' AND i.unit_price > 0
+		    AND ($3::bigint IS NULL OR e.supplier_code = $3)
+		  ORDER BY e.data_entrada DESC, e.id DESC LIMIT 1`, empresa, itemCode, supplierCode).Scan(&p.Preco, &p.Data, &p.Numero)
+	if err == nil {
+		return &p, nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("lendo a última compra do item: %w", err)
+	}
+	if supplierCode == nil {
+		return nil, nil
+	}
+	empresaCode, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = r.db.QueryRow(ctx,
+		`SELECT poi.unit_price, po.emission_date, po.order_number
+		   FROM purchase_order_items poi
+		   JOIN purchase_orders po ON po.code = poi.purchase_order_code
+		  WHERE po.enterprise_code = $1 AND po.supplier_code = $2 AND poi.item_code = $3
+		    AND po.status <> 'CANCELLED' AND poi.status <> 'CANCELLED' AND poi.unit_price > 0
+		  ORDER BY po.emission_date DESC, po.code DESC LIMIT 1`, empresaCode, *supplierCode, itemCode).Scan(&p.Preco, &p.Data, &p.Numero)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo o último pedido do item: %w", err)
+	}
+	p.DoPedido = true
+	return &p, nil
 }

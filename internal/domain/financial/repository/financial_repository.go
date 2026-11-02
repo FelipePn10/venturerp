@@ -151,6 +151,8 @@ type FinancialRepository interface {
 
 	// Contas a Pagar
 	CreateContaPagar(ctx context.Context, c *entity.ContaPagar) (*entity.ContaPagar, error)
+	// CreateContasPagar grava as parcelas de um título: todas ou nenhuma.
+	CreateContasPagar(ctx context.Context, titulos []*entity.ContaPagar) ([]*entity.ContaPagar, error)
 	GetContaPagar(ctx context.Context, id int64) (*entity.ContaPagar, error)
 	ListContasPagar(ctx context.Context, filters CPFilter) ([]*entity.ContaPagar, error)
 	UpdateContaPagar(ctx context.Context, c *entity.ContaPagar) (*entity.ContaPagar, error)
@@ -216,11 +218,12 @@ type FinancialRepository interface {
 	GetComprasPeriodo(ctx context.Context, startDate, endDate time.Time) ([]map[string]interface{}, error)
 
 	// Adiantamentos (advance payments)
-	CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa) (*entity.Adiantamento, error)
+	CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa, lote *contabilizacao.Lote) (*entity.Adiantamento, error)
 	GetAdiantamento(ctx context.Context, id int64) (*entity.Adiantamento, error)
 	ListAdiantamentos(ctx context.Context, tipo *string, parceiroID *int64) ([]*entity.Adiantamento, error)
-	AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time) (*entity.AdiantamentoAplicacao, error)
+	AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time, lote *contabilizacao.Lote) (*entity.AdiantamentoAplicacao, error)
 	ListAplicacoesByAdiantamento(ctx context.Context, advID int64) ([]*entity.AdiantamentoAplicacao, error)
+	CancelarAdiantamentoAtomico(ctx context.Context, id int64, motivo string, userID uuid.UUID) (*entity.Adiantamento, error)
 
 	// Conciliação Bancária
 	// SaveExtratoItem grava um lançamento do extrato. Devolve false quando a linha

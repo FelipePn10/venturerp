@@ -63,6 +63,7 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 			CostCenterCode:      n.Component.CostCenterCode,
 			IsCriticalMPS:       n.Component.IsCriticalMPS,
 			GeneratesInspection: n.Component.GeneratesInspection,
+			CustomerSupplied:    n.Component.CustomerSupplied,
 			IsActive:            n.Component.IsActive,
 			CreatedBy:           n.Component.CreatedBy,
 			CreatedAt:           n.Component.CreatedAt,

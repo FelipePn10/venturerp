@@ -80,7 +80,7 @@ func TestLerNFeLeImpostosDuplicatasEChave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n.ChaveAcesso != "41261012345678000190550010000123451000123459" {
+	if n.ChaveAcesso != "41261012345678000190550010000123451000123450" {
 		t.Errorf("chave = %q", n.ChaveAcesso)
 	}
 	if n.Protocolo != "141260000012345" || n.NaturezaOperacao != "VENDA DE MERCADORIA" {

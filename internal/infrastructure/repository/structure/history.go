@@ -64,6 +64,7 @@ func instantaneo(s *entity.ItemStructure) []byte {
 		"centro_custo":           s.CostCenterCode,
 		"critico_mps":            s.IsCriticalMPS,
 		"gera_inspecao":          s.GeneratesInspection,
+		"fornecido_pelo_cliente": s.CustomerSupplied,
 		"ativo":                  s.IsActive,
 	}
 	raw, err := json.Marshal(dados)

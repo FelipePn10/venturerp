@@ -76,7 +76,7 @@ type FiscalExit struct {
 	// FinalidadeCompra que valeu no cálculo (REVENDA, INDUSTRIALIZACAO,
 	// USO_CONSUMO); nil = deduzida do destinatário.
 	FinalidadeCompra *string
-	// InvoiceTypeID: tipo de nota (VFIS0110) cujos indicadores tributaram a saída.
+	// InvoiceTypeID: tipo de nota (VCLI0530) cujos indicadores tributaram a saída.
 	InvoiceTypeID *int64
 	// InformacoesComplementares (infCpl): o texto do usuário mais o que a lei
 	// manda constar (Simples Nacional, base legal dos benefícios).

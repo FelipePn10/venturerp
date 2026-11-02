@@ -46,6 +46,7 @@ type CreateStructureComponentDTO struct {
 	CostCenterCode      *int64                          `json:"cost_center_code,omitempty"`
 	IsCriticalMPS       bool                            `json:"is_critical_mps,omitempty"`
 	GeneratesInspection bool                            `json:"generates_inspection,omitempty"`
+	CustomerSupplied    bool                            `json:"customer_supplied"` // fornecido pelo cliente (beneficiamento)
 }
 
 type UpdateStructureComponentDTO struct {
@@ -77,6 +78,7 @@ type UpdateStructureComponentDTO struct {
 	CostCenterCode      *int64                          `json:"cost_center_code,omitempty"`
 	IsCriticalMPS       bool                            `json:"is_critical_mps,omitempty"`
 	GeneratesInspection bool                            `json:"generates_inspection,omitempty"`
+	CustomerSupplied    bool                            `json:"customer_supplied"` // fornecido pelo cliente (beneficiamento)
 }
 
 // ConsultStructureDTO é a entrada para consulta da estrutura de produtos (VENG0401).

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -114,6 +115,11 @@ func DistribuirProporcional(parcelas []*entity.FiscalEntryInstallment, totais ma
 	}
 	base := decimal.Max(totalParcelas, totalClassificado)
 	fechaLinha := totalClassificado.Sub(totalParcelas).Abs().LessThanOrEqual(Tolerancia)
+	// Parcelas somando menos que o total das contas: a última não pode levar o
+	// que falta, senão recebe mais do que vale. A conta só fecha quando a pessoa
+	// acertar as parcelas; até lá, cada parcela fecha no próprio valor.
+	parcelasCobrem := totalParcelas.Add(Tolerancia).GreaterThanOrEqual(totalClassificado)
+	fechaLinha = fechaLinha || !parcelasCobrem
 
 	acumulado := map[entity.ChaveConta]decimal.Decimal{}
 	for pi, p := range parcelas {
@@ -123,7 +129,7 @@ func DistribuirProporcional(parcelas []*entity.FiscalEntryInstallment, totais ma
 		for ci, k := range contas {
 			var v decimal.Decimal
 			switch {
-			case ultimaParcela:
+			case ultimaParcela && parcelasCobrem:
 				v = totais[k].Sub(acumulado[k])
 			case fechaLinha && ci == len(contas)-1:
 				v = p.Valor.Sub(somaLinha)
@@ -203,9 +209,37 @@ func ConferirEntrada(e *entity.FiscalEntry) []Pendencia {
 				Mensagem: fmt.Sprintf("item %d sem CFOP de entrada: o livro de entradas sai com o CFOP do fornecedor", it.Sequence)})
 		}
 	}
+	out = append(out, conferirDatas(e, time.Now())...)
 	if r := e.TotalRetencoes(); r.IsPositive() {
 		out = append(out, Pendencia{Nivel: NivelAtencao, Campo: "retencoes",
 			Mensagem: fmt.Sprintf("a nota tem %s de retenções: o fornecedor recebe %s e a empresa recolhe a diferença (títulos de imposto gerados na aprovação)", Moeda(r), Moeda(aPagar))})
+	}
+	return out
+}
+
+// conferirDatas: nota que entra antes de ser emitida, entrada no futuro ou parcela
+// que vence antes da emissão são erro de digitação ou documento errado, e cairiam no
+// livro fiscal e no fluxo de caixa com a data errada.
+func conferirDatas(e *entity.FiscalEntry, agora time.Time) []Pendencia {
+	var out []Pendencia
+	dia := func(t time.Time) string { return t.Format("2006-01-02") }
+	br := func(t time.Time) string { return t.Format("02/01/2006") }
+	emissao := dia(e.DataEmissao)
+	if !e.DataEntrada.IsZero() && dia(e.DataEntrada) < emissao {
+		out = append(out, Pendencia{Nivel: NivelImpede, Campo: "data_entrada",
+			Mensagem: fmt.Sprintf("a data de entrada (%s) é anterior à emissão da nota (%s)", br(e.DataEntrada), br(e.DataEmissao))})
+	}
+	// Um dia de folga: o processo pode rodar em outro fuso.
+	limite := dia(agora.In(time.FixedZone("BRT", -3*60*60)).AddDate(0, 0, 1))
+	if !e.DataEntrada.IsZero() && dia(e.DataEntrada) > limite {
+		out = append(out, Pendencia{Nivel: NivelImpede, Campo: "data_entrada",
+			Mensagem: fmt.Sprintf("a data de entrada (%s) está no futuro", br(e.DataEntrada))})
+	}
+	for _, p := range e.Parcelas {
+		if dia(p.DataVencimento) < emissao {
+			out = append(out, Pendencia{Nivel: NivelImpede, Campo: fmt.Sprintf("parcelas[%d].data_vencimento", p.Numero),
+				Mensagem: fmt.Sprintf("a parcela %d vence em %s, antes da emissão da nota (%s)", p.Numero, br(p.DataVencimento), br(e.DataEmissao))})
+		}
 	}
 	return out
 }

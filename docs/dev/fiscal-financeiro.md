@@ -231,7 +231,7 @@ prévia e a autorização recusa. Desligada, a linha usa a regra geral e a prév
 | Situação | Regra |
 |---|---|
 | Base | Valor + frete − desconto; com **IPI** quando consumidor final (CF, art. 155, §2º, XI). |
-| Interna | Alíquota interna da configuração, ou a da regra para o tipo de destinatário. |
+| Interna | Precedência: a regra da VFIS0320 para o tipo de destinatário; senão a tabela `icms_internal` da **UF do emitente** (VFIS0110); só sem a UF na tabela, `fiscal_configs.icms_interno_aliquota` (VFIS0100). `engine.AliquotaInternaDaEmpresa` devolve a alíquota e a origem, que vai às notas do cálculo. |
 | Diferimento (CST 51) | Só interna, contribuinte e **não** consumidor final (SEFA/PR, Consulta 11/2011: uso, consumo e ativo encerram o diferimento). Percentual da regra ou da configuração; o tipo de nota pode desligar. `pDif` gravado por linha. O cBenef vem da linha, da regra ou de `fiscal_configs.cbenef_diferimento` (migração 000428; no PR, **PR830001** — art. 28, I, do Anexo VIII do RICMS/2017). |
 | Interestadual | Tabela `icms_interstate`; par ausente = Resolução SF 22/1989 (Sul/Sudeste exceto ES → N/NE/CO/ES = 7%; demais 12%). Importada (origens 1, 2, 3, 8) = 4%. |
 | Redução de base | Da regra (`BASE` reduz a base, CST 20 e `pRedBC`; `PERCENTUAL` reduz a alíquota). |
@@ -372,11 +372,32 @@ para uso, consumo ou ativo (CFOP 2556, 2407, 2551, 2406) mostra na conferência 
 DIFAL a recolher pela base dupla (LC 190/2022):
 `base = (valor − ICMS origem) / (1 − interna)`, `DIFAL = base × interna − ICMS origem`.
 
+**Lançamento manual.** `GET /api/fiscal/entries/sugestao-item` resolve o item pelo
+código do fornecedor (`item_preferred_suppliers`) e sugere preço (linha de pedido em
+aberto, depois última compra), ICMS (interno ou interestadual, 4% para importado),
+IPI por NCM e CFOP. É ponto de partida: o valor fiscal é o da nota do fornecedor, e o
+digitado prevalece. `lembrar_vinculo` grava o vínculo na transação da nota, sem
+unidade do XML.
+
+**Parcelas.** A última parcela só leva a diferença quando as parcelas cobrem o total
+da nota; senão, cada uma fecha no próprio valor.
+
+**Cancelamento.** O estorno de estoque sai pelo preço da entrada
+(`StockMovement.SaidaPeloPreco`, `ApplyEntryReversalCosting`), e não pelo custo médio.
+Com o saldo insuficiente para esse valor (parte consumida a médio mais alto), o saldo
+fica no médio atual. O estorno manual de movimento segue a mesma regra. A devolução ao
+fornecedor continua saindo pelo custo médio.
+
 ---
 
 ## 3.1 Gestão de Tabelas Tributárias
 
 As tabelas de alíquotas são consultadas pelo motor tributário em tempo de cálculo. Gerencie-as via API para refletir mudanças na legislação.
+
+São **globais** (sem coluna de empresa): representam a lei, a mesma para todas as
+empresas da instalação. Por isso só o **administrador** grava (POST/DELETE →
+`podeEditarTabelaLegal`, 403 para os demais); a leitura segue `CanManageFiscalConfig`.
+Exceções de uma empresa vão para `icms_ipi_tax_params` (VFIS0320), que tem precedência.
 
 ### Tabela NCM — `POST /api/fiscal/tabelas/ncm`
 
@@ -514,7 +535,19 @@ Retorna as alíquotas internas de ICMS e FCP por estado.
 
 ---
 
+### `GET /api/fiscal/exits/destinatario/{code}` e `GET /api/fiscal/exits/sugestao-cfop`
+
+Alimentam a nota avulsa da VFIS0200. O primeiro devolve documento, IE, contato, os
+endereços do cliente (o `sugerido` segue a regra de `enderecoDaNota`: entrega,
+cobrança, padrão, primeiro) e o CFOP de cada um. O segundo atende destinatário sem
+cadastro (`uf`, `ie`, `tipo_pessoa`). A regra do CFOP é `cfopDaVenda`, a mesma do
+faturamento do pedido.
+
 ### `POST /api/fiscal/exits/create`
+
+Recusa linha com quantidade zero (422) e número digitado já usado na série (409).
+`quantidade` continua aceito como apelido de `quantity`: o desktop até a 1.9 enviava
+esse nome, a API o ignorava e a linha nascia com quantidade 0 e ICMS 0.
 
 Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PIS, COFINS, DIFAL).
 
@@ -555,8 +588,8 @@ Cria a NF-e em rascunho e **calcula os impostos automaticamente** (ICMS, IPI, PI
 
 | Campo | Obrigatório | Descrição |
 |---|---|---|
-| `numero_nf` | Sim | Número da nota |
-| `serie` | Sim | Série da nota (ex: `"001"`) |
+| `numero_nf` | Não | Não informe: a Focus numera na autorização. Sem chave de acesso, a resposta traz `0` |
+| `serie` | Não | Idem: a série vale depois da autorização |
 | `cfop` | Sim | CFOP principal (ex: `"6101"` = venda estadual, `"5101"` = venda interestadual) |
 | `ie_destinatario` | Não | Ausente ou `"ISENTO"` → destinatário não-contribuinte → DIFAL |
 | `tipo_pessoa` | Não | `"F"` = Pessoa Física → tratada como não-contribuinte para DIFAL |
@@ -612,6 +645,12 @@ Cria uma NF-e de saída em rascunho a partir de uma **carga de expedição**
 (`shipment_loads`). O endpoint consome os romaneios vinculados à carga, monta
 os itens da nota, busca preço no pedido de venda quando o romaneio estiver
 ligado a pedido e vincula a nota gerada de volta à carga/romaneios.
+
+Descrição, NCM, unidade, código do produto e origem vêm do cadastro do item
+(`item_overrides` vence). Item sem NCM recusa o faturamento antes de criar a nota,
+e o CFOP da linha segue `cfopDaLinha` (5101→5102 para item comprado), como no
+faturamento por pedido. `customer_code` é opcional e liga a nota ao cliente quando
+a carga tem mais de um pedido.
 
 **Request:**
 ```json
@@ -752,7 +791,16 @@ servem para consulta, auditoria, SPED/livros e impressão/observações.
   Brasília com a hora da transmissão.
 - A resposta é lida como a Focus devolve: `autorizado`, `numero`, `serie`,
   `chave_nfe` (sem o prefixo "NFe"), `caminho_xml_nota_fiscal`, `caminho_danfe`.
-  O número e a série gravados são os autorizados (a Focus numera a nota).
+  O número e a série gravados são os autorizados (a Focus numera a nota): o envio
+  não leva `numero` nem `serie`, e o `MAX+1` gravado no rascunho é só controle
+  interno (`numeroDefinitivo`). O próximo número fica no painel da Focus.
+- `conferirDocumentoDaNota` (prévia e transmissão), `conferirXMLDaEntrada` e
+  `conferirNotaManual` são as travas de documento. Toda nota passa por elas, não só a
+  que nasce na tela. `nDup` sai como `001`, `002`...
+- Tipo de nota (VCLI0530): `EfeitosDoTipoNota` decide título, estoque, baixa do pedido
+  e receita. Sem título a NF-e leva `tPag` 90. Sem movimentar estoque, depósito, saldo e
+  conversão de unidade não são exigidos.
+- Nota com `focus_ref` só se cancela na SEFAZ: sem token, o cancelamento é recusado (antes ficava cancelada só no sistema). O prazo dela é a SEFAZ quem conta; o limite local vale só para nota sem envio registrado. Mensagens à tela passam por `fiscal_uc.ErroDaEmissora`, que deixa HTTP, código e corpo no log.
 - Cancelamento só vale com `cancelado` (`erro_cancelamento` é erro); CC-e envia
   `correcao`. A tela manda `justificativa` (15 a 255 caracteres).
 - Nota **rejeitada** pode ser corrigida e retransmitida (nova referência na Focus).
@@ -1076,6 +1124,9 @@ financeiro):
    com `tPag=90` (bonificação/remessa) não gera parcela (`sem_pagamento`).
    Cada parcela é **distribuída por plano de contas**, por padrão na proporção
    dos itens; o usuário pode mudar por parcela (ex.: 1ª toda EPI, 2ª toda MP).
+   **Nota duplicada:** a entrada manual e o XML recusam (409) número, série e
+   emitente já lançados na empresa, com `001` igual a `1`; entrada cancelada não
+   conta. A checagem é de aplicação, sem índice único no banco.
 7. **Aprovação** só com todos os itens conciliados e classificados, parcelas
    somando o **valor a pagar** e cada plano recebendo exatamente a sua parte,
    todo item que movimenta estoque com almoxarifado e nenhuma divergência que
@@ -3216,9 +3267,32 @@ aplicação do saldo sobre contas a pagar/receber. Tabelas: `adiantamentos` (sal
 `adiantamento_aplicacoes` (auditoria de cada aplicação). Use case:
 `financial_uc` (`CreateAdiantamentoUseCase`, `AplicarAdiantamentoUseCase`, etc.).
 
-`adiantamentos` não tem coluna de empresa: o adiantamento é da empresa dona da
-**conta bancária**. Criar exige conta da empresa da sessão; consultar, listar,
-listar aplicações e aplicar só enxergam adiantamentos de contas da empresa.
+`adiantamentos.enterprise_id` isola por empresa (`tenant.ID`); criar exige conta
+bancária da empresa da sessão, e consultar, listar, aplicar e cancelar filtram a
+empresa.
+
+**Travas da aplicação** (no repositório, com `FOR UPDATE` no adiantamento e no
+título): mesmo lado (PAGAR→conta a pagar, RECEBER→conta a receber), **mesmo
+parceiro** (`fornecedor_id`/`cliente_id` do título = `parceiro_id`), título ativo e
+não PAGO/RECEBIDO/CANCELADO, valor ≤ saldo do adiantamento e ≤ saldo do título.
+Erros tipados: 422 (validação), 409 (cancelado), 404.
+
+**Cancelamento** — `POST /api/financial/adiantamentos/{id}/cancelar` com
+`{"motivo": "..."}` (≥ 5 letras): só sem `valor_utilizado`; lança o fluxo de caixa
+inverso (`CURRENT_DATE`), devolve o saldo bancário, marca `CANCELADO` e anexa o
+motivo à descrição. `Saldo()` de adiantamento cancelado é zero.
+
+**Contabilização** (migração 000456): com `contabilizar_pagamentos` (PAGAR) ou
+`contabilizar_recebimentos` (RECEBER) ligado, `loteAdiantamento` grava, na mesma
+transação do caixa, `ADIANTAMENTO`: D `adiantamento_fornecedores_account_id` / C banco
+(PAGAR) ou D banco / C `adiantamento_clientes_account_id` (RECEBER). A aplicação grava
+`ADIANTAMENTO_APLIC` reaproveitando `contabilizacao.Pagamento/Recebimento` com a conta
+do adiantamento no papel do banco — a contrapartida é a mesma da baixa
+(`partesPagamento`/`partesRecebimento`: Fornecedores/Clientes se a nota foi
+contabilizada, senão a despesa/receita do rateio). Só contabiliza a aplicação se a
+entrada do adiantamento foi contabilizada. O cancelamento chama `journal.Estornar`
+(`ADIANTAMENTO_ESTORNO`). Conta ausente com a chave ligada recusa a operação dizendo o
+que falta. Teste: `TestIntegration_AdiantamentoContabilizado`.
 
 ### `POST /api/financial/adiantamentos/create`
 

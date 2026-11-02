@@ -71,7 +71,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 				return res, nil
 			}
 		}
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e %d não possui referência Focus — não foi enviada para autorização", exitID))
+		return nil, errorsuc.NewValidationError("esta nota não foi transmitida à SEFAZ por este sistema: não há situação para consultar")
 	}
 
 	cfg, err := uc.Repo.GetFiscalConfig(ctx)
@@ -79,7 +79,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 		return nil, err
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError(tokenFocusAusente)
 	}
 
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
@@ -95,7 +95,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 	var naoEncontrada *focusnfe.NaoEncontradaError
 	if errors.As(err, &naoEncontrada) && exit.Status == entity.ExitStatusAwaitingAuthorization {
 		// O envio não chegou à Focus: libera o reenvio.
-		motivo := "o envio não chegou à Focus — envie a nota de novo"
+		motivo := "o envio não chegou ao serviço de emissão — envie a nota de novo"
 		if r, ok := uc.Repo.(registroEnvioFocus); ok {
 			if errSit := r.RegistrarRejeicao(ctx, exitID, motivo); errSit != nil {
 				return nil, errSit
@@ -106,7 +106,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 		return &ConsultarNFeResult{ExitID: exitID, FocusRef: *exit.FocusRef, Status: "nao_encontrado", Motivo: motivo}, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("consultando NF-e no Focus: %w", err)
+		return nil, erroDaEmissora(ctx, "a consulta da situação", exitID, err)
 	}
 
 	var avisos []string

@@ -109,11 +109,10 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 
 	resp, err := focusCli.AutorizarCTe(ctx, ref, payload)
 	if err != nil {
-		msg := err.Error()
 		if _, errSit := uc.Repo.UpdateCTeStatus(ctx, id, "REJEITADO"); errSit != nil {
-			msg += "; o CT-e não pôde ser marcado como rejeitado (" + errSit.Error() + ")"
+			slog.Error("CT-e recusado não pôde ser marcado como rejeitado", "documento", id, "erro", errSit)
 		}
-		return nil, errorsuc.NewExternalServiceError("Focus CT-e", msg)
+		return nil, erroDaEmissora(ctx, "o CT-e", id, err)
 	}
 
 	authorized, err := uc.Repo.UpdateCTeAuthorization(ctx, id, resp.ChaveCTe, resp.Protocolo, ref)

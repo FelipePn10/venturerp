@@ -9,6 +9,9 @@
 #
 # NUNCA aponta para produção. Segredos são fornecidos pelo operador.
 
+# Nome fixo: sem ele, cada worktree cria outro projeto e um banco demo vazio.
+name: panossoerp
+
 services:
   postgres-demo:
     image: postgres:16-alpine

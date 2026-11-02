@@ -210,6 +210,21 @@ func (r *FiscalRepositoryPG) UpdateEntryStatus(ctx context.Context, id int64, st
 	return &e, nil
 }
 
+func (r *FiscalRepositoryPG) NFNumberExists(ctx context.Context, numero int64, serie string) (bool, error) {
+	enterpriseID, tenantErr := tenant.ID(ctx)
+	if tenantErr != nil {
+		return false, tenantErr
+	}
+	var existe bool
+	err := r.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM public.fiscal_exits
+		  WHERE enterprise_id=$1 AND numero_nf=$2 AND ltrim(serie,'0') = ltrim($3,'0'))`, enterpriseID, numero, serie).Scan(&existe)
+	if err != nil {
+		return false, fmt.Errorf("checking NF number: %w", err)
+	}
+	return existe, nil
+}
+
 func (r *FiscalRepositoryPG) GetNextNFNumber(ctx context.Context) (int64, error) {
 	enterpriseID, tenantErr := tenant.ID(ctx)
 	if tenantErr != nil {
@@ -631,7 +646,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        COALESCE(cep,''), telefone,
 		        logo, logo_mime, brand_color,
 		        created_at, updated_at, updated_by,
-		        exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento
+		        exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao
 		 FROM public.fiscal_configs WHERE enterprise_id=$1`, enterpriseID,
 	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
@@ -642,7 +657,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		&cfg.CEP, &cfg.Telefone,
 		&cfg.Logo, &cfg.LogoMime, &cfg.BrandColor,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy,
-		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento)
+		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento, &cfg.ObsRetornoIndustrializacao, &cfg.CBenefSuspensao)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError("parametrização fiscal não encontrada")
@@ -665,8 +680,8 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		      focus_nfe_token, focus_nfe_ambiente, juros_mes, multa_atraso,
 		      vencimento_icms_dia, vencimento_ipi_dia, vencimento_pis_cofins_dia,
 		      logradouro, numero, complemento, bairro, municipio, codigo_municipio, cep, telefone,
-		      updated_at, updated_by, exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF(BTRIM($11),''),$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),$26,$27,$28,NULLIF(UPPER(BTRIM($29)),''))
+		      updated_at, updated_by, exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NULLIF(BTRIM($11),''),$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,NOW(),$26,$27,$28,NULLIF(UPPER(BTRIM($29)),''),NULLIF(BTRIM($30),''),NULLIF(UPPER(BTRIM($31)),''))
 		 ON CONFLICT (enterprise_id) DO UPDATE SET
 		     cnpj_empresa = EXCLUDED.cnpj_empresa, razao_social = EXCLUDED.razao_social,
 		     trade_name = EXCLUDED.trade_name, email = EXCLUDED.email,
@@ -687,6 +702,8 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		     exigir_regra_icms_ipi = EXCLUDED.exigir_regra_icms_ipi,
 		     aliquota_credito_simples = EXCLUDED.aliquota_credito_simples,
 		     cbenef_diferimento = EXCLUDED.cbenef_diferimento,
+		     obs_retorno_industrializacao = EXCLUDED.obs_retorno_industrializacao,
+		     cbenef_suspensao = EXCLUDED.cbenef_suspensao,
 		     updated_at = NOW(), updated_by = EXCLUDED.updated_by
 		 RETURNING id, enterprise_id, cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(email,''), ie_empresa, regime_tributario, uf_empresa,
 		           icms_interno_aliquota, icms_diferimento_percentual,
@@ -696,14 +713,14 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		           COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
 		           COALESCE(cep,''), telefone,
 		           created_at, updated_at, updated_by,
-		           exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento`,
+		           exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao`,
 		cfg.EnterpriseID, cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.TradeName, cfg.Email, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
 		cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual,
 		cfg.FocusNfeToken, cfg.FocusNfeAmbiente, cfg.JurosMes, cfg.MultaAtraso,
 		cfg.VencimentoIcmsDia, cfg.VencimentoIPIDia, cfg.VencimentoPisCofinsDia,
 		cfg.Logradouro, cfg.Numero, cfg.Complemento, cfg.Bairro,
 		cfg.Municipio, cfg.CodigoMunicipio, cfg.CEP, cfg.Telefone,
-		cfg.UpdatedBy, cfg.ExigirRegraICMSIPI, cfg.AliquotaCreditoSimples, cfg.CBenefDiferimento,
+		cfg.UpdatedBy, cfg.ExigirRegraICMSIPI, cfg.AliquotaCreditoSimples, cfg.CBenefDiferimento, cfg.ObsRetornoIndustrializacao, cfg.CBenefSuspensao,
 	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
 		&cfg.FocusNfeToken, &cfg.FocusNfeAmbiente, &cfg.JurosMes, &cfg.MultaAtraso,
@@ -711,7 +728,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		&cfg.Logradouro, &cfg.Numero, &cfg.Complemento, &cfg.Bairro,
 		&cfg.Municipio, &cfg.CodigoMunicipio, &cfg.CEP, &cfg.Telefone,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy,
-		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento)
+		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento, &cfg.ObsRetornoIndustrializacao, &cfg.CBenefSuspensao)
 	if err != nil {
 		return nil, fmt.Errorf("upserting fiscal config: %w", err)
 	}

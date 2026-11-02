@@ -170,6 +170,7 @@ func (uc *CreateStructureComponentUseCase) Execute(
 	structure.CostCenterCode = dto.CostCenterCode
 	structure.IsCriticalMPS = dto.IsCriticalMPS
 	structure.GeneratesInspection = dto.GeneratesInspection
+	structure.CustomerSupplied = dto.CustomerSupplied
 	structure.QuantityStockUOM = qtdeEmEstoque
 	structure.ConversionFactor = fator
 

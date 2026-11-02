@@ -21,12 +21,20 @@ type repoFalso struct {
 	notaBaixada int64
 	baixas      []domrepo.MovimentoDaNota
 	falharBaixa bool
-	estornos    []estornoPedido
+	// clienteSemCadastro e clienteInativo mudam a resposta de SituacaoDoCliente.
+	clienteSemCadastro, clienteInativo bool
+	estornos                           []estornoPedido
+	// vínculo do pedido de beneficiamento
+	pedidoVinculado int64
+	desbloqueou     bool
 }
 
 func (r *repoFalso) Registrar(_ context.Context, remessa *entity.Remessa) (*entity.Remessa, error) {
 	r.registrada = remessa
 	return remessa, nil
+}
+func (r *repoFalso) SituacaoDoCliente(context.Context, int64) (bool, bool, error) {
+	return !r.clienteSemCadastro, !r.clienteInativo, nil
 }
 func (r *repoFalso) BuscarPorID(context.Context, int64) (*entity.Remessa, error) {
 	if r.remessa == nil {
@@ -91,6 +99,16 @@ type estornoPedido struct {
 }
 
 func (r *repoFalso) Encerrar(context.Context, int64, string, string) error { return nil }
+func (r *repoFalso) RelatorioDeMovimentos(context.Context, domrepo.FiltroMovimentos) ([]*entity.MovimentoDoRelatorio, error) {
+	return nil, nil
+}
+func (r *repoFalso) HorasDeBeneficiamento(context.Context, domrepo.FiltroHoras) ([]*entity.HorasDeBeneficiamento, error) {
+	return nil, nil
+}
+func (r *repoFalso) VincularPedido(_ context.Context, _ int64, salesOrderCode int64, desbloquear bool, _ string) error {
+	r.pedidoVinculado, r.desbloqueou = salesOrderCode, desbloquear
+	return nil
+}
 
 var emissao = time.Date(2026, 9, 17, 0, 0, 0, 0, time.UTC)
 
@@ -373,5 +391,78 @@ func TestEstornoExigeMotivoDescritivo(t *testing.T) {
 	}
 	if repo.estornos[0].Usuario != "usuario-1" || repo.estornos[0].FiscalExitID != 9001 {
 		t.Fatalf("pedido repassado errado: %+v", repo.estornos[0])
+	}
+}
+
+func TestChaveDeAcessoDaRemessa(t *testing.T) {
+	// Chave de uma nota real autorizada em homologação: o dígito é o que a SEFAZ aceitou.
+	valida := "41261052454668000102550010000000371968536900"
+	erroNoDigito := "41261052454668000102550010000000371968536901"
+	erroNoMeio := "41261052454668000102550010000000381968536900"
+	casos := map[string]bool{"": true, "   ": true, valida: true, erroNoDigito: false, erroNoMeio: false,
+		"123": false, valida + "1": false, strings.Repeat("a", 44): false}
+	for chave, esperado := range casos {
+		if got := chaveDeAcessoValida(chave); got != esperado {
+			t.Errorf("chave %q: válida = %v, esperado %v", chave, got, esperado)
+		}
+	}
+}
+
+// O CFOP, o NCM e a data voltam na nota de retorno: recusar no recebimento é melhor
+// que descobrir na rejeição da SEFAZ, com o material já na produção.
+func TestReceberConfereCamposDaNota(t *testing.T) {
+	futura := emissao.AddDate(0, 0, 30)
+	casos := map[string]struct {
+		mexe   func(n *NovaRemessa)
+		trecho string
+	}{
+		"emissão no futuro": {func(n *NovaRemessa) { n.IssueDate = futura; n.ReceivedAt = futura }, "futuro"},
+		"CFOP com letras":   {func(n *NovaRemessa) { n.CFOP = "abc" }, "CFOP"},
+		"CFOP curto":        {func(n *NovaRemessa) { n.CFOP = "590" }, "CFOP"},
+		"NCM com letras":    {func(n *NovaRemessa) { n.Itens[0].NCM = "7208ABCD" }, "NCM"},
+		"NCM de 5 dígitos":  {func(n *NovaRemessa) { n.Itens[0].NCM = "72085" }, "NCM"},
+	}
+	for nome, caso := range casos {
+		t.Run(nome, func(t *testing.T) {
+			uc, _ := novoUC()
+			n := remessaBase()
+			n.SalesOrderCode = nil
+			caso.mexe(&n)
+			_, err := uc.Receber(context.Background(), n, autorValido)
+			if err == nil || !strings.Contains(err.Error(), caso.trecho) {
+				t.Fatalf("erro = %v, esperado com %q", err, caso.trecho)
+			}
+		})
+	}
+}
+
+// NCM copiado com pontos da nota é o mesmo NCM: vai limpo, como a SEFAZ espera.
+func TestNCMComPontosEhNormalizado(t *testing.T) {
+	uc, repo := novoUC()
+	n := remessaBase()
+	n.SalesOrderCode = nil
+	n.Itens[0].NCM = "7616.99.00"
+	if _, err := uc.Receber(context.Background(), n, autorValido); err != nil {
+		t.Fatal(err)
+	}
+	if got := repo.registrada.Itens[0].NCM; got != "76169900" {
+		t.Fatalf("NCM = %q", got)
+	}
+}
+
+func TestReceberConfereOCadastroDoCliente(t *testing.T) {
+	uc, repo := novoUC()
+	n := remessaBase()
+	n.SalesOrderCode = nil
+	repo.clienteSemCadastro = true
+	if _, err := uc.Receber(context.Background(), n, autorValido); err == nil || !strings.Contains(err.Error(), "não encontrado") {
+		t.Fatalf("sem cadastro: erro = %v", err)
+	}
+	repo.clienteSemCadastro, repo.clienteInativo = false, true
+	if _, err := uc.Receber(context.Background(), n, autorValido); err == nil || !strings.Contains(err.Error(), "inativo") {
+		t.Fatalf("inativo: erro = %v", err)
+	}
+	if repo.registrada != nil {
+		t.Fatal("não deveria ter registrado a remessa")
 	}
 }

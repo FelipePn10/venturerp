@@ -151,3 +151,78 @@ func cancelarNotaComAjuste(t *testing.T, linhas []string, ajuste string, estorno
 		t.Fatalf("estornos = %v, quer %v", got, estornos)
 	}
 }
+
+// Cancelar uma nota devolve o custo médio ao que era: o estoque tem 100 a 2,20,
+// a nota entra 10 a 82,00 (médio sobe para 9,4545…) e o cancelamento tira os
+// mesmos 820,00. Antes saíam 10 × médio e os R$ 725,45 restantes ficavam no
+// estoque, com o custo do item inflado por uma nota que deixou de existir.
+func TestCancelamentoDeNotaDevolveOCustoMedio(t *testing.T) {
+	pool := testutil.Pool(t)
+	ctx, emp := empresaFiscal(t)
+	ator := testutil.Actor(t, pool)
+	bg := context.Background()
+	u := testutil.UniqueCode()
+	var almox, nota int64
+	if err := pool.QueryRow(bg, `INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed,enterprise_id) VALUES($1,'Almox',$2,'INTERNO','NORMAL',TRUE,TRUE,$3) RETURNING id`,
+		fmt.Sprintf("WC-%d", u), ator, emp).Scan(&almox); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$2,$3,$4)`, u, almox, ator, emp)
+	if err := pool.QueryRow(bg, `INSERT INTO fiscal_entries(numero_nf,serie,data_emissao,data_entrada,cnpj_emitente,razao_social_emitente,valor_produtos,valor_total,status,stock_status,created_by,enterprise_id)
+		VALUES(78403,'1',$1::date,$1::date,'27785001000145','TUBOS LTDA',820,820,'APPROVED','CONCLUIDO',$2,$3) RETURNING id`, time.Now(), ator, emp).Scan(&nota); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		testutil.Exec(t, pool, `DELETE FROM fiscal_entries WHERE enterprise_id=$1`, emp)
+		testutil.Exec(t, pool, `DELETE FROM stock_movements WHERE enterprise_id=$1`, emp)
+		testutil.Exec(t, pool, `DELETE FROM stock_balances WHERE enterprise_id=$1`, emp)
+		testutil.Exec(t, pool, `DELETE FROM items WHERE enterprise_id=$1`, emp)
+		testutil.Exec(t, pool, `DELETE FROM warehouse WHERE enterprise_id=$1`, emp)
+	})
+	entrada := func(qtd, preco string, ref *int64) int64 {
+		t.Helper()
+		tipo := stockentity.ReferenceTypeNFEntry
+		m := &stockentity.StockMovement{ItemCode: u, WarehouseID: almox, MovementType: stockentity.MovementTypeIn, Quantity: decimal.RequireFromString(qtd),
+			UnitPrice: decimal.RequireFromString(preco), CreatedBy: ator}
+		if ref != nil {
+			m.ReferenceType, m.ReferenceCode = &tipo, ref
+		}
+		tx, err := pool.Begin(bg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(bg) }()
+		if err := stockrepo.CreateMovementTx(ctx, tx, emp, m); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(bg); err != nil {
+			t.Fatal(err)
+		}
+		return m.ID
+	}
+	entrada("100", "2.20", nil)
+	mov := entrada("10", "82", &nota)
+	testutil.Exec(t, pool, `INSERT INTO fiscal_entry_items(fiscal_entry_id,sequence,item_code,description,quantity,unit_price,total_price,cfop,uom,fator_conversao,quantidade_estoque,stock_movement_id,movimenta_estoque)
+		VALUES($1,1,$2,'PARAFUSO',10,82,820,'1102','UN',1,10,$3,TRUE)`, nota, u, mov)
+
+	r := fiscalpg.NewFiscalRepositoryPG(pool).(interface {
+		CancelarEntrada(context.Context, repository.CancelamentoEntrada) (*repository.ResultadoCancelamento, error)
+	})
+	if _, err := r.CancelarEntrada(ctx, repository.CancelamentoEntrada{EntryID: nota, UserID: ator, Motivo: "preço lançado errado"}); err != nil {
+		t.Fatalf("cancelando a nota: %v", err)
+	}
+	var qtd, medio, valor, saida decimal.Decimal
+	if err := pool.QueryRow(bg, `SELECT quantity, avg_cost, total_cost FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, emp, u).Scan(&qtd, &medio, &valor); err != nil {
+		t.Fatal(err)
+	}
+	if !qtd.Equal(decimal.NewFromInt(100)) || !medio.Equal(decimal.RequireFromString("2.2")) || !valor.Equal(decimal.NewFromInt(220)) {
+		t.Fatalf("depois do cancelamento: qtd %s, médio %s, valor %s; quer 100, 2,20 e 220,00", qtd, medio, valor)
+	}
+	// O extrato bate com o saldo: a saída grava o mesmo valor que tirou.
+	if err := pool.QueryRow(bg, `SELECT total_price FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2 AND movement_type='OUT'`, emp, u).Scan(&saida); err != nil {
+		t.Fatal(err)
+	}
+	if !saida.Equal(decimal.NewFromInt(820)) {
+		t.Fatalf("valor da saída do estorno = %s, quer 820", saida)
+	}
+}

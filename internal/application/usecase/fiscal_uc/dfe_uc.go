@@ -104,7 +104,7 @@ func (uc *DFeUseCase) sincronizar(ctx context.Context) (*SincronizacaoDFe, error
 	for pagina := 0; pagina < 50; pagina++ {
 		lista, max, err := fonte.ListarNFesRecebidas(ctx, cnpj, out.Versao)
 		if err != nil {
-			return nil, errorsuc.NewExternalServiceError("Focus NF-e (notas recebidas)", err.Error())
+			return nil, erroDaEmissora(ctx, "a consulta das notas recebidas", 0, err)
 		}
 		if max < out.Versao {
 			max = out.Versao // a versão nunca anda para trás
@@ -239,7 +239,7 @@ func (uc *DFeUseCase) Manifestar(ctx context.Context, chave, tipo, justificativa
 		return err
 	}
 	if _, err := fonte.ManifestarDestinatario(ctx, focusnfe.ManifestacaoPayload{CNPJ: cnpj, ChaveNFe: chave, Tipo: tipo, Justificativa: justificativa}); err != nil {
-		return errorsuc.NewExternalServiceError("Focus NF-e (manifestação)", err.Error())
+		return erroDaEmissora(ctx, "a manifestação", 0, err)
 	}
 	return uc.Recebida.SetManifestacao(ctx, chave, tipo)
 }

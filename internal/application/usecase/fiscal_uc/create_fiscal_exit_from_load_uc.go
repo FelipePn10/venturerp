@@ -19,6 +19,11 @@ type CreateFiscalExitFromLoadUseCase struct {
 	FiscalRepo     fiscalrepo.FiscalRepository
 	ShipmentRepo   shiprepo.ShipmentRepository
 	SalesOrderRepo salesrepo.SalesOrderRepository
+	// Itens: cadastro do item, de onde vêm descrição, NCM, unidade e origem da
+	// nota. Sem NCM a SEFAZ rejeita, então o faturamento para antes de criar.
+	Itens interface {
+		ItemsByCode(ctx context.Context, codes []int64) (map[int64]fiscalrepo.ItemCandidate, error)
+	}
 }
 
 func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitFromLoadDTO) (*response.FiscalExitResponse, error) {
@@ -33,8 +38,11 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 	if err != nil {
 		return nil, err
 	}
-	if load.Status == shipentity.LoadStatusCancelled || load.Status == shipentity.LoadStatusShipped {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não pode ser faturada no status %s", dto.LoadCode, load.Status))
+	if load.Status == shipentity.LoadStatusCancelled {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a carga %d foi cancelada e não pode ser faturada", dto.LoadCode))
+	}
+	if load.Status == shipentity.LoadStatusShipped {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a carga %d já foi expedida e não pode ser faturada", dto.LoadCode))
 	}
 	if len(load.Shipments) == 0 {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d não possui romaneios para faturar", dto.LoadCode))
@@ -46,6 +54,10 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 	overrides := fiscalLoadOverrides(dto.ItemOverrides)
 	items, salesOrderCode, err := uc.itemsFromLoad(ctx, load.Shipments, dto, overrides)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := uc.completarDoCadastro(ctx, items, dto, overrides); err != nil {
 		return nil, err
 	}
 
@@ -65,6 +77,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		IEDestinatario:          dto.IEDestinatario,
 		UFDestinatario:          dto.UFDestinatario,
 		TipoPessoa:              dto.TipoPessoa,
+		CustomerCode:            dto.CustomerCode,
 		Cfop:                    dto.Cfop,
 		NaturezaOperacao:        dto.NaturezaOperacao,
 		ValorProdutos:           sumFiscalExitItems(items),
@@ -121,8 +134,11 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 		if err != nil {
 			return nil, nil, err
 		}
-		if ship.Status == shipentity.ShipmentStatusCancelled || ship.Status == shipentity.ShipmentStatusShipped {
-			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser faturado no status %s", ship.Code, ship.Status))
+		if ship.Status == shipentity.ShipmentStatusCancelled {
+			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d foi cancelado e não pode ser faturado", ship.Code))
+		}
+		if ship.Status == shipentity.ShipmentStatusShipped {
+			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já foi expedido e não pode ser faturado", ship.Code))
 		}
 		if len(ship.Items) == 0 {
 			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para faturar", ship.Code))
@@ -212,7 +228,7 @@ func fiscalItemFromShipmentItem(
 		unitPrice = *ov.UnitPrice
 	}
 	if unitPrice <= 0 {
-		return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf("item %d do romaneio %d sem preço; informe item_overrides.unit_price ou vincule o pedido de venda", si.ItemCode, shipmentCode))
+		return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf("item %d do romaneio %d sem preço; vincule o romaneio a um pedido de venda", si.ItemCode, shipmentCode))
 	}
 
 	qty := si.Quantity
@@ -249,6 +265,70 @@ func fiscalItemFromShipmentItem(
 		AliqInternaDestinoST: ov.AliqInternaDestinoST,
 		RedBaseSTPct:         ov.RedBaseSTPct,
 	}, nil
+}
+
+// completarDoCadastro troca o que o romaneio não sabe pelo cadastro do item. O
+// que veio em item_overrides vence, por ser escolha explícita de quem faturou.
+func (uc *CreateFiscalExitFromLoadUseCase) completarDoCadastro(
+	ctx context.Context,
+	items []request.CreateFiscalExitItemDTO,
+	dto request.CreateFiscalExitFromLoadDTO,
+	overrides map[fiscalLoadOverrideKey]request.FiscalExitLoadItemOverride,
+) error {
+	if uc.Itens == nil {
+		return nil
+	}
+	codigos := make([]int64, 0, len(items))
+	for _, it := range items {
+		codigos = append(codigos, *it.ItemCode)
+	}
+	cadastro, err := uc.Itens.ItemsByCode(ctx, codigos)
+	if err != nil {
+		return fmt.Errorf("lendo o cadastro dos itens da carga: %w", err)
+	}
+	for i := range items {
+		it := &items[i]
+		c, ok := cadastro[*it.ItemCode]
+		if !ok {
+			continue
+		}
+		var ov request.FiscalExitLoadItemOverride
+		for chave, candidato := range overrides {
+			if chave.itemCode == *it.ItemCode {
+				ov = candidato
+				break
+			}
+		}
+		if ov.Description == nil && c.Name != "" {
+			it.Description = strPtr(c.Name)
+		}
+		if ov.Ncm == nil {
+			if soDigitos(c.NCM) == "" {
+				return errorsuc.NewValidationError(fmt.Sprintf(
+					"o item %s (%s) está sem NCM na classificação fiscal do cadastro — preencha em VENT0200, aba Fiscal, antes de faturar",
+					codigoDoCadastro(c), c.Name))
+			}
+			it.Ncm = strPtr(c.NCM)
+		}
+		if c.UOM != "" {
+			it.UnidadeComercial = strPtr(c.UOM)
+		}
+		it.CodigoProduto = strPtr(codigoDoCadastro(c))
+		if ov.OrigemMercadoria == nil && dto.OrigemMercadoria == "" && c.Origem != "" {
+			it.OrigemMercadoria = c.Origem
+		}
+		if ov.Cfop == nil {
+			it.Cfop = cfopDaLinha(dto.Cfop, c.Comprado)
+		}
+	}
+	return nil
+}
+
+func codigoDoCadastro(c fiscalrepo.ItemCandidate) string {
+	if c.BusinessCode != "" {
+		return c.BusinessCode
+	}
+	return fmt.Sprintf("%d", c.Code)
 }
 
 func sumFiscalExitItems(items []request.CreateFiscalExitItemDTO) float64 {

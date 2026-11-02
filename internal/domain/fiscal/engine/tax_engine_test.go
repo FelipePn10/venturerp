@@ -756,3 +756,27 @@ func TestFracaoDiferimento(t *testing.T) {
 		}
 	}
 }
+
+// A venda dentro do estado usa a alíquota da UF na tabela (a lei do estado); a da
+// configuração fiscal só vale para UF fora da tabela.
+func TestAliquotaInternaVemDaTabelaDaUF(t *testing.T) {
+	params := TaxCalculationParams{
+		Itens:      []TaxItem{{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1}},
+		EmitenteUF: "SP", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "5102",
+	}
+	cfg := defaultFiscalConfig()
+	cfg.UFEmpresa, cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual = "SP", 0.195, 0
+	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	near(t, "AliquotaICMS", 0.18, res.Itens[0].AliquotaICMS)
+	near(t, "ValorICMS", 180, res.Itens[0].ValorICMS)
+
+	semUF := map[string]ICMSInternalConfig{}
+	res, err = CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), semUF, TaxScenarioConfig{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	near(t, "AliquotaICMS sem a UF na tabela", 0.195, res.Itens[0].AliquotaICMS)
+}

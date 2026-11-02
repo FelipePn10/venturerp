@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
   <NFe xmlns="http://www.portalfiscal.inf.br/nfe">
-    <infNFe Id="NFe41261012345678000190550010000123451000123459" versao="4.00">
+    <infNFe Id="NFe41261012345678000190550010000123451000123450" versao="4.00">
       <ide>
         <cUF>41</cUF><natOp>VENDA DE MERCADORIA</natOp><mod>55</mod><serie>1</serie><nNF>12345</nNF>
         <dhEmi>2026-10-01T09:30:00-03:00</dhEmi><dhSaiEnt>2026-10-02T08:00:00-03:00</dhSaiEnt><tpNF>1</tpNF>
@@ -57,5 +57,5 @@
       <infAdic><infCpl>PEDIDO PC-77</infCpl></infAdic>
     </infNFe>
   </NFe>
-  <protNFe versao="4.00"><infProt><chNFe>41261012345678000190550010000123451000123459</chNFe><nProt>141260000012345</nProt><cStat>100</cStat></infProt></protNFe>
+  <protNFe versao="4.00"><infProt><chNFe>41261012345678000190550010000123451000123450</chNFe><nProt>141260000012345</nProt><cStat>100</cStat></infProt></protNFe>
 </nfeProc>

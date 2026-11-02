@@ -135,6 +135,22 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 	var movements []*stockentity.StockMovement
 	if uc.StockRepo != nil {
 		if qty.IsPositive() {
+			// A estrutura é lida antes de qualquer movimento: é ela que diz se a
+			// OF é de beneficiamento. Falha de leitura é erro — seguir sem ela
+			// daria entrada do produto do cliente no estoque próprio.
+			var children []*structentity.ItemStructure
+			if uc.Structure != nil {
+				lidos, cerr := uc.Structure.GetAllDirectChildren(ctx, order.ItemCode)
+				if cerr != nil {
+					return nil, fmt.Errorf("lendo a estrutura do item para a entrega da OF: %w", cerr)
+				}
+				children = structentity.SelectPrimarySubstituteComponents(lidos)
+			}
+			// OF de beneficiamento (estrutura com material do cliente): o produto
+			// processado é do CLIENTE e volta pela nota de retorno (CFOP 5902).
+			// A entrega fica registrada, sem entrada no estoque próprio — nem do
+			// produto nem da sucata, que também é do cliente (CFOP 5903).
+			beneficiamento := structentity.TemMaterialDoCliente(children)
 			refType := stockentity.ReferenceTypeProductionOrder
 			refCode := order.ID
 			appendFinishedMovement := func(class string, movementQty decimal.Decimal) {
@@ -152,50 +168,53 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				}
 				movements = append(movements, mov)
 			}
-			if len(lines) == 0 {
-				appendFinishedMovement(movementClass, qty)
-			} else {
-				for _, line := range lines {
-					appendFinishedMovement(line.MovementClass, line.Quantity)
+			if !beneficiamento {
+				if len(lines) == 0 {
+					appendFinishedMovement(movementClass, qty)
+				} else {
+					for _, line := range lines {
+						appendFinishedMovement(line.MovementClass, line.Quantity)
+					}
 				}
 			}
 
 			// Receive the BOM's co-products / returnable scrap into stock (an IN
 			// movement of coproduct_qty × produced, into the same warehouse).
-			if uc.Structure != nil {
-				children, cerr := uc.Structure.GetAllDirectChildren(ctx, order.ItemCode)
-				if cerr == nil {
-					for _, child := range structentity.SelectPrimarySubstituteComponents(children) {
-						if !child.IsCoproduct || child.Quantity <= 0 {
-							automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
-							if infoErr != nil || !automatic || child.IsCoproduct {
-								continue
-							}
-							componentQty := decimal.NewFromFloat(child.Quantity)
-							if !child.IsFixedQty {
-								componentQty = componentQty.Mul(qty)
-							}
-							componentQtyBruta, _ := componentQty.Float64()
-							componentQty = decimal.NewFromFloat(structentity.QuantidadeComPerda(
-								componentQtyBruta, child.LossPercentage, structentity.FormulaPerdaPadrao))
-							rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
-								MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
-								ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: order.CreatedBy}
-							movements = append(movements, rep)
-							continue
-						}
-						coMov := &stockentity.StockMovement{
-							ItemCode:      child.ChildCode,
-							WarehouseID:   *warehouseID,
-							MovementType:  stockentity.MovementTypeIn,
-							Quantity:      decimal.NewFromFloat(child.Quantity).Mul(qty),
-							ReferenceType: &refType,
-							ReferenceCode: &refCode,
-							CreatedBy:     order.CreatedBy,
-						}
-						movements = append(movements, coMov)
-					}
+			for _, child := range children {
+				if child.CustomerSupplied {
+					continue // material do cliente não sai do estoque próprio
 				}
+				if child.IsCoproduct && beneficiamento {
+					continue // sucata do material do cliente é do cliente
+				}
+				if !child.IsCoproduct || child.Quantity <= 0 {
+					automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
+					if infoErr != nil || !automatic || child.IsCoproduct {
+						continue
+					}
+					componentQty := decimal.NewFromFloat(child.Quantity)
+					if !child.IsFixedQty {
+						componentQty = componentQty.Mul(qty)
+					}
+					componentQtyBruta, _ := componentQty.Float64()
+					componentQty = decimal.NewFromFloat(structentity.QuantidadeComPerda(
+						componentQtyBruta, child.LossPercentage, structentity.FormulaPerdaPadrao))
+					rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
+						MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
+						ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: order.CreatedBy}
+					movements = append(movements, rep)
+					continue
+				}
+				coMov := &stockentity.StockMovement{
+					ItemCode:      child.ChildCode,
+					WarehouseID:   *warehouseID,
+					MovementType:  stockentity.MovementTypeIn,
+					Quantity:      decimal.NewFromFloat(child.Quantity).Mul(qty),
+					ReferenceType: &refType,
+					ReferenceCode: &refCode,
+					CreatedBy:     order.CreatedBy,
+				}
+				movements = append(movements, coMov)
 			}
 		}
 	}

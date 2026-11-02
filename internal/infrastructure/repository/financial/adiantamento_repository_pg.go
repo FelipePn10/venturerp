@@ -3,10 +3,12 @@ package financial
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/journal"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,7 +18,7 @@ import (
 // CreateAdiantamentoAtomico inserts an advance, posts the matching cash-flow
 // movement and updates the bank balance in a single transaction. A PAGAR
 // advance is cash out (SAIDA); a RECEBER advance is cash in (ENTRADA).
-func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa) (*entity.Adiantamento, error) {
+func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a *entity.Adiantamento, fc entity.FluxoCaixa, lote *contabilizacao.Lote) (*entity.Adiantamento, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -66,6 +68,13 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 		return nil, fmt.Errorf("updating saldo for adiantamento: %w", err)
 	}
 
+	if lote != nil {
+		lote.SourceID = a.ID
+		if err := journal.Gravar(ctx, tx, empresa, *lote); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -75,7 +84,7 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 // AplicarAdiantamentoAtomico applies part (or all) of an advance balance onto a
 // conta a pagar / a receber. No cash moves here — the cash already moved when
 // the advance was created; this only settles the title against the advance.
-func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time) (*entity.AdiantamentoAplicacao, error) {
+func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, advID int64, contaTipo string, contaID int64, valor decimal.Decimal, userID uuid.UUID, dataAplicacao time.Time, lote *contabilizacao.Lote) (*entity.AdiantamentoAplicacao, error) {
 	// O título abatido tem de ser da empresa da sessão: a aplicação recebe o id
 	// do título direto do corpo, e sem esta cláusula o adiantamento de uma
 	// empresa quitaria a conta a pagar da outra.
@@ -93,10 +102,11 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	var advTipo, advStatus string
 	var valorOriginal, valorUtilizado float64
 	var advActive bool
+	var advParceiro *int64
 	err = tx.QueryRow(ctx,
-		`SELECT tipo, status, valor_original, valor_utilizado, is_active
+		`SELECT tipo, status, valor_original, valor_utilizado, is_active, parceiro_id
 		   FROM public.adiantamentos WHERE id = $1 AND `+adiantamentoDaEmpresa+` FOR UPDATE`, advID, empresa,
-	).Scan(&advTipo, &advStatus, &valorOriginal, &valorUtilizado, &advActive)
+	).Scan(&advTipo, &advStatus, &valorOriginal, &valorUtilizado, &advActive, &advParceiro)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("adiantamento %d não encontrado", advID))
@@ -104,35 +114,55 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		return nil, fmt.Errorf("reading adiantamento: %w", err)
 	}
 	if !advActive || advStatus == string(entity.AdiantamentoStatusCancelado) {
-		return nil, fmt.Errorf("adiantamento %d não está disponível para uso", advID)
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("o adiantamento %d foi cancelado e não pode ser aplicado", advID))
 	}
 	if advTipo != contaTipo {
-		return nil, fmt.Errorf("tipo do adiantamento (%s) não corresponde ao tipo da conta (%s)", advTipo, contaTipo)
+		return nil, errorsuc.NewValidationError("adiantamento pago a fornecedor só abate conta a pagar, e o recebido de cliente só abate conta a receber")
 	}
 
 	saldoAdv := decimal.NewFromFloat(valorOriginal).Sub(decimal.NewFromFloat(valorUtilizado))
 	if valor.GreaterThan(saldoAdv) {
-		return nil, fmt.Errorf("valor %s excede o saldo do adiantamento (%s)", valor.StringFixed(2), saldoAdv.StringFixed(2))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo do adiantamento (R$ %s)", valor.StringFixed(2), saldoAdv.StringFixed(2)))
+	}
+	// O saldo é do parceiro que recebeu ou pagou o adiantamento: abater o título
+	// de outro quitaria uma dívida com o dinheiro de um terceiro.
+	mesmoParceiro := func(do *int64, rotulo string) error {
+		if advParceiro == nil {
+			return nil
+		}
+		if do == nil || *do != *advParceiro {
+			return errorsuc.NewValidationError("este título é de outro " + rotulo + ": o adiantamento só abate títulos do " + rotulo + " que o pagou ou recebeu")
+		}
+		return nil
 	}
 
 	// Settle the title and validate its remaining balance.
 	switch contaTipo {
 	case string(entity.AdiantamentoTipoPagar):
 		var bruto, desconto, pago, abatido float64
+		var fornecedor *int64
+		var status string
+		var ativo bool
 		err = tx.QueryRow(ctx,
-			`SELECT valor_bruto, desconto, valor_pago, COALESCE(valor_adiantamento_abatido,0)
+			`SELECT valor_bruto, desconto, valor_pago, COALESCE(valor_adiantamento_abatido,0), fornecedor_id, status, is_active
 			   FROM contas_pagar WHERE id = $1 AND enterprise_id = $2 FOR UPDATE`, contaID, empresa,
-		).Scan(&bruto, &desconto, &pago, &abatido)
+		).Scan(&bruto, &desconto, &pago, &abatido, &fornecedor, &status, &ativo)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta a pagar %d não encontrada", contaID))
 			}
 			return nil, fmt.Errorf("reading conta pagar: %w", err)
 		}
+		if !ativo || status == "PAGO" || status == "CANCELADO" {
+			return nil, errorsuc.NewConflictError("esta conta a pagar já está paga ou cancelada")
+		}
+		if err := mesmoParceiro(fornecedor, "fornecedor"); err != nil {
+			return nil, err
+		}
 		remaining := decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)).
 			Sub(decimal.NewFromFloat(pago)).Sub(decimal.NewFromFloat(abatido))
 		if valor.GreaterThan(remaining) {
-			return nil, fmt.Errorf("valor %s excede o saldo da conta a pagar (%s)", valor.StringFixed(2), remaining.StringFixed(2))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo da conta a pagar (R$ %s)", valor.StringFixed(2), remaining.StringFixed(2)))
 		}
 		novoAbatido := decimal.NewFromFloat(abatido).Add(valor)
 		quita := decimal.NewFromFloat(pago).Add(novoAbatido).
@@ -153,19 +183,28 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 
 	case string(entity.AdiantamentoTipoReceber):
 		var bruto, desconto, recebido float64
+		var cliente *int64
+		var status string
+		var ativo bool
 		err = tx.QueryRow(ctx,
-			`SELECT valor_bruto, desconto, valor_recebido
+			`SELECT valor_bruto, desconto, valor_recebido, cliente_id, status, is_active
 			   FROM contas_receber WHERE id = $1 AND enterprise_id = $2 FOR UPDATE`, contaID, empresa,
-		).Scan(&bruto, &desconto, &recebido)
+		).Scan(&bruto, &desconto, &recebido, &cliente, &status, &ativo)
 		if err != nil {
 			if err == pgx.ErrNoRows {
 				return nil, errorsuc.NewNotFoundError(fmt.Sprintf("conta a receber %d não encontrada", contaID))
 			}
 			return nil, fmt.Errorf("reading conta receber: %w", err)
 		}
+		if !ativo || status == "RECEBIDO" || status == "CANCELADO" {
+			return nil, errorsuc.NewConflictError("esta conta a receber já está recebida ou cancelada")
+		}
+		if err := mesmoParceiro(cliente, "cliente"); err != nil {
+			return nil, err
+		}
 		remaining := decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)).Sub(decimal.NewFromFloat(recebido))
 		if valor.GreaterThan(remaining) {
-			return nil, fmt.Errorf("valor %s excede o saldo da conta a receber (%s)", valor.StringFixed(2), remaining.StringFixed(2))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo da conta a receber (R$ %s)", valor.StringFixed(2), remaining.StringFixed(2)))
 		}
 		novoRecebido := decimal.NewFromFloat(recebido).Add(valor)
 		quita := novoRecebido.GreaterThanOrEqual(decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)))
@@ -193,8 +232,8 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		novoStatus = entity.AdiantamentoStatusQuitado
 	}
 	_, err = tx.Exec(ctx,
-		`UPDATE public.adiantamentos SET valor_utilizado=$1, status=$2, updated_at=NOW() WHERE id=$3`,
-		novoUtilizado.InexactFloat64(), string(novoStatus), advID)
+		`UPDATE public.adiantamentos SET valor_utilizado=$1, status=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
+		novoUtilizado.InexactFloat64(), string(novoStatus), advID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("atualizando adiantamento: %w", err)
 	}
@@ -216,6 +255,13 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	).Scan(&ap.ID, &ap.DataAplicacao, &ap.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("registrando aplicação: %w", err)
+	}
+
+	if lote != nil {
+		lote.SourceID = ap.ID
+		if err := journal.Gravar(ctx, tx, empresa, *lote); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -323,4 +369,80 @@ func scanAdiantamento(rows pgx.Rows) (*entity.Adiantamento, error) {
 	a.ValorOriginal = decimal.NewFromFloat(valorOriginal)
 	a.ValorUtilizado = decimal.NewFromFloat(valorUtilizado)
 	return &a, nil
+}
+
+// CancelarAdiantamentoAtomico desfaz um adiantamento lançado errado: o dinheiro
+// volta à conta bancária (movimento inverso no fluxo de caixa) e o saldo deixa de
+// poder ser aplicado. Só vale para adiantamento sem aplicação: depois de abater
+// um título, desfazer a aplicação vem antes.
+func (r *FinancialRepositoryPG) CancelarAdiantamentoAtomico(ctx context.Context, id int64, motivo string, userID uuid.UUID) (*entity.Adiantamento, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var tipo, status string
+	var valor, utilizado decimal.Decimal
+	var conta int64
+	err = tx.QueryRow(ctx,
+		`SELECT tipo, status, valor_original, valor_utilizado, conta_bancaria_id
+		   FROM public.adiantamentos WHERE id = $1 AND `+adiantamentoDaEmpresa+` AND is_active FOR UPDATE`, id, empresa,
+	).Scan(&tipo, &status, &valor, &utilizado, &conta)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("adiantamento %d não encontrado", id))
+		}
+		return nil, fmt.Errorf("reading adiantamento: %w", err)
+	}
+	if status == string(entity.AdiantamentoStatusCancelado) {
+		return nil, errorsuc.NewConflictError("este adiantamento já está cancelado")
+	}
+	if utilizado.IsPositive() {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("este adiantamento já abateu R$ %s em títulos e não pode ser cancelado", utilizado.StringFixed(2)))
+	}
+
+	// O inverso do registro: o pago a fornecedor volta para o banco, o recebido de
+	// cliente sai.
+	fcTipo, sinal := entity.FluxoCaixaTipoEntrada, "+"
+	if tipo == string(entity.AdiantamentoTipoReceber) {
+		fcTipo, sinal = entity.FluxoCaixaTipoSaida, "-"
+	}
+	desc := fmt.Sprintf("Cancelamento do adiantamento %d: %s", id, motivo)
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, descricao, conciliado, enterprise_id)
+		 VALUES (CURRENT_DATE,$1,$2,$3,$4,false,$5)`, string(fcTipo), valor, conta, desc, empresa); err != nil {
+		return nil, fmt.Errorf("estornando o fluxo de caixa do adiantamento: %w", err)
+	}
+	if _, err = tx.Exec(ctx,
+		fmt.Sprintf(`UPDATE contas_bancarias SET saldo_inicial = saldo_inicial %s $1, updated_at = NOW() WHERE id = $2 AND enterprise_id = $3`, sinal),
+		valor, conta, empresa); err != nil {
+		return nil, fmt.Errorf("estornando o saldo bancário do adiantamento: %w", err)
+	}
+	if _, err = tx.Exec(ctx,
+		`UPDATE public.adiantamentos
+		    SET status = 'CANCELADO', updated_at = NOW(),
+		        descricao = CONCAT_WS(' — ', NULLIF(descricao, ''), $3::text)
+		  WHERE id = $1 AND enterprise_id = $2`, id, empresa, "Cancelado: "+motivo); err != nil {
+		return nil, fmt.Errorf("cancelando o adiantamento: %w", err)
+	}
+	// A entrada contabilizada (se houve) é estornada na mesma transação, com a
+	// data do banco (a mesma CURRENT_DATE do fluxo de caixa acima).
+	var hoje time.Time
+	if err := tx.QueryRow(ctx, `SELECT CURRENT_DATE`).Scan(&hoje); err != nil {
+		return nil, fmt.Errorf("lendo a data do estorno: %w", err)
+	}
+	if _, err := journal.Estornar(ctx, tx, empresa, contabilizacao.OrigemAdiantamento, id,
+		contabilizacao.OrigemAdiantamentoEstorno, "EAD", hoje); err != nil {
+		return nil, fmt.Errorf("estornando a contabilização do adiantamento: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	_ = userID
+	return r.GetAdiantamento(ctx, id)
 }

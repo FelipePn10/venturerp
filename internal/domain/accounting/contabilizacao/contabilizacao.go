@@ -283,7 +283,41 @@ const (
 	OrigemSaida        = "NFE_SAIDA"
 	OrigemSaidaEstorno = "NFE_SAIDA_ESTORNO"
 	OrigemEntrada      = "NFE_ENTRADA"
+	// Adiantamentos (até 20 caracteres: accounting_journal_entries.source_type).
+	OrigemAdiantamento          = "ADIANTAMENTO"
+	OrigemAdiantamentoEstorno   = "ADIANTAMENTO_ESTORNO"
+	OrigemAdiantamentoAplicacao = "ADIANTAMENTO_APLIC"
 )
+
+// Adiantamento é a entrada do dinheiro antecipado.
+//   - pago a fornecedor: D Adiantamentos a fornecedores (ativo) / C Banco;
+//   - recebido de cliente: D Banco / C Adiantamentos de clientes (passivo).
+//
+// A aplicação num título não passa pelo banco: é um Pagamento (ou
+// Recebimento) em que a conta do adiantamento faz o papel do banco.
+func Adiantamento(pagoAFornecedor bool, banco, contaAdiantamento *int64, valor decimal.Decimal, historico string) ([]Lancamento, []string) {
+	var faltando []string
+	if banco == nil {
+		faltando = append(faltando, "a conta bancária não tem conta contábil (e não há conta de banco padrão)")
+	}
+	if contaAdiantamento == nil {
+		if pagoAFornecedor {
+			faltando = append(faltando, "falta a conta de adiantamentos a fornecedores")
+		} else {
+			faltando = append(faltando, "falta a conta de adiantamentos de clientes")
+		}
+	}
+	if len(faltando) > 0 {
+		return nil, faltando
+	}
+	if !pos(valor) {
+		return nil, nil
+	}
+	if pagoAFornecedor {
+		return []Lancamento{{DebitoID: *contaAdiantamento, CreditoID: *banco, Valor: valor.Round(2), Historico: historico}}, nil
+	}
+	return []Lancamento{{DebitoID: *banco, CreditoID: *contaAdiantamento, Valor: valor.Round(2), Historico: historico}}, nil
+}
 
 // LinhaDevolucao é o custo que saiu do estoque por um item devolvido.
 type LinhaDevolucao struct {

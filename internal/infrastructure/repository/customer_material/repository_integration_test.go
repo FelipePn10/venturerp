@@ -59,6 +59,10 @@ func montar(t *testing.T) *ambiente {
 		t.Fatalf("criando empresa: %v", err)
 	}
 	t.Cleanup(func() { testutil.Exec(t, pool, `DELETE FROM enterprise WHERE id = $1`, a.enterpriseID) })
+	// Item, estrutura e pedido criados pelos testes deixam trilha de auditoria
+	// (imutável) presa à empresa; o DELETE simples acima seria recusado e a
+	// empresa ficaria no banco de teste. Roda antes dele (t.Cleanup é LIFO).
+	t.Cleanup(func() { testutil.ApagarEmpresas(t, pool, a.enterpriseID) })
 
 	a.ctx = context.WithValue(ctx, contextkey.UserKey, &security.AuthUser{
 		ID: a.userID, Role: "ADMIN", EnterpriseID: a.enterpriseID, EnterpriseCode: code,

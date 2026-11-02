@@ -210,6 +210,34 @@ func loteRecebimento(ctx context.Context, c Contabil, cr *entity.ContaReceber, c
 	if err != nil {
 		return nil, err
 	}
+	partes, err := partesRecebimento(ctx, c, p, cr)
+	if err != nil {
+		return nil, err
+	}
+	doc := ""
+	if cr.NumeroDocumento != nil {
+		doc = *cr.NumeroDocumento
+	}
+	ls, faltando := contabilizacao.Recebimento(contabilizacao.Baixa{
+		Banco: banco, Partes: partes, Principal: principal, Juros: juros, Desconto: desconto,
+		ContaJuros: p.JurosRecebidosAccountID, ContaDesconto: p.DescontosConcedidosAccountID,
+		Historico: fmt.Sprintf("Recebimento %s", doc),
+	})
+	if len(faltando) > 0 {
+		return nil, faltaConta("dos recebimentos", faltando)
+	}
+	if err := contasValidas(ctx, c, p.PlanID, ls); err != nil {
+		return nil, err
+	}
+	return &contabilizacao.Lote{PlanID: p.PlanID, Data: data, Prefixo: "REC", SourceType: contabilizacao.OrigemRecebimento, SourceID: cr.ID, Lancamentos: ls}, nil
+}
+
+// partesRecebimento: a contrapartida do recebimento.
+//   - título de nota de saída contabilizada: Clientes;
+//   - crédito com fornecedor de devolução contabilizada: Fornecedores;
+//   - título avulso: a receita do plano de contas (regime de caixa).
+func partesRecebimento(ctx context.Context, c Contabil, p *fiscalrepo.AccountingPostingParams, cr *entity.ContaReceber) ([]contabilizacao.Parte, error) {
+	var err error
 	provisionado := false
 	if cr.FiscalExitID != nil {
 		if provisionado, err = c.Contabilizado(ctx, contabilizacao.OrigemSaida, *cr.FiscalExitID); err != nil {
@@ -239,20 +267,5 @@ func loteRecebimento(ctx context.Context, c Contabil, cr *entity.ContaReceber, c
 			return nil, err
 		}
 	}
-	doc := ""
-	if cr.NumeroDocumento != nil {
-		doc = *cr.NumeroDocumento
-	}
-	ls, faltando := contabilizacao.Recebimento(contabilizacao.Baixa{
-		Banco: banco, Partes: partes, Principal: principal, Juros: juros, Desconto: desconto,
-		ContaJuros: p.JurosRecebidosAccountID, ContaDesconto: p.DescontosConcedidosAccountID,
-		Historico: fmt.Sprintf("Recebimento %s", doc),
-	})
-	if len(faltando) > 0 {
-		return nil, faltaConta("dos recebimentos", faltando)
-	}
-	if err := contasValidas(ctx, c, p.PlanID, ls); err != nil {
-		return nil, err
-	}
-	return &contabilizacao.Lote{PlanID: p.PlanID, Data: data, Prefixo: "REC", SourceType: contabilizacao.OrigemRecebimento, SourceID: cr.ID, Lancamentos: ls}, nil
+	return partes, nil
 }
