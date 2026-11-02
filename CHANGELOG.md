@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.9.1] — 2026-11-02
+
+- feat: beneficiamento completo, travas fiscais da NF-e e adiantamentos contabilizados (`564deb0d`)
+
 - feat(financeiro): adiantamentos contabilizados — entrada (D adiantamento a fornecedor / C banco; D banco / C adiantamento de cliente), aplicação (transfere para Fornecedores/Clientes ou para a despesa/receita do título avulso) e estorno no cancelamento, na mesma transação do caixa. Migração 000456 (`adiantamento_fornecedores_account_id`, `adiantamento_clientes_account_id` em `accounting_posting_params`).
 - feat(financeiro): `POST /api/financial/adiantamentos/{id}/cancelar` (motivo obrigatório; só sem aplicação) com fluxo de caixa inverso e saldo bancário restaurado.
 - fix(financeiro): aplicação de adiantamento recusa título de outro parceiro, título quitado/cancelado e devolve erros tipados (422/409) no lugar de 500; o UPDATE do adiantamento filtra a empresa; adiantamento cancelado tem saldo zero.
