@@ -96,6 +96,7 @@ func structureQueryRowsToEntities(rows []sqlc.GetDirectChildrenForMaskRow) []*st
 			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
 			IsCoproduct:        row.IsCoproduct,
 			IsFixedQty:         row.IsFixedQty,
+			CustomerSupplied:   row.CustomerSupplied,
 			SubstituteGroup:    row.SubstituteGroup,
 			SubstitutePriority: row.SubstitutePriority,
 			QuantityRounding:   row.QuantityRounding,

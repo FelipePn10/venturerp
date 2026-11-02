@@ -207,6 +207,7 @@ func conciliacaoAutomatica(ctx context.Context, docs repository.FiscalEntryDocum
 	agora := time.Now()
 	for _, it := range itens {
 		if it.ItemCode != nil {
+			usarVinculoDoItemEscolhido(it, porCodigo)
 			continue
 		}
 		var achado *repository.ItemCandidate
@@ -250,6 +251,22 @@ func conciliacaoAutomatica(ctx context.Context, docs repository.FiscalEntryDocum
 		aplicarConversao(it, achado.ConversionFactor, achado.XMLUOM)
 	}
 	return nil
+}
+
+// usarVinculoDoItemEscolhido: no lançamento manual a pessoa já escolheu o item.
+// Se o código do fornecedor bate com o vínculo desse mesmo item, a linha fica
+// ligada a ele e usa a conversão de unidade cadastrada.
+func usarVinculoDoItemEscolhido(it *entity.FiscalEntryItem, porCodigo map[string][]repository.ItemCandidate) {
+	if it.SupplierItemCode == nil {
+		return
+	}
+	for _, v := range porCodigo[normCodigo(*it.SupplierItemCode)] {
+		if v.Code == *it.ItemCode {
+			it.ItemSupplierID = v.ItemSupplierID
+			aplicarConversao(it, v.ConversionFactor, v.XMLUOM)
+			return
+		}
+	}
 }
 
 // aplicarConversao calcula a quantidade na unidade do cadastro. O fator do

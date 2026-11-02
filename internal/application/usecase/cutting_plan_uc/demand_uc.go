@@ -142,7 +142,9 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			vars, _ = leitor.GetMaskAnswersWithNames(ctx, s.item, s.mask)
 		}
 		for _, st := range structentity.SelectPrimarySubstituteComponents(vigentes) {
-			if st.IsCoproduct {
+			// Material do cliente (beneficiamento) não está no estoque próprio:
+			// firmar o plano baixaria barra que a empresa não tem.
+			if st.IsCoproduct || st.CustomerSupplied {
 				continue
 			}
 			child, err := uc.loadItem(ctx, itemCache, st.ChildCode)

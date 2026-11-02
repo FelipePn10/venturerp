@@ -65,6 +65,28 @@ Outros alvos:
 | `make demo-migrate`| Reaplica migrations (após `git pull` com migrations novas).  |
 | `make demo-logs`   | Segue os logs da API demo.                                    |
 
+### Manter o demo sempre com o código em desenvolvimento
+
+O demo pode rodar o código de qualquer pasta (worktree), mesmo sem commit e sem
+release. Rode a partir da pasta onde está o código:
+
+```bash
+make demo-app    # atualiza o demo e abre o app desktop
+make demo-sync   # só atualiza; use com o app já aberto, depois de mudar o backend
+```
+
+- **Tela:** o app aberto recebe as mudanças de tela sozinho (o Vite recarrega).
+- **Backend e migrações:** entram com `make demo-sync`. Sem mudança, o comando é
+  rápido e não altera nada.
+- **Backup:** antes de migrar, o banco vai para `backups/demo/`.
+- **Build com erro:** a API anterior continua no ar e o banco não é migrado.
+- **Pasta com código mais antigo que o demo:** o comando recusa, sem alterar nada.
+- **Front:** vem da pasta do mesmo branch em `~/Documentos/front/erp`, ou de
+  `FRONT_DIR=/caminho make demo-app`.
+
+⚠️ Migração aplicada aqui não pode mudar depois: se precisar corrigir uma ainda
+não lançada, restaure o backup de `backups/demo/` antes de rodar de novo.
+
 Para "resetar a demo do zero" antes de uma apresentação:
 
 ```bash

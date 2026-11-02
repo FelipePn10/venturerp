@@ -12,6 +12,9 @@ scripts/
 ├── restore.sh             # Restore do banco de dados
 ├── backup-loop.sh         # Loop de backup contínuo
 ├── seed-demo.sql          # Dados de seed para ambiente demo
+├── seed-demo-beneficiamento.sh # Cenário de beneficiamento do demo
+├── demo-sync.sh           # Põe no demo o código da pasta atual (make demo-sync)
+├── demo-app.sh            # demo-sync e abre o app desktop (make demo-app)
 ├── fix_sqlc_output.go     # Correções pós-geração do sqlc
 ├── test-e2e.sh            # Teste end-to-end completo
 ├── test-cutting.sh        # Teste do módulo de plano de corte

@@ -326,6 +326,11 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	}
 	applyScenarioStock(ajustes, snapshotMap)
 	applyScenarioLeadTimes(ajustes, rulesMap)
+	if leitor, ok := s.MRPRepo.(producaoAguardandoRetornoReader); ok {
+		aguardando, errAguardando := leitor.ProducaoAguardandoRetorno(ctx)
+		registrarErro(errs, "load_awaiting_return", errAguardando)
+		somarAguardandoRetorno(aguardando, snapshotMap)
+	}
 
 	// Expande allCodes para incluir itens de todas as fontes.
 	allCodesFromBOM := collectAllItemCodes(bomMap, rootItems)
@@ -1703,7 +1708,9 @@ func buildLLCFromBOM(bomMap map[int64][]*structentity.ItemStructure, rootItems [
 		for _, child := range structentity.SelectPrimarySubstituteComponents(bomMap[itemCode]) {
 			// Co-products are outputs, not lower-level components — skip so they
 			// don't get a misleading (deeper) low-level code.
-			if child.IsCoproduct {
+			// O material do cliente (beneficiamento) não é planejado por esta
+			// estrutura: não recebe nível a partir dela.
+			if child.IsCoproduct || child.CustomerSupplied {
 				continue
 			}
 			assignLLC(child.ChildCode, level+1)
@@ -1789,6 +1796,12 @@ func explode(
 	for _, child := range selectedChildren {
 		// Co-products/by-products/scrap are OUTPUTS, not consumed inputs → no demand.
 		if child.IsCoproduct {
+			continue
+		}
+		// Componente fornecido pelo cliente (beneficiamento): chega pela NF-e de
+		// remessa e fica no razão de terceiros. Gerar necessidade dele seria
+		// sugerir a COMPRA do material que o cliente manda.
+		if child.CustomerSupplied {
 			continue
 		}
 		// Fixed-quantity components are consumed once per order (per lot), not scaled

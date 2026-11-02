@@ -97,14 +97,10 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}) 
 			Codigo   string `json:"codigo"`
 			Mensagem string `json:"mensagem"`
 		}
-		if json.Unmarshal(respBytes, &apiErr) == nil && apiErr.Mensagem != "" {
-			if apiErr.Codigo != "" {
-				return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d (%s): %s", resp.StatusCode, apiErr.Codigo, apiErr.Mensagem)
-			}
-			return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, apiErr.Mensagem)
+		_ = json.Unmarshal(respBytes, &apiErr)
+		return respBytes, resp.StatusCode, &HTTPError{
+			StatusCode: resp.StatusCode, Codigo: apiErr.Codigo, Mensagem: apiErr.Mensagem, Corpo: strings.TrimSpace(string(respBytes)),
 		}
-
-		return respBytes, resp.StatusCode, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBytes)))
 	}
 
 	return respBytes, resp.StatusCode, nil
@@ -563,7 +559,7 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 		// 4xx: a Focus recusou a nota (dado inválido) — é rejeição, o usuário
 		// corrige. Rede e 5xx seguem como falha do serviço.
 		if statusCode >= 400 && statusCode < 500 {
-			return nil, &RejeicaoError{Status: fmt.Sprintf("HTTP %d", statusCode), Motivo: strings.TrimPrefix(err.Error(), "Focus NF-e ")}
+			return nil, recusaDaFocus(statusCode, body)
 		}
 		return nil, err
 	}
@@ -604,6 +600,34 @@ func (c *Client) EmitirNFe(ctx context.Context, ref string, payload NFEPayload) 
 	}
 	resp.ChaveNFe = resp.Chave()
 	return &resp, nil
+}
+
+// recusaDaFocus separa o que vai para o usuário (a mensagem) do que é diagnóstico
+// (status HTTP e código): o motivo fica gravado na nota e aparece na tela.
+func recusaDaFocus(statusCode int, body []byte) *RejeicaoError {
+	var corpo struct {
+		Codigo   string `json:"codigo"`
+		Mensagem string `json:"mensagem"`
+		Erros    []struct {
+			Mensagem string `json:"mensagem"`
+		} `json:"erros"`
+	}
+	_ = json.Unmarshal(body, &corpo)
+	status := fmt.Sprintf("HTTP %d", statusCode)
+	if corpo.Codigo != "" {
+		status += " (" + corpo.Codigo + ")"
+	}
+	motivo := strings.TrimSpace(corpo.Mensagem)
+	if len(corpo.Erros) > 0 && strings.TrimSpace(corpo.Erros[0].Mensagem) != "" {
+		motivo = strings.TrimSpace(corpo.Erros[0].Mensagem)
+	}
+	if motivo == "" {
+		motivo = "o motivo não foi informado"
+	}
+	if statusCode == http.StatusUnauthorized {
+		motivo = "o token não foi aceito: confira-o na tela Configuração Fiscal (VFIS0100)"
+	}
+	return &RejeicaoError{Status: status, Motivo: motivo}
 }
 
 // DocumentURL builds the absolute URL for a path returned by Focus NF-e
@@ -655,7 +679,7 @@ func (c *Client) CancelarNFe(ctx context.Context, ref, justificativa string) (*N
 	// A Focus responde 200 também quando a SEFAZ recusa o cancelamento
 	// ("erro_cancelamento", por exemplo fora do prazo): só "cancelado" vale.
 	if resp.Status != "cancelado" && resp.Status != "cancelada" {
-		return &resp, fmt.Errorf("cancelamento não aceito pela SEFAZ (%s): %s", resp.Status, resp.motivo())
+		return &resp, &RejeicaoError{Status: resp.Status, Motivo: resp.motivo()}
 	}
 	return &resp, nil
 }
@@ -979,7 +1003,7 @@ func (c *Client) EmitirNFSe(ctx context.Context, ref string, payload NFSePayload
 		if msg == "" && len(resp.Erros) > 0 {
 			msg = resp.Erros[0].Message
 		}
-		return &resp, fmt.Errorf("NFS-e não autorizada: status=%s, msg=%s", resp.Status, msg)
+		return &resp, &RejeicaoError{Status: resp.Status, Motivo: msg}
 	}
 	return &resp, nil
 }
@@ -1007,6 +1031,10 @@ func (c *Client) CancelarNFSe(ctx context.Context, ref, justificativa string) (*
 	var resp NFSeResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshaling NFS-e cancel response: %w", err)
+	}
+	// Como na NF-e: a recusa também chega com HTTP 200, e só "cancelado" vale.
+	if resp.Status != "" && resp.Status != "cancelado" && resp.Status != "cancelada" {
+		return &resp, &RejeicaoError{Status: resp.Status, Motivo: resp.MensagemSEFAZ}
 	}
 	return &resp, nil
 }
@@ -1105,7 +1133,7 @@ func (c *Client) AutorizarCTe(ctx context.Context, ref string, payload CTePayloa
 		if msg == "" && len(resp.Erros) > 0 {
 			msg = resp.Erros[0].Message
 		}
-		return &resp, fmt.Errorf("CT-e não autorizado: status=%s, msg=%s", resp.Status, msg)
+		return &resp, &RejeicaoError{Status: resp.Status, Motivo: msg}
 	}
 	return &resp, nil
 }
@@ -1137,9 +1165,28 @@ func (c *Client) EmitirCCe(ctx context.Context, ref, textoCorrecao string) (map[
 	// A SEFAZ pode recusar a carta com HTTP 200: só "autorizado" vale.
 	if st, _ := resp["status"].(string); st != "" && st != "autorizado" {
 		msg, _ := resp["mensagem_sefaz"].(string)
-		return resp, fmt.Errorf("carta de correção não aceita pela SEFAZ (%s): %s", st, msg)
+		return resp, &RejeicaoError{Status: st, Motivo: msg}
 	}
 	return resp, nil
+}
+
+// HTTPError: a Focus respondeu fora da faixa 2xx. Mensagem é o texto dela; o
+// restante é diagnóstico, para o registro da comunicação e o log.
+type HTTPError struct {
+	StatusCode int
+	Codigo     string
+	Mensagem   string
+	Corpo      string
+}
+
+func (e *HTTPError) Error() string {
+	switch {
+	case e.Mensagem != "" && e.Codigo != "":
+		return fmt.Sprintf("Focus NF-e HTTP %d (%s): %s", e.StatusCode, e.Codigo, e.Mensagem)
+	case e.Mensagem != "":
+		return fmt.Sprintf("Focus NF-e HTTP %d: %s", e.StatusCode, e.Mensagem)
+	}
+	return fmt.Sprintf("Focus NF-e HTTP %d: %s", e.StatusCode, e.Corpo)
 }
 
 // RejeicaoError: a nota foi recusada (pela SEFAZ ou pela validação da Focus).
@@ -1148,6 +1195,9 @@ type RejeicaoError struct {
 	Status string
 	Motivo string
 }
+
+// DaFocus diz que quem recusou foi a Focus NF-e, antes de a nota chegar à SEFAZ.
+func (e *RejeicaoError) DaFocus() bool { return strings.HasPrefix(e.Status, "HTTP") }
 
 func (e *RejeicaoError) Error() string {
 	return fmt.Sprintf("NF-e não autorizada (%s): %s", e.Status, e.Motivo)

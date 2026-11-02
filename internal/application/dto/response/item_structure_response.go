@@ -55,6 +55,7 @@ type StructureComponentResponse struct {
 	CostCenterCode      *int64     `json:"cost_center_code,omitempty"`
 	IsCriticalMPS       bool       `json:"is_critical_mps"`
 	GeneratesInspection bool       `json:"generates_inspection"`
+	CustomerSupplied    bool       `json:"customer_supplied"`
 	IsActive            bool       `json:"is_active"`
 	CreatedBy           uuid.UUID  `json:"created_by"`
 	CreatedAt           time.Time  `json:"created_at"`

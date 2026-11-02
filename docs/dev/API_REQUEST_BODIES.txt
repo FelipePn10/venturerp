@@ -2089,6 +2089,13 @@ POST /api/fiscal/entries/create
   ]
 }
 
+GET /api/fiscal/entries/sugestao-item?supplier_code=1&item_code=20004&codigo_fornecedor=F1-20004&uf_emitente=PR
+-- Todos os parâmetros são opcionais. O código do fornecedor resolve o item pelo vínculo.
+-- Resposta: encontrado, item_code, nome, uom, ncm, cfop, codigo_fornecedor, descricao_fornecedor,
+--           uom_fornecedor, fator_conversao, preco_unitario, origem_preco, aliq_icms, aliq_ipi
+
+-- Em POST /api/fiscal/entries/create, cada item aceita "lembrar_vinculo": true com "supplier_item_code".
+
 POST /api/fiscal/entries/upload-nfe
 {
   "xml_content": "<nfeProc xmlns=\"http://www.portalfiscal.inf.br/nfe\" versao=\"4.00\"><NFe>...</NFe></nfeProc>"
@@ -2315,6 +2322,21 @@ POST /api/financial/contas-pagar/create
   "centro_custo_id": 1,
   "observacao": "Referente à compra de matéria-prima NF-50001"
 }
+
+POST /api/financial/contas-pagar/create-parcelada
+-- Mesmo corpo de /create, sem data_vencimento, valor_bruto e parcela_*, mais:
+{
+  "numero_documento": "FAT-1",
+  "fornecedor_id": 2001,
+  "data_emissao": "2026-11-01",
+  "desconto": "0.00",
+  "parcelas": [
+    { "data_vencimento": "2026-11-01", "valor": "300.00" },
+    { "data_vencimento": "2026-12-01", "valor": "350.00" },
+    { "data_vencimento": "2026-12-31", "valor": "350.00" }
+  ]
+}
+-- Cria um título por parcela ("FAT-1 1/3"), todos ou nenhum; parcela_pai_id aponta para o primeiro.
 
 GET /api/financial/contas-pagar/list
 {
@@ -3686,6 +3708,7 @@ MÓDULO: FISCAL — FATURAMENTO POR CARGA / CUPOM
 POST /api/fiscal/exits/from-load
 {
   "load_code": 9001,
+  "customer_code": 50,
   "serie": "001",
   "data_emissao": "2026-07-06",
   "data_saida": "2026-07-06",

@@ -193,7 +193,10 @@ func structureChildrenForBackflush(raw []*structentity.ItemStructure) []*structu
 	selected := structentity.SelectPrimarySubstituteComponents(raw)
 	children := make([]*structureChild, 0, len(selected))
 	for _, c := range selected {
-		if c.IsCoproduct {
+		// Material do cliente (beneficiamento) não sai do estoque próprio: o
+		// apontamento reporta só as horas, e o material volta fiscalmente pela
+		// nota de retorno (CFOP 5902).
+		if c.IsCoproduct || c.CustomerSupplied {
 			continue
 		}
 		children = append(children, &structureChild{

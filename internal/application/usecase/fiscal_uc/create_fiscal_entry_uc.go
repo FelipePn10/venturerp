@@ -122,6 +122,7 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 		Sequence:              itemDTO.Sequence,
 		ItemCode:              itemDTO.ItemCode,
 		SupplierItemCode:      itemDTO.SupplierItemCode,
+		LembrarVinculo:        itemDTO.LembrarVinculo,
 		UOM:                   itemDTO.UOM,
 		Ncm:                   itemDTO.Ncm,
 		Cfop:                  itemDTO.Cfop,
@@ -160,6 +161,15 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 // pelo CNPJ), itens com plano de contas, parcelas e distribuição, tudo numa
 // transação.
 func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto request.CreateFiscalEntryDTO, entry *entity.FiscalEntry, itens []*entity.FiscalEntryItem) (*response.FiscalEntryResponse, error) {
+	ufEmpresa := ""
+	if cfg, errCfg := uc.Repo.GetFiscalConfig(ctx); errCfg == nil && cfg != nil {
+		ufEmpresa = cfg.UFEmpresa
+	} else if errCfg != nil && !errorsuc.EhNaoEncontrado(errCfg) {
+		return nil, errCfg
+	}
+	if err := conferirNotaManual(dto, entry.DataEmissao, entry.DataEntrada, ufEmpresa, time.Now()); err != nil {
+		return nil, err
+	}
 	if dto.SupplierCode != nil {
 		entry.SupplierCode = dto.SupplierCode
 	}
@@ -169,6 +179,7 @@ func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto requ
 		}
 	}
 	entry.EntryOperationCode = dto.EntryOperationCode
+	entry.ValorICMSST, entry.ValorOutras = dto.ValorICMSST.Round(2), dto.ValorOutras.Round(2)
 	entry.ValorRetPIS, entry.ValorRetCOFINS, entry.ValorRetCSLL = dto.ValorRetPIS.Round(2), dto.ValorRetCOFINS.Round(2), dto.ValorRetCSLL.Round(2)
 	entry.ValorIRRF, entry.ValorRetPrev, entry.ValorISSRet = dto.ValorIRRF.Round(2), dto.ValorRetPrev.Round(2), dto.ValorISSRet.Round(2)
 	if entry.TotalRetencoes().GreaterThan(decimal.NewFromFloat(dto.ValorTotal)) {
@@ -206,13 +217,24 @@ func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto requ
 		}
 	}
 
-	// Valor contábil do item: produto + IPI + a parte do frete/seguro/desconto
+	// Sem chave a nota não se identifica sozinha: emitente, série e número fazem
+	// esse papel. Lançada duas vezes, o título a pagar e o crédito sairiam em dobro.
+	existente, err := uc.Docs.FindEntryByNumero(ctx, dto.CnpjEmitente, dto.Serie, dto.NumeroNF)
+	if err != nil {
+		return nil, err
+	}
+	if existente != nil {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf(
+			"a nota %d, série %s, deste emitente já foi lançada como entrada %d", dto.NumeroNF, dto.Serie, existente.ID))
+	}
+
+	// Valor contábil do item: produto + IPI + a parte do frete/seguro/ST/outras/desconto
 	// do cabeçalho proporcional ao valor do item.
 	somaProdutos := decimal.Zero
 	for _, it := range itens {
 		somaProdutos = somaProdutos.Add(decimal.NewFromFloat(it.TotalPrice))
 	}
-	extras := decimal.NewFromFloat(dto.ValorFrete).Add(decimal.NewFromFloat(dto.ValorSeguro)).Sub(decimal.NewFromFloat(dto.ValorDesconto))
+	extras := decimal.NewFromFloat(dto.ValorFrete).Add(decimal.NewFromFloat(dto.ValorSeguro)).Add(dto.ValorICMSST).Add(dto.ValorOutras).Sub(decimal.NewFromFloat(dto.ValorDesconto))
 	for i, it := range itens {
 		if it.Sequence <= 0 {
 			it.Sequence = i + 1

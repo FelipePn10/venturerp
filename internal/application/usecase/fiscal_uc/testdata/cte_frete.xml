@@ -15,7 +15,7 @@
       <imp><ICMS><ICMS00><CST>00</CST><vBC>1200.00</vBC><pICMS>12.00</pICMS><vICMS>144.00</vICMS></ICMS00></ICMS></imp>
       <infCTeNorm>
         <infCarga><vCarga>100000.00</vCarga><proPred>ACO E EPI</proPred></infCarga>
-        <infDoc><infNFe><chave>41261012345678000190550010000123451000123459</chave></infNFe></infDoc>
+        <infDoc><infNFe><chave>41261012345678000190550010000123451000123450</chave></infNFe></infDoc>
       </infCTeNorm>
     </infCte>
   </CTe>

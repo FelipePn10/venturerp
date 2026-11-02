@@ -76,12 +76,13 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	}
 
 	if exit.Status != entity.ExitStatusAuthorized {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("apenas NF-e autorizadas podem ser canceladas, status atual: %s", exit.Status))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("só nota autorizada pode ser cancelada; esta está %s", situacaoDaNota(exit.Status)))
 	}
 
-	// 24-hour window check
-	if time.Since(exit.DataEmissao) > 24*time.Hour {
-		return nil, errorsuc.NewValidationError("prazo de cancelamento expirado: NF-e emitida há mais de 24 horas")
+	// Nota transmitida: quem conta o prazo é a SEFAZ, a partir da autorização, e a
+	// recusa dela volta com o motivo. Sem transmissão não há a quem perguntar.
+	if exit.FocusRef == nil && prazoDeCancelamentoVencido(exit.DataEmissao, time.Now()) {
+		return nil, errorsuc.NewValidationError("o prazo de cancelamento desta nota já passou: ela foi emitida há mais de 24 horas")
 	}
 
 	// Devolução que já mexeu em título pago depois não pode ser cancelada na
@@ -104,7 +105,13 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		return nil, err
 	}
 
-	if cfg.FocusNfeToken != nil && *cfg.FocusNfeToken != "" && exit.FocusRef != nil {
+	// Nota que foi à SEFAZ só se cancela lá: sem o token, cancelar aqui deixaria a
+	// nota valendo para a fiscalização e cancelada no sistema.
+	if exit.FocusRef != nil && (cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "") {
+		return nil, errorsuc.NewValidationError(tokenFocusAusente)
+	}
+
+	if exit.FocusRef != nil {
 		cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 		cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
 			if errLog := uc.Repo.SaveFocusLog(ctx, params.ID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
@@ -114,7 +121,7 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 			}
 		})
 		if _, err := cli.CancelarNFe(ctx, *exit.FocusRef, params.Motivo); err != nil {
-			return nil, errorsuc.NewExternalServiceError("Focus NF-e (cancelamento)", err.Error())
+			return nil, erroDaEmissora(ctx, "o cancelamento", params.ID, err)
 		}
 	}
 
@@ -191,4 +198,13 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	resp.Warnings = append(resp.Warnings, avisosEfeitos...)
 	resp.Warnings = append(resp.Warnings, avisos...)
 	return resp, nil
+}
+
+// prazoDeCancelamentoVencido vale para a nota sem transmissão registrada.
+// data_emissao guarda só o dia, sem a hora: a nota emitida às 22h ainda está no
+// prazo no dia seguinte, e por isso a conta parte da meia-noite com folga de um
+// dia inteiro mais a maior diferença de fuso do país.
+func prazoDeCancelamentoVencido(emissao, agora time.Time) bool {
+	y, m, d := emissao.Date()
+	return agora.After(time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Add(48*time.Hour + 6*time.Hour))
 }

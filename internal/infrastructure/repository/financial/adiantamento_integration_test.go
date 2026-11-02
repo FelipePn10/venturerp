@@ -89,6 +89,7 @@ func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 			ContaBancariaID: &contaID,
 			Descricao:       &desc,
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("CreateAdiantamentoAtomico: %v", err)
@@ -113,7 +114,7 @@ func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 	}
 
 	// Apply 1000 of the advance onto the conta a pagar — fully settles it.
-	ap, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(1000), user, now)
+	ap, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(1000), user, now, nil)
 	if err != nil {
 		t.Fatalf("AplicarAdiantamentoAtomico: %v", err)
 	}
@@ -144,12 +145,12 @@ func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 	}
 
 	// Over-applying beyond the remaining balances must fail.
-	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(9999), user, now); err == nil {
+	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(9999), user, now, nil); err == nil {
 		t.Error("expected error applying more than the advance balance")
 	}
 
 	// Mismatched tipo must fail (RECEBER application onto a PAGAR advance).
-	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "RECEBER", cp.ID, decimal.NewFromInt(10), user, now); err == nil {
+	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "RECEBER", cp.ID, decimal.NewFromInt(10), user, now, nil); err == nil {
 		t.Error("expected error applying with mismatched tipo")
 	}
 
@@ -201,7 +202,88 @@ func TestIntegration_Adiantamento_CreateAndApplyToContaPagar(t *testing.T) {
 			}
 		}
 	}
-	if _, err := repo.AplicarAdiantamentoAtomico(ctxOutra, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(1), user, now); err == nil {
+	if _, err := repo.AplicarAdiantamentoAtomico(ctxOutra, adv.ID, "PAGAR", cp.ID, decimal.NewFromInt(1), user, now, nil); err == nil {
 		t.Error("outra empresa aplicou o adiantamento")
+	}
+}
+
+// O saldo do adiantamento é do fornecedor que o recebeu: não abate título de
+// outro. Sem aplicação, cancelar devolve o dinheiro ao banco; aplicado, não cancela.
+func TestIntegration_Adiantamento_ParceiroECancelamento(t *testing.T) {
+	pool := testutil.Pool(t)
+	repo := financialrepo.NewFinancialRepositoryPG(pool)
+	ctx := testutil.TenantContext(t, pool)
+	user := testutil.Actor(t, pool)
+	now := time.Now()
+
+	cb, err := repo.CreateContaBancaria(ctx, &entity.ContaBancaria{Banco: "341", Agencia: "0001", Conta: "ADV2",
+		Descricao: "Adiantamento parceiro", SaldoInicial: decimal.NewFromInt(5000), IsActive: true, CreatedBy: user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer testutil.Exec(t, pool, "DELETE FROM contas_bancarias WHERE id=$1", cb.ID)
+	defer testutil.Exec(t, pool, "DELETE FROM fluxo_caixa WHERE conta_bancaria_id=$1", cb.ID)
+
+	fornA, fornB := int64(910001), int64(910002)
+	titulo := func(forn int64) int64 {
+		cp, err := repo.CreateContaPagar(ctx, &entity.ContaPagar{NumeroDocumento: "ADV-PARC", TipoDocumento: "NF-e", FornecedorID: &forn,
+			DataLancamento: now, DataEmissao: now, DataVencimento: now.AddDate(0, 0, 30), ValorBruto: decimal.NewFromInt(300),
+			ParcelaNumero: 1, ParcelaTotal: 1, StatusAprovacao: entity.AprovacaoAprovado, Status: entity.ContaPagarStatusPendente,
+			IsActive: true, CriadoPor: user})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM contas_pagar WHERE id=$1", cp.ID) })
+		return cp.ID
+	}
+	doA, doB := titulo(fornA), titulo(fornB)
+
+	criar := func() *entity.Adiantamento {
+		conta := cb.ID
+		adv, err := repo.CreateAdiantamentoAtomico(ctx,
+			&entity.Adiantamento{Tipo: entity.AdiantamentoTipoPagar, ParceiroID: &fornA, ContaBancariaID: cb.ID,
+				DataAdiantamento: now, ValorOriginal: decimal.NewFromInt(200), CreatedBy: user},
+			entity.FluxoCaixa{Data: now, Tipo: entity.FluxoCaixaTipoSaida, Valor: decimal.NewFromInt(200), ContaBancariaID: &conta}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			testutil.Exec(t, pool, "DELETE FROM adiantamento_aplicacoes WHERE adiantamento_id=$1", adv.ID)
+			testutil.Exec(t, pool, "DELETE FROM adiantamentos WHERE id=$1", adv.ID)
+		})
+		return adv
+	}
+	saldo := func() decimal.Decimal {
+		c, err := repo.GetContaBancaria(ctx, cb.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c.SaldoInicial
+	}
+
+	adv := criar()
+	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", doB, decimal.NewFromInt(100), user, now, nil); err == nil {
+		t.Fatal("o adiantamento do fornecedor A não pode abater título do fornecedor B")
+	}
+	if _, err := repo.AplicarAdiantamentoAtomico(ctx, adv.ID, "PAGAR", doA, decimal.NewFromInt(100), user, now, nil); err != nil {
+		t.Fatalf("título do mesmo fornecedor: %v", err)
+	}
+	if _, err := repo.CancelarAdiantamentoAtomico(ctx, adv.ID, "lançado em dobro", user); err == nil {
+		t.Fatal("adiantamento já aplicado não pode ser cancelado")
+	}
+
+	outro := criar()
+	if !saldo().Equal(decimal.NewFromInt(4600)) {
+		t.Fatalf("saldo depois de dois adiantamentos = %s, queria 4600", saldo())
+	}
+	cancelado, err := repo.CancelarAdiantamentoAtomico(ctx, outro.ID, "lançado em dobro", user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cancelado.Status != entity.AdiantamentoStatusCancelado || !saldo().Equal(decimal.NewFromInt(4800)) {
+		t.Fatalf("cancelado: status %s, saldo %s (queria CANCELADO e 4800)", cancelado.Status, saldo())
+	}
+	if _, err := repo.AplicarAdiantamentoAtomico(ctx, outro.ID, "PAGAR", doA, decimal.NewFromInt(50), user, now, nil); err == nil {
+		t.Fatal("adiantamento cancelado não pode ser aplicado")
 	}
 }

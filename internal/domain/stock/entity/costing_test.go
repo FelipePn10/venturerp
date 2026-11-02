@@ -161,3 +161,25 @@ func TestApplyMovementCosting_MedioIgualValorSobreQuantidade(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyEntryReversalCosting(t *testing.T) {
+	d := decimal.RequireFromString
+	casos := []struct {
+		nome                    string
+		qtd, medio, total       string
+		delta, preco            string
+		querQtd, querMedio, val string
+	}{
+		{"desfaz a entrada e devolve o médio", "110", "9.4545454545", "1040", "-10", "82", "100", "2.2", "220"},
+		{"entrada era todo o saldo: zera", "10", "82", "820", "-10", "82", "0", "82", "0"},
+		{"parte já consumida pelo médio alto: nunca fica negativo", "10", "9", "90", "-5", "82", "5", "9", "45"},
+	}
+	for _, c := range casos {
+		t.Run(c.nome, func(t *testing.T) {
+			got, _ := ApplyEntryReversalCosting(CostingState{Quantity: d(c.qtd), AvgCost: d(c.medio), TotalCost: d(c.total)}, d(c.delta), d(c.preco))
+			if !got.Quantity.Equal(d(c.querQtd)) || !got.AvgCost.Equal(d(c.querMedio)) || !got.TotalCost.Equal(d(c.val)) {
+				t.Fatalf("obtido qtd %s médio %s valor %s; quer %s %s %s", got.Quantity, got.AvgCost, got.TotalCost, c.querQtd, c.querMedio, c.val)
+			}
+		})
+	}
+}

@@ -182,3 +182,52 @@ func TestMoeda(t *testing.T) {
 		}
 	}
 }
+
+// Parcela menor que o total da nota: a última não pode receber o que falta, senão
+// fica com mais do que vale e a tela acusa "distribuído 500,00 de 200,00".
+func TestDistribuirProporcional_ParcelasMenoresQueOTotal(t *testing.T) {
+	p := []*entity.FiscalEntryInstallment{{Numero: 1, Valor: decimal.NewFromInt(100)}, {Numero: 2, Valor: decimal.NewFromInt(100)}}
+	totais := map[entity.ChaveConta]decimal.Decimal{
+		{PlanoContasID: 10}: decimal.NewFromInt(300),
+		{PlanoContasID: 20}: decimal.NewFromInt(200),
+	}
+	if err := DistribuirProporcional(p, totais); err != nil {
+		t.Fatal(err)
+	}
+	for _, parcela := range p {
+		soma := decimal.Zero
+		for _, a := range parcela.Distribuicao {
+			soma = soma.Add(a.Valor)
+		}
+		if !soma.Equal(parcela.Valor) {
+			t.Fatalf("parcela %d: distribuído %s de %s", parcela.Numero, soma, parcela.Valor)
+		}
+		if !parcela.Distribuicao[0].Valor.Equal(decimal.NewFromInt(60)) {
+			t.Fatalf("plano 10 deveria levar 60%%, levou %s", parcela.Distribuicao[0].Valor)
+		}
+	}
+}
+
+func TestConferirDatas(t *testing.T) {
+	agora := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	dia := func(mes time.Month, d int) time.Time { return time.Date(2026, mes, d, 0, 0, 0, 0, time.UTC) }
+	base := func() *entity.FiscalEntry {
+		return &entity.FiscalEntry{DataEmissao: dia(10, 5), DataEntrada: dia(10, 6),
+			Parcelas: []*entity.FiscalEntryInstallment{{Numero: 1, DataVencimento: dia(10, 5)}}}
+	}
+	if p := conferirDatas(base(), agora); len(p) != 0 {
+		t.Fatalf("datas corretas: %+v", p)
+	}
+	casos := map[string]func(*entity.FiscalEntry){
+		"entrada antes da emissão": func(e *entity.FiscalEntry) { e.DataEntrada = dia(10, 4) },
+		"entrada no futuro":        func(e *entity.FiscalEntry) { e.DataEntrada = dia(11, 10) },
+		"parcela antes da emissão": func(e *entity.FiscalEntry) { e.Parcelas[0].DataVencimento = dia(10, 4) },
+	}
+	for nome, mexe := range casos {
+		e := base()
+		mexe(e)
+		if p := conferirDatas(e, agora); len(p) != 1 || p[0].Nivel != NivelImpede {
+			t.Fatalf("%s: %+v", nome, p)
+		}
+	}
+}

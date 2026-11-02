@@ -2,6 +2,9 @@ package fiscal_uc
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -200,6 +204,18 @@ func TestHomologacaoAvisaQueNotaNaoTemValorFiscal(t *testing.T) {
 	}
 }
 
+func TestEnderecoProvisorioDaEmpresaImpedeEmissao(t *testing.T) {
+	cfg := configBase()
+	cfg.Logradouro, cfg.Bairro, cfg.Municipio, cfg.CEP = "A preencher", "A preencher", "A preencher", "00000000"
+	cfg.IEEmpresa = nil
+	pend := conferirNota(notaBase(), itemBase(), cfg, PlanoDaNota{})
+	for _, campo := range []string{"emitente.logradouro", "emitente.bairro", "emitente.municipio", "emitente.cep", "emitente.ie"} {
+		if !temPendencia(pend, NivelImpede, campo) {
+			t.Errorf("%s provisório deveria impedir a emissão: %+v", campo, pend)
+		}
+	}
+}
+
 func TestSemTokenImpedeEmissao(t *testing.T) {
 	cfg := configBase()
 	cfg.FocusNfeToken = nil
@@ -229,14 +245,18 @@ func temPendencia(pend []response.PreviaPendenciaNFe, nivel, campo string) bool 
 
 type repoNumeracao struct {
 	repository.FiscalRepository
-	proximo    int64
-	criada     *fiscalentity.FiscalExit
-	chamouNext int
+	numeroUsado bool
+	proximo     int64
+	criada      *fiscalentity.FiscalExit
+	chamouNext  int
 }
 
 func (r *repoNumeracao) GetNextNFNumber(context.Context) (int64, error) {
 	r.chamouNext++
 	return r.proximo, nil
+}
+func (r *repoNumeracao) NFNumberExists(context.Context, int64, string) (bool, error) {
+	return r.numeroUsado, nil
 }
 func (r *repoNumeracao) GetFiscalConfig(context.Context) (*fiscalentity.FiscalConfig, error) {
 	return configBase(), nil
@@ -267,6 +287,24 @@ type authLiberado struct{ ports.AuthService }
 func (authLiberado) CanCreateFiscalExit(context.Context) bool { return true }
 func (authLiberado) UserID(context.Context) (uuid.UUID, error) {
 	return uuid.MustParse("00000000-0000-0000-0000-000000000001"), nil
+}
+
+// Digitar à mão um número já usado criava uma segunda nota com ele: a SEFAZ só
+// recusava na transmissão, e o rascunho já existia.
+func TestNumeroDigitadoJaUsadoERecusado(t *testing.T) {
+	repo := &repoNumeracao{numeroUsado: true}
+	uc := &CreateFiscalExitUseCase{Repo: repo, Auth: authLiberado{}}
+	_, err := uc.Execute(context.Background(), request.CreateFiscalExitDTO{
+		NumeroNF: 763, Serie: "1", DataEmissao: "2026-09-27", Cfop: "5101", NaturezaOperacao: "VENDA",
+		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: 1, UnitPrice: 10, TotalPrice: 10, OrigemMercadoria: "0"}},
+	})
+	var conflito *errorsuc.ConflictError
+	if !errors.As(err, &conflito) {
+		t.Fatalf("queria recusa por número repetido, veio %v", err)
+	}
+	if repo.criada != nil {
+		t.Fatal("a nota foi criada com o número repetido")
+	}
 }
 
 // O número da NF-e é sequência fiscal. Toda nota digitada nascia com número 0 —
@@ -364,4 +402,31 @@ func reformaPelaLei(t *testing.T, exit *fiscalentity.FiscalExit, items []*fiscal
 		t.Fatal(err)
 	}
 	return rt
+}
+
+// A duplicata vai no formato que a SEFAZ pede: três dígitos, em sequência.
+func TestDuplicatasEmSequenciaDeTresDigitos(t *testing.T) {
+	nota := notaBase()
+	p, _ := montarPayloadNFe(nota, itemBase(), configBase(), planoEm3Parcelas(nota.ValorTotal, nota.DataEmissao), reformaPelaLei(t, nota, itemBase(), configBase()))
+	for i, d := range p.Duplicatas {
+		if want := fmt.Sprintf("%03d", i+1); d.Numero != want {
+			t.Fatalf("duplicata %d = %q, queria %q", i, d.Numero, want)
+		}
+	}
+}
+
+// Antes da autorização a nota não tem número nem série: quem dá é a emissora.
+func TestNumeroSoDepoisDaAutorizacao(t *testing.T) {
+	rascunho := &fiscalentity.FiscalExit{NumeroNF: 42, Serie: "1", Status: fiscalentity.ExitStatusDraft}
+	if numeroDefinitivo(rascunho) != 0 || serieDefinitiva(rascunho) != "" {
+		t.Fatal("rascunho não tem número fiscal")
+	}
+	if r := toFiscalExitResponse(rascunho); r.NumeroNF != 0 {
+		t.Fatalf("a tela não pode mostrar o número provisório: %d", r.NumeroNF)
+	}
+	chave := validation.MontarChaveNFe("41", "2611", cnpjEmitenteTeste, 1, 42, 1)
+	autorizada := &fiscalentity.FiscalExit{NumeroNF: 42, Serie: "1", Status: fiscalentity.ExitStatusAuthorized, ChaveAcesso: &chave}
+	if numeroDefinitivo(autorizada) != 42 || serieDefinitiva(autorizada) != "1" {
+		t.Fatal("nota autorizada mostra o número da autorização")
+	}
 }

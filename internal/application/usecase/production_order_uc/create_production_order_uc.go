@@ -181,6 +181,12 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		if child.IsCoproduct || perUnit <= 0 {
 			continue
 		}
+		// Material do cliente (beneficiamento) não é demanda do estoque próprio:
+		// entra pela NF-e de remessa, no razão de terceiros. Como DEMAND ele
+		// apareceria como falta, entraria no MRP e seria requisitado do estoque.
+		if child.CustomerSupplied {
+			continue
+		}
 		quantity := decimal.NewFromFloat(perUnit)
 		if !child.IsFixedQty {
 			quantity = quantity.Mul(dto.PlannedQty)

@@ -1035,6 +1035,9 @@ func (app *application) mount() chi.Router {
 		// Resolve o destinatário pelo mesmo caminho da nota de venda, para o mesmo
 		// cliente não sair com endereço diferente em cada tipo de nota.
 		Clientes: &fiscalUC.ResolvedorDeDestinatario{Customers: customerRepo.New(queries, app.db.Pool)},
+		// Pedido de beneficiamento = pedido de venda: confere a remessa e traz o
+		// serviço para a nota.
+		Pedidos: customerMaterialRepo.NewPedidos(app.db.Pool),
 	}
 	customerMaterialHandler := handler.NewCustomerMaterialHandler(customerMaterialUC)
 
@@ -1289,12 +1292,14 @@ func (app *application) mount() chi.Router {
 
 	// adiantamentos (advance payments)
 	adiantamentoHandler := handler.NewAdiantamentoHandler(
-		&financial_uc.CreateAdiantamentoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.CreateAdiantamentoUseCase{Repo: fRepo, Auth: authService, Contabil: saidaContabil},
 		&financial_uc.ListAdiantamentosUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetAdiantamentoUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.AplicarAdiantamentoUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.AplicarAdiantamentoUseCase{Repo: fRepo, Auth: authService, Contabil: saidaContabil},
+		&financial_uc.CancelarAdiantamentoUseCase{Repo: fRepo, Auth: authService},
 	)
 
+	contaPagarParceladaHandler := handler.NewContaPagarParceladaHandler(&financial_uc.CreateContaPagarParceladaUseCase{Repo: fRepo, Auth: authService})
 	cpPorPlanoHandler := handler.NewContasPagarPorPlanoHandler(&financial_uc.ContasPagarPorPlanoUseCase{Repo: fRepo, Auth: authService})
 
 	// fiscal module
@@ -1304,8 +1309,9 @@ func (app *application) mount() chi.Router {
 	reformaTributariaHandler := handler.NewReformaTributariaHandler(reformaTributariaUC)
 	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
 	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
-	previaNFeUC := &fiscalUC.PreviaNFeUseCase{CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
+	previaNFeUC := &fiscalUC.PreviaNFeUseCase{TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
 	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
+	destinatarioNotaHandler := handler.NewDestinatarioNotaHandler(&fiscalUC.DestinatarioDaNotaUseCase{Customers: custRepo, Fiscal: fiscalRepository, Auth: authService})
 	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com
 	// o cadastro, plano de contas por item e parcelas distribuídas por plano —
 	// que viram, na aprovação, um título do contas a pagar por parcela com rateio.
@@ -1329,6 +1335,7 @@ func (app *application) mount() chi.Router {
 		ByKey:    &fiscalUC.ImportNFeByKeyUseCase{Upload: uploadNFeEntryUC},
 		Auth:     authService,
 	}
+	sugestaoItemEntradaHandler := handler.NewSugestaoItemEntradaHandler(&fiscalUC.SugestaoItemEntradaUseCase{Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Auth: authService})
 	fiscalEntryEnterpriseHandler := handler.NewFiscalEntryEnterpriseHandler(
 		&fiscalUC.CancelFiscalEntryUseCase{Docs: fiscalEntryDocs, Fiscal: fiscalRepository, FinancialRepo: fRepo, Auth: authService},
 		&fiscalUC.PedidosDoItemUseCase{Docs: fiscalEntryDocs, Auth: authService},
@@ -1391,6 +1398,7 @@ func (app *application) mount() chi.Router {
 		Itens:       itemRepo,
 		Pendencias:  fiscalRepo.NewPendenciasPG(app.db.Pool),
 		GeraTitulos: true,
+		TiposNota:   fiscalRepo.NewCadastroTributarioPG(app.db.Pool),
 		Conversor:   itemConversionUC,
 		Transacao: func(ctx context.Context, fn func(fiscalUC.EfeitosRepos) error) error {
 			tx, err := app.db.Pool.Begin(ctx)
@@ -1430,8 +1438,9 @@ func (app *application) mount() chi.Router {
 			FiscalRepo:     fiscalRepository,
 			ShipmentRepo:   shipmentRepoPG,
 			SalesOrderRepo: soRepo,
+			Itens:          fiscalEntryDocs,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
+		&fiscalUC.AuthorizeFiscalExitUseCase{TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
 		&fiscalUC.CancelFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
@@ -2067,6 +2076,10 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/customer-material", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerMaterialHandler.Listar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/balance", customerMaterialHandler.Saldo)
+			// Relatórios do levantamento da Usimac: movimentação (entrada e saída)
+			// e horas trabalhadas para o terceiro (apontamento só de horas).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/movements", customerMaterialHandler.RelatorioDeMovimentos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/hours", customerMaterialHandler.HorasDeBeneficiamento)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", customerMaterialHandler.Obter)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/items/{itemId}/movements", customerMaterialHandler.Movimentos)
 			// Histórico e auditoria da remessa (migração 000371): quem, quando, o
@@ -2079,6 +2092,13 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/close", customerMaterialHandler.Encerrar)
 			// Faturamento: cria a nota com 5124 + 5902/5903 e baixa o saldo do cliente.
 			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/invoice", customerMaterialHandler.Faturar)
+			// O faturamento abre preenchido pelo pedido de beneficiamento.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/invoice-proposal", customerMaterialHandler.PropostaDeFaturamento)
+			// Vincula o pedido depois do recebimento e libera o material retido
+			// por falta dele.
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{id}/sales-order", customerMaterialHandler.VincularPedido)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/notes/{id}/discard", customerMaterialHandler.DescartarNota)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/hours/{id}/sales-order", customerMaterialHandler.VincularPedidoDaOF)
 			// Estorno da baixa de uma nota. O cancelamento da NF-e já dispara isto;
 			// a rota conclui o caso em que o cancelamento passou e o estorno falhou.
 			r.With(httpmw.RequireRole("ADMIN")).Post("/notes/{fiscalExitId}/reverse", customerMaterialHandler.Estornar)
@@ -2558,6 +2578,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/import-key", fiscalEntryHandler.ImportByKey)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/entries/{code}/conciliacao", fiscalEntryHandler.SaveConciliation)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/itens/{itemId}/sugestoes", fiscalEntryHandler.SuggestItems)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/sugestao-item", sugestaoItemEntradaHandler.Sugerir)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/xml", fiscalEntryHandler.DownloadXML)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/approve", fiscalHandler.ApproveEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/cancelar", fiscalEntryEnterpriseHandler.Cancelar)
@@ -2586,6 +2607,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}", fiscalHandler.GetEntry)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/create", fiscalHandler.CreateExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-load", fiscalHandler.CreateExitFromLoad)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/destinatario/{code}", destinatarioNotaHandler.DoCliente)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/sugestao-cfop", destinatarioNotaHandler.SugerirCfop)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/sales-order/{code}/previa", faturarPedidoHandler.Previa)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/from-sales-order", faturarPedidoHandler.Faturar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tributacao/simular", simularTributacaoHandler.Simular)
@@ -2775,6 +2798,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/adiantamentos/list", adiantamentoHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/adiantamentos/{id}", adiantamentoHandler.Get)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adiantamentos/{id}/aplicar", adiantamentoHandler.Aplicar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adiantamentos/{id}/cancelar", adiantamentoHandler.Cancelar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-bancarias/create", financialHandler.CreateContaBancaria)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-bancarias/list", financialHandler.ListContasBancarias)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/condicoes-pagamento/create", financialHandler.CreateCondicaoPagamento)
@@ -2796,6 +2820,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/centros-custo/{id}", cadastroFinanceiroHandler.UpdateCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/centros-custo/{id}", cadastroFinanceiroHandler.DeleteCentroCusto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/create", financialHandler.CreateContaPagar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/create-parcelada", contaPagarParceladaHandler.Criar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/list", financialHandler.ListContasPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar/{id}", financialHandler.GetContaPagar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-pagar/{id}/approve", financialHandler.ApproveContaPagar)

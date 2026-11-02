@@ -26,7 +26,7 @@ func (r *Repository) Profile(ctx context.Context, filter mrp_report_uc.Filter) (
 		COALESCE((SELECT classification.code FROM item_classification_assignments assignment JOIN item_classifications classification ON classification.id=assignment.classification_id
 			WHERE assignment.enterprise_id=$1 AND assignment.item_code=profile.item_code ORDER BY classification.level DESC,classification.code LIMIT 1),''),
 		CASE WHEN $12 THEN COALESCE((SELECT array_agg(DISTINCT demand.sales_order_code)
-			FROM planned_orders planned JOIN sales_order_demands demand ON demand.code=planned.sales_order_code
+			FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE
 			WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code
 		LEFT JOIN LATERAL(SELECT SUM(quantity-reserved_qty) quantity FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code)current_stock ON TRUE
@@ -107,7 +107,7 @@ func (r *Repository) Availability(ctx context.Context, filter mrp_report_uc.Filt
 	), needs AS (
 		SELECT item_code,mask,quantity,sales_order,level,ARRAY[item_code] path FROM roots
 		UNION ALL SELECT structure.child_code,''::varchar,needs.quantity*structure.quantity*(1+structure.loss_percentage/100),needs.sales_order,needs.level+1,needs.path||structure.child_code
-		FROM needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active
+		FROM needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active AND NOT structure.customer_supplied
 		WHERE NOT structure.child_code=ANY(needs.path)
 	), grouped AS (
 		SELECT item_code,MAX(mask) mask,SUM(quantity) demand,array_agg(DISTINCT sales_order) FILTER(WHERE sales_order IS NOT NULL) sales_orders,level FROM needs GROUP BY item_code,level
@@ -206,7 +206,7 @@ func (r *Repository) GroupedNeeds(ctx context.Context, filter mrp_report_uc.Filt
 	rows, err := r.pool.Query(ctx, `SELECT profile.item_code,profile.need_date,SUM(profile.demand),SUM(profile.orders_planned),SUM(profile.orders_firm),
 		COALESCE((SELECT SUM(balance.quantity-balance.reserved_qty) FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code),0),item.planner_employee_code,
 		COALESCE((SELECT classification.code FROM item_classification_assignments assignment JOIN item_classifications classification ON classification.id=assignment.classification_id WHERE assignment.enterprise_id=$1 AND assignment.item_code=profile.item_code ORDER BY classification.level DESC,classification.code LIMIT 1),''),
-		CASE WHEN $10 THEN COALESCE((SELECT array_agg(DISTINCT demand.sales_order_code) FROM planned_orders planned JOIN sales_order_demands demand ON demand.code=planned.sales_order_code WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
+		CASE WHEN $10 THEN COALESCE((SELECT array_agg(DISTINCT demand.sales_order_code) FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code WHERE profile.enterprise_id=$1 AND ($2::bigint IS NULL OR profile.plan_code=$2)
 		AND ($3::bigint IS NULL OR profile.item_code=$3) AND ($4::date IS NULL OR profile.need_date >= $4)
 		AND ($5::date IS NULL OR profile.need_date <= $5) AND ($6::bigint IS NULL OR item.planner_employee_code=$6)
@@ -261,12 +261,12 @@ func (r *Repository) Explosion(ctx context.Context, itemCode int64, quantity dec
 		WHERE company.id=$4 AND load.enterprise_id=$4 AND load.code=ANY($11::bigint[]) AND load.status<>'CANCELLED'
 	), explosion AS (
 		SELECT structure.parent_code,structure.child_code,1 level,(roots.quantity*structure.quantity*(1+structure.loss_percentage/100)) quantity,ARRAY[structure.parent_code,structure.child_code] path
-		FROM roots JOIN item_structures structure ON structure.parent_code=roots.item_code WHERE structure.is_active
+		FROM roots JOIN item_structures structure ON structure.parent_code=roots.item_code WHERE structure.is_active AND NOT structure.customer_supplied
 		AND ($3::date IS NULL OR structure.start_date IS NULL OR structure.start_date <= $3)
 		AND ($3::date IS NULL OR structure.end_date IS NULL OR structure.end_date >= $3)
 		UNION ALL SELECT structure.parent_code,structure.child_code,explosion.level+1,
 		explosion.quantity*structure.quantity*(1+structure.loss_percentage/100),explosion.path||structure.child_code
-		FROM explosion JOIN item_structures structure ON structure.parent_code=explosion.child_code AND structure.is_active
+		FROM explosion JOIN item_structures structure ON structure.parent_code=explosion.child_code AND structure.is_active AND NOT structure.customer_supplied
 		WHERE NOT structure.child_code=ANY(explosion.path))
 		SELECT explosion.parent_code,explosion.child_code,explosion.level,SUM(explosion.quantity),
 		COALESCE(stock.quantity,0),COALESCE(purchase.quantity,0),CASE WHEN $13='RESUMIDA' THEN COALESCE(item.complement,'') ELSE item.pdm_description_technique END,item.warehouse_unit_of_measurement::text,COALESCE(cost.total_cost,0)
@@ -317,7 +317,7 @@ func (r *Repository) ReorderPoint(ctx context.Context, filter mrp_report_uc.Filt
 		WHERE company.id=$1 AND header.is_active AND header.status IN ('P','A') AND line.is_active AND line.status IN ('OPEN','PARTIAL')
 		AND ($12='LIBERADOS_E_BLOQUEADOS' OR NOT header.is_blocked) AND ($9::date IS NULL OR COALESCE(line.delivery_date,header.delivery_date)>=$9) AND ($10::date IS NULL OR COALESCE(line.delivery_date,header.delivery_date)<=$10)
 		UNION ALL SELECT structure.child_code,needs.quantity*structure.quantity*(1+structure.loss_percentage/100),needs.path||structure.child_code
-		FROM sales_needs needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active WHERE NOT structure.child_code=ANY(needs.path)
+		FROM sales_needs needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active AND NOT structure.customer_supplied WHERE NOT structure.child_code=ANY(needs.path)
 	)
 	SELECT balance.item_code,COALESCE(SUM(CASE WHEN $8 THEN balance.quantity-balance.reserved_qty ELSE balance.quantity END),0),
 		COALESCE(MAX(balance.safety_stock),0),COALESCE(MAX(balance.maximum_stock),0),COALESCE(avg.avg_monthly_consumption,0),

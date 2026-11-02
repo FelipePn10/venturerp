@@ -146,15 +146,12 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 	if err != nil && !errors.As(err, &semConfig) {
 		return nil, err
 	}
-	out.CfopSugerido, out.NaturezaSugerida = "5101", "VENDA DE PRODUCAO DO ESTABELECIMENTO"
-	if cfg != nil && out.CustomerUF != "" && !strings.EqualFold(cfg.UFEmpresa, out.CustomerUF) {
-		out.CfopSugerido = "6101"
-		// Venda a consumidor final não contribuinte de outro estado tem CFOP
-		// próprio (6107): é a operação com DIFAL (EC 87/2015).
-		if tipoDestinatario(dest.IEDestinatario, dest.TipoPessoa) != "contribuinte" {
-			out.CfopSugerido, out.NaturezaSugerida = "6107", "VENDA DE PRODUCAO A NAO CONTRIBUINTE"
-		}
+	ufEmpresa := ""
+	if cfg != nil {
+		ufEmpresa = cfg.UFEmpresa
 	}
+	sugestao := cfopDaVenda(ufEmpresa, out.CustomerUF, out.CustomerIE, deref(dest.TipoPessoa))
+	out.CfopSugerido, out.NaturezaSugerida = sugestao.Cfop, sugestao.Natureza
 
 	pendente := decimal.Zero
 	for _, l := range linhas {

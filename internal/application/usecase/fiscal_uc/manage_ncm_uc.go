@@ -20,7 +20,7 @@ type UpsertNcmTaxUseCase struct {
 }
 
 func (uc *UpsertNcmTaxUseCase) Execute(ctx context.Context, dto request.UpsertNcmTaxDTO) (*response.NcmTaxTableResponse, error) {
-	if !uc.Auth.CanManageFiscalConfig(ctx) {
+	if !podeEditarTabelaLegal(ctx, uc.Auth) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	ncm, err := ncmValido(dto.Ncm)
@@ -67,7 +67,7 @@ type DeleteNcmTaxUseCase struct {
 }
 
 func (uc *DeleteNcmTaxUseCase) Execute(ctx context.Context, ncm string) error {
-	if !uc.Auth.CanManageFiscalConfig(ctx) {
+	if !podeEditarTabelaLegal(ctx, uc.Auth) {
 		return errorsuc.ErrUnauthorized
 	}
 	limpo, err := ncmValido(ncm)
@@ -83,7 +83,7 @@ type UpsertICMSInterstateUseCase struct {
 }
 
 func (uc *UpsertICMSInterstateUseCase) Execute(ctx context.Context, dto request.UpsertICMSInterstateDTO) error {
-	if !uc.Auth.CanManageFiscalConfig(ctx) {
+	if !podeEditarTabelaLegal(ctx, uc.Auth) {
 		return errorsuc.ErrUnauthorized
 	}
 	origem, err := ufValida(dto.OriginUF, "origin_uf")
@@ -115,7 +115,7 @@ type UpsertICMSInternalUseCase struct {
 }
 
 func (uc *UpsertICMSInternalUseCase) Execute(ctx context.Context, dto request.UpsertICMSInternalDTO) error {
-	if !uc.Auth.CanManageFiscalConfig(ctx) {
+	if !podeEditarTabelaLegal(ctx, uc.Auth) {
 		return errorsuc.ErrUnauthorized
 	}
 	uf, err := ufValida(dto.UF, "uf")
@@ -175,4 +175,13 @@ func ncmValido(valor string) (string, error) {
 			valor, len(ncm)))
 	}
 	return ncm, nil
+}
+
+// podeEditarTabelaLegal: as tabelas da VFIS0110 (TIPI por NCM, ICMS interno
+// por UF e interestadual) são a lei, as mesmas para todas as empresas da
+// instalação. Alterá-las muda a nota de todas, então só o administrador edita;
+// o usuário fiscal consulta, e as exceções da empresa ficam na VFIS0320.
+func podeEditarTabelaLegal(ctx context.Context, auth ports.AuthService) bool {
+	admin, ok := auth.(interface{ IsAdmin(context.Context) bool })
+	return ok && auth.CanManageFiscalConfig(ctx) && admin.IsAdmin(ctx)
 }

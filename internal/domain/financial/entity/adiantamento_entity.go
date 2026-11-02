@@ -44,8 +44,12 @@ type Adiantamento struct {
 	UpdatedAt        time.Time
 }
 
-// Saldo is the remaining (unused) amount of the advance.
+// Saldo is the remaining (unused) amount of the advance. A cancelled advance
+// has nothing left to apply: its money went back to the bank account.
 func (a *Adiantamento) Saldo() decimal.Decimal {
+	if a.Status == AdiantamentoStatusCancelado {
+		return decimal.Zero
+	}
 	return a.ValorOriginal.Sub(a.ValorUtilizado)
 }
 

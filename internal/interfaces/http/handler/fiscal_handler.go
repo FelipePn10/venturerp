@@ -187,8 +187,7 @@ func (h *FiscalHandler) GetEntry(w http.ResponseWriter, r *http.Request) {
 
 func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalExitDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createExitUC.Execute(r.Context(), dto)
@@ -201,8 +200,7 @@ func (h *FiscalHandler) CreateExit(w http.ResponseWriter, r *http.Request) {
 
 func (h *FiscalHandler) CreateExitFromLoad(w http.ResponseWriter, r *http.Request) {
 	var dto request.CreateFiscalExitFromLoadDTO
-	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+	if !security.DecodeBody(w, r, &dto) {
 		return
 	}
 	result, err := h.createExitFromLoadUC.Execute(r.Context(), dto)

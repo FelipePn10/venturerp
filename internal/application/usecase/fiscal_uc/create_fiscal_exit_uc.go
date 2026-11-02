@@ -48,6 +48,27 @@ type ResolvedorBeneficioFiscal interface {
 	BeneficioFiscal(ctx context.Context, itemCode *int64, ncm *string, ufDestino string, cliente *int64) (*string, error)
 }
 
+// conferirLinhasDaNota recusa a linha sem quantidade: o imposto é calculado sobre
+// quantidade × preço, então ela criava a nota com total preenchido e ICMS zerado,
+// e o erro só aparecia na rejeição da SEFAZ.
+func conferirLinhasDaNota(itens []request.CreateFiscalExitItemDTO) error {
+	if len(itens) == 0 {
+		return errorsuc.NewValidationError("inclua ao menos um item na nota")
+	}
+	for i := range itens {
+		if itens[i].Quantity == 0 {
+			itens[i].Quantity = itens[i].Quantidade
+		}
+		if itens[i].Quantity <= 0 {
+			return errorsuc.NewValidationError(fmt.Sprintf("informe a quantidade do item da linha %d", i+1))
+		}
+		if itens[i].UnitPrice < 0 {
+			return errorsuc.NewValidationError(fmt.Sprintf("o preço do item da linha %d não pode ser negativo", i+1))
+		}
+	}
+	return nil
+}
+
 // cstComBeneficio: CSTs de ICMS que levam cBenef nas UFs que o exigem. Mandar o
 // código num CST sem benefício (00, 10…) também é rejeitado pela SEFAZ.
 var cstComBeneficio = map[string]bool{"20": true, "30": true, "40": true, "41": true, "50": true, "51": true, "53": true, "70": true, "90": true}
@@ -55,6 +76,10 @@ var cstComBeneficio = map[string]bool{"20": true, "30": true, "40": true, "41": 
 func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitDTO) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+
+	if err := conferirLinhasDaNota(dto.Itens); err != nil {
+		return nil, err
 	}
 
 	if err := resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders); err != nil {
@@ -90,10 +115,27 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	}
 	destTipo, regras, taxResult := trib.DestinoTipo, trib.Regras, trib.Resultado
 
-	// Numeração da nota. O número da NF-e é uma sequência fiscal: ela não pode
-	// repetir nem ser digitada a dedo. Quando a nota vem da carga, o sistema já
-	// numerava; a nota digitada aceitava o que viesse, e todas nasciam com
-	// número 0 — duas notas com o mesmo número é problema com a Receita.
+	if dto.InvoiceTypeID != nil && dto.SalesOrderCode == nil {
+		if leitor, ok := uc.Cadastro.(interface {
+			ExigePedidoNoTipoNota(context.Context, int64) (bool, error)
+		}); ok {
+			exige, err := leitor.ExigePedidoNoTipoNota(ctx, *dto.InvoiceTypeID)
+			if err != nil {
+				return nil, err
+			}
+			if exige {
+				return nil, errorsuc.NewValidationError("este tipo de nota só pode ser usado com pedido de venda: fature pelo pedido ou escolha outro tipo")
+			}
+		}
+	}
+
+	// Número de controle do rascunho. O número fiscal é da Focus: ela controla a
+	// sequência pelo painel, não recebe número nem série no envio e devolve os dois
+	// na autorização (UpdateExitNumbering). Este aqui não sai no XML nem na tela.
+	serie := strings.TrimSpace(dto.Serie)
+	if serie == "" {
+		serie = "1"
+	}
 	numeroNF := dto.NumeroNF
 	if numeroNF <= 0 {
 		proximo, err := uc.Repo.GetNextNFNumber(ctx)
@@ -101,10 +143,14 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			return nil, err
 		}
 		numeroNF = proximo
-	}
-	serie := strings.TrimSpace(dto.Serie)
-	if serie == "" {
-		serie = "1"
+	} else {
+		existe, err := uc.Repo.NFNumberExists(ctx, numeroNF, serie)
+		if err != nil {
+			return nil, err
+		}
+		if existe {
+			return nil, errorsuc.NewConflictError(fmt.Sprintf("já existe uma NF-e com o número %d na série %s: deixe o número em branco para usar o próximo", numeroNF, serie))
+		}
 	}
 
 	dataEmissao, msg := datetime.Obrigatoria("data de emissão", dto.DataEmissao)

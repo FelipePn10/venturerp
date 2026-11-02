@@ -94,6 +94,9 @@ type faturarRequest struct {
 		Unidade    string `json:"unidade"`
 		Quantidade string `json:"quantidade"`
 		ValorUnit  string `json:"valor_unitario"`
+		// Linha do pedido de beneficiamento que o serviço fatura. Vazia com uma
+		// só linha em aberto: o servidor escolhe.
+		SalesOrderItemCode *int64 `json:"sales_order_item_code"`
 	} `json:"servico"`
 	Devolucoes   []devolucaoRequest `json:"devolucoes"`
 	Destinatario struct {
@@ -170,9 +173,19 @@ type itemRemessaResponse struct {
 	Address          *string `json:"address"`
 }
 
+// notaPendenteResponse: a nota da remessa que ainda não foi autorizada.
+type notaPendenteResponse struct {
+	ID              int64   `json:"id"`
+	Number          int64   `json:"number"`
+	Series          string  `json:"series"`
+	Status          string  `json:"status"`
+	RejectionReason *string `json:"rejection_reason"`
+}
+
 type remessaResponse struct {
 	ID                   int64   `json:"id"`
 	CustomerCode         int64   `json:"customer_code"`
+	CustomerName         string  `json:"customer_name"`
 	NFeNumber            int64   `json:"nfe_number"`
 	NFeSeries            string  `json:"nfe_series"`
 	NFeKey               *string `json:"nfe_key"`
@@ -182,16 +195,18 @@ type remessaResponse struct {
 	FiscalReturnDeadline string  `json:"fiscal_return_deadline"`
 	// DiasParaOPrazo é negativo quando o prazo já passou. Vem calculado do
 	// servidor para a tela não depender do relógio da máquina do usuário.
-	DiasParaOPrazo int                   `json:"dias_para_o_prazo"`
-	TotalValue     string                `json:"total_value"`
-	Status         string                `json:"status"`
-	SalesOrderCode *int64                `json:"sales_order_code"`
-	Blocked        bool                  `json:"blocked"`
-	BlockReason    *string               `json:"block_reason"`
-	CloseReason    *string               `json:"close_reason"`
-	Notes          *string               `json:"notes"`
-	SaldoTotal     string                `json:"saldo_total"`
-	Itens          []itemRemessaResponse `json:"itens"`
+	DiasParaOPrazo   int                   `json:"dias_para_o_prazo"`
+	TotalValue       string                `json:"total_value"`
+	Status           string                `json:"status"`
+	SalesOrderCode   *int64                `json:"sales_order_code"`
+	SalesOrderNumber *int64                `json:"sales_order_number"`
+	PendingExit      *notaPendenteResponse `json:"pending_exit"`
+	Blocked          bool                  `json:"blocked"`
+	BlockReason      *string               `json:"block_reason"`
+	CloseReason      *string               `json:"close_reason"`
+	Notes            *string               `json:"notes"`
+	SaldoTotal       string                `json:"saldo_total"`
+	Itens            []itemRemessaResponse `json:"itens"`
 }
 
 type movimentoResponse struct {
@@ -418,14 +433,14 @@ func (h *CustomerMaterialHandler) Movimentar(w http.ResponseWriter, r *http.Requ
 	}
 	if !tipoDeMovimentoValido(mov.MovementType) {
 		security.RespondUseCaseError(w, errorsuc.NewValidationError(
-			"tipo de movimento inválido; use RETURN, LEFTOVER, SCRAP ou ADJUSTMENT"))
+			"escolha o tipo de movimento: retorno, sobra, sucata ou ajuste"))
 		return
 	}
 	if body.ScrapDestination != nil {
 		destino := cmentity.DestinoSucata(strings.ToUpper(strings.TrimSpace(*body.ScrapDestination)))
 		if !destinoDeSucataValido(destino) {
 			security.RespondUseCaseError(w, errorsuc.NewValidationError(
-				"destinação de sucata inválida; use CLIENTE, DESCARTE, RETENCAO ou OUTRA"))
+				"escolha a destinação da sucata: cliente, descarte, retenção ou outra"))
 			return
 		}
 		mov.ScrapDestination = &destino
@@ -487,6 +502,8 @@ func (h *CustomerMaterialHandler) Faturar(w http.ResponseWriter, r *http.Request
 			Unidade:    body.Servico.Unidade,
 			Quantidade: body.Servico.Quantidade,
 			ValorUnit:  body.Servico.ValorUnit,
+
+			SalesOrderItemCode: body.Servico.SalesOrderItemCode,
 		},
 	}
 
@@ -584,7 +601,7 @@ func (h *CustomerMaterialHandler) Encerrar(w http.ResponseWriter, r *http.Reques
 
 func montarRemessa(r *cmentity.Remessa) remessaResponse {
 	out := remessaResponse{
-		ID: r.ID, CustomerCode: r.CustomerCode, NFeNumber: r.NFeNumber,
+		ID: r.ID, CustomerCode: r.CustomerCode, CustomerName: r.CustomerName, NFeNumber: r.NFeNumber,
 		NFeSeries: r.NFeSeries, NFeKey: r.NFeKey, CFOP: r.CFOP,
 		IssueDate:            r.IssueDate.Format(formatoDataCM),
 		ReceivedAt:           r.ReceivedAt.Format(formatoDataCM),
@@ -594,10 +611,13 @@ func montarRemessa(r *cmentity.Remessa) remessaResponse {
 		DiasParaOPrazo: int(r.FiscalReturnDeadline.Truncate(24*time.Hour).
 			Sub(time.Now().UTC().Truncate(24*time.Hour)).Hours() / 24),
 		TotalValue: r.TotalValue.String(), Status: string(r.Status),
-		SalesOrderCode: r.SalesOrderCode, Blocked: r.Blocked, BlockReason: r.BlockReason,
+		SalesOrderCode: r.SalesOrderCode, SalesOrderNumber: r.SalesOrderNumber, Blocked: r.Blocked, BlockReason: r.BlockReason,
 		CloseReason: r.CloseReason, Notes: r.Notes,
 		SaldoTotal: r.SaldoTotal().String(),
 		Itens:      make([]itemRemessaResponse, 0, len(r.Itens)),
+	}
+	if n := r.NotaPendente; n != nil {
+		out.PendingExit = &notaPendenteResponse{ID: n.ID, Number: n.Numero, Series: n.Serie, Status: n.Status, RejectionReason: n.MotivoRejeicao}
 	}
 	for _, item := range r.Itens {
 		out.Itens = append(out.Itens, itemRemessaResponse{
@@ -687,7 +707,7 @@ func decodeCM(w http.ResponseWriter, r *http.Request, alvo any) bool {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(alvo); err != nil {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("JSON inválido: "+err.Error()))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("não foi possível ler os dados enviados: atualize a tela e tente de novo"))
 		return false
 	}
 	return true
@@ -696,7 +716,7 @@ func decodeCM(w http.ResponseWriter, r *http.Request, alvo any) bool {
 func idDaRotaCM(w http.ResponseWriter, r *http.Request, param string) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, param), 10, 64)
 	if err != nil || id <= 0 {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("identificador inválido"))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("registro não identificado: atualize a tela e tente de novo"))
 		return 0, false
 	}
 	return id, true
@@ -708,7 +728,7 @@ func dataObrigatoriaCM(bruto, campo string) (time.Time, error) {
 	}
 	d, err := time.Parse(formatoDataCM, strings.TrimSpace(bruto))
 	if err != nil {
-		return time.Time{}, errorsuc.NewValidationError(campo + " inválida; use AAAA-MM-DD")
+		return time.Time{}, errorsuc.NewValidationError(campo + " inválida: confira o dia, o mês e o ano")
 	}
 	return d, nil
 }
@@ -786,7 +806,7 @@ func (h *CustomerMaterialHandler) Trilha(w http.ResponseWriter, r *http.Request)
 	if bruto := strings.TrimSpace(r.URL.Query().Get("limit")); bruto != "" {
 		n, err := strconv.Atoi(bruto)
 		if err != nil || n <= 0 {
-			security.RespondUseCaseError(w, errorsuc.NewValidationError("limit inválido"))
+			security.RespondUseCaseError(w, errorsuc.NewValidationError("quantidade de registros inválida: atualize a tela e tente de novo"))
 			return
 		}
 		limite = n
@@ -816,6 +836,6 @@ func usuarioDaSessaoCM(w http.ResponseWriter, r *http.Request) (string, bool) {
 	if u, ok := r.Context().Value(contextkey.UserKey).(*appsecurity.AuthUser); ok && u != nil && u.ID != "" {
 		return u.ID, true
 	}
-	security.RespondUseCaseError(w, errorsuc.NewValidationError("sessão sem usuário identificado"))
+	security.RespondUseCaseError(w, errorsuc.NewValidationError("sua sessão não identificou o usuário: entre no sistema novamente"))
 	return "", false
 }

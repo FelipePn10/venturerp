@@ -210,3 +210,34 @@ func TestNotaDevolucao(t *testing.T) {
 		t.Fatalf("faltando: %v", falta)
 	}
 }
+
+func TestAdiantamento(t *testing.T) {
+	ls, falta := Adiantamento(true, c(1), c(2), d("100"), "Adiantamento NF 1")
+	if len(falta) > 0 || len(ls) != 1 || ls[0].DebitoID != 2 || ls[0].CreditoID != 1 {
+		t.Fatalf("pago a fornecedor: D adiantamento / C banco; veio %+v %v", ls, falta)
+	}
+	ls, _ = Adiantamento(false, c(1), c(3), d("100"), "x")
+	if ls[0].DebitoID != 1 || ls[0].CreditoID != 3 {
+		t.Fatalf("recebido de cliente: D banco / C adiantamento; veio %+v", ls)
+	}
+	// Aplicação: o adiantamento faz o papel do banco no pagamento do título.
+	ap, falta := Pagamento(Baixa{Banco: c(2), Partes: []Parte{{Conta: c(5), Peso: d("1")}}, Principal: d("40")})
+	if len(falta) > 0 || ap[0].DebitoID != 5 || ap[0].CreditoID != 2 {
+		t.Fatalf("aplicação: D fornecedores / C adiantamento; veio %+v", ap)
+	}
+	saldo := Saldo(append(ls[:0:0], append(mustAdiant(t), ap...)...))
+	if !saldo[2].Equal(d("60")) {
+		t.Fatalf("sobram 60 no adiantamento, veio %s", saldo[2])
+	}
+	if _, falta := Adiantamento(false, c(1), nil, d("1"), "x"); len(falta) != 1 {
+		t.Fatalf("conta de adiantamentos de clientes ausente deveria ser apontada: %v", falta)
+	}
+}
+
+func mustAdiant(t *testing.T) []Lancamento {
+	ls, falta := Adiantamento(true, c(1), c(2), d("100"), "x")
+	if len(falta) > 0 {
+		t.Fatal(falta)
+	}
+	return ls
+}

@@ -160,6 +160,10 @@ demo-seed:
 	@docker exec -i -e PGPASSWORD="$(DEMO_DB_PASS)" $(DEMO_DB_CONTAINER) \
 		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 \
 		-v admin_password="$(DEMO_ADMIN_PASS)" < scripts/seed-demo.sql
+	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' panossoerp-api-demo 2>/dev/null)" = "healthy" ]; do sleep 2; done
+	@DEMO_ADMIN_PASSWORD="$(DEMO_ADMIN_PASS)" bash scripts/seed-demo-beneficiamento.sh
+	@docker exec -i -e PGPASSWORD="$(DEMO_DB_PASS)" $(DEMO_DB_CONTAINER) \
+		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 < scripts/seed-demo-cadastros-fiscais.sql
 
 # Atalho: sobe a stack e popula em seguida.
 demo-bootstrap: demo-up
@@ -169,6 +173,15 @@ demo-bootstrap: demo-up
 
 demo-logs:
 	docker compose -f $(DEMO_COMPOSE) logs -f api-demo
+
+# Põe no demo o código desta pasta, mesmo sem commit: reconstrói a API e migra,
+# com backup e sem perder os dados.
+demo-sync:
+	@bash scripts/demo-sync.sh
+
+# demo-sync e abre o app desktop em cima dele.
+demo-app:
+	@bash scripts/demo-app.sh
 
 # ── Backup / restore ─────────────────────────────────────────────────────────
 # One-off logical backup against DATABASE_URL (custom format, into ./backups).
@@ -193,7 +206,7 @@ release:
 	@test -n "$(VERSION)" || (echo "uso: make release VERSION=1.0.0" >&2; exit 2)
 	./scripts/release.sh "$(VERSION)"
 
-.PHONY: cutting-samples create_migration migrate_up migrate_development migrate_down migrate_force reset print_db sqlc \
+.PHONY: demo-sync demo-app cutting-samples create_migration migrate_up migrate_development migrate_down migrate_force reset print_db sqlc \
 	test test-bom-mrp test-purchase-receiving test-procurement-governance test-cover test-integration test-cutting build run vet fmt-check ci \
 	docker-build up down up-backup logs backup restore release release-check \
 	demo-up demo-down demo-reset demo-migrate demo-seed demo-bootstrap demo-logs

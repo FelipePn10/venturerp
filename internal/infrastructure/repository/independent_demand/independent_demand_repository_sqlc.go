@@ -413,6 +413,22 @@ func (r *IndependentDemandRepositorySQLC) VincularSugestao(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("linking demands of suggestion %d: %w", suggestionCode, err)
 	}
+	// O pedido de venda vai junto: o pegging é refeito a cada cálculo, e sem este
+	// registro a OF gerada pelo MRP perde o cliente e o pedido que a originaram.
+	_, err = r.db.Exec(ctx, `
+		INSERT INTO sales_order_planned_orders (enterprise_id, sales_order_item_code, planned_order_id, quantity, created_by)
+		SELECT $1, p.demand_code, po.id, SUM(p.quantity), $4
+		  FROM mrp_pegging p
+		  JOIN planned_orders po ON po.code = $3 AND po.enterprise_id = $1
+		  JOIN sales_order_items soi ON soi.code = p.demand_code
+		 WHERE p.enterprise_id = $1 AND p.supply_kind = 'SUGESTAO' AND p.supply_code = $2
+		   AND p.demand_kind = 'PEDIDO_VENDA' AND p.demand_code IS NOT NULL AND p.quantity > 0
+		 GROUP BY p.demand_code, po.id
+		ON CONFLICT (enterprise_id, sales_order_item_code, planned_order_id) DO NOTHING`,
+		enterpriseID, suggestionCode, plannedOrderCode, pgutil.ToPgUUID(por))
+	if err != nil {
+		return fmt.Errorf("linking sales orders of suggestion %d: %w", suggestionCode, err)
+	}
 	return nil
 }
 

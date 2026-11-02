@@ -33,17 +33,18 @@ INSERT INTO item_structures (
     is_critical_mps,
     generates_inspection,
     quantity_stock_uom,
-    conversion_factor
+    conversion_factor,
+    customer_supplied
 ) SELECT
              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-             $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+             $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $33
       WHERE EXISTS (SELECT 1 FROM items pi WHERE pi.code = $1 AND pi.enterprise_id = $32)
         AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = $2 AND ci.enterprise_id = $32)
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied;
 
 
 -- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied
 FROM item_structures
 WHERE item_structures.id = $1
   AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2);
@@ -78,7 +79,7 @@ SELECT
     s.quantity_formula,
     s.quantity_rounding,
     s.quantity_scale,
-    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection, quantity_stock_uom, conversion_factor
+    s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection, quantity_stock_uom, conversion_factor, s.customer_supplied
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
 WHERE s.parent_code = $1
@@ -125,7 +126,7 @@ SELECT
     s.quantity_rounding,
     s.quantity_scale,
     s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection,
-    s.quantity_stock_uom, s.conversion_factor,
+    s.quantity_stock_uom, s.conversion_factor, s.customer_supplied,
     i.pdm_description_technique AS child_description,
     i.warehouse_unit_of_measurement AS child_stock_uom
 FROM item_structures s
@@ -171,6 +172,7 @@ SET
     generates_inspection = $27,
     quantity_stock_uom   = $28,
     conversion_factor    = $29,
+    customer_supplied    = $31,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -180,7 +182,7 @@ WHERE parent_code = $1
     )
   AND is_active = TRUE
   AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $30)
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor;
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied;
 
 -- name: DeactivateStructureComponent :execrows
 UPDATE item_structures

@@ -47,6 +47,7 @@ func ToItemStructureDTO(e *entity.ItemStructure) *response.StructureComponentRes
 		CostCenterCode:         e.CostCenterCode,
 		IsCriticalMPS:          e.IsCriticalMPS,
 		GeneratesInspection:    e.GeneratesInspection,
+		CustomerSupplied:       e.CustomerSupplied,
 		IsActive:               e.IsActive,
 		CreatedBy:              e.CreatedBy,
 		CreatedAt:              e.CreatedAt,

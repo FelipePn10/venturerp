@@ -88,6 +88,23 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 		cfg.ExigirRegraICMSIPI, cfg.AliquotaCreditoSimples = atual.ExigirRegraICMSIPI, atual.AliquotaCreditoSimples
 		cfg.CBenefDiferimento = atual.CBenefDiferimento
 	}
+	if atual != nil && dto.ObsRetornoIndustrializacao == nil {
+		cfg.ObsRetornoIndustrializacao = atual.ObsRetornoIndustrializacao
+	}
+	if dto.ObsRetornoIndustrializacao != nil {
+		v := strings.TrimSpace(*dto.ObsRetornoIndustrializacao)
+		cfg.ObsRetornoIndustrializacao = &v
+	}
+	if atual != nil && dto.CBenefSuspensao == nil {
+		cfg.CBenefSuspensao = atual.CBenefSuspensao
+	}
+	if dto.CBenefSuspensao != nil {
+		v := strings.ToUpper(strings.TrimSpace(*dto.CBenefSuspensao))
+		if v != "" && (len(v) < 8 || len(v) > 10) {
+			return nil, errorsuc.NewValidationError("o código de benefício fiscal (cBenef) tem 8 a 10 caracteres, como PR840007")
+		}
+		cfg.CBenefSuspensao = &v
+	}
 	if dto.ExigirRegraICMSIPI != nil {
 		cfg.ExigirRegraICMSIPI = *dto.ExigirRegraICMSIPI
 	}

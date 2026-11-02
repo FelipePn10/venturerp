@@ -5,6 +5,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"testing"
@@ -56,7 +57,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	cnpj := fmt.Sprintf("%014d", (u+31)%100_000_000_000_000)
 	supplier := 7_000_000_000 + u%1_000_000_000
 	chapa, luva := u+20, u+21
-	chave := fmt.Sprintf("41%042d", u+9)
+	chave := validation.MontarChaveNFe("41", "2610", cnpj, 1, 12345, u+9)
 
 	testutil.Exec(t, pool, `INSERT INTO fiscal_configs(cnpj_empresa,razao_social,uf_empresa,updated_by,enterprise_id) VALUES('98765432000110','INDUSTRIA','PR',$1,$2)`, actor, empresa)
 	var almox int64
@@ -165,7 +166,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", chave)
+	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", chave)
 	s = strings.ReplaceAll(s, "12345678000190", cnpj)
 	s = strings.ReplaceAll(s, "</ICMSTot>", "</ICMSTot><retTrib><vBCIRRF>100000.00</vBCIRRF><vIRRF>1500.00</vIRRF></retTrib>")
 	s = strings.ReplaceAll(s, "<vDup>33333.34</vDup>", "<vDup>31833.34</vDup>")
@@ -292,10 +293,10 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	}
 	exit := &entity.FiscalExit{ID: exitID, NumeroNF: 9001, Serie: "1", DataEmissao: time.Now(), ValorProdutos: 5000, ValorIPI: 250, ValorICMS: 600,
 		ValorPIS: 82.5, ValorCOFINS: 380, ValorTotal: 5250}
-	if avisos := contabilizarSaida(ctx, pg, exit, true); len(avisos) > 0 {
+	if avisos := contabilizarSaida(ctx, pg, exit, nil, true); len(avisos) > 0 {
 		t.Fatalf("contabilização da venda: %v", avisos)
 	}
-	if avisos := contabilizarSaida(ctx, pg, exit, true); len(avisos) > 0 {
+	if avisos := contabilizarSaida(ctx, pg, exit, nil, true); len(avisos) > 0 {
 		t.Fatalf("repetir: %v", avisos)
 	}
 	cmv := custoMedio.Mul(decimal.NewFromInt(500)).Round(2)

@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/repository"
@@ -134,7 +135,7 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 		return nil, err
 	}
 	if n.Status != entity.NFSeStatusRascunho && n.Status != entity.NFSeStatusRejeitada {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("NFS-e deve estar em rascunho para autorizar, status atual: %s", n.Status))
+		return nil, errorsuc.NewValidationError("só NFS-e em rascunho ou rejeitada pode ser autorizada")
 	}
 
 	cfg, err := uc.Config.GetFiscalConfig(ctx)
@@ -142,7 +143,7 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 		return nil, err
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado — acesse Configurações Fiscais")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o nos Parâmetros Fiscais (VFIS0100)")
 	}
 
 	payload := focusnfe.NFSePayload{
@@ -201,9 +202,9 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 	resp, err := cli.EmitirNFSe(ctx, ref, payload)
 	if err != nil {
 		if _, errSit := uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusRejeitada); errSit != nil {
-			return nil, fmt.Errorf("Focus NFS-e: %w; a NFS-e não pôde ser marcada como rejeitada: %v", err, errSit)
+			slog.Error("NFS-e recusada não pôde ser marcada como rejeitada", "documento", id, "erro", errSit)
 		}
-		return nil, fmt.Errorf("Focus NFS-e: %w", err)
+		return nil, fiscal_uc.ErroDaEmissora(ctx, "a prefeitura", "a NFS-e", id, err)
 	}
 	authorized, err := uc.Repo.UpdateAuthorization(ctx, id, resp.NumeroNFSe, resp.CodigoVerificacao, resp.URL, ref)
 	if err != nil {
@@ -234,14 +235,14 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 		return nil, errorsuc.NewValidationError("apenas NFS-e autorizada pode ser cancelada")
 	}
 	if n.FocusRef == nil || *n.FocusRef == "" {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("NFS-e %d não possui referência Focus", id))
+		return nil, errorsuc.NewValidationError("esta NFS-e não foi transmitida à prefeitura por este sistema, então não há o que cancelar")
 	}
 	cfg, err := uc.Config.GetFiscalConfig(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, fmt.Errorf("token Focus NF-e não configurado")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o nos Parâmetros Fiscais (VFIS0100)")
 	}
 	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
@@ -252,7 +253,7 @@ func (uc *CancelNFSeUseCase) Execute(ctx context.Context, id int64, dto request.
 		}
 	})
 	if _, err := cli.CancelarNFSe(ctx, *n.FocusRef, dto.Justificativa); err != nil {
-		return nil, fmt.Errorf("Focus NFS-e cancelamento: %w", err)
+		return nil, fiscal_uc.ErroDaEmissora(ctx, "a prefeitura", "o cancelamento", id, err)
 	}
 	cancelled, err := uc.Repo.UpdateStatus(ctx, id, entity.NFSeStatusCancelada)
 	if err != nil {

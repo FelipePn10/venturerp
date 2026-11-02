@@ -123,6 +123,10 @@ type StockMovement struct {
 	// ValorizarPelaMedia: entrada que NÃO atualiza o custo médio (tipo de
 	// movimento com "atualiza custo" desligado) entra pelo custo médio atual.
 	ValorizarPelaMedia bool
+	// SaidaPeloPreco (não é gravado): saída que desfaz uma entrada tira do saldo o
+	// valor do próprio movimento, não o custo médio. Sem isto, cancelar uma nota
+	// deixava o custo médio inflado pelo preço da nota que deixou de existir.
+	SaidaPeloPreco bool
 }
 
 type StockReservation struct {

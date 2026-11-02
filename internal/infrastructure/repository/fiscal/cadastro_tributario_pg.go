@@ -69,6 +69,44 @@ func (r *CadastroTributarioPG) FinalidadeDoPedido(ctx context.Context, salesOrde
 	return f, nil
 }
 
+// EfeitosDoTipoNota lê os efeitos mesmo de tipo já inativado: a nota foi criada
+// quando ele valia, e sua autorização pode vir depois.
+func (r *CadastroTributarioPG) EfeitosDoTipoNota(ctx context.Context, id int64) (entity.EfeitosDoTipoNota, error) {
+	padrao := entity.EfeitosPadraoDaNota()
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return padrao, err
+	}
+	var e entity.EfeitosDoTipoNota
+	err = r.pool.QueryRow(ctx, `
+		SELECT generates_financial_title, updates_inventory AND stock_movement <> 'NAO_ATUALIZA', baixa_pedido, generates_revenue
+		  FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&e.GeraTitulo, &e.MovimentaEstoque, &e.BaixaPedido, &e.GeraReceita)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return padrao, nil
+	}
+	if err != nil {
+		return padrao, fmt.Errorf("lendo os efeitos do tipo de nota: %w", err)
+	}
+	return e, nil
+}
+
+// ExigePedidoNoTipoNota diz se o tipo de nota só vale com pedido de venda.
+func (r *CadastroTributarioPG) ExigePedidoNoTipoNota(ctx context.Context, id int64) (bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	var exige bool
+	err = r.pool.QueryRow(ctx, `SELECT requires_sales_order FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&exige)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("lendo o tipo de nota: %w", err)
+	}
+	return exige, nil
+}
+
 func (r *CadastroTributarioPG) TipoNota(ctx context.Context, id int64) (*entity.TipoNotaFiscal, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {

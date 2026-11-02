@@ -26,7 +26,7 @@ type InvoiceTypeFlags struct {
 	// transfer invoices where the IPI base comes from a sales table).
 	// Set this per-item in TaxItem.IPITransferPrice instead.
 
-	// Indicadores do tipo de nota (VFIS0110) escolhido na saída. Valor zero =
+	// Indicadores do tipo de nota (VCLI0530) escolhido na saída. Valor zero =
 	// comportamento padrão, para quem não informa tipo de nota nada mudar.
 	// SemDiferimento: o tipo de nota não calcula diferimento de ICMS.
 	SemDiferimento bool
@@ -431,7 +431,9 @@ func calculateItemTax(
 	var aliqICMS, aliqInterNominal decimal.Decimal
 	baseICMS := baseOperacao
 	if isInterno {
-		aliqICMS = decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
+		var origem string
+		aliqICMS, origem = AliquotaInternaDaEmpresa(params.EmitenteUF, fiscalConfig, internalTable)
+		nota("alíquota interna de %s: %s%% (%s)", strings.ToUpper(strings.TrimSpace(params.EmitenteUF)), pctBR(aliqICMS.Mul(decimal.NewFromInt(100))), origem)
 		baseICMS, aliqICMS, redBase = item.Parametro.ajustarICMS(params.DestinoTipo, baseICMS, aliqICMS, false)
 	} else {
 		// Resolução SF 13/2012: importada (origens 1 e 2) ou nacional com
@@ -605,7 +607,7 @@ func calculateItemTax(
 		aliqST := aliqSTInformada
 		if !aliqST.IsPositive() {
 			if isInterno {
-				aliqST = decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
+				aliqST, _ = AliquotaInternaDaEmpresa(params.EmitenteUF, fiscalConfig, internalTable)
 			} else if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS > 0 {
 				aliqST = decimal.NewFromFloat(cfg.ICMS)
 			} else {
@@ -767,6 +769,18 @@ var regiaoDaUF = map[string]string{
 	"DF": "CO", "GO": "CO", "MS": "CO", "MT": "CO",
 	"ES": "SE", "MG": "SE", "RJ": "SE", "SP": "SE",
 	"PR": "S", "RS": "S", "SC": "S",
+}
+
+// AliquotaInternaDaEmpresa é a alíquota da operação dentro do estado: a da UF da
+// empresa na tabela de ICMS interno (VFIS0110), que acompanha a lei de cada
+// estado. A alíquota da configuração fiscal (VFIS0100) só vale quando a UF não
+// está na tabela. Antes a configuração mandava sempre: empresa de SP com 19,5%
+// digitado ali (a alíquota do PR) emitia toda venda interna com o ICMS errado.
+func AliquotaInternaDaEmpresa(uf string, cfg FiscalConfig, tabela map[string]ICMSInternalConfig) (decimal.Decimal, string) {
+	if t, ok := tabela[strings.ToUpper(strings.TrimSpace(uf))]; ok && t.ICMS > 0 {
+		return decimal.NewFromFloat(t.ICMS), "tabela de ICMS interno por UF"
+	}
+	return decimal.NewFromFloat(cfg.IcmsInternoAliquota), "configuração fiscal da empresa"
 }
 
 // AliquotaInterestadualLegal é a alíquota da Resolução SF 22/1989 quando a

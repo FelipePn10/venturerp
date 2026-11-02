@@ -39,6 +39,9 @@ func (r *loadFiscalRepo) GetNextNFNumber(context.Context) (int64, error) { retur
 func (r *loadFiscalRepo) GetFiscalConfig(context.Context) (*fiscalentity.FiscalConfig, error) {
 	return &fiscalentity.FiscalConfig{UFEmpresa: "SP", IcmsInternoAliquota: 0.18}, nil
 }
+func (r *loadFiscalRepo) NFNumberExists(context.Context, int64, string) (bool, error) {
+	return false, nil
+}
 func (r *loadFiscalRepo) ListNcmTaxes(context.Context) ([]*fiscalentity.NcmTaxTable, error) {
 	return nil, nil
 }
@@ -139,7 +142,7 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.NumeroNF != 123 || resp.ValorProdutos != 100 || resp.ShipmentLoadCode == nil || *resp.ShipmentLoadCode != 9001 {
+	if resp.NumeroNF != 0 || fiscal.created.NumeroNF != 123 || resp.ValorProdutos != 100 || resp.ShipmentLoadCode == nil || *resp.ShipmentLoadCode != 9001 {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
 	if fiscal.created == nil || fiscal.created.SourceType == nil || *fiscal.created.SourceType != "LOAD" {
@@ -184,5 +187,51 @@ func TestCreateFiscalExitFromLoad_MissingPriceRequiresOverride(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "sem preço") {
 		t.Fatalf("expected missing price error, got %v", err)
+	}
+}
+
+type cadastroDaCargaFake map[int64]fiscalrepo.ItemCandidate
+
+func (c cadastroDaCargaFake) ItemsByCode(context.Context, []int64) (map[int64]fiscalrepo.ItemCandidate, error) {
+	return c, nil
+}
+
+func TestCompletarDoCadastro_LeNcmDescricaoEUnidadeDoItem(t *testing.T) {
+	code := int64(1001)
+	desc := "Item 1001 - romaneio 1"
+	items := []request.CreateFiscalExitItemDTO{{ItemCode: &code, Cfop: "5101", Description: &desc, OrigemMercadoria: "0"}}
+	uc := &CreateFiscalExitFromLoadUseCase{Itens: cadastroDaCargaFake{
+		1001: {Code: 1001, BusinessCode: "CH-10", Name: "Chapa de aço", NCM: "7208.51.00", UOM: "KG", Origem: "1"},
+	}}
+	if err := uc.completarDoCadastro(context.Background(), items, request.CreateFiscalExitFromLoadDTO{Cfop: "5101"}, nil); err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	it := items[0]
+	if *it.Description != "Chapa de aço" || *it.Ncm != "7208.51.00" || *it.UnidadeComercial != "KG" || *it.CodigoProduto != "CH-10" || it.OrigemMercadoria != "1" {
+		t.Fatalf("o cadastro não chegou à linha da nota: %+v", it)
+	}
+}
+
+func TestCompletarDoCadastro_ItemSemNcmParaAntesDeCriar(t *testing.T) {
+	code := int64(1001)
+	items := []request.CreateFiscalExitItemDTO{{ItemCode: &code, Cfop: "5101"}}
+	uc := &CreateFiscalExitFromLoadUseCase{Itens: cadastroDaCargaFake{1001: {Code: 1001, Name: "Chapa"}}}
+	err := uc.completarDoCadastro(context.Background(), items, request.CreateFiscalExitFromLoadDTO{Cfop: "5101"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "sem NCM") {
+		t.Fatalf("esperava recusa por falta de NCM, veio %v", err)
+	}
+}
+
+func TestCompletarDoCadastro_OverrideVenceOCadastro(t *testing.T) {
+	code := int64(1001)
+	ncm, desc := "99999999", "Texto escolhido"
+	items := []request.CreateFiscalExitItemDTO{{ItemCode: &code, Cfop: "5101", Ncm: &ncm, Description: &desc}}
+	ov := map[fiscalLoadOverrideKey]request.FiscalExitLoadItemOverride{{itemCode: 1001}: {Ncm: &ncm, Description: &desc}}
+	uc := &CreateFiscalExitFromLoadUseCase{Itens: cadastroDaCargaFake{1001: {Code: 1001, Name: "Chapa", NCM: "72085100"}}}
+	if err := uc.completarDoCadastro(context.Background(), items, request.CreateFiscalExitFromLoadDTO{Cfop: "5101"}, ov); err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if *items[0].Ncm != "99999999" || *items[0].Description != "Texto escolhido" {
+		t.Fatalf("o override foi ignorado: %+v", items[0])
 	}
 }

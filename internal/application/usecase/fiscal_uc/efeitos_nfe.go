@@ -65,6 +65,8 @@ type EfeitosNFe struct {
 	Transacao  EmTransacaoEfeitos
 	// GeraTitulos: com o financeiro configurado, a autorização gera os títulos.
 	GeraTitulos bool
+	// TiposNota diz o que o tipo de nota escolhido faz: título, estoque e pedido.
+	TiposNota LeitorEfeitosTipoNota
 	// Conversor leva a quantidade da nota (unidade comercial) para a unidade de
 	// estoque do item antes da baixa.
 	Conversor ports.UOMConverter
@@ -149,7 +151,14 @@ func (e *EfeitosNFe) ProcessarVencidas(ctx context.Context, limite int, sessao f
 // padrão do item. Sem nenhum dos dois a autorização é recusada — depois de
 // autorizada a nota não volta, e a baixa ficaria sem depósito.
 func (e *EfeitosNFe) PreConferirDepositos(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem) error {
-	_, err := e.depositos(ctx, exit, items)
+	efeitos, err := efeitosDaNota(ctx, e.TiposNota, exit)
+	if err != nil {
+		return err
+	}
+	if !efeitos.MovimentaEstoque {
+		return nil
+	}
+	_, err = e.depositos(ctx, exit, items)
 	return err
 }
 
@@ -213,17 +222,25 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 	if err != nil {
 		return fmt.Errorf("lendo os itens da nota: %w", err)
 	}
-	plano, err := resolverPlanoDaNota(ctx, exit, e.Customers, e.Orders)
+	plano, err := resolverPlanoDaNota(ctx, exit, items, e.Customers, e.Orders)
 	if err != nil {
 		return err
 	}
-	depositos, err := e.depositos(ctx, exit, items)
+	efeitos, err := efeitosDaNota(ctx, e.TiposNota, exit)
 	if err != nil {
 		return err
 	}
-	quantidades, err := e.quantidadesEmEstoque(ctx, items)
-	if err != nil {
-		return err
+	plano = planoDoTipoNota(plano, efeitos)
+	// Tipo de nota que não mexe no estoque não pede depósito nem conversão de unidade.
+	var depositos map[int64]int64
+	var quantidades map[int64]float64
+	if efeitos.MovimentaEstoque {
+		if depositos, err = e.depositos(ctx, exit, items); err != nil {
+			return err
+		}
+		if quantidades, err = e.quantidadesEmEstoque(ctx, items); err != nil {
+			return err
+		}
 	}
 	var clienteID *int64
 	if e.Customers != nil && exit.CustomerCode != nil {
@@ -247,16 +264,20 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 				return err
 			}
 		}
-		if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, userID); err != nil {
-			return err
+		if efeitos.MovimentaEstoque {
+			if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, userID); err != nil {
+				return err
+			}
 		}
 		if r.Series != nil {
 			if err := r.Series.SaidaPelaNota(ctx, exitID, exit.CustomerCode, exit.DataEmissao, atorOuNil(userID)); err != nil {
 				return fmt.Errorf("levando as séries da nota ao cliente: %w", err)
 			}
 		}
-		if err := faturarPedido(ctx, r, exit); err != nil {
-			return err
+		if efeitos.BaixaPedido {
+			if err := faturarPedido(ctx, r, exit); err != nil {
+				return err
+			}
 		}
 		return r.Pendencias.Resolver(ctx, exitID, entity.PendenciaAutorizacao)
 	})
@@ -308,6 +329,10 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 // pagamento da nota. O valor parcelado é o TOTAL da nota (produtos + IPI +
 // ICMS-ST + frete + seguro − desconto): é o que o cliente paga.
 func gerarTitulos(ctx context.Context, fin financialRepo.FinancialRepository, exit *entity.FiscalExit, plano PlanoDaNota, clienteID *int64, userID uuid.UUID) error {
+	// Nota que só devolve material do cliente não gera conta a receber.
+	if plano.SemCobranca {
+		return nil
+	}
 	parcelas := plano.Parcelas
 	if len(parcelas) == 0 {
 		parcelas = []customerentity.ParcelaCalculada{{

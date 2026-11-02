@@ -282,7 +282,43 @@ func (r *FinancialRepositoryPG) CreateContaPagar(ctx context.Context, c *entity.
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	err = tx.QueryRow(ctx,
+	if err = inserirContaPagar(ctx, tx, empresa, c); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// CreateContasPagar grava as parcelas de um título numa transação só: um
+// parcelamento pela metade faria o saldo a pagar sumir sem ninguém ver.
+func (r *FinancialRepositoryPG) CreateContasPagar(ctx context.Context, titulos []*entity.ContaPagar) ([]*entity.ContaPagar, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	for i, c := range titulos {
+		if i > 0 {
+			c.ParcelaPaiID = &titulos[0].ID
+		}
+		if err = inserirContaPagar(ctx, tx, empresa, c); err != nil {
+			return nil, err
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return titulos, nil
+}
+
+func inserirContaPagar(ctx context.Context, tx pgx.Tx, empresa int64, c *entity.ContaPagar) error {
+	err := tx.QueryRow(ctx,
 		`INSERT INTO contas_pagar
 			(numero_documento, tipo_documento, fornecedor_id, fiscal_entry_id, purchase_order_id,
 			 data_lancamento, data_emissao, data_vencimento,
@@ -302,20 +338,17 @@ func (r *FinancialRepositoryPG) CreateContaPagar(ctx context.Context, c *entity.
 		c.Observacao, c.IsActive, c.CriadoPor, empresa,
 	).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
-		return nil, fmt.Errorf("creating conta pagar: %w", err)
+		return fmt.Errorf("creating conta pagar: %w", err)
 	}
 	for i := range c.Rateios {
 		rt := &c.Rateios[i]
 		if err = tx.QueryRow(ctx,
 			`INSERT INTO contas_pagar_rateios (enterprise_id, conta_pagar_id, plano_contas_id, centro_custo_id, valor)
 			 VALUES ($1,$2,$3,$4,$5) RETURNING id`, empresa, c.ID, rt.PlanoContasID, rt.CentroCustoID, rt.Valor).Scan(&rt.ID); err != nil {
-			return nil, fmt.Errorf("gravando rateio do título: %w", err)
+			return fmt.Errorf("gravando rateio do título: %w", err)
 		}
 	}
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return c, nil
+	return nil
 }
 
 // ListRateiosContasPagar devolve o rateio dos títulos, com os nomes do plano
@@ -1910,8 +1943,8 @@ func (r *FinancialRepositoryPG) GetFichaTecnicaCusto(ctx context.Context, itemCo
 		`SELECT s.child_code AS insumo_code, COALESCE(CAST(i.code AS text),'') AS insumo_codigo,
 		        COALESCE(i.pdm_description_technique, i.name, '') AS insumo_descricao,
 		        s.quantity AS qtd_por_unidade,
-		        COALESCE(c.custo,0) AS custo_unitario,
-		        s.quantity * COALESCE(c.custo,0) AS custo_total
+		        CASE WHEN s.customer_supplied THEN 0 ELSE COALESCE(c.custo,0) END AS custo_unitario,
+		        CASE WHEN s.customer_supplied THEN 0 ELSE s.quantity * COALESCE(c.custo,0) END AS custo_total
 		 FROM item_structures s
 		 JOIN items pai ON pai.code = s.parent_code AND pai.enterprise_id = $2
 		 LEFT JOIN items i ON i.code = s.child_code AND i.enterprise_id = $2

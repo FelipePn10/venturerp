@@ -33,3 +33,36 @@ func (h *PreviaNFeHandler) Previa(w http.ResponseWriter, r *http.Request) {
 	}
 	security.RespondJSON(w, http.StatusOK, result)
 }
+
+// DestinatarioNotaHandler entrega à nota avulsa os dados do cliente já cadastrados.
+type DestinatarioNotaHandler struct {
+	uc *fiscal_uc.DestinatarioDaNotaUseCase
+}
+
+func NewDestinatarioNotaHandler(uc *fiscal_uc.DestinatarioDaNotaUseCase) *DestinatarioNotaHandler {
+	return &DestinatarioNotaHandler{uc: uc}
+}
+
+func (h *DestinatarioNotaHandler) DoCliente(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código do cliente inválido")
+		return
+	}
+	result, err := h.uc.DoCliente(r.Context(), code)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *DestinatarioNotaHandler) SugerirCfop(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	result, err := h.uc.SugerirCfop(r.Context(), q.Get("uf"), q.Get("ie"), q.Get("tipo_pessoa"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}

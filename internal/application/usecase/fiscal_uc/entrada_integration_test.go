@@ -5,6 +5,7 @@ package fiscal_uc_test
 import (
 	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"testing"
@@ -40,8 +41,8 @@ func TestIntegration_NotaDeEntradaXMLConciliacaoRateio(t *testing.T) {
 
 	u := testutil.UniqueCode()
 	cnpj := fmt.Sprintf("%014d", u%100_000_000_000_000)
-	chave1 := fmt.Sprintf("41%042d", u)
-	chave2 := fmt.Sprintf("42%042d", u)
+	chave1 := validation.MontarChaveNFe("41", "2610", cnpj, 1, 777001, u)
+	chave2 := validation.MontarChaveNFe("41", "2610", cnpj, 1, 777002, u+1)
 	supplierCode := 9_000_000_000 + u%1_000_000_000
 	chapa, luva := u, u+1
 
@@ -50,7 +51,7 @@ func TestIntegration_NotaDeEntradaXMLConciliacaoRateio(t *testing.T) {
 		t.Fatal(err)
 	}
 	xmlDaNota := func(chave string, numero int) []byte {
-		s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", chave)
+		s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", chave)
 		s = strings.ReplaceAll(s, "12345678000190", cnpj)
 		s = strings.ReplaceAll(s, "<nNF>12345</nNF>", fmt.Sprintf("<nNF>%d</nNF>", numero))
 		return []byte(s)

@@ -49,12 +49,30 @@ VALUES (1, 1, 'Panosso Metalurgia Ltda', :'START_TS', :'ADMIN'::uuid);
 INSERT INTO user_enterprises (user_id, enterprise_id, role)
 VALUES (:'ADMIN'::uuid, 1, 'ADMIN');
 
+-- O demo tem uma empresa só. As colunas de empresa recebem a empresa 1 durante o
+-- seed, para ele não quebrar a cada tabela nova; o DEFAULT é retirado no fim.
+CREATE TEMP TABLE seed_tenant_defaults ON COMMIT DROP AS
+SELECT table_name, column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND column_name IN ('enterprise_id', 'enterprise_code')
+  AND column_default IS NULL
+  AND table_name IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public');
+
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT * FROM seed_tenant_defaults LOOP
+    EXECUTE format('ALTER TABLE %I ALTER COLUMN %I SET DEFAULT 1', r.table_name, r.column_name);
+  END LOOP;
+END $$;
+
 -- ─── 3. Depósitos (warehouse) ────────────────────────────────────────────────
-INSERT INTO warehouse (id, code, description, created_at, created_by, location, type, disposition, reservations_allowed) VALUES
- (1, '1', 'Almoxarifado de Matéria-Prima', :'START_TS', :'ADMIN'::uuid, 'NORMAL', 'INTERNO', true, true),
- (2, '2', 'Depósito de Produtos Acabados', :'START_TS', :'ADMIN'::uuid, 'NORMAL', 'INTERNO', true, true),
- (3, '3', 'Linha de Produção',            :'START_TS', :'ADMIN'::uuid, 'LINHA_DE_PRODUCAO', 'INTERNO', true, false),
- (4, '4', 'Depósito de Rejeição',         :'START_TS', :'ADMIN'::uuid, 'NORMAL', 'REJEICAO', false, false);
+INSERT INTO warehouse (id, code, description, created_at, created_by, location, type, disposition, reservations_allowed, enterprise_id) VALUES
+ (1, '1', 'Almoxarifado de Matéria-Prima', :'START_TS', :'ADMIN'::uuid, 'INTERNO', 'NORMAL', true, true, 1),
+ (2, '2', 'Depósito de Produtos Acabados', :'START_TS', :'ADMIN'::uuid, 'INTERNO', 'NORMAL', true, true, 1),
+ (3, '3', 'Linha de Produção',            :'START_TS', :'ADMIN'::uuid, 'INTERNO', 'LINHA_DE_PRODUCAO', true, false, 1),
+ (4, '4', 'Depósito de Rejeição',         :'START_TS', :'ADMIN'::uuid, 'REJEICAO', 'NORMAL', false, false, 1);
 
 -- ─── 4. Cadastros de apoio ───────────────────────────────────────────────────
 INSERT INTO condicoes_pagamento (id, nome, parcelas, ativo, created_at, updated_at) VALUES
@@ -357,8 +375,8 @@ WHERE so.status = 'F';
 INSERT INTO fiscal_exit_items (id, fiscal_exit_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
   base_icms, aliq_icms, valor_icms, valor_pis, valor_cofins, origem_mercadoria, description, created_at)
 SELECT row_number() OVER (), fe.id, soi.sequence, soi.item_code, '73269000', '5101',
-  soi.requested_qty, soi.unit_price, soi.total_net,
-  soi.total_net, 18, round(soi.total_net*0.18, 2), round(soi.total_net*0.0065, 2), round(soi.total_net*0.03, 2),
+  soi.requested_qty, round(soi.total_net / NULLIF(soi.requested_qty, 0), 4), soi.total_net,
+  soi.total_net, 0.18, round(soi.total_net*0.18, 2), round(soi.total_net*0.0065, 2), round(soi.total_net*0.03, 2),
   '0', ic.name, fe.created_at
 FROM fiscal_exits fe
 JOIN sales_order_items soi ON soi.sales_order_code = fe.sales_order_code
@@ -462,6 +480,14 @@ SELECT setval('fiscal_exits_id_seq',          (SELECT max(id) FROM fiscal_exits)
 SELECT setval('fiscal_exit_items_id_seq',     (SELECT max(id) FROM fiscal_exit_items));
 SELECT setval('contas_receber_id_seq',        (SELECT max(id) FROM contas_receber));
 SELECT setval('contas_pagar_id_seq',          (SELECT max(id) FROM contas_pagar));
+
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT * FROM seed_tenant_defaults LOOP
+    EXECUTE format('ALTER TABLE %I ALTER COLUMN %I DROP DEFAULT', r.table_name, r.column_name);
+  END LOOP;
+END $$;
 
 COMMIT;
 

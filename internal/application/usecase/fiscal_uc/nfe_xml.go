@@ -14,8 +14,12 @@ import (
 // valores em decimal. É dela que nascem o cabeçalho, os itens e as parcelas da
 // entrada — o usuário não redigita nada que a nota já diz.
 type NFeLida struct {
-	ChaveAcesso      string
-	Protocolo        string
+	ChaveAcesso string
+	Protocolo   string
+	// SituacaoProtocolo é o cStat do protocolo: 100 e 150 são nota autorizada.
+	SituacaoProtocolo string
+	// Ambiente é o tpAmb: 1 produção, 2 homologação (sem valor fiscal).
+	Ambiente         string
 	Numero           string
 	Serie            string
 	Modelo           string
@@ -171,6 +175,7 @@ type xmlInfNFe struct {
 	Ide struct {
 		NatOp    string `xml:"natOp"`
 		Mod      string `xml:"mod"`
+		TpAmb    string `xml:"tpAmb"`
 		Serie    string `xml:"serie"`
 		NNF      string `xml:"nNF"`
 		DhEmi    string `xml:"dhEmi"`
@@ -350,12 +355,13 @@ func LerNFe(conteudo []byte) (*NFeLida, error) {
 	}
 
 	var inf xmlInfNFe
-	var chaveProt, protocolo string
+	var chaveProt, protocolo, situacao string
 	var proc xmlNFeProc
 	if err := xml.Unmarshal([]byte(bruto), &proc); err == nil {
 		inf = proc.NFe.Inf
 		chaveProt = strings.TrimSpace(proc.Prot.Inf.ChNFe)
 		protocolo = strings.TrimSpace(proc.Prot.Inf.NProt)
+		situacao = strings.TrimSpace(proc.Prot.Inf.CStat)
 	} else {
 		var direta xmlNFe
 		if err := xml.Unmarshal([]byte(bruto), &direta); err != nil {
@@ -382,6 +388,8 @@ func LerNFe(conteudo []byte) (*NFeLida, error) {
 	n := &NFeLida{
 		ChaveAcesso:               chave,
 		Protocolo:                 protocolo,
+		SituacaoProtocolo:         situacao,
+		Ambiente:                  strings.TrimSpace(inf.Ide.TpAmb),
 		Numero:                    numero,
 		Serie:                     strings.TrimSpace(inf.Ide.Serie),
 		Modelo:                    strings.TrimSpace(inf.Ide.Mod),

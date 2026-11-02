@@ -85,6 +85,26 @@ func (r *FiscalRepositoryPG) FindEntryByChave(ctx context.Context, chave string)
 	return e, nil
 }
 
+// FindEntryByNumero: a série é comparada sem zeros à esquerda, "001" e "1" são a mesma.
+func (r *FiscalRepositoryPG) FindEntryByNumero(ctx context.Context, cnpjEmitente, serie string, numero int64) (*entity.FiscalEntry, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	e, err := scanEntryHeader(r.db.QueryRow(ctx,
+		`SELECT `+entryHeaderCols+` FROM fiscal_entries e
+		  WHERE e.enterprise_id = $1 AND e.cnpj_emitente = $2 AND e.numero_nf = $3
+		    AND ltrim(e.serie, '0') = ltrim($4, '0') AND e.is_active AND e.status <> 'CANCELLED'
+		  ORDER BY e.id LIMIT 1`, empresa, cnpjEmitente, numero, serie))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("buscando a nota de entrada por número: %w", err)
+	}
+	return e, nil
+}
+
 func (r *FiscalRepositoryPG) CreateEntryDocument(ctx context.Context, e *entity.FiscalEntry) (*entity.FiscalEntry, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
@@ -154,6 +174,22 @@ func (r *FiscalRepositoryPG) CreateEntryDocument(ctx context.Context, e *entity.
 
 	for _, it := range e.Itens {
 		it.FiscalEntryID = e.ID
+		if it.LembrarVinculo && it.ItemCode != nil && e.SupplierCode != nil && it.SupplierItemCode != nil {
+			// Sem unidade de propósito: a da nota manual não pode trocar a unidade
+			// a que o fator de conversão já cadastrado se refere.
+			descricao := ""
+			if it.Description != nil {
+				descricao = *it.Description
+			}
+			link, errVinculo := upsertVinculo(ctx, tx, empresa, repository.SupplierItemLink{
+				SupplierCode: *e.SupplierCode, ItemCode: *it.ItemCode, SupplierItemCode: *it.SupplierItemCode,
+				SupplierDescription: descricao, CreatedBy: e.CreatedBy,
+			})
+			if errVinculo != nil {
+				return nil, errVinculo
+			}
+			it.ItemSupplierID = &link
+		}
 		err = tx.QueryRow(ctx,
 			`INSERT INTO fiscal_entry_items
 				(fiscal_entry_id, sequence, item_code, ncm, cfop, quantity, unit_price, total_price,
@@ -280,7 +316,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		        i.purchase_order_code, i.purchase_order_item_code, i.qtd_recebida_antes, i.stock_movement_id, i.custo_aquisicao,
 		        i.cst_ibscbs, i.cclass_trib, i.base_ibscbs, i.aliq_ibs_uf, i.valor_ibs_uf, i.aliq_ibs_mun, i.valor_ibs_mun,
 		        i.valor_ibs, i.aliq_cbs, i.valor_cbs, i.valor_is, i.gera_credito_ibscbs,
-		        it.name, it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.description,
+		        NULLIF(`+nomeDoItemSQL+`, ''), it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.description,
 		        w.code || ' — ' || w.description, op.description,
 		        CASE WHEN it.code IS NULL THEN NULL ELSE `+ncmDoItemSQL+` END,
 		        po.order_number, poi.sequence
@@ -641,7 +677,10 @@ func (r *FiscalRepositoryPG) PlanoContasByCodigo(ctx context.Context, codigo str
 	return &id, nil
 }
 
-const candidatoCols = `it.code, it.name, it.warehouse_unit_of_measurement::text, ` + ncmDoItemSQL + `, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
+// nomeDoItemSQL: item de PDM não tem `name`; o nome dele é a descrição técnica.
+const nomeDoItemSQL = `COALESCE(NULLIF(btrim(it.name), ''), NULLIF(btrim(it.pdm_description_technique), ''), NULLIF(btrim(it.commercial_description), ''), '')`
+
+const candidatoCols = `it.code, ` + nomeDoItemSQL + `, it.warehouse_unit_of_measurement::text, ` + ncmDoItemSQL + `, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 	COALESCE((SELECT w.id FROM warehouse w WHERE w.id = it.supplies_warehouse_code AND w.enterprise_id = it.enterprise_id),
 	         (SELECT w.id FROM warehouse w WHERE w.id = it.warehouse_code AND w.enterprise_id = it.enterprise_id)),
 	COALESCE(it.business_code, ''), COALESCE(it.engineering_type, 0) IN (1, 2), COALESCE(it.supplies_type_of_use, 0)`
@@ -699,7 +738,7 @@ func (r *FiscalRepositoryPG) SupplierLinksForEntry(ctx context.Context, supplier
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT it.code, it.name, it.warehouse_unit_of_measurement::text, `+ncmDoItemSQL+`, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
+		`SELECT it.code, `+nomeDoItemSQL+`, it.warehouse_unit_of_measurement::text, `+ncmDoItemSQL+`, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 		        COALESCE(s.supplier_item_code,''), s.id, COALESCE(s.supplier_description,''), s.xml_uom, s.conversion_factor, COALESCE(s.barcode,'')
 		   FROM item_preferred_suppliers s
 		   JOIN items it ON it.code = s.item_code AND it.enterprise_id = s.enterprise_id

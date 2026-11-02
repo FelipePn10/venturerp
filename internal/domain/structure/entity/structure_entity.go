@@ -65,9 +65,13 @@ type ItemStructure struct {
 	// IsCriticalMPS coloca o componente na linha crítica do plano mestre.
 	IsCriticalMPS       bool
 	GeneratesInspection bool
-	CreatedBy           uuid.UUID
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	// CustomerSupplied marca o componente que o CLIENTE fornece (beneficiamento,
+	// remessa CFOP 5901). Não é da empresa: fica fora do MRP, da baixa automática
+	// e do custo, e a OF do pai não dá entrada do produto no estoque próprio.
+	CustomerSupplied bool
+	CreatedBy        uuid.UUID
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // ConsultRow estende ItemStructure com campos desnormalizados do item filho

@@ -46,6 +46,22 @@ func ApplyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (n
 	return next, lastCost
 }
 
+// ApplyEntryReversalCosting desfaz uma entrada: a quantidade sai com o valor que
+// entrou (quantidade × preço da entrada), e o custo médio volta ao que seria sem
+// ela. Se o que sobra não comporta esse valor — parte da entrada já foi consumida
+// por um médio mais alto, ou o saldo zerou —, o saldo fica no médio atual: valor
+// de estoque nunca fica negativo.
+func ApplyEntryReversalCosting(cur CostingState, delta, unitPrice decimal.Decimal) (next CostingState, lastCost decimal.Decimal) {
+	next = CostingState{Quantity: cur.Quantity.Add(delta), AvgCost: cur.AvgCost}
+	next.TotalCost = cur.TotalCost.Add(delta.Mul(unitPrice)).Round(CasasValor) // delta é negativo
+	if next.TotalCost.IsNegative() || !next.Quantity.IsPositive() {
+		next.TotalCost = decimal.Max(next.Quantity.Mul(cur.AvgCost), decimal.Zero).Round(CasasValor)
+		return next, cur.AvgCost
+	}
+	next.AvgCost = next.TotalCost.DivRound(next.Quantity, CasasCusto)
+	return next, next.AvgCost
+}
+
 func applyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (next CostingState, lastCost decimal.Decimal) {
 	next = CostingState{
 		Quantity:  cur.Quantity.Add(delta),

@@ -55,6 +55,19 @@ type CreateContaPagarDTO struct {
 	Rateios []RateioContaPagarDTO `json:"rateios,omitempty"`
 }
 
+// CreateContaPagarParceladaDTO é um título dividido em parcelas livres: entrada
+// em %, parcelas e saldo no fim saem da tela já em valor e vencimento. A soma
+// precisa fechar com o valor líquido do título.
+type CreateContaPagarParceladaDTO struct {
+	CreateContaPagarDTO
+	Parcelas []ParcelaContaPagarDTO `json:"parcelas"`
+}
+
+type ParcelaContaPagarDTO struct {
+	DataVencimento string          `json:"data_vencimento"`
+	Valor          decimal.Decimal `json:"valor"`
+}
+
 type RateioContaPagarDTO struct {
 	PlanoContasID int64           `json:"plano_contas_id"`
 	CentroCustoID *int64          `json:"centro_custo_id,omitempty"`

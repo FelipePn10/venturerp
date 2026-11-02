@@ -5,6 +5,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"testing"
@@ -127,9 +128,14 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 	// Nota de entrada com o endereço completo do fornecedor no XML.
 	base, _ := os.ReadFile("testdata/nfe_mp_epi.xml")
 	// A chave contém o CNPJ: troca a chave antes do CNPJ.
-	chave := fmt.Sprintf("41%042d", u+5)
-	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123459", chave)
+	chave := validation.MontarChaveNFe("41", "2610", cnpj, 1, 12345, u+5)
+	s := strings.ReplaceAll(string(base), "41261012345678000190550010000123451000123450", chave)
 	s = strings.ReplaceAll(s, "12345678000190", cnpj)
+	// O XML traz vencimentos fixos. Com a parcela vencida, pagar hoje gera juros, e
+	// este teste não configura conta de juros: ele parou de passar em 01/11/2026.
+	for i, venc := range []string{"2026-10-31", "2026-11-30", "2026-12-30"} {
+		s = strings.ReplaceAll(s, venc, time.Now().AddDate(0, 0, 30*(i+1)).Format("2006-01-02"))
+	}
 	s = strings.Replace(s, "<enderEmit><xLgr>RUA A</xLgr><nro>1</nro><xMun>CURITIBA</xMun><UF>PR</UF></enderEmit>",
 		"<enderEmit><xLgr>RUA A</xLgr><nro>1</nro><xBairro>CENTRO</xBairro><cMun>4106902</cMun><xMun>CURITIBA</xMun><UF>PR</UF><CEP>80000000</CEP></enderEmit>", 1)
 	nota, err := (&UploadNFEEntryUseCase{Repo: fiscalRepo, Docs: docs, Auth: auth}).ExecuteFile(ctx, []byte(s), request.UploadNFEDTO{})

@@ -21,7 +21,7 @@ func TestNFEPayloadFormatoFocus(t *testing.T) {
 			IBSCBS: &NFEItemIBSCBS{CST: "000", ClassTrib: "000001", Base: 7.27, AliqIBSUF: 0.1, ValorIBSUF: 0.01, AliqCBS: 0.9, ValorCBS: 0.07, ValorIBS: 0.01}},
 			{NumeroItem: 2, CodigoSituacaoTributariaICMS: "40", CodigoSituacaoTributariaPIS: "07", CodigoSituacaoTributariaCOFINS: "07"}},
 		FormaPagamento:     []NFEFormaPagamento{{FormaPagamento: "90", Valor: 0}},
-		NotasReferenciadas: []NFERef{{ChaveNFe: "41261012345678000190550010000123451000123459"}},
+		NotasReferenciadas: []NFERef{{ChaveNFe: "41261012345678000190550010000123451000123450"}},
 		ValorFrete:         3, ValorTotal: 13, ValorProdutos: 10, ModalidadeFrete: 0,
 	}
 	b, err := json.Marshal(p)

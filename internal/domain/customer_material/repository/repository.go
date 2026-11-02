@@ -72,6 +72,8 @@ type Repository interface {
 	// Encerrar fecha a remessa. Com saldo remanescente, exige motivo — é exceção
 	// aprovada, e fica registrado quem aprovou.
 	Encerrar(ctx context.Context, id int64, motivo string, usuario string) error
+	// SituacaoDoCliente diz se o cliente existe nesta empresa e se está ativo.
+	SituacaoDoCliente(ctx context.Context, code int64) (existe, ativo bool, err error)
 	// RegistrarMovimentosDaNota baixa, numa única transação, todo o material que a
 	// nota de beneficiamento devolve, já vinculado a ela. Idempotente pela nota:
 	// repetir a chamada com a mesma nota devolve os movimentos originais, porque a
@@ -87,6 +89,36 @@ type Repository interface {
 	// EstornarMovimentosDaNota devolve ao saldo do cliente o que a nota baixou,
 	// quando a nota é cancelada. Idempotente: repetir não devolve duas vezes.
 	EstornarMovimentosDaNota(ctx context.Context, fiscalExitID int64, usuario, motivo string) ([]*entity.Movimento, error)
+	// RelatorioDeMovimentos lista entrada e saída de material de terceiro.
+	RelatorioDeMovimentos(ctx context.Context, filtro FiltroMovimentos) ([]*entity.MovimentoDoRelatorio, error)
+	// HorasDeBeneficiamento lista as horas das OFs de beneficiamento.
+	HorasDeBeneficiamento(ctx context.Context, filtro FiltroHoras) ([]*entity.HorasDeBeneficiamento, error)
+	// VincularPedido grava o pedido de beneficiamento da remessa e, quando
+	// pedido, libera o bloqueio — na mesma transação, com o autor na trilha.
+	VincularPedido(ctx context.Context, id, salesOrderCode int64, desbloquear bool, usuario string) error
+}
+
+// FiltroMovimentos recorta o relatório de movimentação. Datas são do
+// movimento (created_at, no fuso do banco), inclusivas.
+type FiltroMovimentos struct {
+	CustomerCode *int64
+	RemittanceID *int64
+	De           *time.Time
+	Ate          *time.Time
+	Tipos        []string
+	// IncluirEstornados mostra também o que foi desfeito pelo cancelamento da nota.
+	IncluirEstornados bool
+	Q                 string
+	Limite            int
+}
+
+// FiltroHoras recorta o relatório de horas. As datas valem para o registro da
+// hora (data do apontamento, momento do lançamento na operação).
+type FiltroHoras struct {
+	CustomerCode   *int64
+	SalesOrderCode *int64
+	De             *time.Time
+	Ate            *time.Time
 }
 
 // MovimentoDaNota é uma baixa que a nota de beneficiamento representa.

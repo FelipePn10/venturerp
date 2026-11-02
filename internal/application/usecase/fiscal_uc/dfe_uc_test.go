@@ -144,15 +144,25 @@ func TestDFeSincronizaPaginandoEContinuaDaVersao(t *testing.T) {
 }
 
 func TestDFeErroDaFonteViraErroDeServicoExterno(t *testing.T) {
-	uc, mem := novoDFe(&fonteFake{falhaListar: errors.New("CNPJ do emitente não autorizado")})
+	uc, mem := novoDFe(&fonteFake{falhaListar: errors.New("dial tcp: i/o timeout")})
 	_, err := uc.Sincronizar(context.Background())
 	var ext *errorsuc.ExternalServiceError
 	if !errors.As(err, &ext) {
 		t.Fatalf("esperava erro de serviço externo, veio %T %v", err, err)
 	}
 	// O erro fica registrado: a sincronização agendada não tem quem leia a resposta.
-	if len(mem.resultados) != 1 || mem.resultados[0] == nil || !strings.Contains(*mem.resultados[0], "não autorizado") {
+	if len(mem.resultados) != 1 || mem.resultados[0] == nil || !strings.Contains(*mem.resultados[0], "tente de novo") {
 		t.Fatalf("erro não registrado: %v", mem.resultados)
+	}
+}
+
+func TestDFeRecusaRegistraOMotivo(t *testing.T) {
+	uc, mem := novoDFe(&fonteFake{falhaListar: &focusnfe.HTTPError{StatusCode: 400, Mensagem: "CNPJ do emitente não autorizado"}})
+	if _, err := uc.Sincronizar(context.Background()); err == nil {
+		t.Fatal("esperava a recusa")
+	}
+	if len(mem.resultados) != 1 || mem.resultados[0] == nil || !strings.Contains(*mem.resultados[0], "não autorizado") {
+		t.Fatalf("motivo não registrado: %v", mem.resultados)
 	}
 }
 

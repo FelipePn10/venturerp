@@ -227,7 +227,11 @@ func applyMovementToBalance(ctx context.Context, tx pgx.Tx, enterpriseID int64, 
 
 	// Weighted-average costing is computed by the domain (single source of truth,
 	// unit-tested); the repository only persists the result.
-	next, lastCost := entity.ApplyMovementCosting(
+	custeio := entity.ApplyMovementCosting
+	if m.SaidaPeloPreco && deltaExact.IsNegative() && m.UnitPrice.IsPositive() {
+		custeio = entity.ApplyEntryReversalCosting
+	}
+	next, lastCost := custeio(
 		entity.CostingState{Quantity: qtdTotal, AvgCost: custoMedio, TotalCost: valorTotal}, deltaExact, m.UnitPrice,
 	)
 

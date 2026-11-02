@@ -27,7 +27,7 @@ type ManifestarDestinatarioDTO struct {
 
 func (uc *ManifestarDestinatarioUseCase) Execute(ctx context.Context, dto ManifestarDestinatarioDTO) (map[string]interface{}, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
-		return nil, errorsuc.NewValidationError("não autorizado")
+		return nil, errorsuc.ErrUnauthorized
 	}
 	tipo := normalizarTipoManifestacao(dto.Tipo)
 	if !tiposManifestacao[tipo] {
@@ -45,9 +45,9 @@ func (uc *ManifestarDestinatarioUseCase) Execute(ctx context.Context, dto Manife
 	}
 	return cli.ManifestarDestinatario(ctx, focusnfe.ManifestacaoPayload{
 		CNPJ:          cfg.CnpjEmpresa,
-		ChaveNFe:      dto.ChaveNFe,
+		ChaveNFe:      soDigitos(dto.ChaveNFe),
 		Tipo:          tipo,
-		Justificativa: dto.Justificativa,
+		Justificativa: strings.TrimSpace(dto.Justificativa),
 	})
 }
 
@@ -81,10 +81,10 @@ type InutilizarNumeracaoDTO struct {
 
 func (uc *InutilizarNumeracaoUseCase) Execute(ctx context.Context, dto InutilizarNumeracaoDTO) (map[string]interface{}, error) {
 	if !uc.Auth.CanAuthorizeFiscalExit(ctx) {
-		return nil, errorsuc.NewValidationError("não autorizado")
+		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.NumeroFinal < dto.NumeroInicial {
-		return nil, errorsuc.NewValidationError("o número final deve ser maior ou igual ao número inicial")
+	if err := validarInutilizacao(dto); err != nil {
+		return nil, err
 	}
 	cli, cfg, err := newFocusFromConfig(ctx, uc.Repo)
 	if err != nil {
@@ -95,8 +95,28 @@ func (uc *InutilizarNumeracaoUseCase) Execute(ctx context.Context, dto Inutiliza
 		Serie:         dto.Serie,
 		NumeroInicial: dto.NumeroInicial,
 		NumeroFinal:   dto.NumeroFinal,
-		Justificativa: dto.Justificativa,
+		Justificativa: strings.TrimSpace(dto.Justificativa),
 	})
+}
+
+// validarInutilizacao aplica as regras da SEFAZ antes de enviar: série de 0 a
+// 999, números de 1 a 999.999.999 em faixa crescente e justificativa de 15 a
+// 255 caracteres. A inutilização não pode ser desfeita.
+func validarInutilizacao(dto InutilizarNumeracaoDTO) error {
+	if dto.Serie < 0 || dto.Serie > 999 {
+		return errorsuc.NewValidationError("a série deve estar entre 0 e 999")
+	}
+	if dto.NumeroInicial < 1 || dto.NumeroFinal > 999_999_999 {
+		return errorsuc.NewValidationError("os números da faixa devem estar entre 1 e 999.999.999")
+	}
+	if dto.NumeroFinal < dto.NumeroInicial {
+		return errorsuc.NewValidationError("o número final deve ser maior ou igual ao número inicial")
+	}
+	n := len([]rune(strings.TrimSpace(dto.Justificativa)))
+	if n < 15 || n > 255 {
+		return errorsuc.NewValidationError("a justificativa da inutilização deve ter entre 15 e 255 caracteres")
+	}
+	return nil
 }
 
 // newFocusFromConfig builds a Focus client from the stored fiscal configuration.

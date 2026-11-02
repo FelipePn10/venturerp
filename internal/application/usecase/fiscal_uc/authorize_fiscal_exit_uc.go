@@ -71,6 +71,8 @@ type AuthorizeFiscalExitUseCase struct {
 	// Reforma resolve alíquotas e cClassTrib da nota e guarda o retrato do grupo
 	// IBS/CBS transmitido. Sem ele valem a lei e a tributação integral.
 	Reforma repository.ReformaTributariaRepository
+	// TiposNota diz se o tipo de nota escolhido cobra e gera receita.
+	TiposNota LeitorEfeitosTipoNota
 }
 
 // BeneficiamentoBaixaGuard é a conferência da baixa de material de terceiro.
@@ -98,7 +100,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// Rejeitada pode ser retransmitida depois de corrigida: a rejeição não usa
 	// o número na SEFAZ (cada envio tem referência nova na Focus).
 	if exit.Status != entity.ExitStatusDraft && exit.Status != entity.ExitStatusAwaitingAuthorization && exit.Status != entity.ExitStatusRejected {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("NF-e deve estar em rascunho ou rejeitada para autorizar, status atual: %s", exit.Status))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("só nota em rascunho ou rejeitada pode ser transmitida; esta está %s", situacaoDaNota(exit.Status)))
 	}
 	// Já enviada e sem resposta: reenviar criaria outra nota na Focus, e as duas
 	// poderiam ser autorizadas. A consulta resolve (autoriza ou libera o reenvio).
@@ -132,7 +134,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	}
 
 	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado — acesse Configurações Fiscais para informá-lo antes de autorizar a nota")
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o na tela Configuração Fiscal (VFIS0100) antes de transmitir a nota")
 	}
 	if err := recusarPendenciasTributarias(exit, items, cfg); err != nil {
 		return nil, err
@@ -159,10 +161,15 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	// A condição de pagamento resolvida aqui serve aos três: a duplicata da
 	// NF-e, a forma de pagamento declarada à SEFAZ e o título do contas a
 	// receber. Um cálculo só, um resultado só.
-	plano, err := resolverPlanoDaNota(ctx, exit, uc.CustomerRepo, uc.SalesOrderRepo)
+	plano, err := resolverPlanoDaNota(ctx, exit, items, uc.CustomerRepo, uc.SalesOrderRepo)
 	if err != nil {
 		return nil, err
 	}
+	efeitosTipo, err := efeitosDaNota(ctx, uc.TiposNota, exit)
+	if err != nil {
+		return nil, err
+	}
+	plano = planoDoTipoNota(plano, efeitosTipo)
 	payload, retrato := montarPayloadNFe(exit, items, cfg, plano, rt)
 	if err := anexarSeries(ctx, uc.Series, id, items, &payload); err != nil {
 		return nil, err
@@ -234,12 +241,17 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 				return nil, fmt.Errorf("a SEFAZ rejeitou a NF-e (%s) e a rejeição não pôde ser gravada: %w", rejeicao.Motivo, errSit)
 			}
 			// Rejeição é dado a corrigir, não falha do servidor: 422 com o motivo.
-			return nil, errorsuc.NewValidationError("a SEFAZ rejeitou a NF-e: " + rejeicao.Motivo + ". Corrija e envie de novo")
+			quem := "a SEFAZ rejeitou a NF-e"
+			if rejeicao.DaFocus() {
+				quem = "a Focus NF-e recusou o envio"
+			}
+			return nil, errorsuc.NewValidationError(quem + ": " + strings.TrimSuffix(rejeicao.Motivo, ".") + ". Corrija e envie de novo")
 		default:
 			// Rede ou erro da Focus: não se sabe se a nota chegou. Ela fica
 			// aguardando, com a referência gravada, para a consulta resolver.
+			slog.ErrorContext(ctx, "falha ao enviar a NF-e à Focus", "documento", id, "erro", err)
 			return nil, errorsuc.NewExternalServiceError("Focus NF-e",
-				err.Error()+" — a nota ficou aguardando autorização; use \"Status\" antes de enviar de novo")
+				"não foi possível confirmar o envio. A nota ficou aguardando autorização: use \"Status\" na tela de notas fiscais de saída (VFIS0200) antes de enviar de novo")
 		}
 	}
 
@@ -295,7 +307,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 			resp.Warnings = append(resp.Warnings, "nota autorizada; estoque, títulos e pedido ficaram PENDENTES e serão reprocessados automaticamente (há também o botão Reprocessar na nota): "+err.Error())
 		}
 	}
-	resp.Warnings = append(resp.Warnings, contabilizarSaida(ctx, uc.Contabil, updated, uc.FinancialRepo != nil)...)
+	resp.Warnings = append(resp.Warnings, contabilizarSaida(ctx, uc.Contabil, updated, items, uc.FinancialRepo != nil && efeitosTipo.GeraReceita)...)
 	return resp, nil
 }
 
@@ -396,7 +408,9 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 		// porcentagem por engano, como o motor).
 		// O percentual é o da linha (regra do cadastro); linha antiga, sem ele,
 		// usa o da configuração, como antes.
-		if cstICMS == "51" && it.ValorICMSDiferido > 0 {
+		// Diferimento total (beneficiamento) tem valor zero e pDif de 100%: a SEFAZ
+		// recusa o CST 51 sem o grupo (rejeição 929).
+		if cstICMS == "51" && (it.ValorICMSDiferido > 0 || it.ICMSDiferimentoPct > 0) {
 			pct := it.ICMSDiferimentoPct
 			if pct <= 0 {
 				pct, _ = engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100)).Float64()
@@ -472,4 +486,21 @@ type registroEnvioFocus interface {
 // quatro casas. Multiplicar em float deixava 7.000000000000001 no payload.
 func percentualXML(fracao float64) float64 {
 	return decimal.NewFromFloat(fracao).Mul(decimal.NewFromInt(100)).Round(4).InexactFloat64()
+}
+
+// situacaoDaNota diz a situação da nota como a tela mostra, para a mensagem ao usuário.
+func situacaoDaNota(status entity.FiscalExitStatus) string {
+	switch status {
+	case entity.ExitStatusAuthorized:
+		return "autorizada"
+	case entity.ExitStatusCancelled:
+		return "cancelada"
+	case entity.ExitStatusAwaitingAuthorization:
+		return "aguardando a SEFAZ"
+	case entity.ExitStatusDraft:
+		return "em rascunho"
+	case entity.ExitStatusRejected:
+		return "rejeitada"
+	}
+	return "em outra situação"
 }

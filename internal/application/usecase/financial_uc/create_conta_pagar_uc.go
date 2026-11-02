@@ -11,6 +11,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -55,6 +56,35 @@ func aplicarRateio(c *entity.ContaPagar, in []request.RateioContaPagarDTO) error
 	return nil
 }
 
+func novoTitulo(dto request.CreateContaPagarDTO, userID uuid.UUID, dataEmissao, dataVencimento time.Time) *entity.ContaPagar {
+	c := &entity.ContaPagar{
+		NumeroDocumento: dto.NumeroDocumento,
+		TipoDocumento:   dto.TipoDocumento,
+		FornecedorID:    dto.FornecedorID,
+		FiscalEntryID:   dto.FiscalEntryID,
+		PurchaseOrderID: dto.PurchaseOrderID,
+		DataLancamento:  time.Now(),
+		DataEmissao:     dataEmissao,
+		DataVencimento:  dataVencimento,
+		ValorBruto:      decimal.NewFromFloat(dto.ValorBruto),
+		Desconto:        decimal.NewFromFloat(dto.Desconto),
+		Juros:           decimal.Zero,
+		Multa:           decimal.Zero,
+		ValorPago:       decimal.Zero,
+		ParcelaNumero:   dto.ParcelaNumero,
+		ParcelaTotal:    dto.ParcelaTotal,
+		FormaPagamento:  dto.FormaPagamento,
+		PlanoContasID:   dto.PlanoContasID,
+		CentroCustoID:   dto.CentroCustoID,
+		StatusAprovacao: entity.AprovacaoPendente,
+		Status:          entity.ContaPagarStatusPendente,
+		IsActive:        true,
+		CriadoPor:       userID,
+		Observacao:      dto.Observacao,
+	}
+	return c
+}
+
 type CreateContaPagarUseCase struct {
 	Repo repository.FinancialRepository
 	Auth ports.AuthService
@@ -81,31 +111,7 @@ func (uc *CreateContaPagarUseCase) Execute(
 		return nil, errorsuc.NewValidationError(msg)
 	}
 
-	c := &entity.ContaPagar{
-		NumeroDocumento: dto.NumeroDocumento,
-		TipoDocumento:   dto.TipoDocumento,
-		FornecedorID:    dto.FornecedorID,
-		FiscalEntryID:   dto.FiscalEntryID,
-		PurchaseOrderID: dto.PurchaseOrderID,
-		DataLancamento:  time.Now(),
-		DataEmissao:     dataEmissao,
-		DataVencimento:  dataVencimento,
-		ValorBruto:      decimal.NewFromFloat(dto.ValorBruto),
-		Desconto:        decimal.NewFromFloat(dto.Desconto),
-		Juros:           decimal.Zero,
-		Multa:           decimal.Zero,
-		ValorPago:       decimal.Zero,
-		ParcelaNumero:   dto.ParcelaNumero,
-		ParcelaTotal:    dto.ParcelaTotal,
-		FormaPagamento:  dto.FormaPagamento,
-		PlanoContasID:   dto.PlanoContasID,
-		CentroCustoID:   dto.CentroCustoID,
-		StatusAprovacao: entity.AprovacaoPendente,
-		Status:          entity.ContaPagarStatusPendente,
-		IsActive:        true,
-		CriadoPor:       userID,
-		Observacao:      dto.Observacao,
-	}
+	c := novoTitulo(dto, userID, dataEmissao, dataVencimento)
 
 	if err := aplicarRateio(c, dto.Rateios); err != nil {
 		return nil, err
