@@ -200,6 +200,12 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 		if _, err := tx.Exec(ctx, `UPDATE stock_movements SET reversed_by_movement_id=$2 WHERE id=$1`, p.id, rev.ID); err != nil {
 			return nil, fmt.Errorf("linking the reversal: %w", err)
 		}
+		// Estornada a saída para a demanda, a peça volta reservada para ela.
+		if ref == entity.ReferenceTypeIndependentDemand && p.refCodigo != nil {
+			if _, err := ReservarDeVoltaDoEstornoTx(ctx, tx, empresa, *p.refCodigo, rev, ator); err != nil {
+				return nil, err
+			}
+		}
 		out = append(out, rev)
 	}
 	if err := tx.Commit(ctx); err != nil {
