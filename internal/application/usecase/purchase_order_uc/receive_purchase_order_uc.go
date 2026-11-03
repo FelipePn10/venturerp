@@ -76,7 +76,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		byCode[line.Code] = line
 	}
 
-	receivedByLine := make(map[int64]float64, len(dto.Items))
+	receivedByLine := make(map[int64]decimal.Decimal, len(dto.Items))
 	receiptLines := make([]response.PurchaseReceiptLine, 0, len(dto.Items))
 	movements := make([]response.StockMovementResponse, 0, len(dto.Items))
 	inspectionOrders := make([]response.ReceiptInspectionOrder, 0)
@@ -85,7 +85,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 	refCode := dto.PurchaseOrderCode
 
 	for _, item := range dto.Items {
-		if item.Quantity <= 0 {
+		if !item.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("quantidade deve ser positiva para o item %d do pedido de compra", item.PurchaseOrderItemCode))
 		}
 		if item.WarehouseID <= 0 {
@@ -98,10 +98,11 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		if line.Status == poentity.PurchaseOrderItemStatusCANCELLED {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d do pedido de compra está cancelado", item.PurchaseOrderItemCode))
 		}
-		remaining := line.RequestedQty - line.ReceivedQty - line.CancelledQty
+		folga := decimal.New(1, -4)
+		remaining := line.RequestedQty.Sub(line.ReceivedQty).Sub(line.CancelledQty)
 		toleranceHandled := false
-		if uc.Tolerances != nil && line.ReceivedQty+item.Quantity > line.RequestedQty+0.0001 {
-			action, message, exceeded, toleranceErr := uc.Tolerances.EvaluatePurchaseTolerance(ctx, order.SupplierCode, "QUANTITY", "RECEIVING_NOTICE", decimal.NewFromFloat(line.RequestedQty), decimal.NewFromFloat(line.ReceivedQty+item.Quantity))
+		if uc.Tolerances != nil && line.ReceivedQty.Add(item.Quantity).GreaterThan(line.RequestedQty.Add(folga)) {
+			action, message, exceeded, toleranceErr := uc.Tolerances.EvaluatePurchaseTolerance(ctx, order.SupplierCode, "QUANTITY", "RECEIVING_NOTICE", line.RequestedQty, line.ReceivedQty.Add(item.Quantity))
 			if toleranceErr != nil {
 				return nil, toleranceErr
 			}
@@ -116,13 +117,13 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			}
 		}
 		if !toleranceHandled {
-			toleranceRemaining := line.TolerancePct/100*line.RequestedQty + line.CancelledToleranceQty
-			if item.Quantity > remaining+toleranceRemaining+0.0001 {
-				return nil, errorsuc.NewValidationError(fmt.Sprintf("a quantidade recebida %.4f passa do saldo de %.4f do item %d do pedido de compra", item.Quantity, remaining, item.PurchaseOrderItemCode))
+			toleranceRemaining := line.TolerancePct.Div(decimal.NewFromInt(100)).Mul(line.RequestedQty).Add(line.CancelledToleranceQty)
+			if item.Quantity.GreaterThan(remaining.Add(toleranceRemaining).Add(folga)) {
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("a quantidade recebida %s passa do saldo de %s do item %d do pedido de compra", item.Quantity.StringFixed(4), remaining.StringFixed(4), item.PurchaseOrderItemCode))
 			}
 		}
 
-		if line.InternalQty <= 0 && uc.Unidade != nil {
+		if !line.InternalQty.IsPositive() && uc.Unidade != nil {
 			// Linha anterior à conversão obrigatória: converte agora, pela
 			// unidade de estoque do cadastro, em vez de receber em unidade de compra.
 			copia := *line
@@ -133,14 +134,13 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		}
 		// Conta em decimal: a quantidade convertida para a unidade interna e o
 		// valor vão para o estoque, onde a soma de várias entradas não pode derivar.
-		stockQtyExata := decimal.NewFromFloat(item.Quantity)
-		unitPrice := decimal.NewFromFloat(line.UnitPrice)
-		if line.InternalQty > 0 && line.RequestedQty > 0 {
-			stockQtyExata = stockQtyExata.Mul(decimal.NewFromFloat(line.InternalQty)).
-				DivRound(decimal.NewFromFloat(line.RequestedQty), 6)
+		stockQtyExata := item.Quantity
+		unitPrice := line.UnitPrice
+		if line.InternalQty.IsPositive() && line.RequestedQty.IsPositive() {
+			stockQtyExata = stockQtyExata.Mul(line.InternalQty).DivRound(line.RequestedQty, 6)
 		}
-		if line.InternalPrice > 0 {
-			unitPrice = decimal.NewFromFloat(line.InternalPrice)
+		if line.InternalPrice.IsPositive() {
+			unitPrice = line.InternalPrice
 		}
 		totalPrice := stockQtyExata.Mul(unitPrice).Round(4)
 		stockQty := stockQtyExata.InexactFloat64()
@@ -202,15 +202,15 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			})
 		}
 
-		receivedByLine[line.Code] += item.Quantity
+		receivedByLine[line.Code] = receivedByLine[line.Code].Add(item.Quantity)
 		receiptLines = append(receiptLines, response.PurchaseReceiptLine{
 			PurchaseOrderItemCode: line.Code,
 			ItemCode:              line.ItemCode,
 			Mask:                  line.Mask,
 			WarehouseID:           targetWarehouse,
-			Quantity:              item.Quantity,
+			Quantity:              item.Quantity.InexactFloat64(),
 			StockQuantity:         stockQty,
-			RemainingQty:          remaining - item.Quantity,
+			RemainingQty:          remaining.Sub(item.Quantity).InexactFloat64(),
 			UnderInspection:       underInspection,
 		})
 	}

@@ -76,7 +76,7 @@ func (uc *UpdatePurchaseOrderUseCase) Execute(
 			}
 		}
 	}
-	if dto.FreightValue < 0 || dto.AdvanceValue < 0 || dto.RedispatchFreightValue < 0 {
+	if dto.FreightValue.IsNegative() || dto.AdvanceValue.IsNegative() || dto.RedispatchFreightValue.IsNegative() {
 		return nil, errorsuc.NewValidationError("frete e adiantamento não podem ser negativos")
 	}
 

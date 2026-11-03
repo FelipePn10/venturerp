@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 // ReceivePurchaseOrderDTO registers the physical receipt of purchase order
 // lines and posts inbound stock movements for the received quantities.
 type ReceivePurchaseOrderDTO struct {
@@ -9,12 +11,12 @@ type ReceivePurchaseOrderDTO struct {
 }
 
 type ReceivePurchaseOrderItemDTO struct {
-	PurchaseOrderItemCode int64   `json:"purchase_order_item_code"`
-	Quantity              float64 `json:"quantity"`
-	WarehouseID           int64   `json:"warehouse_id"`
-	Lot                   *string `json:"lot,omitempty"`
-	SerialNumber          *string `json:"serial_number,omitempty"`
-	Batch                 *string `json:"batch,omitempty"`
-	ExpirationDate        *string `json:"expiration_date,omitempty"`
-	Notes                 *string `json:"notes,omitempty"`
+	PurchaseOrderItemCode int64           `json:"purchase_order_item_code"`
+	Quantity              decimal.Decimal `json:"quantity"`
+	WarehouseID           int64           `json:"warehouse_id"`
+	Lot                   *string         `json:"lot,omitempty"`
+	SerialNumber          *string         `json:"serial_number,omitempty"`
+	Batch                 *string         `json:"batch,omitempty"`
+	ExpirationDate        *string         `json:"expiration_date,omitempty"`
+	Notes                 *string         `json:"notes,omitempty"`
 }

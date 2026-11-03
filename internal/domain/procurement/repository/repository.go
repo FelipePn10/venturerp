@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
@@ -35,7 +36,7 @@ type Repository interface {
 	ListSupplierContracts(ctx context.Context, supplierCode int64, status string) ([]*entity.SupplierContract, error)
 	UpdateSupplierContractStatus(ctx context.Context, id int64, status string) (*entity.SupplierContract, error)
 	FindContractItem(ctx context.Context, contractID, itemCode int64, mask string) (*entity.SupplierContractItem, error)
-	ConsumeContractItem(ctx context.Context, contractItemID int64, qty float64) (*entity.SupplierContractItem, error)
+	ConsumeContractItem(ctx context.Context, contractItemID int64, qty decimal.Decimal) (*entity.SupplierContractItem, error)
 
 	// Supplier performance for IQF auto-computation.
 	AggregateSupplierPerformance(ctx context.Context, supplierCode int64, from, to time.Time) (*entity.SupplierPerformanceAggregate, error)

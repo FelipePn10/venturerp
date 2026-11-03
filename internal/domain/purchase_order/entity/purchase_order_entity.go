@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,9 +50,9 @@ type PurchaseOrder struct {
 	ShippingAddressCode *int64
 	Notes               *string
 
-	TotalGross    float64
-	TotalNet      float64
-	TotalDiscount float64
+	TotalGross    decimal.Decimal
+	TotalNet      decimal.Decimal
+	TotalDiscount decimal.Decimal
 
 	// Comercial / fiscal (capa)
 	PriceTableCode   *int64
@@ -63,15 +64,15 @@ type PurchaseOrder struct {
 	FreightType      string  // CIF/DAF/FOB/SEM_FRETE/CONVENIO/RETIRA/CORTESIA/TERCEIROS
 	FreightValueType *string // VALOR | PERCENTUAL
 	FreightValueMode *string // UNITARIO | TOTAL
-	FreightValue     float64
+	FreightValue     decimal.Decimal
 	CarrierCode      *int64
 	// Redespacho
 	RedispatchCarrierCode  *int64
 	RedispatchFreightType  *string
-	RedispatchFreightValue float64
+	RedispatchFreightValue decimal.Decimal
 	// Adiantamento
 	AdvanceDate  *time.Time
-	AdvanceValue float64
+	AdvanceValue decimal.Decimal
 	// Importação
 	IncotermCode *string
 	ShipmentDate *time.Time
@@ -95,17 +96,17 @@ type PurchaseOrderItem struct {
 	Sequence          int
 	ItemCode          int64
 	Mask              string
-	RequestedQty      float64
-	ReceivedQty       float64
-	CancelledQty      float64
+	RequestedQty      decimal.Decimal
+	ReceivedQty       decimal.Decimal
+	CancelledQty      decimal.Decimal
 	// InvoicedQty é o que já chegou com nota (e virou título a pagar).
-	InvoicedQty  float64
-	UnitPrice    float64
-	TotalPrice   float64
-	DiscountPct  float64
-	IPIPct       float64
-	ICMSPct      float64
-	ICMSSTPct    float64
+	InvoicedQty  decimal.Decimal
+	UnitPrice    decimal.Decimal
+	TotalPrice   decimal.Decimal
+	DiscountPct  decimal.Decimal
+	IPIPct       decimal.Decimal
+	ICMSPct      decimal.Decimal
+	ICMSSTPct    decimal.Decimal
 	Status       PurchaseOrderItemStatus
 	DeliveryDate *time.Time
 	PromisedDate *time.Time
@@ -113,12 +114,12 @@ type PurchaseOrderItem struct {
 	// UM / conversão (compra ↔ estoque)
 	PurchaseUOM   *string
 	InternalUOM   *string
-	InternalQty   float64
-	InternalPrice float64
+	InternalQty   decimal.Decimal
+	InternalPrice decimal.Decimal
 	WarehouseID   *int64
 	// Tolerância / cancelamento
-	TolerancePct          float64
-	CancelledToleranceQty float64
+	TolerancePct          decimal.Decimal
+	CancelledToleranceQty decimal.Decimal
 	// Fiscal / contábil
 	OperationTypeCode        *int64
 	InvoiceTypeCode          *int64

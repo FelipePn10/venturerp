@@ -133,7 +133,7 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 || dto.Quantity <= 0 {
+	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 || !dto.Quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("código do item, depósito e quantidade são obrigatórios")
 	}
 	if dto.Source == "" {
@@ -152,7 +152,7 @@ func (uc *UseCase) GenerateReceivingInspectionOrder(ctx context.Context, dto req
 	}
 	wh := dto.WarehouseID
 	r, err := lu.Abrir(ctx, lote_uc.AberturaDTO{
-		Origem: origem, ItemCode: dto.ItemCode, Mask: dto.Mask, Lote: dto.Lot, Serie: dto.SerialNumber, Quantidade: decimalDe(dto.Quantity),
+		Origem: origem, ItemCode: dto.ItemCode, Mask: dto.Mask, Lote: dto.Lot, Serie: dto.SerialNumber, Quantidade: dto.Quantity.Round(6),
 		WarehouseID: &wh, SupplierCode: dto.SupplierCode, PurchaseOrderCode: dto.PurchaseOrderCode, PurchaseOrderItemCode: dto.PurchaseOrderItemCode,
 		FiscalEntryCode: dto.FiscalEntryCode, ReceivingNoticeCode: dto.ReceivingNoticeCode, Certificado: dto.Certificate,
 		NotaFornecedor: dto.SupplierNote, Modelo: dto.Model, Observacoes: dto.Notes,
@@ -282,7 +282,7 @@ func (uc *UseCase) AnalyzeReceivingInspectionOrder(ctx context.Context, orderID 
 	}
 	// Sem retrabalho/rejeição explícitos, a sucata do tratamento SCRAP é a rejeitada.
 	dec := lote_uc.DecisaoDTO{
-		Aceita: decimalDe(dto.ConformQty), Restrita: decimalDe(dto.RestrictedQty), Retrabalho: decimalDe(dto.ReworkQty), Rejeitada: decimalDe(dto.RejectedQty),
+		Aceita: dto.ConformQty.Round(6), Restrita: dto.RestrictedQty.Round(6), Retrabalho: dto.ReworkQty.Round(6), Rejeitada: dto.RejectedQty.Round(6),
 		DestinoAceito: dto.DestinationWarehouseID, DestinoRestrito: restrito, DestinoRetrabalho: dto.ReworkWarehouseID, DestinoRejeitado: dto.RejectionWarehouseID,
 		Tratamento: tratamento, AfetaIQF: &dto.AffectsSupplierScore, Motivo: dto.Notes,
 	}
@@ -305,7 +305,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) || !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.ApprovedQty < 0 || dto.RejectedQty < 0 || dto.ApprovedQty+dto.RejectedQty <= 0 {
+	if dto.ApprovedQty.IsNegative() || dto.RejectedQty.IsNegative() || !dto.ApprovedQty.Add(dto.RejectedQty).IsPositive() {
 		return nil, errorsuc.NewValidationError("informe a quantidade aprovada ou a rejeitada, maior que zero")
 	}
 	rec, err := uc.Repo.GetRecord(ctx, id)
@@ -329,7 +329,7 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 		}
 		kind, legado := legadoRegistro, id
 		aberto, errAbrir := lu.Abrir(ctx, lote_uc.AberturaDTO{
-			Origem: string(dom.OrigemRecebimento), ItemCode: *rec.ItemCode, Mask: rec.Mask, Quantidade: decimalDe(rec.Quantity),
+			Origem: string(dom.OrigemRecebimento), ItemCode: *rec.ItemCode, Mask: rec.Mask, Quantidade: rec.Quantity.Round(6),
 			WarehouseID: rec.WarehouseID, SupplierCode: rec.SupplierCode, PurchaseOrderCode: rec.PurchaseOrderCode,
 			PurchaseOrderItemCode: rec.PurchaseOrderItemCode, Observacoes: rec.Reference, SemRoteiro: true,
 			LegacyKind: &kind, LegacyID: &legado,
@@ -341,16 +341,16 @@ func (uc *UseCase) DisposeInspection(ctx context.Context, id int64, dto request.
 	}
 	trat := "DEVOLVER"
 	r, err := lu.Decidir(ctx, l.ID, lote_uc.DecisaoDTO{
-		Aceita: decimalDe(dto.ApprovedQty), Rejeitada: decimalDe(dto.RejectedQty),
+		Aceita: dto.ApprovedQty.Round(6), Rejeitada: dto.RejectedQty.Round(6),
 		DestinoAceito: dto.DestinationWarehouseID, DestinoRejeitado: dto.QuarantineWarehouseID, Tratamento: &trat, Motivo: dto.Reason,
 	})
 	if err != nil {
 		return nil, err
 	}
 	next := entity.StatusApproved
-	if dto.ApprovedQty == 0 {
+	if dto.ApprovedQty.IsZero() {
 		next = entity.StatusRejected
-	} else if dto.RejectedQty > 0 {
+	} else if dto.RejectedQty.IsPositive() {
 		next = entity.StatusPartial
 	}
 	updated, err := uc.Repo.UpdateRecordStatus(ctx, id, next)

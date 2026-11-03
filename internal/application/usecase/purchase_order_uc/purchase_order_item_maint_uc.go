@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -64,20 +65,20 @@ func (uc *UpdatePurchaseOrderItemUseCase) Execute(ctx context.Context, dto reque
 	if err := po.Editavel(); err != nil {
 		return nil, errorsuc.NewValidationError(err.Error())
 	}
-	if it.ReceivedQty > 0 || it.Status == entity.PurchaseOrderItemStatusCANCELLED {
+	if it.ReceivedQty.IsPositive() || it.Status == entity.PurchaseOrderItemStatusCANCELLED {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d já tem recebimento ou está cancelada", it.Sequence))
 	}
-	set := func(dst *float64, v *float64, nome string, max float64) error {
+	set := func(dst *decimal.Decimal, v *decimal.Decimal, nome string, max int64) error {
 		if v == nil {
 			return nil
 		}
-		if *v < 0 || (max > 0 && *v > max) {
+		if v.IsNegative() || (max > 0 && v.GreaterThan(decimal.NewFromInt(max))) {
 			return errorsuc.NewValidationError(nome + " inválido")
 		}
 		*dst = *v
 		return nil
 	}
-	if dto.RequestedQty != nil && *dto.RequestedQty <= 0 {
+	if dto.RequestedQty != nil && !dto.RequestedQty.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 	qtdAntes := it.RequestedQty
@@ -94,8 +95,8 @@ func (uc *UpdatePurchaseOrderItemUseCase) Execute(ctx context.Context, dto reque
 		}
 	}
 	// A quantidade em UM de estoque acompanha a de compra na mesma proporção.
-	if qtdAntes > 0 && it.InternalQty > 0 {
-		it.InternalQty = it.InternalQty * it.RequestedQty / qtdAntes
+	if qtdAntes.IsPositive() && it.InternalQty.IsPositive() {
+		it.InternalQty = it.InternalQty.Mul(it.RequestedQty).DivRound(qtdAntes, 6)
 	} else {
 		it.InternalQty = it.RequestedQty
 	}
@@ -178,7 +179,7 @@ func (uc *CancelPurchaseOrderItemUseCase) Execute(ctx context.Context, dto reque
 	}
 	motivo := strings.TrimSpace(dto.Motivo)
 
-	if po.Editavel() == nil && it.ReceivedQty == 0 {
+	if po.Editavel() == nil && it.ReceivedQty.IsZero() {
 		it.IsActive = false
 		it.Status = entity.PurchaseOrderItemStatusCANCELLED
 		if _, err := uc.Repo.UpdateItem(ctx, it); err != nil {
@@ -193,14 +194,14 @@ func (uc *CancelPurchaseOrderItemUseCase) Execute(ctx context.Context, dto reque
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está %s; não há saldo a eliminar", po.Code, entity.RotuloSituacao(po.Status)))
 	}
 	saldo := it.Saldo()
-	if saldo <= 0.0001 {
+	if !saldo.GreaterThan(decimal.New(1, -4)) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d não tem saldo a receber", it.Sequence))
 	}
 	if motivo == "" {
 		return nil, errorsuc.NewValidationError("informe o motivo da eliminação do saldo (fica no histórico da linha)")
 	}
-	it.CancelledQty = it.RequestedQty - it.ReceivedQty
-	if it.ReceivedQty > 0 {
+	it.CancelledQty = it.RequestedQty.Sub(it.ReceivedQty)
+	if it.ReceivedQty.IsPositive() {
 		it.Status = entity.PurchaseOrderItemStatusRECEIVED
 	} else {
 		it.Status = entity.PurchaseOrderItemStatusCANCELLED
@@ -229,6 +230,6 @@ func (uc *CancelPurchaseOrderItemUseCase) Execute(ctx context.Context, dto reque
 	return toPurchaseOrderResponse(updated), nil
 }
 
-func formatarQtd(v float64) string {
-	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.4f", v), "0"), ".")
+func formatarQtd(v decimal.Decimal) string {
+	return v.Round(4).String()
 }

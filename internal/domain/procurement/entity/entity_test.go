@@ -1,6 +1,10 @@
 package entity
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 func TestSupplierContractItemRemainingQty(t *testing.T) {
 	cases := []struct {
@@ -15,8 +19,8 @@ func TestSupplierContractItemRemainingQty(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			it := &SupplierContractItem{ContractedQty: c.contracted, ConsumedQty: c.consumed}
-			if got := it.RemainingQty(); got != c.want {
+			it := &SupplierContractItem{ContractedQty: decimal.NewFromFloat(c.contracted), ConsumedQty: decimal.NewFromFloat(c.consumed)}
+			if got := it.RemainingQty(); !got.Equal(decimal.NewFromFloat(c.want)) {
 				t.Errorf("RemainingQty()=%v want %v", got, c.want)
 			}
 		})

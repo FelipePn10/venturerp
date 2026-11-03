@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/lote_uc"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -228,8 +229,8 @@ func (uc *UseCase) CreateReceivingInspectionRoute(ctx context.Context, dto reque
 		if !validAppointmentMode(stepDTO.AppointmentMode) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("modo de apontamento %q inválido na etapa %d", stepDTO.AppointmentMode, stepDTO.Sequence))
 		}
-		if stepDTO.SampleQty <= 0 {
-			stepDTO.SampleQty = 1
+		if !stepDTO.SampleQty.IsPositive() {
+			stepDTO.SampleQty = decimal.NewFromFloat(1)
 		}
 		stepValidTo, err := parseDatePtr(stepDTO.ValidTo)
 		if err != nil {
@@ -429,7 +430,7 @@ func toRecordResponse(rec *entity.Record) *response.ProcurementRecordResponse {
 		ItemCode:              rec.ItemCode,
 		Mask:                  rec.Mask,
 		WarehouseID:           rec.WarehouseID,
-		Quantity:              rec.Quantity,
+		Quantity:              rec.Quantity.InexactFloat64(),
 		Reference:             rec.Reference,
 		Payload:               rec.Payload,
 		OpenedAt:              rec.OpenedAt,
@@ -514,9 +515,9 @@ func toReceivingInspectionRouteResponse(route *entity.ReceivingInspectionRoute) 
 			InstrumentGroup: step.InstrumentGroup,
 			SampleType:      step.SampleType,
 			SampleUnit:      step.SampleUnit,
-			SampleQty:       step.SampleQty,
-			AcceptanceQty:   step.AcceptanceQty,
-			RejectionQty:    step.RejectionQty,
+			SampleQty:       step.SampleQty.InexactFloat64(),
+			AcceptanceQty:   step.AcceptanceQty.InexactFloat64(),
+			RejectionQty:    step.RejectionQty.InexactFloat64(),
 			Norm:            step.Norm,
 			Reference:       step.Reference,
 			ValidTo:         step.ValidTo,
@@ -554,12 +555,12 @@ func toReceivingInspectionOrderResponse(order *entity.ReceivingInspectionOrder) 
 		Lot:                   order.Lot,
 		SerialNumber:          order.SerialNumber,
 		WarehouseID:           order.WarehouseID,
-		Quantity:              order.Quantity,
-		InspectedQty:          order.InspectedQty,
-		ApprovedQty:           order.ApprovedQty,
-		RejectedQty:           order.RejectedQty,
-		ReworkQty:             order.ReworkQty,
-		RestrictedQty:         order.RestrictedQty,
+		Quantity:              order.Quantity.InexactFloat64(),
+		InspectedQty:          order.InspectedQty.InexactFloat64(),
+		ApprovedQty:           order.ApprovedQty.InexactFloat64(),
+		RejectedQty:           order.RejectedQty.InexactFloat64(),
+		ReworkQty:             order.ReworkQty.InexactFloat64(),
+		RestrictedQty:         order.RestrictedQty.InexactFloat64(),
 		Status:                order.Status,
 		Certificate:           order.Certificate,
 		SupplierNote:          order.SupplierNote,
@@ -601,10 +602,10 @@ func toReceivingInspectionAnalysisResponse(analysis *entity.ReceivingInspectionA
 	return &response.ReceivingInspectionAnalysisResponse{
 		ID:                   analysis.ID,
 		OrderID:              analysis.OrderID,
-		ConformQty:           analysis.ConformQty,
-		RejectedQty:          analysis.RejectedQty,
-		ReworkQty:            analysis.ReworkQty,
-		RestrictedQty:        analysis.RestrictedQty,
+		ConformQty:           analysis.ConformQty.InexactFloat64(),
+		RejectedQty:          analysis.RejectedQty.InexactFloat64(),
+		ReworkQty:            analysis.ReworkQty.InexactFloat64(),
+		RestrictedQty:        analysis.RestrictedQty.InexactFloat64(),
 		Treatment:            analysis.Treatment,
 		AffectsSupplierScore: analysis.AffectsSupplierScore,
 		Notes:                analysis.Notes,

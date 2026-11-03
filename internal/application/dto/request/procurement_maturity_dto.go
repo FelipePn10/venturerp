@@ -1,6 +1,9 @@
 package request
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/shopspring/decimal"
+)
 
 type CreateProcurementRecordDTO struct {
 	RecordType            string          `json:"record_type"`
@@ -11,7 +14,7 @@ type CreateProcurementRecordDTO struct {
 	ItemCode              *int64          `json:"item_code"`
 	Mask                  string          `json:"mask"`
 	WarehouseID           *int64          `json:"warehouse_id"`
-	Quantity              float64         `json:"quantity"`
+	Quantity              decimal.Decimal `json:"quantity"`
 	Reference             *string         `json:"reference"`
 	Payload               json.RawMessage `json:"payload"`
 }
@@ -21,11 +24,11 @@ type UpdateProcurementRecordStatusDTO struct {
 }
 
 type DisposeReceivingInspectionDTO struct {
-	ApprovedQty            float64 `json:"approved_qty"`
-	RejectedQty            float64 `json:"rejected_qty"`
-	QuarantineWarehouseID  *int64  `json:"quarantine_warehouse_id"`
-	DestinationWarehouseID *int64  `json:"destination_warehouse_id"`
-	Reason                 *string `json:"reason"`
+	ApprovedQty            decimal.Decimal `json:"approved_qty"`
+	RejectedQty            decimal.Decimal `json:"rejected_qty"`
+	QuarantineWarehouseID  *int64          `json:"quarantine_warehouse_id"`
+	DestinationWarehouseID *int64          `json:"destination_warehouse_id"`
+	Reason                 *string         `json:"reason"`
 }
 
 type CreateSupplierScorecardDTO struct {
@@ -56,15 +59,15 @@ type ComputeSupplierScorecardDTO struct {
 }
 
 type CreateApprovalLimitDTO struct {
-	EnterpriseCode int64    `json:"-"`
-	Scope          string   `json:"scope"`
-	ScopeRef       *string  `json:"scope_ref"`
-	Currency       string   `json:"currency"`
-	AutoApproveMax float64  `json:"auto_approve_max"`
-	BlockAbove     *float64 `json:"block_above"`
-	ValidFrom      string   `json:"valid_from"`
-	ValidTo        *string  `json:"valid_to"`
-	Notes          *string  `json:"notes"`
+	EnterpriseCode int64            `json:"-"`
+	Scope          string           `json:"scope"`
+	ScopeRef       *string          `json:"scope_ref"`
+	Currency       string           `json:"currency"`
+	AutoApproveMax decimal.Decimal  `json:"auto_approve_max"`
+	BlockAbove     *decimal.Decimal `json:"block_above"`
+	ValidFrom      string           `json:"valid_from"`
+	ValidTo        *string          `json:"valid_to"`
+	Notes          *string          `json:"notes"`
 }
 
 type CreateSupplierContractDTO struct {
@@ -82,13 +85,13 @@ type CreateSupplierContractDTO struct {
 }
 
 type SupplierContractItemInputDTO struct {
-	ItemCode      int64   `json:"item_code"`
-	Mask          string  `json:"mask"`
-	Unit          *string `json:"unit"`
-	ContractedQty float64 `json:"contracted_qty"`
-	UnitPrice     float64 `json:"unit_price"`
-	MinOrderQty   float64 `json:"min_order_qty"`
-	Notes         *string `json:"notes"`
+	ItemCode      int64           `json:"item_code"`
+	Mask          string          `json:"mask"`
+	Unit          *string         `json:"unit"`
+	ContractedQty decimal.Decimal `json:"contracted_qty"`
+	UnitPrice     decimal.Decimal `json:"unit_price"`
+	MinOrderQty   decimal.Decimal `json:"min_order_qty"`
+	Notes         *string         `json:"notes"`
 }
 
 type UpdateSupplierContractStatusDTO struct {
@@ -96,7 +99,7 @@ type UpdateSupplierContractStatusDTO struct {
 }
 
 type ConsumeSupplierContractDTO struct {
-	ItemCode int64   `json:"item_code"`
-	Mask     string  `json:"mask"`
-	Quantity float64 `json:"quantity"`
+	ItemCode int64           `json:"item_code"`
+	Mask     string          `json:"mask"`
+	Quantity decimal.Decimal `json:"quantity"`
 }

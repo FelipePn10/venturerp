@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 
@@ -36,33 +37,33 @@ func TestUnidadeInterna(t *testing.T) {
 	}
 
 	// Compra em KG de item estocado em M: converte quantidade e preço.
-	l := &entity.PurchaseOrderItem{ItemCode: 238, RequestedQty: 115.8975, UnitPrice: 6.246, PurchaseUOM: ptrS("kg"), InternalUOM: ptrS("KG")}
+	l := &entity.PurchaseOrderItem{ItemCode: 238, RequestedQty: decimal.NewFromFloat(115.8975), UnitPrice: decimal.NewFromFloat(6.246), PurchaseUOM: ptrS("kg"), InternalUOM: ptrS("KG")}
 	if err := u.Preencher(ctx, l); err != nil {
 		t.Fatal(err)
 	}
-	if *l.InternalUOM != "M" || l.InternalQty < 17.9999 || l.InternalQty > 18.0001 {
+	if *l.InternalUOM != "M" || l.InternalQty.LessThan(decimal.NewFromFloat(17.9999)) || l.InternalQty.GreaterThan(decimal.NewFromFloat(18.0001)) {
 		t.Fatalf("esperava 18 M (unidade do cadastro, não a informada), veio %v %s", l.InternalQty, *l.InternalUOM)
 	}
-	if valor := l.InternalPrice * l.InternalQty; valor < 723.88 || valor > 723.90 {
+	if valor := l.InternalPrice.Mul(l.InternalQty).InexactFloat64(); valor < 723.88 || valor > 723.90 {
 		t.Fatalf("o valor da linha tem de ser o mesmo nas duas unidades: %v", valor)
 	}
 
 	// Sem conversão cadastrada: recusa (antes gravava 19,4 KG como 19,4 M).
-	l = &entity.PurchaseOrderItem{ItemCode: 239, RequestedQty: 19.4371, UnitPrice: 7, PurchaseUOM: ptrS("KG")}
+	l = &entity.PurchaseOrderItem{ItemCode: 239, RequestedQty: decimal.NewFromFloat(19.4371), UnitPrice: decimal.NewFromFloat(7), PurchaseUOM: ptrS("KG")}
 	if err := u.Preencher(ctx, l); err == nil || !strings.Contains(err.Error(), "cadastre a conversão KG→M") {
 		t.Fatalf("esperava recusa por falta de conversão, veio %v", err)
 	}
 
 	// Sem unidade de compra (sugestão do MRP): está na unidade de estoque.
-	l = &entity.PurchaseOrderItem{ItemCode: 300, RequestedQty: 10, UnitPrice: 2}
-	if err := u.Preencher(ctx, l); err != nil || l.InternalQty != 10 || *l.PurchaseUOM != "UN" || *l.InternalUOM != "UN" {
+	l = &entity.PurchaseOrderItem{ItemCode: 300, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(2)}
+	if err := u.Preencher(ctx, l); err != nil || !l.InternalQty.Equal(decimal.NewFromFloat(10)) || *l.PurchaseUOM != "UN" || *l.InternalUOM != "UN" {
 		t.Fatalf("linha sem unidade fica na de estoque: %+v %v", l, err)
 	}
 
 	// Sem provedor (testes antigos): mantém o comportamento anterior.
 	var nada *UnidadeInterna
-	l = &entity.PurchaseOrderItem{ItemCode: 1, RequestedQty: 3, UnitPrice: 4}
-	if err := nada.Preencher(ctx, l); err != nil || l.InternalQty != 3 || l.InternalPrice != 4 {
+	l = &entity.PurchaseOrderItem{ItemCode: 1, RequestedQty: decimal.NewFromFloat(3), UnitPrice: decimal.NewFromFloat(4)}
+	if err := nada.Preencher(ctx, l); err != nil || !l.InternalQty.Equal(decimal.NewFromFloat(3)) || !l.InternalPrice.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("sem provedor: %+v %v", l, err)
 	}
 }

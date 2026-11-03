@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 // CreatePurchaseQuotationDTO releases requisition items and/or planned orders to
 // a new quotation, optionally inviting suppliers.
@@ -19,12 +22,12 @@ type AddQuotationSupplierDTO struct {
 }
 
 type RecordQuotationPriceDTO struct {
-	QuotationItemID int64   `json:"quotation_item_id"`
-	SupplierCode    int64   `json:"supplier_code"`
-	UnitPrice       float64 `json:"unit_price"`
-	LeadTimeDays    int32   `json:"lead_time_days,omitempty"`
-	PaymentTermCode *int64  `json:"payment_term_code,omitempty"`
-	Notes           *string `json:"notes,omitempty"`
+	QuotationItemID int64           `json:"quotation_item_id"`
+	SupplierCode    int64           `json:"supplier_code"`
+	UnitPrice       decimal.Decimal `json:"unit_price"`
+	LeadTimeDays    int32           `json:"lead_time_days,omitempty"`
+	PaymentTermCode *int64          `json:"payment_term_code,omitempty"`
+	Notes           *string         `json:"notes,omitempty"`
 }
 
 type GenerateOrdersFromQuotationDTO struct {

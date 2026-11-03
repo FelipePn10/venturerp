@@ -30,7 +30,7 @@ func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.Purchase
 	warnings := []string{}
 	expectedTotal := decimal.Zero
 	for _, line := range lines {
-		expectedTotal = expectedTotal.Add(decimal.NewFromFloat(line.RequestedQty).Mul(decimal.NewFromFloat(line.UnitPrice)))
+		expectedTotal = expectedTotal.Add(line.RequestedQty.Mul(line.UnitPrice))
 	}
 	check := func(kind string, expected, actual decimal.Decimal) error {
 		action, msg, exceeded, err := evaluator.EvaluatePurchaseTolerance(ctx, order.SupplierCode, kind, "ENTRY_INVOICE", expected, actual)
@@ -58,10 +58,10 @@ func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.Purchase
 		}
 		line := lines[indexes[0]]
 		byItem[*item.ItemCode] = indexes[1:]
-		if err = check("QUANTITY", decimal.NewFromFloat(line.RequestedQty), item.Quantity); err != nil {
+		if err = check("QUANTITY", line.RequestedQty, item.Quantity); err != nil {
 			return nil, nil, err
 		}
-		if err = check("ITEM_PRICE", decimal.NewFromFloat(line.UnitPrice), item.UnitPrice); err != nil {
+		if err = check("ITEM_PRICE", line.UnitPrice, item.UnitPrice); err != nil {
 			return nil, nil, err
 		}
 	}

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 )
@@ -16,6 +17,6 @@ type PurchaseRequisitionRepository interface {
 	ListItems(ctx context.Context, requisitionCode int64) ([]*entity.PurchaseRequisitionItem, error)
 	GetItem(ctx context.Context, id int64) (*entity.PurchaseRequisitionItem, error)
 	// RegisterAttendance increments the attended quantity and recomputes status.
-	RegisterAttendance(ctx context.Context, itemID int64, qty float64) (*entity.PurchaseRequisitionItem, error)
+	RegisterAttendance(ctx context.Context, itemID int64, qty decimal.Decimal) (*entity.PurchaseRequisitionItem, error)
 	UpdateStatus(ctx context.Context, code int64, status string) error
 }

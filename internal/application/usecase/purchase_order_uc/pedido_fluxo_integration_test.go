@@ -4,6 +4,7 @@ package purchase_order_uc_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 
@@ -35,9 +36,9 @@ func (authCompras) EnterpriseCode(ctx context.Context) (int64, error) {
 // alcadaDe100 libera até 100 e bloqueia até 1000.
 type alcadaDe100 struct{}
 
-func (alcadaDe100) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, valor float64) (*procuremententity.ApprovalDecision, error) {
-	teto, id := 1000.0, int64(1)
-	return &procuremententity.ApprovalDecision{AutoApprove: valor <= 100, Blocked: valor > teto, Ceiling: 100, HardCeiling: &teto, LimitID: &id}, nil
+func (alcadaDe100) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, valor decimal.Decimal) (*procuremententity.ApprovalDecision, error) {
+	teto, id := decimal.NewFromInt(1000), int64(1)
+	return &procuremententity.ApprovalDecision{AutoApprove: !valor.GreaterThan(decimal.NewFromInt(100)), Blocked: valor.GreaterThan(teto), Ceiling: decimal.NewFromInt(100), HardCeiling: &teto, LimitID: &id}, nil
 }
 
 // TestFluxoDoPedidoDeCompra cobre os defeitos achados no pedido de compra:
@@ -93,7 +94,7 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 	if _, err := criar.Execute(ctx, request.CreatePurchaseOrderDTO{SupplierCode: &fornecedor, Status: "APPROVED"}); err == nil {
 		t.Fatal("criar pedido já aprovado deveria ser recusado")
 	}
-	po, err := criar.Execute(ctx, request.CreatePurchaseOrderDTO{SupplierCode: &fornecedor, FreightType: "FOB", FreightValue: 30, TotalNet: 999})
+	po, err := criar.Execute(ctx, request.CreatePurchaseOrderDTO{SupplierCode: &fornecedor, FreightType: "FOB", FreightValue: decimal.NewFromFloat(30), TotalNet: decimal.NewFromFloat(999)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,14 +105,14 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 
 	// Linha sem almoxarifado: o do cadastro do item completa; sem ele, a
 	// mensagem diz onde cadastrar.
-	l1, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: comAlmox, RequestedQty: 10, UnitPrice: 5, DiscountPct: 10, IPIPct: f(5)})
+	l1, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: comAlmox, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(5), DiscountPct: decimal.NewFromFloat(10), IPIPct: f(5)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if l1.WarehouseID == nil || *l1.WarehouseID != almox {
 		t.Fatalf("almoxarifado da linha = %v, quer o do cadastro %d", l1.WarehouseID, almox)
 	}
-	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: semAlmox, RequestedQty: 1, UnitPrice: 1}); err == nil || !strings.Contains(err.Error(), "VENT0200") {
+	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: semAlmox, RequestedQty: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1)}); err == nil || !strings.Contains(err.Error(), "VENT0200") {
 		t.Fatalf("item sem almoxarifado: err=%v", err)
 	}
 	got, _ := obter.Execute(ctx, po.Code)
@@ -123,7 +124,7 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 	if _, err := alterar.Execute(ctx, request.UpdatePurchaseOrderDTO{Code: po.Code, SupplierCode: &fornecedor, Status: "APPROVED"}); err == nil {
 		t.Fatal("PUT com situação APPROVED deveria ser recusado")
 	}
-	alterado, err := alterar.Execute(ctx, request.UpdatePurchaseOrderDTO{Code: po.Code, SupplierCode: &fornecedor, Status: "DRAFT", FreightType: "FOB", FreightValue: 0, TotalNet: 1})
+	alterado, err := alterar.Execute(ctx, request.UpdatePurchaseOrderDTO{Code: po.Code, SupplierCode: &fornecedor, Status: "DRAFT", FreightType: "FOB", FreightValue: decimal.NewFromFloat(0), TotalNet: decimal.NewFromFloat(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 	if _, err := alterarLinha.Execute(ctx, request.UpdatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemLineCode: l1.Code, RequestedQty: f(1)}); err == nil {
 		t.Fatal("alterar linha de pedido aprovado deveria ser recusado")
 	}
-	if _, err := repo.RegisterItemReceipts(ctx, po.Code, map[int64]float64{l1.Code: 15}); err != nil {
+	if _, err := repo.RegisterItemReceipts(ctx, po.Code, map[int64]decimal.Decimal{l1.Code: decimal.NewFromInt(15)}); err != nil {
 		t.Fatal(err)
 	}
 	if err := cancelar.Execute(ctx, po.Code); err == nil {
@@ -177,14 +178,14 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 		t.Fatal(err)
 	}
 	pedidos = append(pedidos, p2.Code)
-	a, _ := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: 2, UnitPrice: 3})
-	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: 1, UnitPrice: 10}); err != nil {
+	a, _ := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: decimal.NewFromFloat(2), UnitPrice: decimal.NewFromFloat(3)})
+	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(10)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := cancelarLinha.Execute(ctx, request.CancelPurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemLineCode: a.Code}); err != nil {
 		t.Fatal(err)
 	}
-	c, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: 1, UnitPrice: 1})
+	c, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: p2.Code, ItemCode: comAlmox, RequestedQty: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1)})
 	if err != nil || c.Sequence != 3 {
 		t.Fatalf("sequência depois de remover a linha 1: %v err=%v", c, err)
 	}
@@ -214,4 +215,4 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 	}
 }
 
-func f(v float64) *float64 { return &v }
+func f(v float64) *decimal.Decimal { d := decimal.NewFromFloat(v); return &d }

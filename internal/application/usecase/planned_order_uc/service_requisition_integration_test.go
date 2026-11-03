@@ -5,6 +5,7 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/google/uuid"
@@ -102,7 +103,7 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 		t.Fatalf("requisition items = %d, want 1", len(items))
 	}
 	it := items[0]
-	if it.ItemCode != serviceItem || it.Quantity != 10 || it.SuggestedPrice != 12.5 {
+	if it.ItemCode != serviceItem || !it.Quantity.Equal(decimal.NewFromFloat(10)) || !it.SuggestedPrice.Equal(decimal.NewFromFloat(12.5)) {
 		t.Errorf("item = %+v, want service %d qty 10 price 12.5", it, serviceItem)
 	}
 	if it.CostCenterCode == nil || *it.CostCenterCode != ccCode {

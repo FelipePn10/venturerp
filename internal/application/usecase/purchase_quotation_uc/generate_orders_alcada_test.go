@@ -2,6 +2,7 @@ package purchase_quotation_uc
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -54,8 +55,8 @@ type reqFalsa struct {
 	atendido map[int64]float64
 }
 
-func (r *reqFalsa) RegisterAttendance(_ context.Context, id int64, q float64) (*reqentity.PurchaseRequisitionItem, error) {
-	r.atendido[id] += q
+func (r *reqFalsa) RegisterAttendance(_ context.Context, id int64, q decimal.Decimal) (*reqentity.PurchaseRequisitionItem, error) {
+	r.atendido[id] += q.InexactFloat64()
 	return &reqentity.PurchaseRequisitionItem{}, nil
 }
 
@@ -99,8 +100,8 @@ func (almoxFixo) AlmoxarifadoPadraoDoItem(context.Context, int64) (*int64, error
 
 type tetoDe100 struct{}
 
-func (tetoDe100) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, v float64) (*procuremententity.ApprovalDecision, error) {
-	return &procuremententity.ApprovalDecision{AutoApprove: v <= 100, Ceiling: 100}, nil
+func (tetoDe100) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, v decimal.Decimal) (*procuremententity.ApprovalDecision, error) {
+	return &procuremententity.ApprovalDecision{AutoApprove: !v.GreaterThan(decimal.NewFromInt(100)), Ceiling: decimal.NewFromFloat(100)}, nil
 }
 
 // O pedido da cotação passa pela alçada, leva a condição cotada, o vínculo com
@@ -110,12 +111,12 @@ func TestGerarPedidoDaCotacaoPassaPelaAlcada(t *testing.T) {
 	termo := int64(3060)
 	cot := &cotacaoFalsa{
 		itens: []*qentity.PurchaseQuotationItem{
-			{ID: 1, ItemCode: 10, Quantity: 2, SourceType: qentity.SourceRequisition, SourceItemID: &req},
-			{ID: 2, ItemCode: 11, Quantity: 1},
+			{ID: 1, ItemCode: 10, Quantity: decimal.NewFromFloat(2), SourceType: qentity.SourceRequisition, SourceItemID: &req},
+			{ID: 2, ItemCode: 11, Quantity: decimal.NewFromFloat(1)},
 		},
 		precos: []*qentity.PurchaseQuotationPrice{
-			{QuotationItemID: 1, SupplierCode: 500, UnitPrice: 30, LeadTimeDays: 10, PaymentTermCode: &termo}, // 60
-			{QuotationItemID: 2, SupplierCode: 600, UnitPrice: 300},                                           // 300 > alçada
+			{QuotationItemID: 1, SupplierCode: 500, UnitPrice: decimal.NewFromFloat(30), LeadTimeDays: 10, PaymentTermCode: &termo}, // 60
+			{QuotationItemID: 2, SupplierCode: 600, UnitPrice: decimal.NewFromFloat(300)},                                           // 300 > alçada
 		},
 	}
 	pos := &poFalso{pedidos: map[int64]*poentity.PurchaseOrder{}, itens: map[int64][]*poentity.PurchaseOrderItem{}}
@@ -139,7 +140,7 @@ func TestGerarPedidoDaCotacaoPassaPelaAlcada(t *testing.T) {
 	}
 	la := pos.itens[a.Code][0]
 	if la.WarehouseID == nil || *la.WarehouseID != 9 || la.QuotationCode == nil || *la.QuotationCode != 5 ||
-		la.PurchaseRequisitionItemID == nil || *la.PurchaseRequisitionItemID != req || la.TotalPrice != 60 {
+		la.PurchaseRequisitionItemID == nil || *la.PurchaseRequisitionItemID != req || !la.TotalPrice.Equal(decimal.NewFromFloat(60)) {
 		t.Fatalf("linha da cotação: %+v", la)
 	}
 	if la.DeliveryDate == nil || la.DeliveryDate.Before(time.Now().AddDate(0, 0, 9)) {

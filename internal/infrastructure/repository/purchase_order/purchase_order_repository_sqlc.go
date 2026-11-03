@@ -611,13 +611,13 @@ func (r *PurchaseOrderRepositorySQLC) ListItems(ctx context.Context, purchaseOrd
 	return result, rows.Err()
 }
 
-func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]float64) (int, error) {
+func (r *PurchaseOrderRepositorySQLC) RegisterReceipts(ctx context.Context, purchaseOrderCode int64, receivedByItemCode map[int64]decimal.Decimal) (int, error) {
 	return r.registerReceipts(ctx, purchaseOrderCode, receivedByItemCode, true, func(l receiptLineState) int64 {
 		return l.itemCode
 	})
 }
 
-func (r *PurchaseOrderRepositorySQLC) RegisterItemReceipts(ctx context.Context, purchaseOrderCode int64, receivedByOrderItemCode map[int64]float64) (int, error) {
+func (r *PurchaseOrderRepositorySQLC) RegisterItemReceipts(ctx context.Context, purchaseOrderCode int64, receivedByOrderItemCode map[int64]decimal.Decimal) (int, error) {
 	return r.registerReceipts(ctx, purchaseOrderCode, receivedByOrderItemCode, false, func(l receiptLineState) int64 {
 		return l.code
 	})
@@ -626,15 +626,15 @@ func (r *PurchaseOrderRepositorySQLC) RegisterItemReceipts(ctx context.Context, 
 type receiptLineState struct {
 	code      int64
 	itemCode  int64
-	requested float64
-	received  float64
-	cancelled float64
+	requested decimal.Decimal
+	received  decimal.Decimal
+	cancelled decimal.Decimal
 }
 
 func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 	ctx context.Context,
 	purchaseOrderCode int64,
-	receivedByKey map[int64]float64,
+	receivedByKey map[int64]decimal.Decimal,
 	distributeByRemaining bool,
 	keyForLine func(receiptLineState) int64,
 ) (int, error) {
@@ -689,7 +689,7 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 		return 0, err
 	}
 
-	const eps = 0.0001
+	eps := decimal.New(1, -4)
 	matched := 0
 	allReceived := len(lines) > 0
 	anyReceived := false
@@ -697,36 +697,36 @@ func (r *PurchaseOrderRepositorySQLC) registerReceipts(
 	for _, l := range lines {
 		key := keyForLine(l)
 		add, ok := receivedByKey[key]
-		if distributeByRemaining && add > 0 {
-			lineRemaining := l.requested - l.cancelled - l.received
-			if lineRemaining <= 0 {
-				add = 0
-			} else if add > lineRemaining {
+		if distributeByRemaining && add.IsPositive() {
+			lineRemaining := l.requested.Sub(l.cancelled).Sub(l.received)
+			if !lineRemaining.IsPositive() {
+				add = decimal.Zero
+			} else if add.GreaterThan(lineRemaining) {
 				add = lineRemaining
 			}
-			receivedByKey[key] -= add
+			receivedByKey[key] = receivedByKey[key].Sub(add)
 		}
 		newReceived := l.received
-		if ok && add > 0 {
-			newReceived = l.received + add
+		if ok && add.IsPositive() {
+			newReceived = l.received.Add(add)
 			matched++
 		}
 
 		status := entity.PurchaseOrderItemStatusOPEN
 		switch {
-		case newReceived+l.cancelled >= l.requested-eps && newReceived > 0:
+		case !newReceived.Add(l.cancelled).LessThan(l.requested.Sub(eps)) && newReceived.IsPositive():
 			status = entity.PurchaseOrderItemStatusRECEIVED
-		case newReceived > 0:
+		case newReceived.IsPositive():
 			status = entity.PurchaseOrderItemStatusPARTIAL
 		}
 		if status != entity.PurchaseOrderItemStatusRECEIVED {
 			allReceived = false
 		}
-		if newReceived > 0 {
+		if newReceived.IsPositive() {
 			anyReceived = true
 		}
 
-		if ok && add > 0 {
+		if ok && add.IsPositive() {
 			if _, err := tx.Exec(ctx,
 				`UPDATE public.purchase_order_items
 				 SET received_qty = $2, status = $3, updated_at = NOW()
@@ -790,9 +790,9 @@ type purchaseOrderRow struct {
 	CurrencyCode        string
 	ShippingAddressCode *int64
 	Notes               pgtype.Text
-	TotalGross          float64
-	TotalNet            float64
-	TotalDiscount       float64
+	TotalGross          decimal.Decimal
+	TotalNet            decimal.Decimal
+	TotalDiscount       decimal.Decimal
 	IsActive            bool
 	IsFirm              bool
 	CreatedAt           time.Time
@@ -807,13 +807,13 @@ type purchaseOrderRow struct {
 	FreightType            string
 	FreightValueType       pgtype.Text
 	FreightValueMode       pgtype.Text
-	FreightValue           float64
+	FreightValue           decimal.Decimal
 	CarrierCode            *int64
 	RedispatchCarrierCode  *int64
 	RedispatchFreightType  pgtype.Text
-	RedispatchFreightValue float64
+	RedispatchFreightValue decimal.Decimal
 	AdvanceDate            pgtype.Date
-	AdvanceValue           float64
+	AdvanceValue           decimal.Decimal
 	IncotermCode           pgtype.Text
 	ShipmentDate           pgtype.Date
 	TalaoNumber            pgtype.Text
@@ -826,14 +826,14 @@ type purchaseOrderItemRow struct {
 	Sequence          int32
 	ItemCode          int64
 	Mask              string
-	RequestedQty      float64
-	ReceivedQty       float64
-	CancelledQty      float64
-	UnitPrice         float64
-	TotalPrice        float64
-	DiscountPct       float64
-	IPIPct            float64
-	ICMSPct           float64
+	RequestedQty      decimal.Decimal
+	ReceivedQty       decimal.Decimal
+	CancelledQty      decimal.Decimal
+	UnitPrice         decimal.Decimal
+	TotalPrice        decimal.Decimal
+	DiscountPct       decimal.Decimal
+	IPIPct            decimal.Decimal
+	ICMSPct           decimal.Decimal
 	Status            string
 	DeliveryDate      pgtype.Date
 	Notes             pgtype.Text
@@ -841,14 +841,14 @@ type purchaseOrderItemRow struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	// extended (migration 000140)
-	ICMSSTPct                 float64
+	ICMSSTPct                 decimal.Decimal
 	PromisedDate              pgtype.Date
 	PurchaseUOM               pgtype.Text
 	InternalUOM               pgtype.Text
-	InternalQty               float64
-	InternalPrice             float64
-	TolerancePct              float64
-	CancelledToleranceQty     float64
+	InternalQty               decimal.Decimal
+	InternalPrice             decimal.Decimal
+	TolerancePct              decimal.Decimal
+	CancelledToleranceQty     decimal.Decimal
 	OperationTypeCode         *int64
 	InvoiceTypeCode           *int64
 	AccountingAccount         pgtype.Text
@@ -866,7 +866,7 @@ type purchaseOrderItemRow struct {
 	ProductionOrderID         *int64
 	PurchaseRequisitionCode   *int64
 	PurchaseRequisitionItemID *int64
-	InvoicedQty               float64
+	InvoicedQty               decimal.Decimal
 }
 
 func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {

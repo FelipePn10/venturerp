@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 		t.Fatalf("empresa B listou %d mensagem(ns) EDI da A (%v)", len(l), err)
 	}
 
-	imp, err := repo.CreateImportProcess(a.Ctx, &entity.ImportProcess{SupplierCode: &supplier, Currency: "USD", ExchangeRate: 5, ApportionBasis: "VALUE", Status: "OPEN"})
+	imp, err := repo.CreateImportProcess(a.Ctx, &entity.ImportProcess{SupplierCode: &supplier, Currency: "USD", ExchangeRate: decimal.NewFromFloat(5), ApportionBasis: "VALUE", Status: "OPEN"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +112,7 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 
 	hoje := time.Now().UTC().Truncate(24 * time.Hour)
 	contrato, err := repo.CreateSupplierContract(a.Ctx, &entity.SupplierContract{SupplierCode: supplier, ContractNumber: "CT-A", Status: "ACTIVE", Currency: "BRL", ValidFrom: hoje,
-		Items: []*entity.SupplierContractItem{{ItemCode: supplier, ContractedQty: 10, UnitPrice: 1}}})
+		Items: []*entity.SupplierContractItem{{ItemCode: supplier, ContractedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(1)}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 	if _, err := repo.FindContractItem(b.Ctx, contrato.ID, supplier, ""); err == nil {
 		t.Fatal("empresa B achou item do contrato da A")
 	}
-	if _, err := repo.ConsumeContractItem(b.Ctx, contrato.Items[0].ID, 1); err == nil {
+	if _, err := repo.ConsumeContractItem(b.Ctx, contrato.Items[0].ID, decimal.NewFromFloat(1)); err == nil {
 		t.Fatal("empresa B consumiu saldo do contrato da A")
 	}
 

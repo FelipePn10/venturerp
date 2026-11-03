@@ -1,6 +1,9 @@
 package request
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/shopspring/decimal"
+)
 
 // ---- Receiving notice + divergences (FAVR) ----
 
@@ -17,12 +20,12 @@ type CreateReceivingNoticeDTO struct {
 }
 
 type ReceivingNoticeItemDTO struct {
-	PurchaseOrderItemCode *int64  `json:"purchase_order_item_code"`
-	ItemCode              int64   `json:"item_code"`
-	Mask                  string  `json:"mask"`
-	ExpectedQty           float64 `json:"expected_qty"`
-	Unit                  *string `json:"unit"`
-	Notes                 *string `json:"notes"`
+	PurchaseOrderItemCode *int64          `json:"purchase_order_item_code"`
+	ItemCode              int64           `json:"item_code"`
+	Mask                  string          `json:"mask"`
+	ExpectedQty           decimal.Decimal `json:"expected_qty"`
+	Unit                  *string         `json:"unit"`
+	Notes                 *string         `json:"notes"`
 }
 
 type UpdateReceivingNoticeStatusDTO struct {
@@ -31,19 +34,19 @@ type UpdateReceivingNoticeStatusDTO struct {
 }
 
 type CreateReceivingDivergenceDTO struct {
-	NoticeID              *int64   `json:"notice_id"`
-	PurchaseOrderCode     *int64   `json:"purchase_order_code"`
-	PurchaseOrderItemCode *int64   `json:"purchase_order_item_code"`
-	SupplierCode          *int64   `json:"supplier_code"`
-	ItemCode              *int64   `json:"item_code"`
-	Mask                  string   `json:"mask"`
-	DivergenceType        string   `json:"divergence_type"`
-	ExpectedQty           float64  `json:"expected_qty"`
-	ActualQty             float64  `json:"actual_qty"`
-	ExpectedPrice         *float64 `json:"expected_price"`
-	ActualPrice           *float64 `json:"actual_price"`
-	AffectsSupplierScore  bool     `json:"affects_supplier_score"`
-	Notes                 *string  `json:"notes"`
+	NoticeID              *int64           `json:"notice_id"`
+	PurchaseOrderCode     *int64           `json:"purchase_order_code"`
+	PurchaseOrderItemCode *int64           `json:"purchase_order_item_code"`
+	SupplierCode          *int64           `json:"supplier_code"`
+	ItemCode              *int64           `json:"item_code"`
+	Mask                  string           `json:"mask"`
+	DivergenceType        string           `json:"divergence_type"`
+	ExpectedQty           decimal.Decimal  `json:"expected_qty"`
+	ActualQty             decimal.Decimal  `json:"actual_qty"`
+	ExpectedPrice         *decimal.Decimal `json:"expected_price"`
+	ActualPrice           *decimal.Decimal `json:"actual_price"`
+	AffectsSupplierScore  bool             `json:"affects_supplier_score"`
+	Notes                 *string          `json:"notes"`
 }
 
 type ResolveReceivingDivergenceDTO struct {
@@ -61,8 +64,8 @@ type CreateEDIMessageDTO struct {
 	ExternalReference *string         `json:"external_reference"`
 	Payload           json.RawMessage `json:"payload"`
 	Notes             *string         `json:"notes"`
-	QtyTolerance      float64         `json:"qty_tolerance"`
-	PriceTolerance    float64         `json:"price_tolerance"`
+	QtyTolerance      decimal.Decimal `json:"qty_tolerance"`
+	PriceTolerance    decimal.Decimal `json:"price_tolerance"`
 	Lines             []EDILineDTO    `json:"lines"`
 }
 
@@ -70,16 +73,16 @@ type CreateEDIMessageDTO struct {
 // reference values (po_qty/po_price/po_date) so the divergence can be detected
 // without coupling to the purchase order repository.
 type EDILineDTO struct {
-	PurchaseOrderItemCode *int64  `json:"purchase_order_item_code"`
-	ItemCode              *int64  `json:"item_code"`
-	Mask                  string  `json:"mask"`
-	ConfirmedQty          float64 `json:"confirmed_qty"`
-	ConfirmedPrice        float64 `json:"confirmed_price"`
-	ConfirmedDate         *string `json:"confirmed_date"`
-	PoQty                 float64 `json:"po_qty"`
-	PoPrice               float64 `json:"po_price"`
-	PoDate                *string `json:"po_date"`
-	Notes                 *string `json:"notes"`
+	PurchaseOrderItemCode *int64          `json:"purchase_order_item_code"`
+	ItemCode              *int64          `json:"item_code"`
+	Mask                  string          `json:"mask"`
+	ConfirmedQty          decimal.Decimal `json:"confirmed_qty"`
+	ConfirmedPrice        decimal.Decimal `json:"confirmed_price"`
+	ConfirmedDate         *string         `json:"confirmed_date"`
+	PoQty                 decimal.Decimal `json:"po_qty"`
+	PoPrice               decimal.Decimal `json:"po_price"`
+	PoDate                *string         `json:"po_date"`
+	Notes                 *string         `json:"notes"`
 }
 
 // ---- Import landed cost (FREC0203 / FIMP) ----
@@ -91,7 +94,7 @@ type CreateImportProcessDTO struct {
 	Reference         *string            `json:"reference"`
 	Incoterm          *string            `json:"incoterm"`
 	Currency          string             `json:"currency"`
-	ExchangeRate      float64            `json:"exchange_rate"`
+	ExchangeRate      decimal.Decimal    `json:"exchange_rate"`
 	ApportionBasis    string             `json:"apportion_basis"`
 	Notes             *string            `json:"notes"`
 	Items             []ImportItemDTO    `json:"items"`
@@ -99,19 +102,19 @@ type CreateImportProcessDTO struct {
 }
 
 type ImportItemDTO struct {
-	ItemCode     int64   `json:"item_code"`
-	Mask         string  `json:"mask"`
-	Quantity     float64 `json:"quantity"`
-	Weight       float64 `json:"weight"`
-	FobUnitPrice float64 `json:"fob_unit_price"`
-	Notes        *string `json:"notes"`
+	ItemCode     int64           `json:"item_code"`
+	Mask         string          `json:"mask"`
+	Quantity     decimal.Decimal `json:"quantity"`
+	Weight       decimal.Decimal `json:"weight"`
+	FobUnitPrice decimal.Decimal `json:"fob_unit_price"`
+	Notes        *string         `json:"notes"`
 }
 
 type ImportExpenseDTO struct {
-	ExpenseType string  `json:"expense_type"`
-	Amount      float64 `json:"amount"`
-	InItemCost  *bool   `json:"in_item_cost"`
-	Notes       *string `json:"notes"`
+	ExpenseType string          `json:"expense_type"`
+	Amount      decimal.Decimal `json:"amount"`
+	InItemCost  *bool           `json:"in_item_cost"`
+	Notes       *string         `json:"notes"`
 }
 
 type UpdateImportProcessStatusDTO struct {

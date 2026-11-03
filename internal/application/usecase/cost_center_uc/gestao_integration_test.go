@@ -95,7 +95,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 	reqs := purchaseReqRepo.New(sqlc.New(pool), pool)
 	rUC := purchase_requisition_uc.NewPurchaseRequisitionUseCase(reqs, az).ComAprovacoesDoCentro(repo)
 	cc := int64(filho)
-	req, err := rUC.Create(ctx, request.CreatePurchaseRequisitionDTO{Items: []request.RequisitionItemInput{{ItemCode: item, Quantity: 5, CostCenterCode: &cc}}})
+	req, err := rUC.Create(ctx, request.CreatePurchaseRequisitionDTO{Items: []request.RequisitionItemInput{{ItemCode: item, Quantity: decimal.NewFromFloat(5), CostCenterCode: &cc}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 	}
 	gerar := &purchase_requisition_uc.GeneratePurchaseOrdersUseCase{Reqs: reqs, Auth: az, Aprovacoes: repo}
 	sup := int64(1)
-	res, err := gerar.Execute(ctx, request.GeneratePurchaseOrdersDTO{Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[0].ID, QtyToAttend: 5, SupplierCode: &sup}}})
+	res, err := gerar.Execute(ctx, request.GeneratePurchaseOrdersDTO{Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[0].ID, QtyToAttend: decimal.NewFromFloat(5), SupplierCode: &sup}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 		t.Fatalf("aprovada não bloqueia: %v", b)
 	}
 	// Reprovada: bloqueia; corrigida com item novo, volta para o aprovador.
-	req2, err := rUC.Create(ctx, request.CreatePurchaseRequisitionDTO{Items: []request.RequisitionItemInput{{ItemCode: item, Quantity: 9, CostCenterCode: &cc}}})
+	req2, err := rUC.Create(ctx, request.CreatePurchaseRequisitionDTO{Items: []request.RequisitionItemInput{{ItemCode: item, Quantity: decimal.NewFromFloat(9), CostCenterCode: &cc}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 		t.Fatalf("reprovada bloqueia: %v", b)
 	}
 	time.Sleep(10 * time.Millisecond)
-	if _, err := rUC.AddItem(ctx, request.AddRequisitionItemDTO{RequisitionCode: req2.Code, RequisitionItemInput: request.RequisitionItemInput{ItemCode: item, Quantity: 3, CostCenterCode: &cc}}); err != nil {
+	if _, err := rUC.AddItem(ctx, request.AddRequisitionItemDTO{RequisitionCode: req2.Code, RequisitionItemInput: request.RequisitionItemInput{ItemCode: item, Quantity: decimal.NewFromFloat(3), CostCenterCode: &cc}}); err != nil {
 		t.Fatal(err)
 	}
 	if p3, _ := uc.Aprovacoes(ctxAprovador, "PENDENTE", true, &req2.Code); len(p3) != 1 {

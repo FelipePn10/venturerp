@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -66,8 +67,8 @@ func (r *repoMemoria) ListByStatus(_ context.Context, s entity.PurchaseOrderStat
 
 type politicaFixa struct{ teto float64 }
 
-func (p politicaFixa) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, v float64) (*procuremententity.ApprovalDecision, error) {
-	return &procuremententity.ApprovalDecision{AutoApprove: v <= p.teto, Ceiling: p.teto}, nil
+func (p politicaFixa) EvaluatePurchaseApproval(_ context.Context, _ int64, _ *int64, v decimal.Decimal) (*procuremententity.ApprovalDecision, error) {
+	return &procuremententity.ApprovalDecision{AutoApprove: v.InexactFloat64() <= p.teto, Ceiling: decimal.NewFromFloat(p.teto)}, nil
 }
 
 type consultasFalsas struct {
@@ -197,7 +198,7 @@ func pedidoAprovado(code int64, linhas ...*entity.PurchaseOrderItem) *repoMemori
 
 func TestGeracaoPassaPelaAlcada(t *testing.T) {
 	ctx := context.Background()
-	repo := pedidoAprovado(10, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: 10, UnitPrice: 50})
+	repo := pedidoAprovado(10, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(50)})
 	g := &Geracao{Repo: repo, Aprovacao: &ApprovePurchaseOrderUseCase{Repo: repo, Auth: authLivre{}, Policy: politicaFixa{teto: 100}}}
 	po, aviso, err := g.Aprovar(ctx, repo.pedidos[10])
 	if err != nil {
@@ -207,14 +208,14 @@ func TestGeracaoPassaPelaAlcada(t *testing.T) {
 		t.Fatalf("pedido de 500 com alçada de 100: %s/%s aviso=%q", po.Status, po.AlcadaStatus, aviso)
 	}
 
-	repo2 := pedidoAprovado(11, &entity.PurchaseOrderItem{Code: 2, Sequence: 1, ItemCode: 5, RequestedQty: 1, UnitPrice: 50})
+	repo2 := pedidoAprovado(11, &entity.PurchaseOrderItem{Code: 2, Sequence: 1, ItemCode: 5, RequestedQty: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(50)})
 	g2 := &Geracao{Repo: repo2, Aprovacao: &ApprovePurchaseOrderUseCase{Repo: repo2, Auth: authLivre{}, Policy: politicaFixa{teto: 100}}}
 	if po, aviso, err := g2.Aprovar(ctx, repo2.pedidos[11]); err != nil || po.Status != entity.PurchaseOrderStatusAPPROVED || aviso != "" {
 		t.Fatalf("pedido de 50: %v %q %v", po.Status, aviso, err)
 	}
 
 	// Linha sem almoxarifado: o pedido fica em rascunho e o motivo volta como aviso.
-	repo3 := pedidoAprovado(12, &entity.PurchaseOrderItem{Code: 3, Sequence: 1, ItemCode: 5, RequestedQty: 1, UnitPrice: 1})
+	repo3 := pedidoAprovado(12, &entity.PurchaseOrderItem{Code: 3, Sequence: 1, ItemCode: 5, RequestedQty: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1)})
 	repo3.itens[12][0].WarehouseID = nil
 	g3 := &Geracao{Repo: repo3, Aprovacao: &ApprovePurchaseOrderUseCase{Repo: repo3, Auth: authLivre{}}}
 	if po, aviso, err := g3.Aprovar(ctx, repo3.pedidos[12]); err != nil || po.Status != entity.PurchaseOrderStatusDRAFT || !strings.Contains(aviso, "almoxarifado") {
@@ -235,7 +236,7 @@ func TestGeracaoPassaPelaAlcada(t *testing.T) {
 
 func TestEnviarPedido(t *testing.T) {
 	ctx := context.Background()
-	repo := pedidoAprovado(20, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: 2, UnitPrice: 10})
+	repo := pedidoAprovado(20, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: decimal.NewFromFloat(2), UnitPrice: decimal.NewFromFloat(10)})
 	c := &consultasFalsas{dados: &DadosDocumento{Empresa: Parte{Nome: "TECNOFER"}}}
 	mail := &emailFalso{}
 	uc := &DocumentoPedidoUseCase{Repo: repo, Consultas: c, Gerador: pdfFalso{}, Email: mail, Auth: authLivre{uid: uuid.New()},
@@ -273,7 +274,7 @@ func TestEnviarPedido(t *testing.T) {
 func TestPrevisaoPelaCondicao(t *testing.T) {
 	ctx := context.Background()
 	entrega := data("2026-10-20")
-	repo := pedidoAprovado(30, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: 10, UnitPrice: 30, DeliveryDate: &entrega})
+	repo := pedidoAprovado(30, &entity.PurchaseOrderItem{Code: 1, Sequence: 1, ItemCode: 5, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(30), DeliveryDate: &entrega})
 	repo.pedidos[30].Status = entity.PurchaseOrderStatusAPPROVED
 	cond := int64(3060)
 	repo.pedidos[30].PaymentTermCode = &cond

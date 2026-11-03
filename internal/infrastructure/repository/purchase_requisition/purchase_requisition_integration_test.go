@@ -3,6 +3,7 @@
 package purchase_requisition_test
 
 import (
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/google/uuid"
@@ -31,36 +32,36 @@ func TestIntegration_Requisition_AttendanceStatusRecompute(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM purchase_requisitions WHERE code = $1", code)
 
 	item, err := repo.AddItem(ctx, &entity.PurchaseRequisitionItem{
-		RequisitionCode: code, Sequence: 1, ItemCode: 999, Quantity: 100, Status: entity.ReqStatusOpen,
+		RequisitionCode: code, Sequence: 1, ItemCode: 999, Quantity: decimal.NewFromFloat(100), Status: entity.ReqStatusOpen,
 	})
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
-	if item.Balance() != 100 {
+	if !item.Balance().Equal(decimal.NewFromFloat(100)) {
 		t.Fatalf("initial balance = %v, want 100", item.Balance())
 	}
 
 	// Attend 40 → PARTIAL.
-	upd, err := repo.RegisterAttendance(ctx, item.ID, 40)
+	upd, err := repo.RegisterAttendance(ctx, item.ID, decimal.NewFromFloat(40))
 	if err != nil {
 		t.Fatalf("RegisterAttendance 40: %v", err)
 	}
-	if upd.AttendedQty != 40 || upd.Status != entity.ReqStatusPartial {
+	if !upd.AttendedQty.Equal(decimal.NewFromFloat(40)) || upd.Status != entity.ReqStatusPartial {
 		t.Errorf("after 40: attended=%v status=%s, want 40/PARTIAL", upd.AttendedQty, upd.Status)
 	}
-	if upd.Balance() != 60 {
+	if !upd.Balance().Equal(decimal.NewFromFloat(60)) {
 		t.Errorf("balance after 40 = %v, want 60", upd.Balance())
 	}
 
 	// Attend remaining 60 → ATTENDED.
-	upd, err = repo.RegisterAttendance(ctx, item.ID, 60)
+	upd, err = repo.RegisterAttendance(ctx, item.ID, decimal.NewFromFloat(60))
 	if err != nil {
 		t.Fatalf("RegisterAttendance 60: %v", err)
 	}
-	if upd.AttendedQty != 100 || upd.Status != entity.ReqStatusAttended {
+	if !upd.AttendedQty.Equal(decimal.NewFromFloat(100)) || upd.Status != entity.ReqStatusAttended {
 		t.Errorf("after 100: attended=%v status=%s, want 100/ATTENDED", upd.AttendedQty, upd.Status)
 	}
-	if upd.Balance() != 0 {
+	if !upd.Balance().IsZero() {
 		t.Errorf("balance after full = %v, want 0", upd.Balance())
 	}
 }

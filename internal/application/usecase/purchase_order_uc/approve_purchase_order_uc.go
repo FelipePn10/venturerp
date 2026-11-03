@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -23,7 +24,7 @@ const (
 // hierarchical authorization. Implemented by the procurement use case; kept as a
 // port so the purchase order package does not depend on the procurement use case.
 type ApprovalPolicy interface {
-	EvaluatePurchaseApproval(ctx context.Context, enterpriseCode int64, supplierCode *int64, amount float64) (*procuremententity.ApprovalDecision, error)
+	EvaluatePurchaseApproval(ctx context.Context, enterpriseCode int64, supplierCode *int64, amount decimal.Decimal) (*procuremententity.ApprovalDecision, error)
 }
 
 // ApprovePurchaseOrderUseCase evaluates the approval limit (alçada de valores) and
@@ -71,7 +72,7 @@ func (uc *ApprovePurchaseOrderUseCase) Execute(ctx context.Context, code int64) 
 	order.AplicarTotais(poentity.CalcularTotais(order, items))
 	amount := order.TotalNet
 
-	out := &response.ApprovePurchaseOrderResponse{AppliedAmount: amount}
+	out := &response.ApprovePurchaseOrderResponse{AppliedAmount: amount.InexactFloat64()}
 	if uc.Policy == nil {
 		return uc.finishApproval(ctx, order, out)
 	}
@@ -80,7 +81,7 @@ func (uc *ApprovePurchaseOrderUseCase) Execute(ctx context.Context, code int64) 
 		return nil, err
 	}
 	if decision.LimitID != nil {
-		out.AppliedCeiling = decision.Ceiling
+		out.AppliedCeiling = decision.Ceiling.InexactFloat64()
 	}
 	switch {
 	case decision.Blocked:
@@ -88,14 +89,14 @@ func (uc *ApprovePurchaseOrderUseCase) Execute(ctx context.Context, code int64) 
 		order.AlcadaStatus = alcadaRejected
 		out.Blocked = true
 		out.AlcadaStatus = alcadaRejected
-		out.Message = fmt.Sprintf("valor %.2f acima do teto absoluto de alçada; pedido não pode ser aprovado", amount)
+		out.Message = fmt.Sprintf("valor %s acima do teto absoluto de alçada; pedido não pode ser aprovado", amount.StringFixed(2))
 		return uc.persist(ctx, order, out)
 	case !decision.AutoApprove:
 		order.Status = poentity.PurchaseOrderStatusREQUESTED
 		order.AlcadaStatus = alcadaBlocked
 		out.RequiresAuthorization = true
 		out.AlcadaStatus = alcadaBlocked
-		out.Message = fmt.Sprintf("valor %.2f acima do limite de alçada (%.2f); requer autorização", amount, decision.Ceiling)
+		out.Message = fmt.Sprintf("valor %s acima do limite de alçada (%s); requer autorização", amount.StringFixed(2), decision.Ceiling.StringFixed(2))
 		return uc.persist(ctx, order, out)
 	default:
 		return uc.finishApproval(ctx, order, out)

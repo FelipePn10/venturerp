@@ -71,13 +71,12 @@ func RotuloSituacao(s PurchaseOrderStatus) string {
 }
 
 // Saldo é o que a linha ainda espera receber.
-func (it *PurchaseOrderItem) Saldo() float64 {
-	s := decimal.NewFromFloat(it.RequestedQty).Sub(decimal.NewFromFloat(it.ReceivedQty)).Sub(decimal.NewFromFloat(it.CancelledQty))
+func (it *PurchaseOrderItem) Saldo() decimal.Decimal {
+	s := it.RequestedQty.Sub(it.ReceivedQty).Sub(it.CancelledQty)
 	if s.IsNegative() {
-		return 0
+		return decimal.Zero
 	}
-	f, _ := s.Round(6).Float64()
-	return f
+	return s.Round(6)
 }
 
 // ConsideradaNosTotais: linha removida ou cancelada por inteiro não conta.
@@ -86,11 +85,10 @@ func (it *PurchaseOrderItem) ConsideradaNosTotais() bool {
 }
 
 // TotalDaLinha é quantidade × preço menos o desconto da linha, em centavos.
-func TotalDaLinha(qtd, preco, descontoPct float64) float64 {
-	bruto := decimal.NewFromFloat(qtd).Mul(decimal.NewFromFloat(preco))
-	desc := bruto.Mul(decimal.NewFromFloat(descontoPct)).Div(decimal.NewFromInt(100))
-	f, _ := bruto.Sub(desc).Round(2).Float64()
-	return f
+func TotalDaLinha(qtd, preco, descontoPct decimal.Decimal) decimal.Decimal {
+	bruto := qtd.Mul(preco)
+	desc := bruto.Mul(descontoPct).Div(decimal.NewFromInt(100))
+	return bruto.Sub(desc).Round(2)
 }
 
 // Totais do pedido. Liquido é o que a empresa vai pagar: mercadoria com
@@ -120,20 +118,20 @@ func CalcularTotais(o *PurchaseOrder, itens []*PurchaseOrderItem) Totais {
 		if !it.ConsideradaNosTotais() {
 			continue
 		}
-		qtd := decimal.NewFromFloat(it.RequestedQty).Sub(decimal.NewFromFloat(it.CancelledQty))
+		qtd := it.RequestedQty.Sub(it.CancelledQty)
 		if qtd.IsNegative() {
 			qtd = decimal.Zero
 		}
 		qtdTotal = qtdTotal.Add(qtd)
-		bruto := qtd.Mul(decimal.NewFromFloat(it.UnitPrice)).Round(2)
-		desc := bruto.Mul(decimal.NewFromFloat(it.DiscountPct)).Div(cem).Round(2)
-		ipi := bruto.Sub(desc).Mul(decimal.NewFromFloat(it.IPIPct)).Div(cem).Round(2)
+		bruto := qtd.Mul(it.UnitPrice).Round(2)
+		desc := bruto.Mul(it.DiscountPct).Div(cem).Round(2)
+		ipi := bruto.Sub(desc).Mul(it.IPIPct).Div(cem).Round(2)
 		t.Bruto = t.Bruto.Add(bruto)
 		t.Desconto = t.Desconto.Add(desc)
 		t.IPI = t.IPI.Add(ipi)
 	}
-	if o != nil && FretePagoPeloComprador(o.FreightType) && o.FreightValue > 0 {
-		v := decimal.NewFromFloat(o.FreightValue)
+	if o != nil && FretePagoPeloComprador(o.FreightType) && o.FreightValue.IsPositive() {
+		v := o.FreightValue
 		switch {
 		case o.FreightValueType != nil && strings.EqualFold(*o.FreightValueType, "PERCENTUAL"):
 			t.Frete = t.Bruto.Sub(t.Desconto).Mul(v).Div(cem).Round(2)
@@ -149,9 +147,9 @@ func CalcularTotais(o *PurchaseOrder, itens []*PurchaseOrderItem) Totais {
 
 // AplicarTotais grava os totais na capa.
 func (o *PurchaseOrder) AplicarTotais(t Totais) {
-	o.TotalGross, _ = t.Bruto.Float64()
-	o.TotalDiscount, _ = t.Desconto.Float64()
-	o.TotalNet, _ = t.Liquido.Float64()
+	o.TotalGross = t.Bruto
+	o.TotalDiscount = t.Desconto
+	o.TotalNet = t.Liquido
 }
 
 // SituacaoPelasLinhas recalcula a situação da capa depois que linhas mudam de
@@ -170,10 +168,10 @@ func SituacaoPelasLinhas(atual PurchaseOrderStatus, itens []*PurchaseOrderItem) 
 			continue
 		}
 		ativas++
-		if it.ReceivedQty > 0 {
+		if it.ReceivedQty.IsPositive() {
 			recebidas++
 		}
-		if it.Status != PurchaseOrderItemStatusCANCELLED && it.Saldo() > 0.0001 {
+		if it.Status != PurchaseOrderItemStatusCANCELLED && it.Saldo().GreaterThan(decimal.New(1, -4)) {
 			abertas++
 		}
 	}
@@ -192,16 +190,15 @@ func SituacaoPelasLinhas(atual PurchaseOrderStatus, itens []*PurchaseOrderItem) 
 
 // SaldoAFaturar é o que ainda vai chegar com nota fiscal — e virar título a
 // pagar. Recebido sem nota (recebimento físico) ainda será faturado.
-func (it *PurchaseOrderItem) SaldoAFaturar() float64 {
+func (it *PurchaseOrderItem) SaldoAFaturar() decimal.Decimal {
 	if !it.ConsideradaNosTotais() {
-		return 0
+		return decimal.Zero
 	}
-	s := decimal.NewFromFloat(it.RequestedQty).Sub(decimal.NewFromFloat(it.InvoicedQty)).Sub(decimal.NewFromFloat(it.CancelledQty))
+	s := it.RequestedQty.Sub(it.InvoicedQty).Sub(it.CancelledQty)
 	if s.IsNegative() {
-		return 0
+		return decimal.Zero
 	}
-	f, _ := s.Round(6).Float64()
-	return f
+	return s.Round(6)
 }
 
 // DataPrevista é quando a linha deve chegar: a data que o fornecedor prometeu,
@@ -248,13 +245,13 @@ func ValoresAFaturar(o *PurchaseOrder, itens []*PurchaseOrderItem) []ValorPrevis
 	grupos := map[string]*ValorPrevisto{}
 	var ordem []string
 	for _, it := range itens {
-		qtd := decimal.NewFromFloat(it.SaldoAFaturar())
+		qtd := it.SaldoAFaturar()
 		if !qtd.IsPositive() {
 			continue
 		}
-		bruto := qtd.Mul(decimal.NewFromFloat(it.UnitPrice))
-		desc := bruto.Mul(decimal.NewFromFloat(it.DiscountPct)).Div(cem)
-		ipi := bruto.Sub(desc).Mul(decimal.NewFromFloat(it.IPIPct)).Div(cem)
+		bruto := qtd.Mul(it.UnitPrice)
+		desc := bruto.Mul(it.DiscountPct).Div(cem)
+		ipi := bruto.Sub(desc).Mul(it.IPIPct).Div(cem)
 		valor := bruto.Sub(desc).Add(ipi)
 		if total.Frete.IsPositive() && total.Bruto.IsPositive() {
 			valor = valor.Add(total.Frete.Mul(bruto).Div(total.Bruto))

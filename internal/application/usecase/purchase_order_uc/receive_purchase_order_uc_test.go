@@ -32,7 +32,7 @@ type receivePORepo struct {
 	porepo.PurchaseOrderRepository
 	order      *poentity.PurchaseOrder
 	items      []*poentity.PurchaseOrderItem
-	registered map[int64]float64
+	registered map[int64]decimal.Decimal
 }
 
 func (r *receivePORepo) GetByCode(context.Context, int64) (*poentity.PurchaseOrder, error) {
@@ -43,7 +43,7 @@ func (r *receivePORepo) ListItems(context.Context, int64) ([]*poentity.PurchaseO
 	return r.items, nil
 }
 
-func (r *receivePORepo) RegisterItemReceipts(_ context.Context, _ int64, receivedByOrderItemCode map[int64]float64) (int, error) {
+func (r *receivePORepo) RegisterItemReceipts(_ context.Context, _ int64, receivedByOrderItemCode map[int64]decimal.Decimal) (int, error) {
 	r.registered = receivedByOrderItemCode
 	return len(receivedByOrderItemCode), nil
 }
@@ -78,7 +78,7 @@ func receiveDTO() request.ReceivePurchaseOrderDTO {
 		PurchaseOrderCode: 10,
 		Items: []request.ReceivePurchaseOrderItemDTO{{
 			PurchaseOrderItemCode: 55,
-			Quantity:              4,
+			Quantity:              decimal.NewFromFloat(4),
 			WarehouseID:           2,
 		}},
 	}
@@ -91,11 +91,11 @@ func receiveRepo() *receivePORepo {
 			Code:          55,
 			ItemCode:      1001,
 			Mask:          "AZ",
-			RequestedQty:  10,
-			ReceivedQty:   2,
-			UnitPrice:     7,
-			InternalQty:   20,
-			InternalPrice: 3.5,
+			RequestedQty:  decimal.NewFromFloat(10),
+			ReceivedQty:   decimal.NewFromFloat(2),
+			UnitPrice:     decimal.NewFromFloat(7),
+			InternalQty:   decimal.NewFromFloat(20),
+			InternalPrice: decimal.NewFromFloat(3.5),
 			Status:        poentity.PurchaseOrderItemStatusPARTIAL,
 		}},
 	}
@@ -132,7 +132,7 @@ func TestReceivePurchaseOrderCreatesInboundMovementAndRegistersLine(t *testing.T
 	if out == nil || len(out.ReceivedLines) != 1 || len(out.Movements) != 1 {
 		t.Fatalf("unexpected response: %+v", out)
 	}
-	if got := repo.registered[55]; got != 4 {
+	if got := repo.registered[55]; !got.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("registered qty = %v, want 4", got)
 	}
 	mov := stock.movements[0]
@@ -160,7 +160,7 @@ func TestReceivePurchaseOrderRejectsExcessQuantity(t *testing.T) {
 	repo := receiveRepo()
 	stock := &receiveStockRepo{}
 	dto := receiveDTO()
-	dto.Items[0].Quantity = 99
+	dto.Items[0].Quantity = decimal.NewFromFloat(99)
 	uc := ReceivePurchaseOrderUseCase{
 		Repo:      repo,
 		StockRepo: stock,
@@ -185,7 +185,7 @@ func TestReceivePurchaseOrderConfiguredToleranceWarnsOrBlocks(t *testing.T) {
 			repo := receiveRepo()
 			stock := &receiveStockRepo{}
 			dto := receiveDTO()
-			dto.Items[0].Quantity = 9
+			dto.Items[0].Quantity = decimal.NewFromFloat(9)
 			uc := ReceivePurchaseOrderUseCase{Repo: repo, StockRepo: stock, Auth: receiveAuth{canPO: true, canStock: true, uid: uuid.New()}, Tolerances: receiveTolerance{action: tc.action, exceeded: true}}
 			out, err := uc.Execute(context.Background(), dto)
 			if (err != nil) != tc.wantErr {

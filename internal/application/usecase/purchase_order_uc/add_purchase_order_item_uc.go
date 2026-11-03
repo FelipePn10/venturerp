@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -34,10 +35,10 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	if dto.ItemCode <= 0 {
 		return nil, errorsuc.NewValidationError("escolha o item")
 	}
-	if dto.RequestedQty <= 0 {
+	if !dto.RequestedQty.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
-	if dto.UnitPrice < 0 || dto.DiscountPct < 0 || dto.DiscountPct > 100 {
+	if dto.UnitPrice.IsNegative() || dto.DiscountPct.IsNegative() || dto.DiscountPct.GreaterThan(decimal.NewFromInt(100)) {
 		return nil, errorsuc.NewValidationError("preço ou desconto inválido")
 	}
 
@@ -59,9 +60,9 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	// 1) Unit price — from the price table when not informed.
 	unitPrice := dto.UnitPrice
 	purchaseUOM := dto.PurchaseUOM
-	if unitPrice == 0 && po.PriceTableCode != nil && uc.PriceProvider != nil {
+	if unitPrice.IsZero() && po.PriceTableCode != nil && uc.PriceProvider != nil {
 		if price, uom, found, perr := uc.PriceProvider.GetItemPrice(ctx, *po.PriceTableCode, dto.ItemCode, po.SupplierCode); perr == nil && found {
-			unitPrice = price
+			unitPrice = decimal.NewFromFloat(price)
 			if purchaseUOM == nil && uom != "" {
 				u := uom
 				purchaseUOM = &u
@@ -70,12 +71,12 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	}
 
 	// 2) IPI% — from the fiscal classification when not informed.
-	ipiPct := 0.0
+	ipiPct := decimal.Zero
 	if dto.IPIPct != nil {
 		ipiPct = *dto.IPIPct
 	} else if dto.FiscalClassificationCode != nil && uc.FiscalClass != nil {
 		if rate, found, ferr := uc.FiscalClass.GetIPIRate(ctx, *dto.FiscalClassificationCode); ferr == nil && found {
-			ipiPct = rate
+			ipiPct = decimal.NewFromFloat(rate)
 		}
 	}
 

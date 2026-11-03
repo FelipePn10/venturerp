@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 type CreateReceivingInspectionRouteDTO struct {
 	EnterpriseCode        int64                        `json:"enterprise_code"`
 	Basis                 string                       `json:"basis"`
@@ -27,9 +29,9 @@ type ReceivingInspectionStepDTO struct {
 	InstrumentGroup *string                           `json:"instrument_group"`
 	SampleType      *string                           `json:"sample_type"`
 	SampleUnit      *string                           `json:"sample_unit"`
-	SampleQty       float64                           `json:"sample_qty"`
-	AcceptanceQty   float64                           `json:"acceptance_qty"`
-	RejectionQty    float64                           `json:"rejection_qty"`
+	SampleQty       decimal.Decimal                   `json:"sample_qty"`
+	AcceptanceQty   decimal.Decimal                   `json:"acceptance_qty"`
+	RejectionQty    decimal.Decimal                   `json:"rejection_qty"`
 	Norm            *string                           `json:"norm"`
 	Reference       *string                           `json:"reference"`
 	ValidTo         *string                           `json:"valid_to"`
@@ -45,23 +47,23 @@ type ReceivingInspectionAttributeDTO struct {
 }
 
 type GenerateReceivingInspectionOrderDTO struct {
-	Source                string  `json:"source"`
-	SupplierCode          *int64  `json:"supplier_code"`
-	PurchaseOrderCode     *int64  `json:"purchase_order_code"`
-	PurchaseOrderItemCode *int64  `json:"purchase_order_item_code"`
-	FiscalEntryCode       *int64  `json:"fiscal_entry_code"`
-	ReceivingNoticeCode   *int64  `json:"receiving_notice_code"`
-	ItemCode              int64   `json:"item_code"`
-	ClassificationCode    *string `json:"classification_code"`
-	Mask                  string  `json:"mask"`
-	Lot                   *string `json:"lot"`
-	SerialNumber          *string `json:"serial_number"`
-	WarehouseID           int64   `json:"warehouse_id"`
-	Quantity              float64 `json:"quantity"`
-	Certificate           *string `json:"certificate"`
-	SupplierNote          *string `json:"supplier_note"`
-	Model                 *string `json:"model"`
-	Notes                 *string `json:"notes"`
+	Source                string          `json:"source"`
+	SupplierCode          *int64          `json:"supplier_code"`
+	PurchaseOrderCode     *int64          `json:"purchase_order_code"`
+	PurchaseOrderItemCode *int64          `json:"purchase_order_item_code"`
+	FiscalEntryCode       *int64          `json:"fiscal_entry_code"`
+	ReceivingNoticeCode   *int64          `json:"receiving_notice_code"`
+	ItemCode              int64           `json:"item_code"`
+	ClassificationCode    *string         `json:"classification_code"`
+	Mask                  string          `json:"mask"`
+	Lot                   *string         `json:"lot"`
+	SerialNumber          *string         `json:"serial_number"`
+	WarehouseID           int64           `json:"warehouse_id"`
+	Quantity              decimal.Decimal `json:"quantity"`
+	Certificate           *string         `json:"certificate"`
+	SupplierNote          *string         `json:"supplier_note"`
+	Model                 *string         `json:"model"`
+	Notes                 *string         `json:"notes"`
 }
 
 type LinkReceivingInspectionQualityReportDTO struct {
@@ -81,13 +83,13 @@ type RecordReceivingInspectionResultDTO struct {
 }
 
 type AnalyzeReceivingInspectionOrderDTO struct {
-	ConformQty           float64 `json:"conform_qty"`
-	RejectedQty          float64 `json:"rejected_qty"`
-	ReworkQty            float64 `json:"rework_qty"`
-	RestrictedQty        float64 `json:"restricted_qty"`
-	Treatment            string  `json:"treatment"`
-	AffectsSupplierScore bool    `json:"affects_supplier_score"`
-	Notes                *string `json:"notes"`
+	ConformQty           decimal.Decimal `json:"conform_qty"`
+	RejectedQty          decimal.Decimal `json:"rejected_qty"`
+	ReworkQty            decimal.Decimal `json:"rework_qty"`
+	RestrictedQty        decimal.Decimal `json:"restricted_qty"`
+	Treatment            string          `json:"treatment"`
+	AffectsSupplierScore bool            `json:"affects_supplier_score"`
+	Notes                *string         `json:"notes"`
 
 	// Stock routing: when move_stock is true, the analyzed quantities leave the
 	// inspection warehouse (order.warehouse_id) toward the destinations below.

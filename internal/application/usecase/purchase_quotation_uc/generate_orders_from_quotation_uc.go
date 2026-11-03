@@ -3,6 +3,7 @@ package purchase_quotation_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -30,8 +31,10 @@ type GenerateOrdersFromQuotationUseCase struct {
 }
 
 type GenerateOrdersFromQuotationResult struct {
-	Orders  []*poentity.PurchaseOrder `json:"orders"`
-	Skipped []string                  `json:"skipped,omitempty"`
+	// Orders é para o código; a API devolve Pedidos (formato do GET do pedido).
+	Orders  []*poentity.PurchaseOrder         `json:"-"`
+	Pedidos []*response.PurchaseOrderResponse `json:"orders"`
+	Skipped []string                          `json:"skipped,omitempty"`
 }
 
 func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto request.GenerateOrdersFromQuotationDTO) (*GenerateOrdersFromQuotationResult, error) {
@@ -204,5 +207,6 @@ func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto r
 	if err := uc.Quotations.UpdateStatus(ctx, dto.QuotationCode, string(qentity.QuotationClosed)); err != nil {
 		result.Skipped = append(result.Skipped, fmt.Sprintf("pedidos gerados, mas a cotação %d não foi encerrada: %v", dto.QuotationCode, err))
 	}
+	result.Pedidos = purchase_order_uc.ToPurchaseOrderResponses(result.Orders)
 	return result, nil
 }

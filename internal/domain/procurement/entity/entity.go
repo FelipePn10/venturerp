@@ -2,6 +2,7 @@ package entity
 
 import (
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,7 +42,7 @@ type Record struct {
 	ItemCode              *int64
 	Mask                  string
 	WarehouseID           *int64
-	Quantity              float64
+	Quantity              decimal.Decimal
 	Reference             *string
 	Payload               json.RawMessage
 	OpenedAt              time.Time
@@ -53,8 +54,8 @@ type Record struct {
 type InspectionDisposition struct {
 	ID                     int64
 	RecordID               int64
-	ApprovedQty            float64
-	RejectedQty            float64
+	ApprovedQty            decimal.Decimal
+	RejectedQty            decimal.Decimal
 	QuarantineWarehouseID  *int64
 	DestinationWarehouseID *int64
 	Reason                 *string
@@ -114,9 +115,9 @@ type ReceivingInspectionRouteStep struct {
 	InstrumentGroup *string
 	SampleType      *string
 	SampleUnit      *string
-	SampleQty       float64
-	AcceptanceQty   float64
-	RejectionQty    float64
+	SampleQty       decimal.Decimal
+	AcceptanceQty   decimal.Decimal
+	RejectionQty    decimal.Decimal
 	Norm            *string
 	Reference       *string
 	ValidTo         *time.Time
@@ -149,12 +150,12 @@ type ReceivingInspectionOrder struct {
 	Lot                   *string
 	SerialNumber          *string
 	WarehouseID           int64
-	Quantity              float64
-	InspectedQty          float64
-	ApprovedQty           float64
-	RejectedQty           float64
-	ReworkQty             float64
-	RestrictedQty         float64
+	Quantity              decimal.Decimal
+	InspectedQty          decimal.Decimal
+	ApprovedQty           decimal.Decimal
+	RejectedQty           decimal.Decimal
+	ReworkQty             decimal.Decimal
+	RestrictedQty         decimal.Decimal
 	Status                string
 	Certificate           *string
 	SupplierNote          *string
@@ -201,10 +202,10 @@ type ReceivingInspectionResult struct {
 type ReceivingInspectionAnalysis struct {
 	ID                   int64
 	OrderID              int64
-	ConformQty           float64
-	RejectedQty          float64
-	ReworkQty            float64
-	RestrictedQty        float64
+	ConformQty           decimal.Decimal
+	RejectedQty          decimal.Decimal
+	ReworkQty            decimal.Decimal
+	RestrictedQty        decimal.Decimal
 	Treatment            string
 	AffectsSupplierScore bool
 	Notes                *string
@@ -223,8 +224,8 @@ type ApprovalLimit struct {
 	Scope          string // GLOBAL | SUPPLIER | COST_CENTER | CATEGORY
 	ScopeRef       *string
 	Currency       string
-	AutoApproveMax float64
-	BlockAbove     *float64
+	AutoApproveMax decimal.Decimal
+	BlockAbove     *decimal.Decimal
 	IsActive       bool
 	ValidFrom      time.Time
 	ValidTo        *time.Time
@@ -238,10 +239,10 @@ type ApprovalLimit struct {
 // the applicable approval limit.
 type ApprovalDecision struct {
 	AutoApprove bool
-	Blocked     bool     // over the hard ceiling; cannot be authorized
-	Ceiling     float64  // the auto-approve ceiling that applied
-	HardCeiling *float64 // block_above, when defined
-	LimitID     *int64   // the rule that matched, if any
+	Blocked     bool             // over the hard ceiling; cannot be authorized
+	Ceiling     decimal.Decimal  // the auto-approve ceiling that applied
+	HardCeiling *decimal.Decimal // block_above, when defined
+	LimitID     *int64           // the rule that matched, if any
 }
 
 type SupplierContract struct {
@@ -268,18 +269,18 @@ type SupplierContractItem struct {
 	ItemCode      int64
 	Mask          string
 	Unit          *string
-	ContractedQty float64
-	ConsumedQty   float64
-	UnitPrice     float64
-	MinOrderQty   float64
+	ContractedQty decimal.Decimal
+	ConsumedQty   decimal.Decimal
+	UnitPrice     decimal.Decimal
+	MinOrderQty   decimal.Decimal
 	Notes         *string
 }
 
 // RemainingQty is the still-available contracted balance for the item line.
-func (i *SupplierContractItem) RemainingQty() float64 {
-	remaining := i.ContractedQty - i.ConsumedQty
-	if remaining < 0 {
-		return 0
+func (i *SupplierContractItem) RemainingQty() decimal.Decimal {
+	remaining := i.ContractedQty.Sub(i.ConsumedQty)
+	if remaining.IsNegative() {
+		return decimal.Zero
 	}
 	return remaining
 }
@@ -291,8 +292,8 @@ type SupplierPerformanceAggregate struct {
 	TotalReceipts    int
 	RejectedReceipts int
 	LateReceipts     int
-	InspectedQty     float64
-	RejectedQty      float64
+	InspectedQty     decimal.Decimal
+	RejectedQty      decimal.Decimal
 }
 
 // PurchaseMovementHistoryRow is one aggregated line of the consolidated purchase
@@ -303,10 +304,10 @@ type PurchaseMovementHistoryRow struct {
 	OrderNumber       int64
 	ItemCode          int64
 	Mask              string
-	RequestedQty      float64
-	ReceivedQty       float64
-	CancelledQty      float64
-	UnitPrice         float64
+	RequestedQty      decimal.Decimal
+	ReceivedQty       decimal.Decimal
+	CancelledQty      decimal.Decimal
+	UnitPrice         decimal.Decimal
 	Status            string
 	EmissionDate      time.Time
 	DeliveryDate      *time.Time

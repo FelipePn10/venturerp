@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -214,7 +215,7 @@ func (uc *UseCase) CreateEDIMessage(ctx context.Context, dto request.CreateEDIMe
 			Notes:                 l.Notes,
 		}
 		// Detect divergence against the PO reference values, when they were provided.
-		if l.PoQty > 0 || l.PoPrice > 0 {
+		if l.PoQty.IsPositive() || l.PoPrice.IsPositive() {
 			code := entity.DetectEDILineDivergence(l.PoQty, l.PoPrice, poDate, l.ConfirmedQty, l.ConfirmedPrice, confirmedDate, dto.QtyTolerance, dto.PriceTolerance)
 			if code != "" {
 				line.Divergence = &code
@@ -277,7 +278,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 	if dto.Currency == "" {
 		dto.Currency = "USD"
 	}
-	if dto.ExchangeRate <= 0 {
+	if !dto.ExchangeRate.IsPositive() {
 		return nil, errorsuc.NewValidationError("a taxa de câmbio deve ser maior que zero")
 	}
 	if dto.ApportionBasis == "" {
@@ -307,7 +308,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 		CreatedBy:         &actor,
 	}
 	for _, it := range dto.Items {
-		if it.ItemCode <= 0 || it.Quantity <= 0 {
+		if it.ItemCode <= 0 || !it.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError("cada item importado precisa de código e quantidade maior que zero")
 		}
 		process.Items = append(process.Items, &entity.ImportProcessItem{
@@ -320,7 +321,7 @@ func (uc *UseCase) CreateImportProcess(ctx context.Context, dto request.CreateIm
 		})
 	}
 	for _, e := range dto.Expenses {
-		if e.Amount < 0 {
+		if e.Amount.IsNegative() {
 			return nil, errorsuc.NewValidationError("o valor da despesa deve ser maior ou igual a zero")
 		}
 		inCost := true
@@ -495,7 +496,7 @@ func (uc *UseCase) CreateSupplierHomologation(ctx context.Context, dto request.C
 		if err != nil {
 			return nil, err
 		}
-		quality := ratioScore(agg.InspectedQty-agg.RejectedQty, agg.InspectedQty)
+		quality := ratioScore(agg.InspectedQty.Sub(agg.RejectedQty).InexactFloat64(), agg.InspectedQty.InexactFloat64())
 		delivery := ratioScore(float64(agg.TotalReceipts-agg.LateReceipts), float64(agg.TotalReceipts))
 		iqf := overallIQF(quality, delivery, 100, 100)
 		homologatedMin := dto.HomologatedMin
@@ -659,8 +660,8 @@ func toReceivingNoticeResponse(n *entity.ReceivingNotice) *response.ReceivingNot
 			PurchaseOrderItemCode: it.PurchaseOrderItemCode,
 			ItemCode:              it.ItemCode,
 			Mask:                  it.Mask,
-			ExpectedQty:           it.ExpectedQty,
-			ReceivedQty:           it.ReceivedQty,
+			ExpectedQty:           it.ExpectedQty.InexactFloat64(),
+			ReceivedQty:           it.ReceivedQty.InexactFloat64(),
 			Unit:                  it.Unit,
 			Notes:                 it.Notes,
 		})
@@ -678,10 +679,10 @@ func toDivergenceResponse(d *entity.ReceivingDivergence) *response.ReceivingDive
 		ItemCode:              d.ItemCode,
 		Mask:                  d.Mask,
 		DivergenceType:        d.DivergenceType,
-		ExpectedQty:           d.ExpectedQty,
-		ActualQty:             d.ActualQty,
-		ExpectedPrice:         d.ExpectedPrice,
-		ActualPrice:           d.ActualPrice,
+		ExpectedQty:           d.ExpectedQty.InexactFloat64(),
+		ActualQty:             d.ActualQty.InexactFloat64(),
+		ExpectedPrice:         floatPtr(d.ExpectedPrice),
+		ActualPrice:           floatPtr(d.ActualPrice),
 		Resolution:            d.Resolution,
 		AffectsSupplierScore:  d.AffectsSupplierScore,
 		Notes:                 d.Notes,
@@ -712,8 +713,8 @@ func toEDIMessageResponse(m *entity.SupplierEDIMessage) *response.SupplierEDIMes
 			PurchaseOrderItemCode: l.PurchaseOrderItemCode,
 			ItemCode:              l.ItemCode,
 			Mask:                  l.Mask,
-			ConfirmedQty:          l.ConfirmedQty,
-			ConfirmedPrice:        l.ConfirmedPrice,
+			ConfirmedQty:          l.ConfirmedQty.InexactFloat64(),
+			ConfirmedPrice:        l.ConfirmedPrice.InexactFloat64(),
 			ConfirmedDate:         l.ConfirmedDate,
 			Divergence:            l.Divergence,
 			Notes:                 l.Notes,
@@ -732,37 +733,40 @@ func toImportProcessResponse(p *entity.ImportProcess) *response.ImportProcessRes
 		Reference:         p.Reference,
 		Incoterm:          p.Incoterm,
 		Currency:          p.Currency,
-		ExchangeRate:      p.ExchangeRate,
+		ExchangeRate:      p.ExchangeRate.InexactFloat64(),
 		ApportionBasis:    p.ApportionBasis,
 		Status:            p.Status,
 		Notes:             p.Notes,
 		CreatedAt:         p.CreatedAt,
 		NationalizedAt:    p.NationalizedAt,
 	}
+	landed, despesas := decimal.Zero, decimal.Zero
 	for _, it := range p.Items {
 		out.Items = append(out.Items, response.ImportProcessItemResponse{
 			ID:                  it.ID,
 			ItemCode:            it.ItemCode,
 			Mask:                it.Mask,
-			Quantity:            it.Quantity,
-			Weight:              it.Weight,
-			FobUnitPrice:        it.FobUnitPrice,
-			ApportionedExpenses: it.ApportionedExpenses,
-			LandedUnitCost:      it.LandedUnitCost,
+			Quantity:            it.Quantity.InexactFloat64(),
+			Weight:              it.Weight.InexactFloat64(),
+			FobUnitPrice:        it.FobUnitPrice.InexactFloat64(),
+			ApportionedExpenses: it.ApportionedExpenses.InexactFloat64(),
+			LandedUnitCost:      it.LandedUnitCost.InexactFloat64(),
 			Notes:               it.Notes,
 		})
-		out.TotalLandedValue += it.LandedUnitCost * it.Quantity
+		landed = landed.Add(it.LandedUnitCost.Mul(it.Quantity))
 	}
 	for _, e := range p.Expenses {
 		out.Expenses = append(out.Expenses, response.ImportExpenseResponse{
 			ID:          e.ID,
 			ExpenseType: e.ExpenseType,
-			Amount:      e.Amount,
+			Amount:      e.Amount.InexactFloat64(),
 			InItemCost:  e.InItemCost,
 			Notes:       e.Notes,
 		})
-		out.TotalExpenses += e.Amount
+		despesas = despesas.Add(e.Amount)
 	}
+	out.TotalLandedValue = landed.Round(6).InexactFloat64()
+	out.TotalExpenses = despesas.Round(4).InexactFloat64()
 	return out
 }
 

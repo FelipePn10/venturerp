@@ -5,6 +5,7 @@ package purchase_quotation_test
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	qentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/entity"
@@ -66,11 +67,11 @@ func TestPurchaseQuotationAndRequisitionAreIsolatedByTenant(t *testing.T) {
 		t.Fatalf("as duas empresas receberam o código %d", cotA.Code)
 	}
 
-	itA, err := cot.AddItem(a.Ctx, &qentity.PurchaseQuotationItem{QuotationCode: cotA.Code, Sequence: 1, ItemCode: itemA, Quantity: 10, SourceType: qentity.SourceManual})
+	itA, err := cot.AddItem(a.Ctx, &qentity.PurchaseQuotationItem{QuotationCode: cotA.Code, Sequence: 1, ItemCode: itemA, Quantity: decimal.NewFromFloat(10), SourceType: qentity.SourceManual})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := cot.AddItem(b.Ctx, &qentity.PurchaseQuotationItem{QuotationCode: cotA.Code, Sequence: 2, ItemCode: itemB, Quantity: 1, SourceType: qentity.SourceManual}); err == nil {
+	if _, err := cot.AddItem(b.Ctx, &qentity.PurchaseQuotationItem{QuotationCode: cotA.Code, Sequence: 2, ItemCode: itemB, Quantity: decimal.NewFromFloat(1), SourceType: qentity.SourceManual}); err == nil {
 		t.Fatal("empresa B incluiu item na cotação da A")
 	}
 	if _, err := cot.GetItem(b.Ctx, itA.ID); err == nil {
@@ -93,13 +94,13 @@ func TestPurchaseQuotationAndRequisitionAreIsolatedByTenant(t *testing.T) {
 		t.Fatalf("empresa B listou %d fornecedor(es) da cotação da A (%v)", len(l), err)
 	}
 
-	if _, err := cot.UpsertPrice(b.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornB, UnitPrice: 1}); err == nil {
+	if _, err := cot.UpsertPrice(b.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornB, UnitPrice: decimal.NewFromFloat(1)}); err == nil {
 		t.Fatal("empresa B gravou preço no item da cotação da A")
 	}
-	if _, err := cot.UpsertPrice(a.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornB, UnitPrice: 1}); err == nil {
+	if _, err := cot.UpsertPrice(a.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornB, UnitPrice: decimal.NewFromFloat(1)}); err == nil {
 		t.Fatal("a cotação da A aceitou preço do fornecedor da B")
 	}
-	preco, err := cot.UpsertPrice(a.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornA, UnitPrice: 12.5})
+	preco, err := cot.UpsertPrice(a.Ctx, &qentity.PurchaseQuotationPrice{QuotationItemID: itA.ID, SupplierCode: fornA, UnitPrice: decimal.NewFromFloat(12.5)})
 	if err != nil {
 		t.Fatalf("a cotação da A recusou o preço do próprio fornecedor: %v", err)
 	}
@@ -138,11 +139,11 @@ func TestPurchaseQuotationAndRequisitionAreIsolatedByTenant(t *testing.T) {
 	reqA := criaReq(a)
 	criaReq(b)
 
-	riA, err := req.AddItem(a.Ctx, &reqentity.PurchaseRequisitionItem{RequisitionCode: reqA.Code, Sequence: 1, ItemCode: itemA, Quantity: 5})
+	riA, err := req.AddItem(a.Ctx, &reqentity.PurchaseRequisitionItem{RequisitionCode: reqA.Code, Sequence: 1, ItemCode: itemA, Quantity: decimal.NewFromFloat(5)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.AddItem(b.Ctx, &reqentity.PurchaseRequisitionItem{RequisitionCode: reqA.Code, Sequence: 2, ItemCode: itemB, Quantity: 1}); err == nil {
+	if _, err := req.AddItem(b.Ctx, &reqentity.PurchaseRequisitionItem{RequisitionCode: reqA.Code, Sequence: 2, ItemCode: itemB, Quantity: decimal.NewFromFloat(1)}); err == nil {
 		t.Fatal("empresa B incluiu item na requisição da A")
 	}
 	if _, err := req.GetItem(b.Ctx, riA.ID); err == nil {
@@ -151,10 +152,10 @@ func TestPurchaseQuotationAndRequisitionAreIsolatedByTenant(t *testing.T) {
 	if l, err := req.ListItems(b.Ctx, reqA.Code); err != nil || len(l) != 0 {
 		t.Fatalf("empresa B listou %d item(ns) da requisição da A (%v)", len(l), err)
 	}
-	if _, err := req.RegisterAttendance(b.Ctx, riA.ID, 5); err == nil {
+	if _, err := req.RegisterAttendance(b.Ctx, riA.ID, decimal.NewFromFloat(5)); err == nil {
 		t.Fatal("empresa B deu atendimento no item da requisição da A")
 	}
-	if got, err := req.RegisterAttendance(a.Ctx, riA.ID, 5); err != nil || got.AttendedQty != 5 {
+	if got, err := req.RegisterAttendance(a.Ctx, riA.ID, decimal.NewFromFloat(5)); err != nil || !got.AttendedQty.Equal(decimal.NewFromFloat(5)) {
 		t.Fatalf("a A não atendeu o próprio item: %+v (%v)", got, err)
 	}
 }
@@ -194,7 +195,7 @@ func TestPurchaseQuotationCreateWithChildrenIsAtomic(t *testing.T) {
 		return n
 	}
 	itens := func() []*qentity.PurchaseQuotationItem {
-		return []*qentity.PurchaseQuotationItem{{Sequence: 1, ItemCode: itemA, Quantity: 3, SourceType: qentity.SourceManual}}
+		return []*qentity.PurchaseQuotationItem{{Sequence: 1, ItemCode: itemA, Quantity: decimal.NewFromFloat(3), SourceType: qentity.SourceManual}}
 	}
 
 	falha := nova()

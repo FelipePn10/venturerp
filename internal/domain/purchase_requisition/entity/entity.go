@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,13 +58,13 @@ type PurchaseRequisitionItem struct {
 	RequisitionCode   int64
 	Sequence          int32
 	ItemCode          int64
-	Quantity          float64
-	AttendedQty       float64
-	CancelledQty      float64
+	Quantity          decimal.Decimal
+	AttendedQty       decimal.Decimal
+	CancelledQty      decimal.Decimal
 	UOM               *string
 	CostCenterCode    *int64
 	AccountingAccount *string
-	SuggestedPrice    float64
+	SuggestedPrice    decimal.Decimal
 	DeliveryDate      *time.Time
 	Application       *string
 	UtilizationType   *string
@@ -73,10 +74,10 @@ type PurchaseRequisitionItem struct {
 }
 
 // Balance is the still-open quantity (Qtde Saldo).
-func (i *PurchaseRequisitionItem) Balance() float64 {
-	b := i.Quantity - i.AttendedQty - i.CancelledQty
-	if b < 0 {
-		return 0
+func (i *PurchaseRequisitionItem) Balance() decimal.Decimal {
+	b := i.Quantity.Sub(i.AttendedQty).Sub(i.CancelledQty)
+	if b.IsNegative() {
+		return decimal.Zero
 	}
 	return b
 }

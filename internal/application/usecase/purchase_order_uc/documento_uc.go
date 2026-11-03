@@ -50,7 +50,7 @@ func (uc *DocumentoPedidoUseCase) montar(ctx context.Context, code int64) (*enti
 	t := entity.CalcularTotais(po, itens)
 	d := DocumentoPedido{
 		Dados: dados, Numero: po.OrderNumber, Codigo: po.Code, Emissao: po.EmissionDate, Entrega: po.DeliveryDate,
-		Situacao: entity.RotuloSituacao(po.Status), Moeda: po.CurrencyCode, Frete: po.FreightType, ValorFrete: po.FreightValue,
+		Situacao: entity.RotuloSituacao(po.Status), Moeda: po.CurrencyCode, Frete: po.FreightType, ValorFrete: po.FreightValue.InexactFloat64(),
 		Bruto: t.Bruto, Desconto: t.Desconto, IPI: t.IPI, FreteFOB: t.Frete, Liquido: t.Liquido, Gerado: uc.agora(),
 		Rascunho: po.Status == entity.PurchaseOrderStatusDRAFT || po.Status == entity.PurchaseOrderStatusREQUESTED,
 	}

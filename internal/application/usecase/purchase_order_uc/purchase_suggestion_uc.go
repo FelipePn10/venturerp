@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -80,7 +81,7 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	if dto.SupplierCode == nil || *dto.SupplierCode <= 0 {
 		return nil, errorsuc.NewValidationError("escolha o fornecedor da compra")
 	}
-	if dto.UnitPrice < 0 {
+	if dto.UnitPrice.IsNegative() {
 		return nil, errorsuc.NewValidationError("preço unitário inválido")
 	}
 	planned, err := uc.Planned.GetByCode(ctx, dto.PlannedOrderCode)
@@ -107,9 +108,10 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		paymentTerm = def.PaymentConditionID
 	}
 
-	qty := planned.QuantityCorrected
-	if qty <= 0 {
-		qty = planned.Quantity
+	// A ordem planejada ainda é float (etapa 4): converte na fronteira.
+	qty := decimal.NewFromFloat(planned.QuantityCorrected)
+	if !qty.IsPositive() {
+		qty = decimal.NewFromFloat(planned.Quantity)
 	}
 
 	po := &poentity.PurchaseOrder{
@@ -139,7 +141,7 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		Mask:             mask,
 		RequestedQty:     qty,
 		UnitPrice:        dto.UnitPrice,
-		TotalPrice:       poentity.TotalDaLinha(qty, dto.UnitPrice, 0),
+		TotalPrice:       poentity.TotalDaLinha(qty, dto.UnitPrice, decimal.Zero),
 		Status:           poentity.PurchaseOrderItemStatusOPEN,
 		DeliveryDate:     &planned.NeedDate,
 		IsActive:         true,
