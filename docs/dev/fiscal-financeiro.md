@@ -78,7 +78,12 @@ infrastructure/
 **Stack tecnológica:**
 - Go 1.25, Clean Architecture
 - PostgreSQL (pgx/v5, sem ORM)
-- `shopspring/decimal` para todos os valores monetários
+- `shopspring/decimal` para todos os valores monetários. Desde a 1.10.0 a
+  entrada da API do financeiro (títulos, baixas, conta bancária, adiantamentos,
+  filtros de valor) e a NF-e de entrada inteira (entidade `FiscalEntry`/itens e
+  DTOs) são `decimal`: o JSON aceita número ou texto e a resposta continua
+  número. A NF-e de saída e o motor de tributos ainda trabalham em `float`; a
+  devolução de compra converte na borda.
 - [Focus NF-e](https://focusnfe.com.br) para autorização, cancelamento e CC-e
 - Regime tributário: **Lucro Real** (PIS/COFINS não-cumulativo)
 

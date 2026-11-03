@@ -712,7 +712,7 @@ func (uc *DemandaUseCase) resposta(d *entity.IndependentDemand, p entity.Posicao
 		Projeto: d.Projeto, Prioridade: d.Prioridade,
 		Observacao: d.Observacao, Programacao: d.Programacao, Situacao: d.Situacao, EncerradaEm: d.EncerradaEm,
 		MotivoEncerramento: d.MotivoEncerramento,
-		Posicao:            p.Situacao, Consumida: p.Consumida, Atendida: d.Atendida, APlanejar: p.APlanejar, VenceEm: venceEm,
+		Posicao:            p.Situacao, Consumida: p.Consumida, Atendida: d.Atendida, Reservada: d.Reservada, APlanejar: p.APlanejar, VenceEm: venceEm,
 		Coberta: coberta, SemOrdem: entity.SemOrdem(p.APlanejar, coberta),
 		Consumo: consumoResp(p.Consumo),
 	}

@@ -47,7 +47,7 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 		return errorsuc.NewValidationError("data de pagamento inválida: use o formato AAAA-MM-DD")
 	}
 
-	valorPago := decimal.NewFromFloat(dto.ValorPago).Round(2)
+	valorPago := dto.ValorPago.Round(2)
 	desconto := dto.Desconto.Round(2)
 	// O que ainda se deve: o bruto menos o já pago, o desconto já dado e o que
 	// um adiantamento abateu.

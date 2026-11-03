@@ -47,7 +47,7 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 		}
 		return nil, errorsuc.NewValidationError("informe o cliente que fez o adiantamento")
 	}
-	if dto.ValorOriginal <= 0 {
+	if !dto.ValorOriginal.IsPositive() {
 		return nil, errorsuc.NewValidationError("o valor do adiantamento precisa ser maior que zero")
 	}
 	if dto.ContaBancariaID == 0 {
@@ -65,7 +65,7 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 		ContaBancariaID:  dto.ContaBancariaID,
 		NumeroDocumento:  dto.NumeroDocumento,
 		DataAdiantamento: data,
-		ValorOriginal:    decimal.NewFromFloat(dto.ValorOriginal),
+		ValorOriginal:    dto.ValorOriginal,
 		Descricao:        dto.Descricao,
 		CreatedBy:        userID,
 	}
@@ -83,7 +83,7 @@ func (uc *CreateAdiantamentoUseCase) Execute(ctx context.Context, dto request.Cr
 	fc := entity.FluxoCaixa{
 		Data:            data,
 		Tipo:            fcTipo,
-		Valor:           decimal.NewFromFloat(dto.ValorOriginal),
+		Valor:           dto.ValorOriginal,
 		ContaBancariaID: &contaID,
 		Descricao:       &desc,
 	}
@@ -171,7 +171,7 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 	if err != nil {
 		return nil, err
 	}
-	if dto.Valor <= 0 {
+	if !dto.Valor.IsPositive() {
 		return nil, errorsuc.NewValidationError("o valor a aplicar precisa ser maior que zero")
 	}
 
@@ -183,7 +183,7 @@ func (uc *AplicarAdiantamentoUseCase) Execute(ctx context.Context, advID int64, 
 		}
 	}
 
-	valor := decimal.NewFromFloat(dto.Valor).Round(2)
+	valor := dto.Valor.Round(2)
 	lote, err := uc.loteDaAplicacao(ctx, advID, contaTipo, dto.ContaID, valor, data)
 	if err != nil {
 		return nil, err

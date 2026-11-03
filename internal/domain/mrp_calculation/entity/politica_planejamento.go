@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // Política de planejamento por item ou por classificação (VPLA0310). Ver
@@ -28,6 +29,37 @@ func EstrategiaValida(e string) bool {
 	return e == EstrategiaConsumo || e == EstrategiaSobEncomenda
 }
 
+// Período de agrupamento das necessidades (lote por período).
+const (
+	LotePeriodoNenhum = "NENHUM"
+	LotePeriodoDia    = "DIA"
+	LotePeriodoSemana = "SEMANA"
+	LotePeriodoMes    = "MES"
+)
+
+// LotePeriodoValido diz se o período existe.
+func LotePeriodoValido(p string) bool {
+	switch p {
+	case LotePeriodoNenhum, LotePeriodoDia, LotePeriodoSemana, LotePeriodoMes:
+		return true
+	}
+	return false
+}
+
+// InicioDoPeriodo é o começo do período da data: o próprio dia, a segunda-feira
+// da semana ou o dia 1º do mês. Fora disso (NENHUM), a data.
+func InicioDoPeriodo(periodo string, d time.Time) time.Time {
+	dia := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.UTC)
+	switch periodo {
+	case LotePeriodoSemana:
+		desdeSegunda := (int(dia.Weekday()) + 6) % 7
+		return dia.AddDate(0, 0, -desdeSegunda)
+	case LotePeriodoMes:
+		return time.Date(dia.Year(), dia.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+	return dia
+}
+
 // Limite de dias dos campos da política (janela, horizonte e segurança).
 const DiasMaximosPolitica = 365
 
@@ -42,11 +74,15 @@ type PoliticaPlanejamento struct {
 	ConsumoDiasDepois  *int
 	HorizonteFirmeDias *int
 	TempoSegurancaDias *int
-	Observacao         *string
-	CreatedAt          time.Time
-	CreatedBy          uuid.UUID
-	UpdatedAt          time.Time
-	UpdatedBy          *uuid.UUID
+	// LotePeriodo junta as necessidades do período numa ordem; LoteMaximo
+	// quebra a necessidade em ordens de no máximo esse valor (só do item).
+	LotePeriodo *string
+	LoteMaximo  *decimal.Decimal
+	Observacao  *string
+	CreatedAt   time.Time
+	CreatedBy   uuid.UUID
+	UpdatedAt   time.Time
+	UpdatedBy   *uuid.UUID
 
 	// Rótulos para a tela (preenchidos pela leitura).
 	ItemBusinessCode    string
@@ -75,8 +111,19 @@ func (p *PoliticaPlanejamento) Validar() string {
 			return fmt.Sprintf("%s vai de 0 a %d dias", nome, DiasMaximosPolitica)
 		}
 	}
+	if p.LotePeriodo != nil && !LotePeriodoValido(*p.LotePeriodo) {
+		return "período de lote inválido: use NENHUM, DIA, SEMANA ou MES"
+	}
+	if p.LoteMaximo != nil {
+		if !p.LoteMaximo.IsPositive() {
+			return "o lote máximo precisa ser maior que zero"
+		}
+		if p.ItemCode == nil {
+			return "lote máximo é quantidade do item: informe na política do item, não da classificação"
+		}
+	}
 	if p.Estrategia == nil && p.ConsumoDiasAntes == nil && p.ConsumoDiasDepois == nil &&
-		p.HorizonteFirmeDias == nil && p.TempoSegurancaDias == nil {
+		p.HorizonteFirmeDias == nil && p.TempoSegurancaDias == nil && p.LotePeriodo == nil && p.LoteMaximo == nil {
 		return "informe ao menos um campo da política (os vazios seguem o nível de cima)"
 	}
 	return ""
@@ -96,6 +143,8 @@ type OrigemPolitica struct {
 	Janela         string
 	HorizonteFirme string
 	TempoSeguranca string
+	LotePeriodo    string
+	LoteMaximo     string
 }
 
 // PoliticaEfetiva é a política que vale para o item depois da herança.
@@ -105,7 +154,10 @@ type PoliticaEfetiva struct {
 	ConsumoDiasDepois  int
 	HorizonteFirmeDias int
 	TempoSegurancaDias int
-	Origem             OrigemPolitica
+	LotePeriodo        string
+	// LoteMaximo zero = sem lote máximo.
+	LoteMaximo decimal.Decimal
+	Origem     OrigemPolitica
 }
 
 // SobEncomenda diz se o item é planejado só pelo pedido.
@@ -161,6 +213,35 @@ func aplicar(ef *PoliticaEfetiva, r *PoliticaPlanejamento, origem string) {
 	if r.TempoSegurancaDias != nil {
 		ef.TempoSegurancaDias, ef.Origem.TempoSeguranca = *r.TempoSegurancaDias, origem
 	}
+	if r.LotePeriodo != nil {
+		ef.LotePeriodo, ef.Origem.LotePeriodo = *r.LotePeriodo, origem
+	}
+	if r.LoteMaximo != nil {
+		ef.LoteMaximo, ef.Origem.LoteMaximo = *r.LoteMaximo, origem
+	}
+}
+
+// DividirPorLoteMaximo quebra a quantidade em ordens de no máximo o lote
+// máximo — ajustado para baixo ao lote múltiplo, para cada ordem continuar
+// múltipla dele. A última leva o resto. Sem lote máximo, uma ordem só.
+func DividirPorLoteMaximo(qtd, loteMaximo, loteMultiplo decimal.Decimal) []decimal.Decimal {
+	if !qtd.IsPositive() {
+		return nil
+	}
+	maximo := loteMaximo
+	if maximo.IsPositive() && loteMultiplo.IsPositive() {
+		if ajustado := maximo.Div(loteMultiplo).Floor().Mul(loteMultiplo); ajustado.IsPositive() {
+			maximo = ajustado
+		}
+	}
+	if !maximo.IsPositive() || qtd.LessThanOrEqual(maximo) {
+		return []decimal.Decimal{qtd}
+	}
+	var out []decimal.Decimal
+	for resta := qtd; resta.IsPositive(); resta = resta.Sub(maximo) {
+		out = append(out, decimal.Min(resta, maximo))
+	}
+	return out
 }
 
 // DescreverOrigem é a origem como o usuário lê.

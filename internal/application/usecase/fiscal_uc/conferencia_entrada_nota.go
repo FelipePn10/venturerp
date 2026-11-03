@@ -131,14 +131,14 @@ func conferirNotaManual(dto request.CreateFiscalEntryDTO, emissao, entrada time.
 		if n <= 0 {
 			n = i + 1
 		}
-		qtd, preco, total := decimal.NewFromFloat(it.Quantity), decimal.NewFromFloat(it.UnitPrice), decimal.NewFromFloat(it.TotalPrice)
+		qtd, preco, total := it.Quantity, it.UnitPrice, it.TotalPrice
 		if !qtd.IsPositive() {
 			return erro("linha %d: a quantidade precisa ser maior que zero", n)
 		}
 		if preco.IsNegative() || total.IsNegative() {
 			return erro("linha %d: o valor não pode ser negativo", n)
 		}
-		if it.ValorICMS < 0 || it.ValorIPI < 0 || it.ValorPIS < 0 || it.ValorCOFINS < 0 {
+		if it.ValorICMS.IsNegative() || it.ValorIPI.IsNegative() || it.ValorPIS.IsNegative() || it.ValorCOFINS.IsNegative() {
 			return erro("linha %d: os impostos não podem ser negativos", n)
 		}
 		if conta := qtd.Mul(preco); conta.Sub(total).Abs().GreaterThan(centavo.Add(qtd.Mul(decimal.RequireFromString("0.00005")))) {
@@ -150,29 +150,29 @@ func conferirNotaManual(dto request.CreateFiscalEntryDTO, emissao, entrada time.
 		if msg := cfopDoFornecedorForaDaUF(it.Cfop, ufEmitente, ufEmpresa); msg != "" {
 			return erro("linha %d: %s", n, msg)
 		}
-		somaProdutos, somaIPI, somaICMS = somaProdutos.Add(total), somaIPI.Add(decimal.NewFromFloat(it.ValorIPI)), somaICMS.Add(decimal.NewFromFloat(it.ValorICMS))
+		somaProdutos, somaIPI, somaICMS = somaProdutos.Add(total), somaIPI.Add(it.ValorIPI), somaICMS.Add(it.ValorICMS)
 	}
 
 	dois := centavo.Mul(decimal.NewFromInt(2))
-	produtos := decimal.NewFromFloat(dto.ValorProdutos)
+	produtos := dto.ValorProdutos
 	if somaProdutos.Sub(produtos).Abs().GreaterThan(dois) {
 		return erro("a soma das linhas (%s) não fecha com o total de produtos da nota (%s)", somaProdutos.StringFixed(2), produtos.StringFixed(2))
 	}
-	if ipi := decimal.NewFromFloat(dto.ValorIPI); somaIPI.Sub(ipi).Abs().GreaterThan(dois) {
+	if ipi := dto.ValorIPI; somaIPI.Sub(ipi).Abs().GreaterThan(dois) {
 		return erro("o IPI das linhas (%s) não fecha com o IPI da nota (%s)", somaIPI.StringFixed(2), ipi.StringFixed(2))
 	}
-	if icms := decimal.NewFromFloat(dto.ValorICMS); somaICMS.Sub(icms).Abs().GreaterThan(dois) {
+	if icms := dto.ValorICMS; somaICMS.Sub(icms).Abs().GreaterThan(dois) {
 		return erro("o ICMS das linhas (%s) não fecha com o ICMS da nota (%s)", somaICMS.StringFixed(2), icms.StringFixed(2))
 	}
-	if dto.ValorFrete < 0 || dto.ValorSeguro < 0 || dto.ValorDesconto < 0 || dto.ValorICMSST.IsNegative() || dto.ValorOutras.IsNegative() {
+	if dto.ValorFrete.IsNegative() || dto.ValorSeguro.IsNegative() || dto.ValorDesconto.IsNegative() || dto.ValorICMSST.IsNegative() || dto.ValorOutras.IsNegative() {
 		return erro("frete, seguro, desconto, ICMS-ST e outras despesas não podem ser negativos")
 	}
-	esperado := produtos.Add(decimal.NewFromFloat(dto.ValorIPI)).Add(decimal.NewFromFloat(dto.ValorFrete)).
-		Add(decimal.NewFromFloat(dto.ValorSeguro)).Add(dto.ValorICMSST).Add(dto.ValorOutras).Sub(decimal.NewFromFloat(dto.ValorDesconto))
-	if total := decimal.NewFromFloat(dto.ValorTotal); total.Sub(esperado).Abs().GreaterThan(dois) {
+	esperado := produtos.Add(dto.ValorIPI).Add(dto.ValorFrete).
+		Add(dto.ValorSeguro).Add(dto.ValorICMSST).Add(dto.ValorOutras).Sub(dto.ValorDesconto)
+	if total := dto.ValorTotal; total.Sub(esperado).Abs().GreaterThan(dois) {
 		return erro("o total da nota (%s) não fecha com produtos + IPI + ICMS-ST + frete + seguro + outras despesas − desconto (%s)", total.StringFixed(2), esperado.StringFixed(2))
 	}
-	if !decimal.NewFromFloat(dto.ValorTotal).IsPositive() {
+	if !dto.ValorTotal.IsPositive() {
 		return erro("o total da nota precisa ser maior que zero")
 	}
 	return nil

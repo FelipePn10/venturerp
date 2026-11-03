@@ -2,6 +2,7 @@ package planning_params_uc
 
 import (
 	"context"
+	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	"strconv"
 	"strings"
 
@@ -37,6 +38,14 @@ func (uc *UpdatePlanningParamUseCase) Execute(
 			return nil, errorsuc.NewValidationError(nome + " é um número de dias entre 0 e 365")
 		}
 		dto.Value = strconv.Itoa(dias)
+	}
+	// 50: período de agrupamento das necessidades (lote por período).
+	if dto.ParamNumber == 50 {
+		v := strings.ToUpper(strings.TrimSpace(dto.Value))
+		if !mrpentity.LotePeriodoValido(v) {
+			return nil, errorsuc.NewValidationError("o período de lote é NENHUM, DIA, SEMANA ou MES")
+		}
+		dto.Value = v
 	}
 	p, err := uc.Repo.Update(ctx, dto.ParamNumber, dto.Value, dto.UpdatedBy)
 	if err != nil {

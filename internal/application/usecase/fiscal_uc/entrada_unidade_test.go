@@ -39,7 +39,7 @@ func linhaNota(seq int, item int64, uom string, qtd float64) *entity.FiscalEntry
 	u := uom
 	um := decimal.NewFromInt(1)
 	q := decimal.NewFromFloat(qtd)
-	return &entity.FiscalEntryItem{Sequence: seq, ItemCode: &item, UOM: &u, Quantity: qtd, MovimentaEstoque: true, FatorConversao: &um, QuantidadeEstoque: &q}
+	return &entity.FiscalEntryItem{Sequence: seq, ItemCode: &item, UOM: &u, Quantity: decimal.NewFromFloat(qtd), MovimentaEstoque: true, FatorConversao: &um, QuantidadeEstoque: &q}
 }
 
 // Caso real (Tecnofer, NF 78402): tubo estocado em metros comprado em quilos.

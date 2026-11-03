@@ -159,8 +159,8 @@ func TestConferirXMLDaEntrada(t *testing.T) {
 func manualBoa() request.CreateFiscalEntryDTO {
 	return request.CreateFiscalEntryDTO{
 		NumeroNF: 555, Serie: "1", Modelo: "55", CnpjEmitente: cnpjEmitenteTeste, RazaoSocialEmitente: "FORNECEDOR", UFEmitente: sp("PR"),
-		ValorProdutos: 100, ValorIPI: 5, ValorICMS: 12, ValorFrete: 10, ValorTotal: 115,
-		Itens: []request.CreateFiscalEntryItemDTO{{Sequence: 1, Cfop: "5101", Quantity: 2, UnitPrice: 50, TotalPrice: 100, ValorIPI: 5, ValorICMS: 12}},
+		ValorProdutos: decimal.NewFromFloat(100), ValorIPI: decimal.NewFromFloat(5), ValorICMS: decimal.NewFromFloat(12), ValorFrete: decimal.NewFromFloat(10), ValorTotal: decimal.NewFromFloat(115),
+		Itens: []request.CreateFiscalEntryItemDTO{{Sequence: 1, Cfop: "5101", Quantity: decimal.NewFromFloat(2), UnitPrice: decimal.NewFromFloat(50), TotalPrice: decimal.NewFromFloat(100), ValorIPI: decimal.NewFromFloat(5), ValorICMS: decimal.NewFromFloat(12)}},
 	}
 }
 
@@ -171,7 +171,7 @@ func TestConferirNotaManual(t *testing.T) {
 		t.Fatalf("nota correta: %v", err)
 	}
 	st := manualBoa()
-	st.ValorICMSST, st.ValorOutras, st.ValorTotal = decimal.NewFromInt(8), decimal.NewFromInt(2), 125
+	st.ValorICMSST, st.ValorOutras, st.ValorTotal = decimal.NewFromInt(8), decimal.NewFromInt(2), decimal.NewFromFloat(125)
 	if err := conferirNotaManual(st, emissao, entrada, "PR", agora); err != nil {
 		t.Fatalf("nota com ICMS-ST e outras despesas fecha: %v", err)
 	}
@@ -195,14 +195,20 @@ func TestConferirNotaManual(t *testing.T) {
 			d.ChaveAcesso = &c
 		}},
 		{"sem itens", func(d *request.CreateFiscalEntryDTO) { d.Itens = nil }},
-		{"quantidade zero", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].Quantity = 0 }},
-		{"conta da linha", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].UnitPrice = 60 }},
+		{"quantidade zero", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].Quantity = decimal.NewFromFloat(0) }},
+		{"conta da linha", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].UnitPrice = decimal.NewFromFloat(60) }},
 		{"NCM curto", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].Ncm = sp("7318") }},
 		{"CFOP interestadual em fornecedor da mesma UF", func(d *request.CreateFiscalEntryDTO) { d.Itens[0].Cfop = "6101" }},
-		{"soma das linhas", func(d *request.CreateFiscalEntryDTO) { d.ValorProdutos = 90; d.ValorTotal = 105 }},
-		{"IPI do cabeçalho", func(d *request.CreateFiscalEntryDTO) { d.ValorIPI = 9; d.ValorTotal = 119 }},
-		{"ICMS do cabeçalho", func(d *request.CreateFiscalEntryDTO) { d.ValorICMS = 20 }},
-		{"total digitado errado", func(d *request.CreateFiscalEntryDTO) { d.ValorTotal = 200 }},
+		{"soma das linhas", func(d *request.CreateFiscalEntryDTO) {
+			d.ValorProdutos = decimal.NewFromFloat(90)
+			d.ValorTotal = decimal.NewFromFloat(105)
+		}},
+		{"IPI do cabeçalho", func(d *request.CreateFiscalEntryDTO) {
+			d.ValorIPI = decimal.NewFromFloat(9)
+			d.ValorTotal = decimal.NewFromFloat(119)
+		}},
+		{"ICMS do cabeçalho", func(d *request.CreateFiscalEntryDTO) { d.ValorICMS = decimal.NewFromFloat(20) }},
+		{"total digitado errado", func(d *request.CreateFiscalEntryDTO) { d.ValorTotal = decimal.NewFromFloat(200) }},
 		{"ST negativo", func(d *request.CreateFiscalEntryDTO) { d.ValorICMSST = decimal.NewFromInt(-1) }},
 	}
 	for _, c := range recusa {

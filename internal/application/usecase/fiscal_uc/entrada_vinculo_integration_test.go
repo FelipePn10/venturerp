@@ -43,7 +43,7 @@ func TestIntegration_VinculoDaNotaManualEUltimoPreco(t *testing.T) {
 			Status: status, CreatedBy: actor,
 			Itens: []*entity.FiscalEntryItem{{
 				Sequence: 1, ItemCode: &item, SupplierItemCode: &codigo, LembrarVinculo: true, Description: &descricao, UOM: &uom,
-				Cfop: "1101", Quantity: 2, UnitPrice: 42.5, TotalPrice: 85, ValorContabil: decimal.NewFromInt(85), MovimentaEstoque: true, GeraFinanceiro: true,
+				Cfop: "1101", Quantity: decimal.NewFromFloat(2), UnitPrice: decimal.NewFromFloat(42.5), TotalPrice: decimal.NewFromFloat(85), ValorContabil: decimal.NewFromInt(85), MovimentaEstoque: true, GeraFinanceiro: true,
 			}},
 		}
 	}

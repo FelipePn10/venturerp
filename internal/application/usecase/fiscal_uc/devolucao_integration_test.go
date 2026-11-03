@@ -250,7 +250,7 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 	rows.Close()
 	baixar := &financial_uc.BaixarContaPagarUseCase{Repo: finRepo, Auth: auth, FiscalRepo: fiscalRepo, Contabil: pg}
 	for _, a := range abertos {
-		if err := baixar.Execute(ctx, a.id, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: a.saldo.InexactFloat64(), DataPagamento: hoje}); err != nil {
+		if err := baixar.Execute(ctx, a.id, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: a.saldo, DataPagamento: hoje}); err != nil {
 			t.Fatalf("pagando %d: %v", a.id, err)
 		}
 	}
@@ -279,7 +279,7 @@ func TestIntegration_DevolucaoDeCompra(t *testing.T) {
 		t.Fatalf("GetContaReceber sem o fornecedor: %+v %v", lido, err)
 	}
 	receber := &financial_uc.BaixarContaReceberUseCase{Repo: finRepo, Auth: auth, FiscalRepo: fiscalRepo, Contabil: pg}
-	if err := receber.Execute(ctx, crID, request.BaixarContaReceberDTO{ContaBancariaID: banco, ValorRecebido: 5000, DataRecebimento: hoje}); err != nil {
+	if err := receber.Execute(ctx, crID, request.BaixarContaReceberDTO{ContaBancariaID: banco, ValorRecebido: decimal.NewFromFloat(5000), DataRecebimento: hoje}); err != nil {
 		t.Fatalf("recebendo o crédito: %v", err)
 	}
 	if !contabil(cForn, "RECEBIMENTO_CR").Equal(decimal.NewFromInt(-5000)) {

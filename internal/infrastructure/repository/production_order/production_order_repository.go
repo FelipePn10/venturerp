@@ -214,6 +214,16 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 			return nil, err
 		}
 		d.SeriesGravadas = gravadas
+		// O produzido para amostra, feira, projeto… fica reservado para a
+		// demanda da OF: nenhum pedido de venda o pega antes da saída.
+		mask := ""
+		if d.Mask != nil {
+			mask = *d.Mask
+		}
+		if _, err := stockrepository.ReservarProduzidoParaDemandasTx(ctx, tx, enterpriseID, d.ProductionOrderID, d.ItemCode, mask,
+			d.WarehouseID, d.Quantity, d.CreatedBy); err != nil {
+			return nil, err
+		}
 	}
 	status := "IN_PROGRESS"
 	if d.IsFinal {

@@ -254,3 +254,30 @@ func TestTransition_FirmRejectsDateChange(t *testing.T) {
 		t.Fatalf("expected firm-date guard, got %v", err)
 	}
 }
+
+type centrosFixos map[int64]int64
+
+func (c centrosFixos) IDDoCentro(_ context.Context, code int64) (*int64, error) {
+	id, ok := c[code]
+	if !ok {
+		return nil, errors.New("centro não encontrado")
+	}
+	return &id, nil
+}
+
+// A ordem planejada guarda o CÓDIGO do centro; a OF guarda o ID. Antes o código
+// ia direto para o id: outro centro, ou a chave estrangeira recusava.
+func TestFirmOrder_OFRecebeOIdDoCentro(t *testing.T) {
+	centro := int64(310)
+	order := &entity.PlannedOrder{ID: 77, Code: 99, ItemCode: 3001, Quantity: 5, OrderType: types.OrderProduction,
+		Status: types.StatusPlanned, CreatedBy: uuid.New(), CostCenterCode: &centro}
+	prodRepo := &fakeProdOrderRepo{nextNum: 201}
+	uc := &FirmPlannedOrderUseCase{Repo: &fakePORepo{order: order}, Auth: &firmAuth{canRelease: true}, ProdOrderRepo: prodRepo,
+		Centros: centrosFixos{310: 7}}
+	if _, err := uc.Execute(context.Background(), request.FirmOrderDTO{OrderCode: 99}); err != nil {
+		t.Fatal(err)
+	}
+	if prodRepo.created == nil || prodRepo.created.CostCenterID == nil || *prodRepo.created.CostCenterID != 7 {
+		t.Fatalf("centro da OF: %+v", prodRepo.created)
+	}
+}

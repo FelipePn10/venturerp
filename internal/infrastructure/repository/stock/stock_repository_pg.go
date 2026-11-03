@@ -126,6 +126,11 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 		return fmt.Errorf("creating stock movement: %w", err)
 	}
 
+	// A saída para a finalidade da demanda independente usa a peça reservada
+	// para ela: a reserva sai antes de o saldo baixar.
+	if err := consumirReservaDaSaidaTx(ctx, tx, enterpriseID, m); err != nil {
+		return err
+	}
 	if err := applyMovementToBalance(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}

@@ -47,7 +47,7 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		return errorsuc.NewValidationError("data de recebimento inválida: use o formato AAAA-MM-DD")
 	}
 
-	valorRecebido := decimal.NewFromFloat(dto.ValorRecebido).Round(2)
+	valorRecebido := dto.ValorRecebido.Round(2)
 	desconto := dto.Desconto.Round(2)
 	valorOriginal := cr.ValorBruto.Sub(cr.ValorRecebido).Sub(cr.Desconto)
 	if !valorRecebido.IsPositive() {

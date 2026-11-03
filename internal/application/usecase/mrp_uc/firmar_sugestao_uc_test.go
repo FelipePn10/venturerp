@@ -200,7 +200,12 @@ func TestFirmarSugestao_IsIdempotentBySuggestion(t *testing.T) {
 	}
 }
 
-type fakeDemandas struct{ ligadas [][2]int64 }
+type fakeDemandas struct {
+	ligadas [][2]int64
+	centro  *int64
+}
+
+func (d *fakeDemandas) CentroDaSugestao(context.Context, int64) (*int64, error) { return d.centro, nil }
 
 func (d *fakeDemandas) VincularSugestao(_ context.Context, sugestao, ordem int64, _ uuid.UUID) error {
 	d.ligadas = append(d.ligadas, [2]int64{sugestao, ordem})
@@ -308,5 +313,20 @@ func TestFirmSuggestionPreservesMachineForecast(t *testing.T) {
 	}
 	if repo.created.EndDate == nil || !repo.created.EndDate.Equal(end) || !repo.created.NeedDate.Equal(s.NeedDate) || repo.created.MachineCode == nil || *repo.created.MachineCode != machine || repo.created.ProductionTime != minutes {
 		t.Fatalf("forecast lost: %+v", repo.created)
+	}
+}
+
+// A sugestão que cobre demandas de um mesmo centro gera a ordem com esse
+// centro: a OF e a requisição (com a aprovação do centro) nascem nele.
+func TestFirmarSugestao_LevaOCentroDaDemanda(t *testing.T) {
+	centro := int64(310)
+	repo := &fakePlannedRepo{nextNum: 9}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()}, Demandas: &fakeDemandas{centro: &centro},
+		PlannedRepo: repo, Auth: &fakeAuth{canCreate: true}}
+	if _, err := uc.Execute(context.Background(), 42); err != nil {
+		t.Fatal(err)
+	}
+	if repo.created == nil || repo.created.CostCenterCode == nil || *repo.created.CostCenterCode != 310 {
+		t.Fatalf("centro da ordem planejada: %+v", repo.created)
 	}
 }

@@ -29,12 +29,12 @@ func (e toleranceEval) EvaluatePurchaseTolerance(context.Context, *int64, string
 func TestValidatePurchaseEntryTolerancesWarnsAndBlocks(t *testing.T) {
 	po := int64(1)
 	item := int64(10)
-	items := []*fiscalentity.FiscalEntryItem{{ItemCode: &item, Quantity: 7, UnitPrice: 3}}
-	supplier, warnings, err := validatePurchaseEntryTolerances(context.Background(), tolerancePORepo{}, toleranceEval{action: "WARN"}, &po, items, 21)
+	items := []*fiscalentity.FiscalEntryItem{{ItemCode: &item, Quantity: decimal.NewFromFloat(7), UnitPrice: decimal.NewFromFloat(3)}}
+	supplier, warnings, err := validatePurchaseEntryTolerances(context.Background(), tolerancePORepo{}, toleranceEval{action: "WARN"}, &po, items, decimal.NewFromInt(21))
 	if err != nil || supplier == nil || len(warnings) != 3 {
 		t.Fatalf("supplier=%v warnings=%v err=%v", supplier, warnings, err)
 	}
-	_, _, err = validatePurchaseEntryTolerances(context.Background(), tolerancePORepo{}, toleranceEval{action: "BLOCK"}, &po, items, 21)
+	_, _, err = validatePurchaseEntryTolerances(context.Background(), tolerancePORepo{}, toleranceEval{action: "BLOCK"}, &po, items, decimal.NewFromInt(21))
 	if err == nil {
 		t.Fatal("blocking tolerance accepted divergent invoice")
 	}

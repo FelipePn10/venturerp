@@ -144,7 +144,7 @@ func TestConsumoComPoliticaPorItem(t *testing.T) {
 	previsao := []*entity.MRPInput{{ItemCode: 8, Quantity: decimal.NewFromInt(50), NeedDate: hoje.AddDate(0, 0, 7), DemandType: "FORECAST"}}
 	linha := int64(1)
 	s := &MRPServiceImpl{Vendas: vendasFixas{{Chave: inddemandentity.ChaveItem(7, ""), Data: hoje, Quantidade: decimal.NewFromInt(4), Linha: &linha}}}
-	d, p, err := s.consumirPelaVenda(context.Background(), params, demands, previsao, nil, nil)
+	d, p, _, err := s.consumirPelaVenda(context.Background(), params, demands, previsao, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

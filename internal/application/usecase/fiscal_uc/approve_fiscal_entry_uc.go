@@ -233,7 +233,7 @@ func (uc *ApproveFiscalEntryUseCase) montarMovimentos(ctx context.Context, doc *
 		if it.ItemCode == nil {
 			continue
 		}
-		qtd := decimal.NewFromFloat(it.Quantity)
+		qtd := it.Quantity
 		if it.QuantidadeEstoque != nil {
 			qtd = *it.QuantidadeEstoque
 		}
@@ -325,10 +325,10 @@ func (uc *ApproveFiscalEntryUseCase) montarContabilizacao(ctx context.Context, d
 			}
 			add(*contaRec, p.FornecedoresAccountID, nil, valor, hist(nome+" a recuperar"))
 		}
-		recuperar(it.GeraCreditoICMS, decimal.NewFromFloat(it.ValorICMS), p.ICMSRecuperarAccountID, "ICMS")
-		recuperar(it.GeraCreditoIPI, decimal.NewFromFloat(it.ValorIPI), p.IPIRecuperarAccountID, "IPI")
-		recuperar(it.GeraCreditoPIS, decimal.NewFromFloat(it.ValorPIS), p.PISRecuperarAccountID, "PIS")
-		recuperar(it.GeraCreditoCOFINS, decimal.NewFromFloat(it.ValorCOFINS), p.COFINSRecuperarAccountID, "COFINS")
+		recuperar(it.GeraCreditoICMS, it.ValorICMS, p.ICMSRecuperarAccountID, "ICMS")
+		recuperar(it.GeraCreditoIPI, it.ValorIPI, p.IPIRecuperarAccountID, "IPI")
+		recuperar(it.GeraCreditoPIS, it.ValorPIS, p.PISRecuperarAccountID, "PIS")
+		recuperar(it.GeraCreditoCOFINS, it.ValorCOFINS, p.COFINSRecuperarAccountID, "COFINS")
 		recuperar(it.GeraCreditoIBSCBS, it.ValorIBS, p.IBSRecuperarAccountID, "IBS")
 		recuperar(it.GeraCreditoIBSCBS, it.ValorCBS, p.CBSRecuperarAccountID, "CBS")
 		if ciapAtivo {
@@ -386,16 +386,16 @@ func lancarCreditosDaNota(ctx context.Context, fin financialrepo.FinancialReposi
 	creditos := map[string]decimal.Decimal{}
 	for _, item := range doc.Itens {
 		if item.GeraCreditoICMS {
-			creditos["ICMS"] = creditos["ICMS"].Add(decimal.NewFromFloat(item.ValorICMS))
+			creditos["ICMS"] = creditos["ICMS"].Add(item.ValorICMS)
 		}
 		if item.GeraCreditoIPI {
-			creditos["IPI"] = creditos["IPI"].Add(decimal.NewFromFloat(item.ValorIPI))
+			creditos["IPI"] = creditos["IPI"].Add(item.ValorIPI)
 		}
 		if item.GeraCreditoPIS {
-			creditos["PIS"] = creditos["PIS"].Add(decimal.NewFromFloat(item.ValorPIS))
+			creditos["PIS"] = creditos["PIS"].Add(item.ValorPIS)
 		}
 		if item.GeraCreditoCOFINS {
-			creditos["COFINS"] = creditos["COFINS"].Add(decimal.NewFromFloat(item.ValorCOFINS))
+			creditos["COFINS"] = creditos["COFINS"].Add(item.ValorCOFINS)
 		}
 		if item.GeraCreditoIBSCBS {
 			creditos["IBS"] = creditos["IBS"].Add(item.ValorIBS)

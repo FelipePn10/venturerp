@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"strings"
 	"time"
 
@@ -221,14 +222,41 @@ func (r *IndependentDemandRepositorySQLC) Encerrar(ctx context.Context, code int
 	if err != nil {
 		return false, err
 	}
-	n, err := r.q.CloseIndependentDemand(ctx, sqlc.CloseIndependentDemandParams{
+	params := sqlc.CloseIndependentDemandParams{
 		Situacao: situacao, EncerradaPor: pgutil.ToPgUUID(por), MotivoEncerramento: pgutil.ToPgTextFromString(motivo),
 		Code: code, EnterpriseID: enterpriseID,
+	}
+	// Com o pool, encerrar e liberar a reserva do produzido vão juntos: a
+	// demanda encerrada não segura mais estoque.
+	pool, ok := r.db.(interface {
+		Begin(context.Context) (pgx.Tx, error)
 	})
+	if !ok || enterpriseID == nil {
+		n, err := r.q.CloseIndependentDemand(ctx, params)
+		if err != nil {
+			return false, fmt.Errorf("closing independent demand %d: %w", code, err)
+		}
+		return n == 1, nil
+	}
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return false, fmt.Errorf("closing independent demand %d: %w", code, err)
 	}
-	return n == 1, nil
+	defer func() { _ = tx.Rollback(ctx) }()
+	n, err := r.q.WithTx(tx).CloseIndependentDemand(ctx, params)
+	if err != nil {
+		return false, fmt.Errorf("closing independent demand %d: %w", code, err)
+	}
+	if n != 1 {
+		return false, nil
+	}
+	if _, err := stockrepo.LiberarReservasDaDemandaTx(ctx, tx, *enterpriseID, code, nil, nil, false); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, fmt.Errorf("closing independent demand %d: %w", code, err)
+	}
+	return true, nil
 }
 
 const colunasDemanda = `id, code, item_code, mask, cost_center_code, quantity, demand_date, is_active, created_at, updated_at, created_by,
@@ -430,6 +458,28 @@ func (r *IndependentDemandRepositorySQLC) VincularSugestao(ctx context.Context, 
 		return fmt.Errorf("linking sales orders of suggestion %d: %w", suggestionCode, err)
 	}
 	return nil
+}
+
+func (r *IndependentDemandRepositorySQLC) CentroDaSugestao(ctx context.Context, suggestionCode int64) (*int64, error) {
+	if r.db == nil {
+		return nil, nil
+	}
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var centro *int64
+	err = r.db.QueryRow(ctx, `
+		SELECT CASE WHEN COUNT(DISTINCT d.cost_center_code) = 1 AND COUNT(*) = COUNT(d.cost_center_code)
+		            THEN MIN(d.cost_center_code) END
+		  FROM mrp_pegging p
+		  JOIN independent_demands d ON d.code = p.demand_code AND d.enterprise_id = p.enterprise_id
+		 WHERE p.enterprise_id = $1 AND p.supply_kind = 'SUGESTAO' AND p.supply_code = $2
+		   AND p.demand_kind = 'DEMANDA_INDEPENDENTE' AND p.quantity > 0`, enterpriseID, suggestionCode).Scan(&centro)
+	if err != nil {
+		return nil, fmt.Errorf("cost center of suggestion %d: %w", suggestionCode, err)
+	}
+	return centro, nil
 }
 
 // Vendas: linhas de pedido de venda da empresa (abertas ou já atendidas) com a
@@ -643,29 +693,36 @@ func (r *IndependentDemandRepositorySQLC) preencherAtendido(ctx context.Context,
 	for _, d := range ds {
 		codes = append(codes, d.CodeDemand)
 	}
+	// Atendido (saídas sem estorno) e reservado (o produzido que a OF da
+	// demanda entregou e ainda não saiu).
 	rows, err := r.db.Query(ctx, `
-		SELECT reference_code, SUM(ABS(quantity)) FROM stock_movements
-		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = ANY($3)
-		   AND movement_type = 'OUT' AND reversed_by_movement_id IS NULL
-		 GROUP BY reference_code`, enterpriseID, entity.ReferenciaAtendimento, codes)
+		SELECT c.code,
+		       COALESCE((SELECT SUM(ABS(m.quantity)) FROM stock_movements m
+		                  WHERE m.enterprise_id = $1 AND m.reference_type = $2 AND m.reference_code = c.code
+		                    AND m.movement_type = 'OUT' AND m.reversed_by_movement_id IS NULL), 0),
+		       COALESCE((SELECT SUM(rs.quantity) FROM stock_reservations rs
+		                  WHERE rs.enterprise_id = $1 AND rs.reference_type = $2 AND rs.reference_code = c.code
+		                    AND rs.status = 'ACTIVE'), 0)
+		  FROM unnest($3::bigint[]) AS c(code)`, enterpriseID, entity.ReferenciaAtendimento, codes)
 	if err != nil {
 		return fmt.Errorf("reading attended quantity of demands: %w", err)
 	}
 	defer rows.Close()
-	atendido := map[int64]decimal.Decimal{}
+	atendido, reservado := map[int64]decimal.Decimal{}, map[int64]decimal.Decimal{}
 	for rows.Next() {
 		var code int64
-		var qtd pgtype.Numeric
-		if err := rows.Scan(&code, &qtd); err != nil {
+		var qtd, res pgtype.Numeric
+		if err := rows.Scan(&code, &qtd, &res); err != nil {
 			return fmt.Errorf("scanning attended quantity: %w", err)
 		}
 		atendido[code] = pgutil.FromPgNumericToDecimal(qtd)
+		reservado[code] = pgutil.FromPgNumericToDecimal(res)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
 	for _, d := range ds {
-		d.Atendida = atendido[d.CodeDemand]
+		d.Atendida, d.Reservada = atendido[d.CodeDemand], reservado[d.CodeDemand]
 	}
 	return nil
 }

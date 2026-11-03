@@ -107,7 +107,7 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 		DataEntrada:         dataEntrada,
 		CnpjEmitente:        nfe.CnpjEmitente,
 		RazaoSocialEmitente: nfe.NomeEmitente,
-		ValorTotal:          nfe.ValorTotal,
+		ValorTotal:          decimal.NewFromFloat(nfe.ValorTotal),
 		TipoDocumento:       "NFE",
 		PurchaseOrderCode:   dto.PurchaseOrderCode,
 		SupplierCode:        supplierCode,
@@ -136,9 +136,9 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 			Sequence:      item.NumeroItem,
 			ItemCode:      &ic,
 			Cfop:          item.CFOP,
-			Quantity:      item.QuantidadeComercial,
-			UnitPrice:     item.ValorUnitario,
-			TotalPrice:    item.ValorTotal,
+			Quantity:      decimal.NewFromFloat(item.QuantidadeComercial),
+			UnitPrice:     decimal.NewFromFloat(item.ValorUnitario),
+			TotalPrice:    decimal.NewFromFloat(item.ValorTotal),
 		}
 		if _, err := uc.FiscalRepo.CreateEntryItem(ctx, entryItem); err != nil {
 			// Item que não entrou na nota não movimenta estoque; o motivo volta

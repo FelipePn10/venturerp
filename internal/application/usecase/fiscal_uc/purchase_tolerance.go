@@ -11,7 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.PurchaseOrderRepository, evaluator ports.PurchaseToleranceEvaluator, purchaseOrderCode *int64, items []*fiscalentity.FiscalEntryItem, productsTotal float64) (*int64, []string, error) {
+func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.PurchaseOrderRepository, evaluator ports.PurchaseToleranceEvaluator, purchaseOrderCode *int64, items []*fiscalentity.FiscalEntryItem, productsTotal decimal.Decimal) (*int64, []string, error) {
 	if purchaseOrderCode == nil || orders == nil || evaluator == nil {
 		return nil, nil, nil
 	}
@@ -58,14 +58,14 @@ func validatePurchaseEntryTolerances(ctx context.Context, orders porepo.Purchase
 		}
 		line := lines[indexes[0]]
 		byItem[*item.ItemCode] = indexes[1:]
-		if err = check("QUANTITY", decimal.NewFromFloat(line.RequestedQty), decimal.NewFromFloat(item.Quantity)); err != nil {
+		if err = check("QUANTITY", decimal.NewFromFloat(line.RequestedQty), item.Quantity); err != nil {
 			return nil, nil, err
 		}
-		if err = check("ITEM_PRICE", decimal.NewFromFloat(line.UnitPrice), decimal.NewFromFloat(item.UnitPrice)); err != nil {
+		if err = check("ITEM_PRICE", decimal.NewFromFloat(line.UnitPrice), item.UnitPrice); err != nil {
 			return nil, nil, err
 		}
 	}
-	if err = check("PRODUCTS_TOTAL", expectedTotal, decimal.NewFromFloat(productsTotal)); err != nil {
+	if err = check("PRODUCTS_TOTAL", expectedTotal, productsTotal); err != nil {
 		return nil, nil, err
 	}
 	return order.SupplierCode, warnings, nil

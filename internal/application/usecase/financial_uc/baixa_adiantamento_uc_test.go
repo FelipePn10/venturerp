@@ -103,7 +103,7 @@ func TestBaixarContaPagar_RejectsNonPendingStatus(t *testing.T) {
 	repo := &fakeFinRepo{cp: contaPagar(entity.ContaPagarStatusPago, 100, time.Now())}
 	uc := BaixarContaPagarUseCase{Repo: repo, FiscalRepo: fakeFiscalRepo{}, Auth: fakeFinAuth{canPagar: true}}
 
-	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: "2026-01-10", ValorPago: 100})
+	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: "2026-01-10", ValorPago: decimal.NewFromFloat(100)})
 	if err == nil {
 		t.Fatal("expected error for already-paid title")
 	}
@@ -116,7 +116,7 @@ func TestBaixarContaPagar_InvalidDate(t *testing.T) {
 	repo := &fakeFinRepo{cp: contaPagar(entity.ContaPagarStatusPendente, 100, time.Now())}
 	uc := BaixarContaPagarUseCase{Repo: repo, FiscalRepo: fakeFiscalRepo{}, Auth: fakeFinAuth{canPagar: true}}
 
-	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: "10/01/2026", ValorPago: 100})
+	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: "10/01/2026", ValorPago: decimal.NewFromFloat(100)})
 	if err == nil {
 		t.Fatal("expected invalid date error")
 	}
@@ -129,7 +129,7 @@ func TestBaixarContaPagar_OnTimeHasNoInterestOrFine(t *testing.T) {
 
 	// Paid exactly on the due date → no juros/multa.
 	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{
-		DataPagamento: "2026-02-01", ValorPago: 1000, ContaBancariaID: 9,
+		DataPagamento: "2026-02-01", ValorPago: decimal.NewFromFloat(1000), ContaBancariaID: 9,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -155,7 +155,7 @@ func TestBaixarContaPagar_LateAccruesInterestAndFineWithDefaults(t *testing.T) {
 
 	// 30 days late → monthsLate = 1.0 → juros = 1000*0.01*1 = 10; multa = 1000*0.02 = 20.
 	err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{
-		DataPagamento: "2026-01-31", ValorPago: 1000, ContaBancariaID: 9,
+		DataPagamento: "2026-01-31", ValorPago: decimal.NewFromFloat(1000), ContaBancariaID: 9,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -183,7 +183,7 @@ func TestBaixarContaPagar_LateUsesConfiguredRates(t *testing.T) {
 
 	// 30 days late → juros = 1000*0.02*1 = 20; multa = 1000*0.05 = 50.
 	if err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{
-		DataPagamento: "2026-01-31", ValorPago: 1000, ContaBancariaID: 9,
+		DataPagamento: "2026-01-31", ValorPago: decimal.NewFromFloat(1000), ContaBancariaID: 9,
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestBaixarContaPagar_LateUsesConfiguredRates(t *testing.T) {
 
 func TestAplicarAdiantamento_InvalidContaTipo(t *testing.T) {
 	uc := AplicarAdiantamentoUseCase{Repo: &fakeFinRepo{}, Auth: fakeFinAuth{}}
-	_, err := uc.Execute(context.Background(), 1, request.AplicarAdiantamentoDTO{ContaTipo: "XPTO", Valor: 10})
+	_, err := uc.Execute(context.Background(), 1, request.AplicarAdiantamentoDTO{ContaTipo: "XPTO", Valor: decimal.NewFromFloat(10)})
 	if err == nil {
 		t.Fatal("expected error for invalid conta_tipo")
 	}
@@ -205,7 +205,7 @@ func TestAplicarAdiantamento_InvalidContaTipo(t *testing.T) {
 func TestAplicarAdiantamento_UnauthorizedForReceber(t *testing.T) {
 	uc := AplicarAdiantamentoUseCase{Repo: &fakeFinRepo{}, Auth: fakeFinAuth{canReceber: false}}
 	_, err := uc.Execute(context.Background(), 1, request.AplicarAdiantamentoDTO{
-		ContaTipo: string(entity.AdiantamentoTipoReceber), Valor: 10,
+		ContaTipo: string(entity.AdiantamentoTipoReceber), Valor: decimal.NewFromFloat(10),
 	})
 	if !errors.Is(err, errorsuc.ErrUnauthorized) {
 		t.Fatalf("err = %v, want ErrUnauthorized", err)
@@ -215,7 +215,7 @@ func TestAplicarAdiantamento_UnauthorizedForReceber(t *testing.T) {
 func TestAplicarAdiantamento_RejectsNonPositiveValue(t *testing.T) {
 	uc := AplicarAdiantamentoUseCase{Repo: &fakeFinRepo{}, Auth: fakeFinAuth{canPagar: true}}
 	_, err := uc.Execute(context.Background(), 1, request.AplicarAdiantamentoDTO{
-		ContaTipo: string(entity.AdiantamentoTipoPagar), Valor: 0,
+		ContaTipo: string(entity.AdiantamentoTipoPagar), Valor: decimal.NewFromFloat(0),
 	})
 	if err == nil {
 		t.Fatal("expected error for non-positive value")
@@ -227,7 +227,7 @@ func TestAplicarAdiantamento_AppliesWithParsedDate(t *testing.T) {
 	uc := AplicarAdiantamentoUseCase{Repo: repo, Auth: fakeFinAuth{canPagar: true, uid: uuid.New()}}
 	d := "2026-03-15"
 	out, err := uc.Execute(context.Background(), 77, request.AplicarAdiantamentoDTO{
-		ContaTipo: string(entity.AdiantamentoTipoPagar), ContaID: 555, Valor: 250.50, DataAplicacao: &d,
+		ContaTipo: string(entity.AdiantamentoTipoPagar), ContaID: 555, Valor: decimal.NewFromFloat(250.50), DataAplicacao: &d,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -272,7 +272,7 @@ func TestBaixaRecusaDataMalFormatadaComoValidacaoENao500(t *testing.T) {
 		t.Run("pagar/"+c.nome, func(t *testing.T) {
 			repo := &fakeFinRepo{cp: contaPagar(entity.ContaPagarStatusPendente, 100, time.Now())}
 			uc := BaixarContaPagarUseCase{Repo: repo, FiscalRepo: fakeFiscalRepo{}, Auth: fakeFinAuth{canPagar: true}}
-			err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: c.data, ValorPago: 100})
+			err := uc.Execute(context.Background(), 1, request.BaixarContaPagarDTO{DataPagamento: c.data, ValorPago: decimal.NewFromFloat(100)})
 
 			var validacao *errorsuc.ValidationError
 			if !errors.As(err, &validacao) {

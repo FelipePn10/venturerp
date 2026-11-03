@@ -68,12 +68,12 @@ func Divergencias(e *entity.FiscalEntry, p ParametrosConferencia) []Divergencia 
 
 	somaProdutos, somaICMS, somaIPI := decimal.Zero, decimal.Zero, decimal.Zero
 	for _, it := range e.Itens {
-		qtd := decimal.NewFromFloat(it.Quantity)
-		unit := decimal.NewFromFloat(it.UnitPrice)
-		total := decimal.NewFromFloat(it.TotalPrice)
+		qtd := it.Quantity
+		unit := it.UnitPrice
+		total := it.TotalPrice
 		somaProdutos = somaProdutos.Add(total)
-		somaICMS = somaICMS.Add(decimal.NewFromFloat(it.ValorICMS))
-		somaIPI = somaIPI.Add(decimal.NewFromFloat(it.ValorIPI))
+		somaICMS = somaICMS.Add(it.ValorICMS)
+		somaIPI = somaIPI.Add(it.ValorIPI)
 
 		// 1. Aritmética da linha (qCom × vUnCom = vProd, com folga de centavo
 		// por causa do arredondamento do unitário em até 10 casas).
@@ -82,19 +82,19 @@ func Divergencias(e *entity.FiscalEntry, p ParametrosConferencia) []Divergencia 
 				"item %d: quantidade × valor unitário dá %s, mas a nota traz %s", it.Sequence, Moeda(calc), Moeda(total))
 		}
 		// 2. ICMS: base × alíquota.
-		if it.ValorICMS > 0 || it.BaseICMS > 0 {
-			calc := decimal.NewFromFloat(it.BaseICMS).Mul(decimal.NewFromFloat(it.AliqICMS)).Round(2)
-			if calc.Sub(decimal.NewFromFloat(it.ValorICMS)).Abs().GreaterThan(toleranciaCalculo) {
-				add(NivelAtencao, it.Sequence, "CALCULO_ICMS", Moeda(calc), Moeda(decimal.NewFromFloat(it.ValorICMS)),
-					"item %d: base × alíquota do ICMS dá %s, a nota traz %s", it.Sequence, Moeda(calc), Moeda(decimal.NewFromFloat(it.ValorICMS)))
+		if it.ValorICMS.IsPositive() || it.BaseICMS.IsPositive() {
+			calc := it.BaseICMS.Mul(it.AliqICMS).Round(2)
+			if calc.Sub(it.ValorICMS).Abs().GreaterThan(toleranciaCalculo) {
+				add(NivelAtencao, it.Sequence, "CALCULO_ICMS", Moeda(calc), Moeda(it.ValorICMS),
+					"item %d: base × alíquota do ICMS dá %s, a nota traz %s", it.Sequence, Moeda(calc), Moeda(it.ValorICMS))
 			}
 		}
 		// 3. IPI: base × alíquota.
-		if it.ValorIPI > 0 || it.BaseIPI > 0 {
-			calc := decimal.NewFromFloat(it.BaseIPI).Mul(decimal.NewFromFloat(it.AliqIPI)).Round(2)
-			if calc.Sub(decimal.NewFromFloat(it.ValorIPI)).Abs().GreaterThan(toleranciaCalculo) {
-				add(NivelAtencao, it.Sequence, "CALCULO_IPI", Moeda(calc), Moeda(decimal.NewFromFloat(it.ValorIPI)),
-					"item %d: base × alíquota do IPI dá %s, a nota traz %s", it.Sequence, Moeda(calc), Moeda(decimal.NewFromFloat(it.ValorIPI)))
+		if it.ValorIPI.IsPositive() || it.BaseIPI.IsPositive() {
+			calc := it.BaseIPI.Mul(it.AliqIPI).Round(2)
+			if calc.Sub(it.ValorIPI).Abs().GreaterThan(toleranciaCalculo) {
+				add(NivelAtencao, it.Sequence, "CALCULO_IPI", Moeda(calc), Moeda(it.ValorIPI),
+					"item %d: base × alíquota do IPI dá %s, a nota traz %s", it.Sequence, Moeda(calc), Moeda(it.ValorIPI))
 			}
 		}
 		ncm := ""
@@ -103,22 +103,22 @@ func Divergencias(e *entity.FiscalEntry, p ParametrosConferencia) []Divergencia 
 		}
 		// 4. Alíquota de IPI da tabela de NCM.
 		if aliq, ok := p.AliqIPIPorNCM[ncm]; ok && ncm != "" && it.CstIPI != nil && *it.CstIPI == "50" {
-			if aliq.Sub(decimal.NewFromFloat(it.AliqIPI)).Abs().GreaterThan(toleranciaAliq) {
-				add(NivelAtencao, it.Sequence, "ALIQUOTA_IPI", pct(aliq), pct(decimal.NewFromFloat(it.AliqIPI)),
-					"item %d: o NCM %s tem IPI de %s na tabela, a nota usa %s", it.Sequence, ncm, pct(aliq), pct(decimal.NewFromFloat(it.AliqIPI)))
+			if aliq.Sub(it.AliqIPI).Abs().GreaterThan(toleranciaAliq) {
+				add(NivelAtencao, it.Sequence, "ALIQUOTA_IPI", pct(aliq), pct(it.AliqIPI),
+					"item %d: o NCM %s tem IPI de %s na tabela, a nota usa %s", it.Sequence, ncm, pct(aliq), pct(it.AliqIPI))
 			}
 		}
 		// 5. Alíquota interestadual de ICMS (regime normal, operação de outro
 		// estado). Mercadoria importada (origem 1, 2, 3 ou 8) é 4% (Res. SF 13/2012).
 		if e.UFEmitente != nil && p.UFEmpresa != "" && !strings.EqualFold(*e.UFEmitente, p.UFEmpresa) &&
-			it.CstICMS != nil && cstsTributados[*it.CstICMS] && it.AliqICMS > 0 {
+			it.CstICMS != nil && cstsTributados[*it.CstICMS] && it.AliqICMS.IsPositive() {
 			esperado, ok := p.ICMSInterestadual[strings.ToUpper(*e.UFEmitente)+strings.ToUpper(p.UFEmpresa)]
 			if it.Origem != nil && origensImportadas[*it.Origem] {
 				esperado, ok = decimal.NewFromFloat(0.04), true
 			}
-			if ok && esperado.Sub(decimal.NewFromFloat(it.AliqICMS)).Abs().GreaterThan(toleranciaAliq) {
-				add(NivelAtencao, it.Sequence, "ALIQUOTA_ICMS", pct(esperado), pct(decimal.NewFromFloat(it.AliqICMS)),
-					"item %d: a alíquota interestadual %s→%s é %s, a nota usa %s", it.Sequence, *e.UFEmitente, p.UFEmpresa, pct(esperado), pct(decimal.NewFromFloat(it.AliqICMS)))
+			if ok && esperado.Sub(it.AliqICMS).Abs().GreaterThan(toleranciaAliq) {
+				add(NivelAtencao, it.Sequence, "ALIQUOTA_ICMS", pct(esperado), pct(it.AliqICMS),
+					"item %d: a alíquota interestadual %s→%s é %s, a nota usa %s", it.Sequence, *e.UFEmitente, p.UFEmpresa, pct(esperado), pct(it.AliqICMS))
 			}
 		}
 		// 6. NCM da nota × NCM do item do cadastro.
@@ -167,13 +167,13 @@ func Divergencias(e *entity.FiscalEntry, p ParametrosConferencia) []Divergencia 
 		}
 	}
 	// 8. Totais do cabeçalho × soma dos itens.
-	if v := decimal.NewFromFloat(e.ValorProdutos); somaProdutos.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
+	if v := e.ValorProdutos; somaProdutos.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
 		add(NivelAtencao, 0, "TOTAL_PRODUTOS", Moeda(somaProdutos), Moeda(v), "a soma dos itens (%s) não fecha com o total de produtos da nota (%s)", Moeda(somaProdutos), Moeda(v))
 	}
-	if v := decimal.NewFromFloat(e.ValorICMS); somaICMS.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
+	if v := e.ValorICMS; somaICMS.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
 		add(NivelAtencao, 0, "TOTAL_ICMS", Moeda(somaICMS), Moeda(v), "o ICMS dos itens (%s) não fecha com o ICMS da nota (%s)", Moeda(somaICMS), Moeda(v))
 	}
-	if v := decimal.NewFromFloat(e.ValorIPI); somaIPI.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
+	if v := e.ValorIPI; somaIPI.Sub(v).Abs().GreaterThan(toleranciaCalculo) {
 		add(NivelAtencao, 0, "TOTAL_IPI", Moeda(somaIPI), Moeda(v), "o IPI dos itens (%s) não fecha com o IPI da nota (%s)", Moeda(somaIPI), Moeda(v))
 	}
 	return out
@@ -185,7 +185,7 @@ func CustoUnitarioBruto(it *entity.FiscalEntryItem, qtdEstoque decimal.Decimal) 
 	if !qtdEstoque.IsPositive() {
 		return decimal.Zero
 	}
-	return decimal.NewFromFloat(it.TotalPrice).Sub(it.ValorDesconto).Div(qtdEstoque).Round(6)
+	return it.TotalPrice.Sub(it.ValorDesconto).Div(qtdEstoque).Round(6)
 }
 
 func pct(v decimal.Decimal) string {

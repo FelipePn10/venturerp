@@ -1,19 +1,23 @@
 package handler
 
-import "testing"
-import "net/url"
+import (
+	"net/url"
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 // TestValorDaQueryDetectaOFormato: a versão anterior apagava TODO ponto, e
 // `1234.56` — o que um input numérico manda — virava `123456`.
 func TestValorDaQueryDetectaOFormato(t *testing.T) {
-	casos := map[string]*float64{
-		"1234.56":      ptrF64(1234.56),
-		"1234,56":      ptrF64(1234.56),
-		"1.234,56":     ptrF64(1234.56),
-		"1,234.56":     ptrF64(1234.56),
-		"1234":         ptrF64(1234),
-		"0.5":          ptrF64(0.5),
-		"1.234.567,89": ptrF64(1234567.89),
+	casos := map[string]*decimal.Decimal{
+		"1234.56":      ptrDec("1234.56"),
+		"1234,56":      ptrDec("1234.56"),
+		"1.234,56":     ptrDec("1234.56"),
+		"1,234.56":     ptrDec("1234.56"),
+		"1234":         ptrDec("1234"),
+		"0.5":          ptrDec("0.5"),
+		"1.234.567,89": ptrDec("1234567.89"),
 		"":             nil,
 		"abc":          nil,
 	}
@@ -29,10 +33,10 @@ func TestValorDaQueryDetectaOFormato(t *testing.T) {
 		if got == nil {
 			t.Fatalf("%q devolveu nulo, esperado %v", entrada, *esperado)
 		}
-		if *got != *esperado {
+		if !got.Equal(*esperado) {
 			t.Fatalf("%q lido como %v, esperado %v", entrada, *got, *esperado)
 		}
 	}
 }
 
-func ptrF64(v float64) *float64 { return &v }
+func ptrDec(v string) *decimal.Decimal { d := decimal.RequireFromString(v); return &d }

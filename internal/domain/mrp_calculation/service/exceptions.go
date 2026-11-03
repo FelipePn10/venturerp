@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	"github.com/shopspring/decimal"
 	"math"
 	"sort"
@@ -36,6 +37,38 @@ type exceptionBasis struct {
 	labels map[int64]string
 	// horizonte: sugestões que o horizonte firme empurrou para o fim dele.
 	horizonte []*entity.PlannedOrderSuggestion
+	// demandas: demandas independentes vencidas ou atrasadas.
+	demandas []avisoDeDemanda
+}
+
+// demandMessages: a demanda de estoque que venceu sem venda e a de finalidade
+// atrasada com saldo. A ação é na própria demanda (VPLA0102): encerrar o saldo
+// ou ajustar a data.
+func (b *exceptionBasis) demandMessages() []*entity.MRPExceptionMessage {
+	out := make([]*entity.MRPExceptionMessage, 0, len(b.demandas))
+	for _, a := range b.demandas {
+		d := a.demanda
+		code, tipo := d.CodeDemand, "DEMANDA_INDEPENDENTE"
+		motivo := strings.ToLower(inddemandentity.DescricaoDoMotivo(d.Motivo))
+		var texto string
+		if a.tipo == entity.ExceptionDemandExpired {
+			venceu := d.DemandDate
+			if a.venceuEm != nil {
+				venceu = *a.venceuEm
+			}
+			texto = fmt.Sprintf("%s: a demanda %d (%s) de %s un. para %s passou da janela de consumo em %s sem venda; %s un. saíram do cálculo. Encerre o saldo ou ajuste a data na VPLA0102.",
+				b.rotulo(d.ItemCode), d.CodeDemand, motivo, qtd(d.Quantity), d.DemandDate.Format("02/01/2006"), venceu.Format("02/01/2006"), qtd(a.saldo))
+		} else {
+			texto = fmt.Sprintf("%s: a demanda %d (%s) era para %s e ainda tem %s un. a atender. Atenda pela saída, ajuste a data ou encerre o saldo na VPLA0102.",
+				b.rotulo(d.ItemCode), d.CodeDemand, motivo, d.DemandDate.Format("02/01/2006"), qtd(a.saldo))
+		}
+		data := d.DemandDate
+		out = append(out, &entity.MRPExceptionMessage{
+			ItemCode: d.ItemCode, MessageType: a.tipo, SourceCode: &code, SourceType: &tipo,
+			SuggestedDate: &data, Description: texto,
+		})
+	}
+	return out
 }
 
 // rotulo é como o item aparece na mensagem: o código de negócio que o
@@ -125,6 +158,12 @@ func (b *exceptionBasis) itens() []int64 {
 		if !vistos[s.ItemCode] {
 			vistos[s.ItemCode] = true
 			out = append(out, s.ItemCode)
+		}
+	}
+	for _, a := range b.demandas {
+		if !vistos[a.demanda.ItemCode] {
+			vistos[a.demanda.ItemCode] = true
+			out = append(out, a.demanda.ItemCode)
 		}
 	}
 	return out

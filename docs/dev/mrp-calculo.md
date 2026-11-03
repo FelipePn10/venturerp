@@ -79,7 +79,7 @@ demanda e grava a saída de estoque na mesma transação.
 ### Política de planejamento por item (VPLA0310)
 
 `politicas_planejamento` (migração 451) guarda, por item **ou** por
-classificação, quatro campos; o vazio herda, campo a campo: item → classificação
+classificação, seis campos; o vazio herda, campo a campo: item → classificação
 mais profunda que alcança o item (a atribuída a ele ou ancestral; empate de nível,
 a de menor id) → parâmetros da empresa. `entity.ResolverPoliticas` monta a
 efetiva; o cálculo a carrega em `params.Politicas` (falha de leitura = cálculo em
@@ -94,10 +94,21 @@ de estoque somariam com o pedido.
 | Janela de consumo | 46 / 47 | Dias antes/depois da venda (por item) |
 | Horizonte firme | 48 (0 = desligado) | Dias corridos a partir de hoje: a sugestão cujo início cairia antes de hoje + N começa em hoje + N e o recebimento anda junto (o prazo fica igual). Vale no MRP/MPS e nos modos mínimo/máximo, ponto de reposição e kanban. Cada sugestão empurrada gera a exceção `FIRM_FENCE` (fonte `MRP_SUGGESTION`; só se trata, não reprograma) |
 | Tempo de segurança | 49 | Dias úteis (calendário industrial): recebimento = necessidade − N; início = recebimento − prazo. Só no netting do MRP/MPS |
+| Lote por período | 50 (`NENHUM`) | `DIA`, `SEMANA` (segunda a domingo) ou `MES`: as necessidades do item no mesmo período viram uma entrada só, na data da primeira — uma ordem por período (`agruparEntradas`). Vale mesmo sem "agrupa ordens do mesmo dia" no plano. O pegging e o perfil continuam por necessidade |
+| Lote máximo | — (só política do item, migração 457) | A necessidade acima dele vira várias ordens (`DividirPorLoteMaximo`), cada uma com no máximo o lote ajustado para baixo ao lote múltiplo do item; a última leva o resto. As ordens de serviço das operações externas saem uma por parte |
 
 Rotas: `GET/POST /api/planning-policy/`, `GET/PUT/DELETE /api/planning-policy/{id}`,
 `GET /api/planning-policy/efetiva?item=` (valor final e origem de cada campo).
 Permissão: a de parâmetros do planejamento.
+
+### Avisos de demanda (exceções)
+
+O consumo devolve, além do que entra no cálculo, as demandas que pedem ação:
+`DEMANDA_VENCIDA` (expectativa de venda que passou da janela sem venda: o saldo
+saiu do cálculo) e `DEMANDA_ATRASADA` (finalidade própria com a data vencida e
+saldo a atender). Viram exceções com fonte `DEMANDA_INDEPENDENTE` e o código da
+demanda; a aba Exceções da VMRP0100 encerra o saldo na própria linha (encerra a
+demanda e marca a mensagem como tratada).
 
 ### Rastreio do consumo
 
@@ -576,6 +587,12 @@ Sem condição de máscara o tipo não importa: a regra vale para o item inteiro
 ---
 
 ## Saldo que o MRP conta
+
+A reserva do pedido de venda e a do produzido para a demanda independente não
+saem do disponível do netting (`DisponivelParaNecessidade`): o pedido e a demanda
+já são necessidade. A reserva do produzido nasce na entrega da OF ligada a
+demanda de finalidade própria (mesma transação), é consumida pela saída com
+referência `DEMANDA_INDEPENDENTE` e liberada ao encerrar/cancelar a demanda.
 
 O MRP soma o saldo dos almoxarifados com disposição. Desde a migração 418, o
 saldo em `REJEICAO` e em almoxarifado sem disposição (sucata, avaria) não conta.

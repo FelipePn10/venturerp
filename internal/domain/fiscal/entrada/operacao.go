@@ -136,7 +136,7 @@ func ICMSDoCIAP(it *entity.FiscalEntryItem) decimal.Decimal {
 	if len(c) != 4 || (c[1:] != "551" && c[1:] != "406") || it.GeraCreditoICMS {
 		return decimal.Zero
 	}
-	v := decimal.NewFromFloat(it.ValorICMS).Add(it.ValorICMSST)
+	v := it.ValorICMS.Add(it.ValorICMSST)
 	if !v.IsPositive() {
 		return decimal.Zero
 	}
@@ -156,16 +156,16 @@ func deref(s *string) string {
 func CustoAquisicao(it *entity.FiscalEntryItem) decimal.Decimal {
 	c := it.ValorContabil
 	if it.GeraCreditoICMS {
-		c = c.Sub(decimal.NewFromFloat(it.ValorICMS))
+		c = c.Sub(it.ValorICMS)
 	}
 	if it.GeraCreditoIPI {
-		c = c.Sub(decimal.NewFromFloat(it.ValorIPI))
+		c = c.Sub(it.ValorIPI)
 	}
 	if it.GeraCreditoPIS {
-		c = c.Sub(decimal.NewFromFloat(it.ValorPIS))
+		c = c.Sub(it.ValorPIS)
 	}
 	if it.GeraCreditoCOFINS {
-		c = c.Sub(decimal.NewFromFloat(it.ValorCOFINS))
+		c = c.Sub(it.ValorCOFINS)
 	}
 	if it.GeraCreditoIBSCBS {
 		c = c.Sub(it.ValorIBS).Sub(it.ValorCBS)
