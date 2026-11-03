@@ -67,6 +67,9 @@ func mapMRPDemandType(mrpDemand string) types.DemandType {
 // sugestão cobre (pegging DEMANDA_INDEPENDENTE → SUGESTAO).
 type DemandasDaSugestao interface {
 	VincularSugestao(ctx context.Context, suggestionCode, plannedOrderCode int64, por uuid.UUID) error
+	// CentroDaSugestao: o centro de custo das demandas que a sugestão cobre,
+	// quando todas têm o mesmo (nil se nenhuma tem ou se divergem).
+	CentroDaSugestao(ctx context.Context, suggestionCode int64) (*int64, error)
 }
 
 // FirmarSugestaoMRPUseCase converts a single mrp_planned_suggestions row into
@@ -198,6 +201,15 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 
 	if sugg.ParentItemCode != nil {
 		order.Notes = mergeNote(order.Notes, fmt.Sprintf("parent_item=%d", *sugg.ParentItemCode))
+	}
+	// A demanda independente diz a que centro a produção ou a compra se
+	// destina: a OF e a requisição (com a aprovação do centro) nascem com ele.
+	if uc.Demandas != nil && order.CostCenterCode == nil {
+		centro, err := uc.Demandas.CentroDaSugestao(ctx, sugg.Code)
+		if err != nil {
+			return nil, err
+		}
+		order.CostCenterCode = centro
 	}
 
 	created, err := uc.PlannedRepo.Create(ctx, order)

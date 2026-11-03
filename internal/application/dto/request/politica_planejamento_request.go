@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 // PoliticaPlanejamentoDTO cria ou altera a política de planejamento de um
 // item (ItemCode, código de negócio) ou de uma classificação
 // (ClassificationID) — um dos dois, só na criação. Campo ausente herda do
@@ -12,5 +14,8 @@ type PoliticaPlanejamentoDTO struct {
 	ConsumoDiasDepois  *int     `json:"consumo_dias_depois,omitempty"`
 	HorizonteFirmeDias *int     `json:"horizonte_firme_dias,omitempty"`
 	TempoSegurancaDias *int     `json:"tempo_seguranca_dias,omitempty"`
-	Observacao         *string  `json:"observacao,omitempty"`
+	// LotePeriodo: NENHUM, DIA, SEMANA ou MES. LoteMaximo só na política do item.
+	LotePeriodo *string          `json:"lote_periodo,omitempty"`
+	LoteMaximo  *decimal.Decimal `json:"lote_maximo,omitempty"`
+	Observacao  *string          `json:"observacao,omitempty"`
 }

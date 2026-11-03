@@ -236,7 +236,7 @@ func TestIntegration_FreteSobreCompras(t *testing.T) {
 
 	// Pagamento do título: baixa Fornecedores (o frete está provisionado).
 	baixar := &financial_uc.BaixarContaPagarUseCase{Repo: finRepo, Auth: auth, FiscalRepo: fiscalRepo, Contabil: pg}
-	if err := baixar.Execute(ctx, *lancado.ContaPagarID, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: 1200, DataPagamento: time.Now().Format("2006-01-02")}); err != nil {
+	if err := baixar.Execute(ctx, *lancado.ContaPagarID, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(1200), DataPagamento: time.Now().Format("2006-01-02")}); err != nil {
 		t.Fatalf("pagando a transportadora: %v", err)
 	}
 	if !saldo(cForn, "PAGAMENTO_CP").Equal(decimal.RequireFromString("1200")) {

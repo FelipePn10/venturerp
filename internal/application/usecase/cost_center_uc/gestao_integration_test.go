@@ -151,7 +151,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 	fin := financial.NewFinancialRepositoryPG(pool)
 	ap := &financial_uc.CreateContaPagarUseCase{Repo: fin, Auth: az}
 	hoje := time.Now().Format(time.DateOnly)
-	base := request.CreateContaPagarDTO{TipoDocumento: "NF", DataEmissao: hoje, DataVencimento: hoje, ValorBruto: 1500, ParcelaNumero: 1, ParcelaTotal: 1}
+	base := request.CreateContaPagarDTO{TipoDocumento: "NF", DataEmissao: hoje, DataVencimento: hoje, ValorBruto: decimal.NewFromFloat(1500), ParcelaNumero: 1, ParcelaTotal: 1}
 	semCentro := base
 	semCentro.NumeroDocumento = fmt.Sprintf("CC-TESTE-%d-A", sufixo)
 	semCentro.Rateios = []request.RateioContaPagarDTO{{PlanoContasID: contaID, Valor: decimal.NewFromInt(1500)}}

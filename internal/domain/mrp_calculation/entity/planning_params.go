@@ -35,6 +35,8 @@ type TypedPlanningParams struct {
 	// (49, dias úteis) da empresa; a política do item sobrepõe os dois.
 	HorizonteFirmeDias int
 	TempoSegurancaDias int
+	// LotePeriodo (50): período de agrupamento das necessidades da empresa.
+	LotePeriodo string
 	// Politicas é a política de planejamento efetiva dos itens que têm regra
 	// (item ou classificação). Item fora do mapa segue os parâmetros acima.
 	// Preenchida pelo cálculo (por execução), não pelo LoadFromDB.
@@ -55,8 +57,9 @@ func (p *TypedPlanningParams) Politica(item int64) PoliticaEfetiva {
 func (p *TypedPlanningParams) PoliticaDaEmpresa() PoliticaEfetiva {
 	return PoliticaEfetiva{
 		Estrategia: EstrategiaConsumo, ConsumoDiasAntes: p.ConsumoDiasAntes, ConsumoDiasDepois: p.ConsumoDiasDepois,
-		HorizonteFirmeDias: p.HorizonteFirmeDias, TempoSegurancaDias: p.TempoSegurancaDias,
-		Origem: OrigemPolitica{Estrategia: OrigemEmpresa, Janela: OrigemEmpresa, HorizonteFirme: OrigemEmpresa, TempoSeguranca: OrigemEmpresa},
+		HorizonteFirmeDias: p.HorizonteFirmeDias, TempoSegurancaDias: p.TempoSegurancaDias, LotePeriodo: p.lotePeriodo(),
+		Origem: OrigemPolitica{Estrategia: OrigemEmpresa, Janela: OrigemEmpresa, HorizonteFirme: OrigemEmpresa, TempoSeguranca: OrigemEmpresa,
+			LotePeriodo: OrigemEmpresa},
 	}
 }
 
@@ -73,6 +76,7 @@ func DefaultTypedPlanningParams() *TypedPlanningParams {
 		FormulaPerdasEstrutura:       2,
 		NumeracaoOrdens:              "AUTO",
 		ConsumoDiasAntes:             30,
+		LotePeriodo:                  LotePeriodoNenhum,
 	}
 }
 
@@ -154,6 +158,17 @@ func (p *TypedPlanningParams) LoadFromDB(raw map[int]string) {
 	if v, ok := raw[49]; ok {
 		p.TempoSegurancaDias = naoNegativo(parseInt(v, 0))
 	}
+	if v, ok := raw[50]; ok {
+		p.LotePeriodo = strings.ToUpper(strings.TrimSpace(v))
+	}
+}
+
+// lotePeriodo é o período da empresa; valor desconhecido vale NENHUM.
+func (p *TypedPlanningParams) lotePeriodo() string {
+	if LotePeriodoValido(p.LotePeriodo) {
+		return p.LotePeriodo
+	}
+	return LotePeriodoNenhum
 }
 
 func naoNegativo(v int) int {

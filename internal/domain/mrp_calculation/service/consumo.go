@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"time"
 
 	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
@@ -29,9 +30,9 @@ func (s *MRPServiceImpl) consumirPelaVenda(
 	previsao []*entity.MRPInput,
 	ajustes *entity.ScenarioAdjustments,
 	pedidosLidos []*entity.MRPInput,
-) ([]*inddemandentity.IndependentDemand, []*entity.MRPInput, error) {
+) ([]*inddemandentity.IndependentDemand, []*entity.MRPInput, []avisoDeDemanda, error) {
 	if len(demands) == 0 && len(previsao) == 0 {
-		return demands, previsao, nil
+		return demands, previsao, nil, nil
 	}
 	vistos := map[int64]bool{}
 	var itens []int64
@@ -56,15 +57,24 @@ func (s *MRPServiceImpl) consumirPelaVenda(
 		// para (a previsão somaria com o pedido).
 		vendas, errVendas = s.Vendas.Vendas(ctx, itens)
 		if errVendas != nil {
-			return demands, previsao, fmt.Errorf("lendo as vendas que consomem a previsão: %w", errVendas)
+			return demands, previsao, nil, fmt.Errorf("lendo as vendas que consomem a previsão: %w", errVendas)
 		}
 		vendas = ajustarVendasDoCenario(ajustes, pedidosLidos, vendas)
 	}
 	// A janela e a estratégia (sob encomenda) são as da política de cada item.
 	pos, posPrev, _ := inddemandentity.PosicionarComPolitica(demands, prev, vendas, PoliticaDeConsumo(params), today())
 
+	hoje := today()
+	var avisos []avisoDeDemanda
 	outD := make([]*inddemandentity.IndependentDemand, 0, len(demands))
 	for i, d := range demands {
+		switch {
+		case pos[i].Situacao == inddemandentity.PosicaoVencida:
+			avisos = append(avisos, avisoDeDemanda{demanda: d, tipo: entity.ExceptionDemandExpired,
+				saldo: decimal.Max(decimal.Zero, d.Quantity.Sub(pos[i].Consumida)), venceuEm: pos[i].VenceEm})
+		case !inddemandentity.ConsumidaPelaVenda(d.Motivo) && pos[i].APlanejar.IsPositive() && d.DemandDate.Before(hoje):
+			avisos = append(avisos, avisoDeDemanda{demanda: d, tipo: entity.ExceptionDemandLate, saldo: pos[i].APlanejar})
+		}
 		if !pos[i].APlanejar.IsPositive() {
 			continue
 		}
@@ -81,7 +91,16 @@ func (s *MRPServiceImpl) consumirPelaVenda(
 		c.Quantity = posPrev[i].Resto
 		outP = append(outP, &c)
 	}
-	return outD, outP, nil
+	return outD, outP, avisos, nil
+}
+
+// avisoDeDemanda é a demanda que pede ação do planejador: vencida sem venda
+// (saiu do cálculo) ou de finalidade própria atrasada com saldo.
+type avisoDeDemanda struct {
+	demanda  *inddemandentity.IndependentDemand
+	tipo     entity.ExceptionMessageType
+	saldo    decimal.Decimal
+	venceuEm *time.Time
 }
 
 // semSemanasPassadas tira a previsão das semanas que já terminaram

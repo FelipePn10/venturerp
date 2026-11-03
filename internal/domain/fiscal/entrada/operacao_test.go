@@ -38,7 +38,7 @@ func TestCFOPEntrada(t *testing.T) {
 
 func TestCustoAquisicao_SubtraiSoOsCreditos(t *testing.T) {
 	it := &entity.FiscalEntryItem{
-		ValorContabil: d("50000"), ValorICMS: 5820, ValorIPI: 1500, ValorPIS: 792, ValorCOFINS: 3648,
+		ValorContabil: d("50000"), ValorICMS: decimal.NewFromFloat(5820), ValorIPI: decimal.NewFromFloat(1500), ValorPIS: decimal.NewFromFloat(792), ValorCOFINS: decimal.NewFromFloat(3648),
 		GeraCreditoICMS: true, GeraCreditoIPI: true, GeraCreditoPIS: true, GeraCreditoCOFINS: true,
 	}
 	if got := CustoAquisicao(it); !got.Equal(d("38240")) {
@@ -54,7 +54,7 @@ func TestCustoAquisicao_SubtraiSoOsCreditos(t *testing.T) {
 func TestPlanoFinanceiro_RetencoesEItensSemFinanceiro(t *testing.T) {
 	code := int64(1)
 	e := &entity.FiscalEntry{
-		ValorTotal: 10000,
+		ValorTotal: decimal.NewFromFloat(10000),
 		ValorIRRF:  d("150"), ValorRetPIS: d("65"), ValorRetCOFINS: d("300"), ValorRetCSLL: d("100"),
 		Itens: []*entity.FiscalEntryItem{
 			{Sequence: 1, ItemCode: &code, PlanoContasID: p64(planoMP), ValorContabil: d("6000"), GeraFinanceiro: true},
@@ -93,7 +93,7 @@ func TestConferirEntrada_ParcelasPeloLiquidoEAlmoxarifado(t *testing.T) {
 	wh := int64(3)
 	forn := int64(77)
 	e := &entity.FiscalEntry{
-		SupplierCode: &forn, ValorTotal: 10000, ValorIRRF: d("150"),
+		SupplierCode: &forn, ValorTotal: decimal.NewFromFloat(10000), ValorIRRF: d("150"),
 		Itens: []*entity.FiscalEntryItem{
 			{Sequence: 1, ItemCode: &code, PlanoContasID: p64(planoMP), ValorContabil: d("10000"), GeraFinanceiro: true, MovimentaEstoque: true, CfopEntrada: sp("1101")},
 		},
@@ -160,11 +160,11 @@ func TestDivergencias(t *testing.T) {
 	linha := int64(500)
 	uf := "SP"
 	e := &entity.FiscalEntry{
-		UFEmitente: &uf, ValorProdutos: 1000, ValorICMS: 120, ValorIPI: 50,
+		UFEmitente: &uf, ValorProdutos: decimal.NewFromFloat(1000), ValorICMS: decimal.NewFromFloat(120), ValorIPI: decimal.NewFromFloat(50),
 		Itens: []*entity.FiscalEntryItem{{
-			Sequence: 1, ItemCode: &code, Ncm: sp("72085200"), Quantity: 10, UnitPrice: 100, TotalPrice: 1000,
-			BaseICMS: 1000, AliqICMS: 0.07, ValorICMS: 120, CstICMS: sp("00"), Origem: sp("0"),
-			BaseIPI: 1000, AliqIPI: 0.05, ValorIPI: 50, CstIPI: sp("50"),
+			Sequence: 1, ItemCode: &code, Ncm: sp("72085200"), Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(100), TotalPrice: decimal.NewFromFloat(1000),
+			BaseICMS: decimal.NewFromFloat(1000), AliqICMS: decimal.NewFromFloat(0.07), ValorICMS: decimal.NewFromFloat(120), CstICMS: sp("00"), Origem: sp("0"),
+			BaseIPI: decimal.NewFromFloat(1000), AliqIPI: decimal.NewFromFloat(0.05), ValorIPI: decimal.NewFromFloat(50), CstIPI: sp("50"),
 			PurchaseOrderItemCode: &linha,
 		}},
 	}
@@ -189,8 +189,8 @@ func TestDivergencias(t *testing.T) {
 
 	// Mercadoria importada (origem 1): a alíquota esperada é 4%.
 	e.Itens[0].Origem = sp("1")
-	e.Itens[0].AliqICMS, e.Itens[0].ValorICMS = 0.04, 40
-	e.ValorICMS = 40
+	e.Itens[0].AliqICMS, e.Itens[0].ValorICMS = decimal.NewFromFloat(0.04), decimal.NewFromFloat(40)
+	e.ValorICMS = decimal.NewFromFloat(40)
 	for _, dv := range Divergencias(e, p) {
 		if dv.Tipo == "ALIQUOTA_ICMS" || dv.Tipo == "CALCULO_ICMS" {
 			t.Errorf("importado a 4%% não deveria divergir: %+v", dv)
@@ -226,7 +226,7 @@ func TestDivergencias(t *testing.T) {
 func TestConferirEntrada_SemFornecedorImpede(t *testing.T) {
 	code, wh, forn := int64(1), int64(3), int64(77)
 	e := &entity.FiscalEntry{
-		CnpjEmitente: "12345678000190", RazaoSocialEmitente: "ACO LTDA", ValorTotal: 100,
+		CnpjEmitente: "12345678000190", RazaoSocialEmitente: "ACO LTDA", ValorTotal: decimal.NewFromFloat(100),
 		Itens: []*entity.FiscalEntryItem{
 			{Sequence: 1, ItemCode: &code, PlanoContasID: p64(planoMP), ValorContabil: d("100"), GeraFinanceiro: true, MovimentaEstoque: true, WarehouseID: &wh, CfopEntrada: sp("1101")},
 		},
@@ -278,7 +278,7 @@ func TestCFOPEntradaComFinalidade(t *testing.T) {
 // O ICMS (e o ST) do bem do ativo não creditado na nota vai para o CIAP.
 func TestICMSDoCIAP(t *testing.T) {
 	ativo, consumo := "1551", "1556"
-	it := &entity.FiscalEntryItem{CfopEntrada: &ativo, ValorICMS: 480, ValorICMSST: decimal.RequireFromString("20")}
+	it := &entity.FiscalEntryItem{CfopEntrada: &ativo, ValorICMS: decimal.NewFromFloat(480), ValorICMSST: decimal.RequireFromString("20")}
 	if !ICMSDoCIAP(it).Equal(decimal.NewFromInt(500)) {
 		t.Fatalf("ICMS do ativo: %s", ICMSDoCIAP(it))
 	}
@@ -286,7 +286,7 @@ func TestICMSDoCIAP(t *testing.T) {
 	if !ICMSDoCIAP(it).IsZero() {
 		t.Fatal("creditado na nota não vai para o CIAP")
 	}
-	if !ICMSDoCIAP(&entity.FiscalEntryItem{CfopEntrada: &consumo, ValorICMS: 10}).IsZero() {
+	if !ICMSDoCIAP(&entity.FiscalEntryItem{CfopEntrada: &consumo, ValorICMS: decimal.NewFromFloat(10)}).IsZero() {
 		t.Fatal("uso e consumo não tem CIAP")
 	}
 }

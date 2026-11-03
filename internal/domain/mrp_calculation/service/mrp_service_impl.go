@@ -260,6 +260,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 		demands, demandInputs = applyScenarioDemands(ajustes, demands, demandInputs, planCode)
 	}
 
+	var avisosDeDemanda []avisoDeDemanda
 	if plan.OrderItemCode == nil {
 		previsao, errPrevisao := s.loadForecastDemands(ctx, planCode)
 		registrarErro(errs, "load_forecasts", errPrevisao)
@@ -267,7 +268,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 			previsao = semSemanasPassadas(previsao, today())
 		}
 		var errConsumo error
-		demands, previsao, errConsumo = s.consumirPelaVenda(ctx, params, demands, previsao, ajustes, pedidosLidos)
+		demands, previsao, avisosDeDemanda, errConsumo = s.consumirPelaVenda(ctx, params, demands, previsao, ajustes, pedidosLidos)
 		if errConsumo != nil {
 			// Sem as vendas a previsão e a demanda de estoque entram inteiras e
 			// somam com o pedido: o plano sairia inflado (a dupla contagem).
@@ -377,6 +378,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	// suprimento firme (advanceNettingState), então a análise precisa da
 	// posição ANTES do cálculo e de cada necessidade bruta registrada.
 	excecoes := newExceptionBasis(snapshotMap, supplyMap)
+	excecoes.demandas = avisosDeDemanda
 	totalItems := 0
 	totalOrders := 0
 	nextOrderNumber := initialOrderNumber
@@ -663,6 +665,8 @@ func (s *MRPServiceImpl) calculateMRP(
 			LLC:        llc,
 			DemandType: "INDEPENDENT_DEMAND",
 			SourceCode: &sourceCode,
+			// O almoxarifado de destino da demanda segue até a OF.
+			WarehouseCode: d.WarehouseID,
 		})
 	}
 	for _, fi := range forecastInputs {
@@ -699,7 +703,8 @@ func (s *MRPServiceImpl) calculateMRP(
 				errs[fmt.Sprintf("profile_detail_%d_%s", detailInput.ItemCode, detailInput.NeedDate.Format("2006-01-02"))] = err.Error()
 			}
 		}
-		for _, input := range aggregateInputs(inputs, plan.GroupSameDateOrders) {
+		loteDoItem := func(item int64) string { return params.Politica(item).LotePeriodo }
+		for _, input := range agruparEntradas(inputs, plan.GroupSameDateOrders, loteDoItem) {
 			input.PlanCode = planCode
 			input.LLC = level
 
@@ -1320,7 +1325,15 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	if shouldPlanTechnicalAssistance(input, params) {
 		mainOrder.OrderType = "TECHNICAL_ASSISTANCE"
 	}
-	output.PlannedOrders = []*entity.PlannedOrderSuggestion{mainOrder}
+	// Lote máximo: a necessidade vira tantas ordens quanto precisar, cada uma
+	// com no máximo o lote (múltiplo do lote múltiplo do item).
+	partes := entity.DividirPorLoteMaximo(netReq, params.Politica(input.ItemCode).LoteMaximo, cachedItem.multipleLot)
+	output.PlannedOrders = make([]*entity.PlannedOrderSuggestion, 0, len(partes))
+	for _, q := range partes {
+		o := *mainOrder
+		o.Quantity = q
+		output.PlannedOrders = append(output.PlannedOrders, &o)
+	}
 
 	// When a FABRICACAO order is planned and the item has external/third-party
 	// route operations, generate a SERVICO order for each external op so the
@@ -1332,31 +1345,33 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		if err != nil {
 			return nil, fmt.Errorf("lendo as operações externas do item %d: %w", input.ItemCode, err)
 		}
-		for _, op := range extOps {
-			note := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
-			remittance := op.RemittanceType
-			if remittance == "" {
-				remittance = "DEMAND_ITEMS"
+		for _, parte := range partes {
+			for _, op := range extOps {
+				note := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
+				remittance := op.RemittanceType
+				if remittance == "" {
+					remittance = "DEMAND_ITEMS"
+				}
+				serviceOrder := &entity.PlannedOrderSuggestion{
+					PlanCode:         input.PlanCode,
+					ItemCode:         input.ItemCode,
+					Mask:             input.Mask,
+					Quantity:         parte,
+					NeedDate:         recebimento,
+					StartDate:        &startDate,
+					OrderType:        "SERVICO",
+					DemandType:       "EXTERNA",
+					ParentItemCode:   input.ParentItemCode,
+					LLC:              input.LLC,
+					Notes:            &note,
+					RouteOperationID: &op.RouteOpID,
+					OperationID:      &op.OperationID,
+					SupplierCode:     op.SupplierID,
+					ServiceItemCode:  op.ServiceItemCode,
+					RemittanceType:   &remittance,
+				}
+				output.PlannedOrders = append(output.PlannedOrders, serviceOrder)
 			}
-			serviceOrder := &entity.PlannedOrderSuggestion{
-				PlanCode:         input.PlanCode,
-				ItemCode:         input.ItemCode,
-				Mask:             input.Mask,
-				Quantity:         netReq,
-				NeedDate:         recebimento,
-				StartDate:        &startDate,
-				OrderType:        "SERVICO",
-				DemandType:       "EXTERNA",
-				ParentItemCode:   input.ParentItemCode,
-				LLC:              input.LLC,
-				Notes:            &note,
-				RouteOperationID: &op.RouteOpID,
-				OperationID:      &op.OperationID,
-				SupplierCode:     op.SupplierID,
-				ServiceItemCode:  op.ServiceItemCode,
-				RemittanceType:   &remittance,
-			}
-			output.PlannedOrders = append(output.PlannedOrders, serviceOrder)
 		}
 	}
 
@@ -1382,7 +1397,7 @@ func (s *MRPServiceImpl) generateExceptionMessages(ctx context.Context, planCode
 			primeiro = fmt.Errorf("lendo os códigos dos itens das exceções: %w", primeiro)
 		}
 	}
-	for _, m := range append(basis.messages(), basis.firmFenceMessages()...) {
+	for _, m := range append(append(basis.messages(), basis.firmFenceMessages()...), basis.demandMessages()...) {
 		m.PlanCode = planCode
 		if err := s.MRPRepo.CreateExceptionMessage(ctx, m); err != nil && primeiro == nil {
 			primeiro = err
@@ -1943,15 +1958,14 @@ func maxLLC(llcMap map[int64]int) int {
 // aggregateInputs only merges entries sharing item, mask and need date when
 // the production plan explicitly requests same-date grouping.
 func aggregateInputs(inputs []*entity.MRPInput, groupSameDate bool) []*entity.MRPInput {
-	if !groupSameDate {
-		result := make([]*entity.MRPInput, 0, len(inputs))
-		for _, input := range inputs {
-			cp := *input
-			result = append(result, &cp)
-		}
-		sort.SliceStable(result, func(i, j int) bool { return result[i].NeedDate.Before(result[j].NeedDate) })
-		return result
-	}
+	return agruparEntradas(inputs, groupSameDate, nil)
+}
+
+// agruparEntradas junta as necessidades que viram uma ordem só: as do mesmo
+// dia quando o plano agrupa, e as do mesmo período (dia, semana ou mês) do
+// item com lote por período — na data da primeira, para a ordem chegar a
+// tempo dela. A ordem do resultado é estável (data, depois a de entrada).
+func agruparEntradas(inputs []*entity.MRPInput, groupSameDate bool, periodo func(item int64) string) []*entity.MRPInput {
 	type key struct {
 		itemCode             int64
 		mask                 string
@@ -1959,9 +1973,12 @@ func aggregateInputs(inputs []*entity.MRPInput, groupSameDate bool) []*entity.MR
 		warehouseCode        int64
 		technicalAssistance  bool
 		sourceEnterpriseCode int64
+		// separada: sem agrupamento, cada necessidade fica sozinha.
+		separada int
 	}
 	agg := make(map[key]*entity.MRPInput, len(inputs))
-	for _, inp := range inputs {
+	result := make([]*entity.MRPInput, 0, len(inputs))
+	for n, inp := range inputs {
 		warehouseCode := int64(0)
 		if inp.TechnicalAssistance && inp.WarehouseCode != nil {
 			warehouseCode = *inp.WarehouseCode
@@ -1970,21 +1987,32 @@ func aggregateInputs(inputs []*entity.MRPInput, groupSameDate bool) []*entity.MR
 		if inp.InterFactory && inp.SourceEnterpriseCode != nil {
 			sourceEnterpriseCode = *inp.SourceEnterpriseCode
 		}
-		k := key{inp.ItemCode, inp.Mask, inp.NeedDate.Format("2006-01-02"), warehouseCode, inp.TechnicalAssistance, sourceEnterpriseCode}
+		k := key{itemCode: inp.ItemCode, mask: inp.Mask, warehouseCode: warehouseCode, technicalAssistance: inp.TechnicalAssistance,
+			sourceEnterpriseCode: sourceEnterpriseCode}
+		lote := entity.LotePeriodoNenhum
+		if periodo != nil {
+			lote = periodo(inp.ItemCode)
+		}
+		switch {
+		case lote != "" && lote != entity.LotePeriodoNenhum:
+			k.needDate = entity.InicioDoPeriodo(lote, inp.NeedDate).Format("2006-01-02")
+		case groupSameDate:
+			k.needDate = inp.NeedDate.Format("2006-01-02")
+		default:
+			k.separada = n + 1
+		}
 		if existing, ok := agg[k]; ok {
 			existing.Quantity = existing.Quantity.Add(inp.Quantity)
-		} else {
-			cp := *inp
-			agg[k] = &cp
+			if inp.NeedDate.Before(existing.NeedDate) {
+				existing.NeedDate = inp.NeedDate
+			}
+			continue
 		}
+		cp := *inp
+		agg[k] = &cp
+		result = append(result, &cp)
 	}
-	result := make([]*entity.MRPInput, 0, len(agg))
-	for _, v := range agg {
-		result = append(result, v)
-	}
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].NeedDate.Before(result[j].NeedDate)
-	})
+	sort.SliceStable(result, func(i, j int) bool { return result[i].NeedDate.Before(result[j].NeedDate) })
 	return result
 }
 

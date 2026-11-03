@@ -215,10 +215,10 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	dup1, _ := titulo(`numero_documento LIKE 'NF-12345/1%' AND tipo_documento='NFE'`)
 	testutil.Exec(t, pool, `UPDATE contas_pagar SET data_vencimento=$2::date WHERE id=$1`, dup1, time.Now().AddDate(0, 0, -30).Format("2006-01-02"))
 	hoje := time.Now().Format("2006-01-02")
-	if err := baixarP.Execute(ctx, dup1, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: 20000, Desconto: decimal.RequireFromString("333.33"), DataPagamento: hoje}); err != nil {
+	if err := baixarP.Execute(ctx, dup1, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(20000), Desconto: decimal.RequireFromString("333.33"), DataPagamento: hoje}); err != nil {
 		t.Fatalf("baixa parcial: %v", err)
 	}
-	if err := baixarP.Execute(ctx, dup1, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: 1, DataPagamento: hoje}); err == nil {
+	if err := baixarP.Execute(ctx, dup1, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(1), DataPagamento: hoje}); err == nil {
 		t.Fatal("pagar de novo um título já pago deveria ser recusado")
 	}
 	resto, brutoResto := titulo(`parcela_pai_id=$2`, dup1)
@@ -241,7 +241,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	if want := decimal.RequireFromString("20333.33").Mul(decimal.RequireFromString("0.03")).Round(2); !juros.Equal(want) {
 		t.Fatalf("juros+multa da baixa parcial = %s, esperado %s", juros, want)
 	}
-	if err := baixarP.Execute(ctx, resto, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: 13000, DataPagamento: hoje}); err != nil {
+	if err := baixarP.Execute(ctx, resto, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(13000), DataPagamento: hoje}); err != nil {
 		t.Fatalf("baixa do saldo: %v", err)
 	}
 	var jurosResto decimal.Decimal
@@ -255,7 +255,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 
 	// 3. Recolhimento do IRRF.
 	ret, _ := titulo(`tipo_documento='RETENCAO'`)
-	if err := baixarP.Execute(ctx, ret, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: 1500, DataPagamento: hoje}); err != nil {
+	if err := baixarP.Execute(ctx, ret, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(1500), DataPagamento: hoje}); err != nil {
 		t.Fatalf("recolhimento do IRRF: %v", err)
 	}
 
@@ -314,7 +314,7 @@ func TestIntegration_CicloContabil(t *testing.T) {
 		t.Fatal(err)
 	}
 	baixarR := &financial_uc.BaixarContaReceberUseCase{Repo: finRepo, Auth: auth, FiscalRepo: fiscalRepo, Contabil: pg}
-	if err := baixarR.Execute(ctx, crID, request.BaixarContaReceberDTO{ContaBancariaID: banco, ValorRecebido: 5200, Desconto: decimal.NewFromInt(50), DataRecebimento: hoje}); err != nil {
+	if err := baixarR.Execute(ctx, crID, request.BaixarContaReceberDTO{ContaBancariaID: banco, ValorRecebido: decimal.NewFromFloat(5200), Desconto: decimal.NewFromInt(50), DataRecebimento: hoje}); err != nil {
 		t.Fatalf("recebimento: %v", err)
 	}
 	m = saldo()

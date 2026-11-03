@@ -88,7 +88,7 @@ func TestBaixarContaReceber_LateAccruesInterestAndFine(t *testing.T) {
 
 	// 30 days late, defaults → juros = 2000*0.01 = 20; multa = 2000*0.02 = 40.
 	if err := uc.Execute(context.Background(), 1, request.BaixarContaReceberDTO{
-		DataRecebimento: "2026-01-31", ValorRecebido: 2000, ContaBancariaID: 5,
+		DataRecebimento: "2026-01-31", ValorRecebido: decimal.NewFromFloat(2000), ContaBancariaID: 5,
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestCreateContaPagar_MapsDefaults(t *testing.T) {
 
 	out, err := uc.Execute(context.Background(), request.CreateContaPagarDTO{
 		NumeroDocumento: "NF-1", DataEmissao: "2026-01-01", DataVencimento: "2026-02-01",
-		ValorBruto: 500, ParcelaNumero: 1, ParcelaTotal: 1,
+		ValorBruto: decimal.NewFromFloat(500), ParcelaNumero: 1, ParcelaTotal: 1,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -175,7 +175,7 @@ func TestCreateContaReceber_MapsDefaults(t *testing.T) {
 	uc := CreateContaReceberUseCase{Repo: repo, Auth: crudAuth{ok: true, uid: uuid.New()}}
 
 	if _, err := uc.Execute(context.Background(), request.CreateContaReceberDTO{
-		DataEmissao: "2026-01-01", DataVencimento: "2026-02-01", ValorBruto: 750, ParcelaNumero: 1, ParcelaTotal: 1,
+		DataEmissao: "2026-01-01", DataVencimento: "2026-02-01", ValorBruto: decimal.NewFromFloat(750), ParcelaNumero: 1, ParcelaTotal: 1,
 	}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -43,6 +43,8 @@ type IndependentDemandResponse struct {
 	Posicao   string          `json:"posicao"`
 	Consumida decimal.Decimal `json:"consumida"`
 	Atendida  decimal.Decimal `json:"atendida"`
+	// Reservada: produzido pela OF da demanda e reservado para ela.
+	Reservada decimal.Decimal `json:"reservada"`
 	APlanejar decimal.Decimal `json:"a_planejar"`
 	VenceEm   *time.Time      `json:"vence_em,omitempty"`
 	// Coberta: o que as ordens ligadas (não canceladas) cobrem. SemOrdem: o

@@ -150,9 +150,11 @@ func (uc *UseCase) Efetiva(ctx context.Context, item request.TextCode) (*respons
 		Estrategia: ef.Estrategia, EstrategiaDescricao: DescricaoDaEstrategia(ef.Estrategia),
 		ConsumoDiasAntes: ef.ConsumoDiasAntes, ConsumoDiasDepois: ef.ConsumoDiasDepois,
 		HorizonteFirmeDias: ef.HorizonteFirmeDias, TempoSegurancaDias: ef.TempoSegurancaDias,
+		LotePeriodo: ef.LotePeriodo, LoteMaximo: ef.LoteMaximo,
 		Origem: response.OrigemPoliticaResponse{
 			Estrategia: entity.DescreverOrigem(ef.Origem.Estrategia), Janela: entity.DescreverOrigem(ef.Origem.Janela),
 			HorizonteFirme: entity.DescreverOrigem(ef.Origem.HorizonteFirme), TempoSeguranca: entity.DescreverOrigem(ef.Origem.TempoSeguranca),
+			LotePeriodo: entity.DescreverOrigem(ef.Origem.LotePeriodo), LoteMaximo: entity.DescreverOrigem(ef.Origem.LoteMaximo),
 		},
 	}, nil
 }
@@ -176,6 +178,12 @@ func campos(dto request.PoliticaPlanejamentoDTO) *entity.PoliticaPlanejamento {
 			p.Estrategia = &e
 		}
 	}
+	if dto.LotePeriodo != nil {
+		if v := strings.ToUpper(strings.TrimSpace(*dto.LotePeriodo)); v != "" {
+			p.LotePeriodo = &v
+		}
+	}
+	p.LoteMaximo = dto.LoteMaximo
 	if dto.Observacao != nil {
 		if o := strings.TrimSpace(*dto.Observacao); o != "" {
 			p.Observacao = &o
@@ -193,7 +201,8 @@ func resposta(p *entity.PoliticaPlanejamento) *response.PoliticaPlanejamentoResp
 		ID: p.ID, Escopo: escopo, ItemCode: p.ItemCode, ItemBusinessCode: p.ItemBusinessCode, ItemName: p.ItemName,
 		ClassificationID: p.ClassificationID, ClassificationCode: p.ClassificationCode, ClassificationLabel: p.ClassificationLabel,
 		Estrategia: p.Estrategia, ConsumoDiasAntes: p.ConsumoDiasAntes, ConsumoDiasDepois: p.ConsumoDiasDepois,
-		HorizonteFirmeDias: p.HorizonteFirmeDias, TempoSegurancaDias: p.TempoSegurancaDias, Observacao: p.Observacao,
+		HorizonteFirmeDias: p.HorizonteFirmeDias, TempoSegurancaDias: p.TempoSegurancaDias,
+		LotePeriodo: p.LotePeriodo, LoteMaximo: p.LoteMaximo, Observacao: p.Observacao,
 		UpdatedAt: p.UpdatedAt,
 	}
 }

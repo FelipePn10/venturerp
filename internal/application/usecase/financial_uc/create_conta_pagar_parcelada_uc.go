@@ -43,8 +43,8 @@ func (uc *CreateContaPagarParceladaUseCase) Execute(ctx context.Context, dto req
 	if len(dto.Parcelas) == 0 {
 		return nil, errorsuc.NewValidationError("informe as parcelas do título")
 	}
-	bruto := decimal.NewFromFloat(dto.ValorBruto).Round(2)
-	desconto := decimal.NewFromFloat(dto.Desconto).Round(2)
+	bruto := dto.ValorBruto.Round(2)
+	desconto := dto.Desconto.Round(2)
 	liquido := bruto.Sub(desconto)
 	if !liquido.IsPositive() {
 		return nil, errorsuc.NewValidationError("o valor líquido do título precisa ser maior que zero")
@@ -104,8 +104,8 @@ func desdobrarTitulo(
 
 		parte := dto.CreateContaPagarDTO
 		parte.NumeroDocumento = fmt.Sprintf("%s %d/%d", strings.TrimSpace(dto.NumeroDocumento), i+1, total)
-		parte.ValorBruto = brutoParcela.InexactFloat64()
-		parte.Desconto = descontoParcela.InexactFloat64()
+		parte.ValorBruto = brutoParcela
+		parte.Desconto = descontoParcela
 		parte.ParcelaNumero, parte.ParcelaTotal = int32(i+1), int32(total)
 		c := novoTitulo(parte, userID, emissao, vencimentos[i])
 

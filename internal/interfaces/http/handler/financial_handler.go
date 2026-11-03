@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/shopspring/decimal"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -54,7 +55,7 @@ func inteiroDaQuery(q url.Values, chave string) *int64 {
 //
 // A leitura agora DETECTA o formato em vez de assumir um: decide pelo separador
 // que aparece por ÚLTIMO, que é sempre o decimal nas duas convenções.
-func valorDaQuery(q url.Values, chave string) *float64 {
+func valorDaQuery(q url.Values, chave string) *decimal.Decimal {
 	v := strings.TrimSpace(q.Get(chave))
 	if v == "" {
 		return nil
@@ -72,11 +73,11 @@ func valorDaQuery(q url.Values, chave string) *float64 {
 	default:
 		// Sem separador nenhum: número inteiro.
 	}
-	f, err := strconv.ParseFloat(v, 64)
+	d, err := decimal.NewFromString(v)
 	if err != nil {
 		return nil
 	}
-	return &f
+	return &d
 }
 
 func booleanoDaQuery(q url.Values, chave string) *bool {

@@ -70,10 +70,10 @@ func f2d(v float64) decimal.Decimal { return decimal.NewFromFloat(v) }
 func origemDoItem(it *entity.FiscalEntryItem, devolvida decimal.Decimal) devolucao.Origem {
 	o := devolucao.Origem{
 		ItemID: it.ID, Descricao: firstNonEmpty(deref(it.Description), fmt.Sprintf("item %d", it.Sequence)),
-		Quantidade: f2d(it.Quantity), Devolvida: devolvida, ValorUnitario: f2d(it.UnitPrice), Total: f2d(it.TotalPrice),
+		Quantidade: it.Quantity, Devolvida: devolvida, ValorUnitario: it.UnitPrice, Total: it.TotalPrice,
 		Frete: it.ValorFrete, Seguro: it.ValorSeguro, Desconto: it.ValorDesconto, Outras: it.ValorOutras,
-		BaseICMS: f2d(it.BaseICMS), ICMS: f2d(it.ValorICMS), BaseIPI: f2d(it.BaseIPI), IPI: f2d(it.ValorIPI),
-		PIS: f2d(it.ValorPIS), COFINS: f2d(it.ValorCOFINS), BaseST: it.BaseICMSST, ST: it.ValorICMSST, CustoAquisicao: it.CustoAquisicao,
+		BaseICMS: it.BaseICMS, ICMS: it.ValorICMS, BaseIPI: it.BaseIPI, IPI: it.ValorIPI,
+		PIS: it.ValorPIS, COFINS: it.ValorCOFINS, BaseST: it.BaseICMSST, ST: it.ValorICMSST, CustoAquisicao: it.CustoAquisicao,
 	}
 	if it.GeraCreditoICMS {
 		o.CreditoICMS = o.ICMS
@@ -117,7 +117,7 @@ func (uc *DevolucaoCompraUseCase) Previa(ctx context.Context, entryID int64) (*r
 		r.Itens = append(r.Itens, response.DevolucaoItemPrevia{
 			FiscalEntryItemID: it.ID, Sequence: it.Sequence, ItemCode: it.ItemCode, Descricao: o.Descricao, UOM: it.UOM,
 			Quantidade: o.Quantidade.InexactFloat64(), Devolvida: o.Devolvida.InexactFloat64(), Disponivel: o.Disponivel().InexactFloat64(),
-			ValorUnitario: it.UnitPrice, CFOPDevolucao: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior),
+			ValorUnitario: it.UnitPrice.InexactFloat64(), CFOPDevolucao: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior),
 		})
 	}
 	return r, nil
@@ -241,8 +241,8 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 		cstICMS := devolucao.CSTICMS(deref(it.CstICMS), emitenteSimples)
 		item := &entity.FiscalExitItem{
 			FiscalExitID: criada.ID, Sequence: i + 1, ItemCode: it.ItemCode, Ncm: it.Ncm,
-			Cfop: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior), Quantity: q, UnitPrice: it.UnitPrice, TotalPrice: fl(l.Total),
-			BaseICMS: fl(l.BaseICMS), AliqICMS: it.AliqICMS, ValorICMS: fl(l.ICMS), BaseIPI: fl(l.BaseIPI), AliqIPI: it.AliqIPI, ValorIPI: fl(l.IPI),
+			Cfop: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior), Quantity: q, UnitPrice: it.UnitPrice.InexactFloat64(), TotalPrice: fl(l.Total),
+			BaseICMS: fl(l.BaseICMS), AliqICMS: it.AliqICMS.InexactFloat64(), ValorICMS: fl(l.ICMS), BaseIPI: fl(l.BaseIPI), AliqIPI: it.AliqIPI.InexactFloat64(), ValorIPI: fl(l.IPI),
 			ValorPIS: fl(l.PIS), ValorCOFINS: fl(l.COFINS), BaseICMSST: fl(l.BaseST), ValorICMSST: fl(l.ST),
 			CstICMS: &cstICMS, CstIPI: it.CstIPI, CstPIS: it.CstPIS, CstCOFINS: it.CstCOFINS,
 			OrigemMercadoria: firstNonEmpty(deref(it.Origem), "0"), Description: it.Description, UnidadeComercial: it.UOM,
@@ -321,7 +321,7 @@ func (uc *DevolucaoCompraUseCase) PodeAutorizar(ctx context.Context, exit *entit
 		return err
 	}
 	for _, it := range doc.Itens {
-		comprado := decimal.NewFromFloat(it.Quantity)
+		comprado := it.Quantity
 		// QuantidadesDevolvidas já inclui esta nota (rascunho não cancelado).
 		if devolvidas[it.ID].GreaterThan(comprado.Add(decimal.New(1, -6))) {
 			return errorsuc.NewValidationError(fmt.Sprintf("o item %d da nota %d já tem %s devolvidos em outras NF-e de devolução e só %s foram comprados: cancele a devolução excedente",

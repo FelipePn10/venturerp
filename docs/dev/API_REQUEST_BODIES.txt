@@ -459,7 +459,10 @@ GET    /api/planning-policy/{id}
 POST   /api/planning-policy/
 { "item_code": "RN-01001", "estrategia": "SOB_ENCOMENDA", "consumo_dias_antes": 0,
   "consumo_dias_depois": 15, "horizonte_firme_dias": 10, "tempo_seguranca_dias": 2,
+  "lote_periodo": "SEMANA", "lote_maximo": "500",
   "observacao": "linha sob encomenda" }
+-- lote_periodo: NENHUM | DIA | SEMANA | MES (herda; empresa = parâmetro 50).
+-- lote_maximo: só na política do item (texto ou número decimal).
 -- Ou "classification_id": 42 no lugar de item_code (um dos dois). Campo ausente
 -- herda (classificação → parâmetros 46-49). estrategia: CONSUMO | SOB_ENCOMENDA.
 -- Dias de 0 a 365. 409 se o item/classificação já tem política.

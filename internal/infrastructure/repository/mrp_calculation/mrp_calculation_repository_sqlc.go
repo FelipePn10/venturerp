@@ -661,8 +661,9 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	}
 	// stock_snapshots is a manual freeze mechanism that may be empty;
 	// fall back to stock_balances which always reflects the live position.
-	// A reserva ativa de pedido de venda vem à parte: o MRP não a desconta,
-	// porque o pedido já é demanda (DisponivelParaNecessidade). Só a do pedido
+	// A reserva ativa de pedido de venda e a do produzido para a demanda
+	// independente vêm à parte: o MRP não as desconta, porque o pedido e a
+	// demanda já são necessidade (DisponivelParaNecessidade). Só a do pedido
 	// que o MRP lê (P/A, ativo, não bloqueado): a reserva de um pedido
 	// bloqueado continua tirando o estoque, já que ele não entra como demanda.
 	rows, err := r.db.Query(ctx, `
@@ -671,7 +672,7 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 			  FROM stock_reservations r
 			  JOIN sales_orders so ON so.code = r.reference_code
 			  JOIN enterprise e ON e.code = so.enterprise_code AND e.id = r.enterprise_id
-			 WHERE r.enterprise_id = $1 AND r.status = 'ACTIVE' AND r.reference_type = 'SALES_ORDER'
+			 WHERE r.enterprise_id = $1 AND r.status = 'ACTIVE' AND r.reference_type IN ('SALES_ORDER', 'DEMANDA_INDEPENDENTE')
 			   AND so.is_active AND NOT so.is_blocked AND so.status IN ('P', 'A')
 			   AND NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id = r.warehouse_id AND w.enterprise_id = r.enterprise_id
 			                   AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))

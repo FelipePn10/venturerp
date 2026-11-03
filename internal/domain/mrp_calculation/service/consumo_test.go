@@ -26,7 +26,7 @@ func TestConsumoPelaVendaNoMRP(t *testing.T) {
 	}
 	previsao := []*entity.MRPInput{{ItemCode: 7, Quantity: decimal.NewFromInt(20), NeedDate: hoje, DemandType: "FORECAST"}}
 	s := &MRPServiceImpl{Vendas: vendasFixas{{Chave: inddemandentity.ChaveItem(7, ""), Data: hoje, Quantidade: decimal.NewFromInt(12)}}}
-	d, p, err := s.consumirPelaVenda(context.Background(), params, demands, previsao, nil, nil)
+	d, p, _, err := s.consumirPelaVenda(context.Background(), params, demands, previsao, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestCenarioAntesDoConsumo(t *testing.T) {
 	}}
 	demanda, _ = applyScenarioDemands(ajustes, demanda, pedidos, 1)
 	s := &MRPServiceImpl{Vendas: vendasFixas{{Chave: inddemandentity.ChaveItem(7, ""), Data: hoje, Quantidade: decimal.NewFromInt(6), Linha: &linha}}}
-	d, _, err := s.consumirPelaVenda(context.Background(), params, demanda, nil, ajustes, pedidos)
+	d, _, _, err := s.consumirPelaVenda(context.Background(), params, demanda, nil, ajustes, pedidos)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,5 +88,35 @@ func TestAjustarVendasDoCenarioSemAjusteNaoMuda(t *testing.T) {
 	v := []inddemandentity.Venda{{Chave: "7|", Quantidade: decimal.NewFromInt(5), Linha: &linha}}
 	if got := ajustarVendasDoCenario(nil, nil, v); !got[0].Quantidade.Equal(decimal.NewFromInt(5)) {
 		t.Fatalf("sem cenário a venda fica: %+v", got)
+	}
+}
+
+// Demanda de estoque vencida sem venda e amostra atrasada com saldo viram
+// exceção; a vencida sai do cálculo e a atrasada continua nele.
+func TestAvisosDeDemandaVencidaEAtrasada(t *testing.T) {
+	hoje := today()
+	params := entity.DefaultTypedPlanningParams()
+	demands := []*inddemandentity.IndependentDemand{
+		{CodeDemand: 1, ItemCode: 7, Quantity: decimal.NewFromInt(5), DemandDate: hoje.AddDate(0, 0, -60), Motivo: inddemandentity.MotivoEstoque, Situacao: inddemandentity.SituacaoAberta},
+		{CodeDemand: 2, ItemCode: 7, Quantity: decimal.NewFromInt(3), DemandDate: hoje.AddDate(0, 0, -2), Motivo: inddemandentity.MotivoAmostra, Situacao: inddemandentity.SituacaoAberta},
+		{CodeDemand: 3, ItemCode: 7, Quantity: decimal.NewFromInt(4), DemandDate: hoje.AddDate(0, 0, 10), Motivo: inddemandentity.MotivoAmostra, Situacao: inddemandentity.SituacaoAberta},
+	}
+	s := &MRPServiceImpl{Vendas: vendasFixas{}}
+	d, _, avisos, err := s.consumirPelaVenda(context.Background(), params, demands, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d) != 2 {
+		t.Fatalf("a vencida sai do cálculo, as amostras ficam: %d", len(d))
+	}
+	if len(avisos) != 2 || avisos[0].tipo != entity.ExceptionDemandExpired || avisos[1].tipo != entity.ExceptionDemandLate ||
+		!avisos[0].saldo.Equal(decimal.NewFromInt(5)) || !avisos[1].saldo.Equal(decimal.NewFromInt(3)) {
+		t.Fatalf("avisos: %+v", avisos)
+	}
+	b := newExceptionBasis(nil, nil)
+	b.demandas = avisos
+	msgs := b.demandMessages()
+	if len(msgs) != 2 || *msgs[0].SourceCode != 1 || *msgs[0].SourceType != "DEMANDA_INDEPENDENTE" {
+		t.Fatalf("mensagens: %+v", msgs)
 	}
 }

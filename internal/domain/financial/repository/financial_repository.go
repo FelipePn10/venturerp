@@ -49,28 +49,28 @@ type CPFilter struct {
 	DateField    DateField  `json:"date_field,omitempty"`
 	// Documento casa por trecho, sem diferenciar maiúsculas: quem procura digita
 	// "1001", não "NF-e 1001/1".
-	Documento       *string  `json:"documento,omitempty"`
-	TipoDocumento   *string  `json:"tipo_documento,omitempty"`
-	PlanoContasID   *int64   `json:"plano_contas_id,omitempty"`
-	CentroCustoID   *int64   `json:"centro_custo_id,omitempty"`
-	ValorMinimo     *float64 `json:"valor_minimo,omitempty"`
-	ValorMaximo     *float64 `json:"valor_maximo,omitempty"`
-	SomenteVencidos bool     `json:"somente_vencidos,omitempty"`
-	StatusAprovacao *string  `json:"status_aprovacao,omitempty"`
+	Documento       *string          `json:"documento,omitempty"`
+	TipoDocumento   *string          `json:"tipo_documento,omitempty"`
+	PlanoContasID   *int64           `json:"plano_contas_id,omitempty"`
+	CentroCustoID   *int64           `json:"centro_custo_id,omitempty"`
+	ValorMinimo     *decimal.Decimal `json:"valor_minimo,omitempty"`
+	ValorMaximo     *decimal.Decimal `json:"valor_maximo,omitempty"`
+	SomenteVencidos bool             `json:"somente_vencidos,omitempty"`
+	StatusAprovacao *string          `json:"status_aprovacao,omitempty"`
 }
 
 type CRFilter struct {
-	Status          *string    `json:"status,omitempty"`
-	ClienteID       *int64     `json:"cliente_id,omitempty"`
-	StartDate       *time.Time `json:"start_date,omitempty"`
-	EndDate         *time.Time `json:"end_date,omitempty"`
-	DateField       DateField  `json:"date_field,omitempty"`
-	Documento       *string    `json:"documento,omitempty"`
-	SalesOrderID    *int64     `json:"sales_order_id,omitempty"`
-	FiscalExitID    *int64     `json:"fiscal_exit_id,omitempty"`
-	ValorMinimo     *float64   `json:"valor_minimo,omitempty"`
-	ValorMaximo     *float64   `json:"valor_maximo,omitempty"`
-	SomenteVencidos bool       `json:"somente_vencidos,omitempty"`
+	Status          *string          `json:"status,omitempty"`
+	ClienteID       *int64           `json:"cliente_id,omitempty"`
+	StartDate       *time.Time       `json:"start_date,omitempty"`
+	EndDate         *time.Time       `json:"end_date,omitempty"`
+	DateField       DateField        `json:"date_field,omitempty"`
+	Documento       *string          `json:"documento,omitempty"`
+	SalesOrderID    *int64           `json:"sales_order_id,omitempty"`
+	FiscalExitID    *int64           `json:"fiscal_exit_id,omitempty"`
+	ValorMinimo     *decimal.Decimal `json:"valor_minimo,omitempty"`
+	ValorMaximo     *decimal.Decimal `json:"valor_maximo,omitempty"`
+	SomenteVencidos bool             `json:"somente_vencidos,omitempty"`
 }
 
 type AgingResult struct {

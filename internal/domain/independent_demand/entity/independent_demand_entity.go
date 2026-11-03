@@ -90,6 +90,9 @@ type IndependentDemand struct {
 	// Atendida: saídas de estoque para a finalidade (referência
 	// DEMANDA_INDEPENDENTE), sem as estornadas. Preenchida pela leitura.
 	Atendida decimal.Decimal
+	// Reservada: o que a OF da demanda (finalidade própria) entregou e está
+	// reservado para ela até a saída. Preenchida pela leitura.
+	Reservada decimal.Decimal
 	// Código de negócio e nome do item, para a tela (preenchidos pela leitura).
 	ItemBusinessCode string
 	ItemName         string

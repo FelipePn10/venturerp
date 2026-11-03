@@ -207,7 +207,7 @@ func (uc *SaveFiscalEntryConciliationUseCase) Execute(ctx context.Context, entry
 			if fator != nil {
 				f = *fator
 			}
-			q := decimal.NewFromFloat(it.Quantity).Mul(f).Round(6)
+			q := it.Quantity.Mul(f).Round(6)
 			it.FatorConversao, it.QuantidadeEstoque = &f, &q
 		}
 

@@ -181,7 +181,7 @@ func TestFiltroDeContasPagarRecortaPorCadaDimensao(t *testing.T) {
 
 	c.exigePagar("documento por trecho, sem caixa", domrepo.CPFilter{Documento: ptr("flt-a")}, "FLT-A")
 
-	minimo, maximo := 200.0, 1000.0
+	minimo, maximo := decimal.NewFromInt(200), decimal.NewFromInt(1000)
 	c.exigePagar("valor entre 200 e 1000", domrepo.CPFilter{ValorMinimo: &minimo, ValorMaximo: &maximo}, "FLT-C", "FLT-VENCIDO", "FLT-PAGO-ANTIGO")
 	fornecedor2 := int64(4001)
 	_ = fornecedor2
@@ -325,5 +325,5 @@ func TestFiltroNaoVazaEntreEmpresas(t *testing.T) {
 	}
 }
 
-func ptr[T any](v T) *T       { return &v }
-func ptrF(v float64) *float64 { return &v }
+func ptr[T any](v T) *T             { return &v }
+func ptrF(v int64) *decimal.Decimal { d := decimal.NewFromInt(v); return &d }

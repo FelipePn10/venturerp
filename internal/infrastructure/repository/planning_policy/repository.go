@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 
 	"github.com/google/uuid"
@@ -32,7 +33,7 @@ func New(d db) *Repository { return &Repository{db: d} }
 var _ repository.PoliticaRepository = (*Repository)(nil)
 
 const colunas = `p.id, p.item_code, p.classification_id, p.estrategia, p.consumo_dias_antes, p.consumo_dias_depois,
-	p.horizonte_firme_dias, p.tempo_seguranca_dias, p.observacao, p.created_at, p.created_by, p.updated_at, p.updated_by,
+	p.horizonte_firme_dias, p.tempo_seguranca_dias, p.lote_periodo, p.lote_maximo, p.observacao, p.created_at, p.created_by, p.updated_at, p.updated_by,
 	COALESCE(i.business_code, ''), COALESCE(i.name, ''), COALESCE(c.code, ''),
 	COALESCE(c.description, '') || COALESCE(' (' || m.description || ')', ''), COALESCE(c.level, 0)`
 
@@ -44,12 +45,14 @@ const juncoes = `FROM politicas_planejamento p
 func scan(row pgx.Row) (*entity.PoliticaPlanejamento, error) {
 	p := &entity.PoliticaPlanejamento{}
 	var por *uuid.UUID
+	var maximo decimal.NullDecimal
 	if err := row.Scan(&p.ID, &p.ItemCode, &p.ClassificationID, &p.Estrategia, &p.ConsumoDiasAntes, &p.ConsumoDiasDepois,
-		&p.HorizonteFirmeDias, &p.TempoSegurancaDias, &p.Observacao, &p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &por,
+		&p.HorizonteFirmeDias, &p.TempoSegurancaDias, &p.LotePeriodo, &maximo, &p.Observacao, &p.CreatedAt, &p.CreatedBy, &p.UpdatedAt, &por,
 		&p.ItemBusinessCode, &p.ItemName, &p.ClassificationCode, &p.ClassificationLabel, &p.ClassificationLevel); err != nil {
 		return nil, err
 	}
 	p.UpdatedBy = por
+	p.LoteMaximo = loteMaximo(maximo)
 	return p, nil
 }
 
@@ -116,10 +119,11 @@ func (r *Repository) Criar(ctx context.Context, p *entity.PoliticaPlanejamento) 
 	}
 	var id int64
 	err = r.db.QueryRow(ctx, `INSERT INTO politicas_planejamento (enterprise_id, item_code, classification_id, estrategia,
-		consumo_dias_antes, consumo_dias_depois, horizonte_firme_dias, tempo_seguranca_dias, observacao, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10) RETURNING id`,
+		consumo_dias_antes, consumo_dias_depois, horizonte_firme_dias, tempo_seguranca_dias, observacao, created_by, updated_by,
+		lote_periodo, lote_maximo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $12) RETURNING id`,
 		e, p.ItemCode, p.ClassificationID, p.Estrategia, p.ConsumoDiasAntes, p.ConsumoDiasDepois, p.HorizonteFirmeDias,
-		p.TempoSegurancaDias, p.Observacao, p.CreatedBy).Scan(&id)
+		p.TempoSegurancaDias, p.Observacao, p.CreatedBy, p.LotePeriodo, p.LoteMaximo).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("gravando a política de planejamento: %w", emUso(err, p))
 	}
@@ -135,10 +139,10 @@ func (r *Repository) Alterar(ctx context.Context, p *entity.PoliticaPlanejamento
 	}
 	tag, err := r.db.Exec(ctx, `UPDATE politicas_planejamento
 		SET estrategia = $3, consumo_dias_antes = $4, consumo_dias_depois = $5, horizonte_firme_dias = $6,
-		    tempo_seguranca_dias = $7, observacao = $8, updated_by = $9, updated_at = NOW()
+		    tempo_seguranca_dias = $7, observacao = $8, updated_by = $9, lote_periodo = $10, lote_maximo = $11, updated_at = NOW()
 		WHERE id = $1 AND enterprise_id = $2`,
 		p.ID, e, p.Estrategia, p.ConsumoDiasAntes, p.ConsumoDiasDepois, p.HorizonteFirmeDias, p.TempoSegurancaDias,
-		p.Observacao, p.UpdatedBy)
+		p.Observacao, p.UpdatedBy, p.LotePeriodo, p.LoteMaximo)
 	if err != nil {
 		return nil, fmt.Errorf("alterando a política de planejamento %d: %w", p.ID, err)
 	}
@@ -205,7 +209,7 @@ func (r *Repository) resolver(ctx context.Context, item *int64, empresa entity.P
 	}
 	doItem := map[int64]*entity.PoliticaPlanejamento{}
 	rows, err := r.db.Query(ctx, `SELECT id, item_code, estrategia, consumo_dias_antes, consumo_dias_depois,
-		horizonte_firme_dias, tempo_seguranca_dias
+		horizonte_firme_dias, tempo_seguranca_dias, lote_periodo, lote_maximo
 		FROM politicas_planejamento WHERE enterprise_id = $1 AND item_code IS NOT NULL AND ($2::bigint IS NULL OR item_code = $2)`, e, item)
 	if err != nil {
 		return nil, fmt.Errorf("lendo as políticas dos itens: %w", err)
@@ -213,10 +217,13 @@ func (r *Repository) resolver(ctx context.Context, item *int64, empresa entity.P
 	for rows.Next() {
 		p := &entity.PoliticaPlanejamento{}
 		var code int64
-		if err := rows.Scan(&p.ID, &code, &p.Estrategia, &p.ConsumoDiasAntes, &p.ConsumoDiasDepois, &p.HorizonteFirmeDias, &p.TempoSegurancaDias); err != nil {
+		var maximo decimal.NullDecimal
+		if err := rows.Scan(&p.ID, &code, &p.Estrategia, &p.ConsumoDiasAntes, &p.ConsumoDiasDepois, &p.HorizonteFirmeDias, &p.TempoSegurancaDias,
+			&p.LotePeriodo, &maximo); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("lendo a política do item: %w", err)
 		}
+		p.LoteMaximo = loteMaximo(maximo)
 		p.ItemCode = &code
 		doItem[code] = p
 	}
@@ -237,7 +244,7 @@ func (r *Repository) resolver(ctx context.Context, item *int64, empresa entity.P
 			  FROM anc JOIN item_classifications p ON p.id = anc.parent_id
 		)
 		SELECT DISTINCT anc.item_code, pp.id, c.code, c.level, pp.estrategia, pp.consumo_dias_antes, pp.consumo_dias_depois,
-		       pp.horizonte_firme_dias, pp.tempo_seguranca_dias
+		       pp.horizonte_firme_dias, pp.tempo_seguranca_dias, pp.lote_periodo
 		  FROM anc
 		  JOIN politicas_planejamento pp ON pp.classification_id = anc.id AND pp.enterprise_id = $1
 		  JOIN item_classifications c ON c.id = pp.classification_id AND c.is_active`, e, item)
@@ -249,7 +256,7 @@ func (r *Repository) resolver(ctx context.Context, item *int64, empresa entity.P
 		p := &entity.PoliticaPlanejamento{}
 		var code int64
 		if err := rows.Scan(&code, &p.ID, &p.ClassificationCode, &p.ClassificationLevel, &p.Estrategia, &p.ConsumoDiasAntes,
-			&p.ConsumoDiasDepois, &p.HorizonteFirmeDias, &p.TempoSegurancaDias); err != nil {
+			&p.ConsumoDiasDepois, &p.HorizonteFirmeDias, &p.TempoSegurancaDias, &p.LotePeriodo); err != nil {
 			return nil, fmt.Errorf("lendo a política da classificação: %w", err)
 		}
 		porClassificacao[code] = append(porClassificacao[code], p)
@@ -258,4 +265,12 @@ func (r *Repository) resolver(ctx context.Context, item *int64, empresa entity.P
 		return nil, err
 	}
 	return entity.ResolverPoliticas(empresa, doItem, porClassificacao), nil
+}
+
+func loteMaximo(v decimal.NullDecimal) *decimal.Decimal {
+	if !v.Valid {
+		return nil
+	}
+	d := v.Decimal
+	return &d
 }

@@ -187,18 +187,18 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 			natureza = op.Natureza
 			it.MovimentaEstoque = op.MovimentaEstoque
 			it.GeraFinanceiro = op.GeraFinanceiro
-			it.GeraCreditoICMS = op.CreditaICMS && it.ValorICMS > 0
-			it.GeraCreditoIPI = op.CreditaIPI && it.ValorIPI > 0
-			it.GeraCreditoPIS = op.CreditaPISCOFINS && it.ValorPIS > 0
-			it.GeraCreditoCOFINS = op.CreditaPISCOFINS && it.ValorCOFINS > 0
+			it.GeraCreditoICMS = op.CreditaICMS && it.ValorICMS.IsPositive()
+			it.GeraCreditoIPI = op.CreditaIPI && it.ValorIPI.IsPositive()
+			it.GeraCreditoPIS = op.CreditaPISCOFINS && it.ValorPIS.IsPositive()
+			it.GeraCreditoCOFINS = op.CreditaPISCOFINS && it.ValorCOFINS.IsPositive()
 		} else {
 			// Sem operação: entra no estoque, gera financeiro e toma os
 			// créditos destacados que a finalidade da compra admite.
 			it.MovimentaEstoque, it.GeraFinanceiro = true, true
-			it.GeraCreditoICMS = it.ValorICMS > 0
-			it.GeraCreditoIPI = it.ValorIPI > 0
-			it.GeraCreditoPIS = it.ValorPIS > 0
-			it.GeraCreditoCOFINS = it.ValorCOFINS > 0
+			it.GeraCreditoICMS = it.ValorICMS.IsPositive()
+			it.GeraCreditoIPI = it.ValorIPI.IsPositive()
+			it.GeraCreditoPIS = it.ValorPIS.IsPositive()
+			it.GeraCreditoCOFINS = it.ValorCOFINS.IsPositive()
 			finalidade = finalidadeDaCompra(it, linhaPorCodigo, cadastro)
 			entrada.CreditosDaFinalidade(finalidade, it)
 		}
@@ -229,7 +229,7 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 				// o vínculo com o fornecedor não trouxe conversão.
 				if (it.FatorConversao == nil || it.FatorConversao.Equal(umDec)) && l.InternalQty.IsPositive() {
 					f := l.FatorEstoque()
-					q := decimal.NewFromFloat(it.Quantity).Mul(f).Round(6)
+					q := it.Quantity.Mul(f).Round(6)
 					it.FatorConversao, it.QuantidadeEstoque = &f, &q
 				}
 			}
@@ -297,7 +297,7 @@ func (s *EntradaServico) aplicarConversoesDoCadastro(ctx context.Context, e *ent
 		if f == nil || !f.IsPositive() || f.Equal(umDec) {
 			continue
 		}
-		q := decimal.NewFromFloat(it.Quantity).Mul(*f).Round(6)
+		q := it.Quantity.Mul(*f).Round(6)
 		fator := *f
 		it.FatorConversao, it.QuantidadeEstoque = &fator, &q
 		mudou = true
@@ -614,7 +614,7 @@ func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.Fi
 	regime := engine.RegimeDoCadastro(cfg.RegimeTributario)
 	destacado := false
 	for _, it := range e.Itens {
-		if it.ValorICMS > 0 || it.ValorIPI > 0 || it.ValorPIS > 0 || it.ValorCOFINS > 0 {
+		if it.ValorICMS.IsPositive() || it.ValorIPI.IsPositive() || it.ValorPIS.IsPositive() || it.ValorCOFINS.IsPositive() {
 			destacado = true
 		}
 	}
@@ -624,7 +624,7 @@ func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.Fi
 			Mensagem: "empresa do Simples Nacional: o ICMS, o IPI, o PIS e a COFINS destacados pelo fornecedor não geram crédito e entram no custo"})
 	case regime == engine.RegimePresumido:
 		for _, it := range e.Itens {
-			if it.ValorPIS > 0 || it.ValorCOFINS > 0 {
+			if it.ValorPIS.IsPositive() || it.ValorCOFINS.IsPositive() {
 				out = append(out, entrada.Pendencia{Nivel: entrada.NivelAtencao, Campo: "itens.creditos",
 					Mensagem: "empresa do Lucro Presumido: PIS e COFINS são cumulativos e não geram crédito na entrada"})
 				break
@@ -648,7 +648,7 @@ func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.Fi
 		if it.CfopEntrada == nil || !entrada.CFOPDeUsoConsumoInterestadual(*it.CfopEntrada) {
 			continue
 		}
-		icmsOrigem := decimal.NewFromFloat(it.ValorICMS)
+		icmsOrigem := it.ValorICMS
 		if !icmsOrigem.IsPositive() && e.UFEmitente != nil {
 			// Fornecedor sem ICMS destacado (Simples): vale a alíquota
 			// interestadual entre as UFs.

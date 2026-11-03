@@ -52,7 +52,7 @@ func (uc *ListContasPagarUseCase) Execute(
 	if inicio != nil && fim != nil && fim.Before(*inicio) {
 		return nil, errorsuc.NewValidationError("a data final do período é anterior à data inicial")
 	}
-	if filters.ValorMinimo != nil && filters.ValorMaximo != nil && *filters.ValorMaximo < *filters.ValorMinimo {
+	if filters.ValorMinimo != nil && filters.ValorMaximo != nil && filters.ValorMaximo.LessThan(*filters.ValorMinimo) {
 		return nil, errorsuc.NewValidationError("o valor máximo do filtro é menor que o valor mínimo")
 	}
 

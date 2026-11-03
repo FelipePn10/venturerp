@@ -119,7 +119,7 @@ func TestSugestao_InterestadualImportadoEFinalidadeDeConsumo(t *testing.T) {
 func TestConciliacao_ItemEscolhidoUsaConversaoDoVinculo(t *testing.T) {
 	fator, link := decimal.NewFromInt(12), int64(99)
 	code, codigo, uom := int64(7), "f1-7", "CX"
-	it := &entity.FiscalEntryItem{ItemCode: &code, SupplierItemCode: &codigo, UOM: &uom, Quantity: 2}
+	it := &entity.FiscalEntryItem{ItemCode: &code, SupplierItemCode: &codigo, UOM: &uom, Quantity: decimal.NewFromFloat(2)}
 	usarVinculoDoItemEscolhido(it, map[string][]repository.ItemCandidate{"F1-7": {{Code: 7, ItemSupplierID: &link, ConversionFactor: &fator, XMLUOM: &uom}}})
 	if it.ItemSupplierID == nil || *it.ItemSupplierID != 99 || !it.QuantidadeEstoque.Equal(decimal.NewFromInt(24)) {
 		t.Fatalf("vínculo/conversão: %+v", it)

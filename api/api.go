@@ -755,7 +755,8 @@ func (app *application) mount() chi.Router {
 	plannedRepo := planned.NewPlannedOrderRepositorySQLC(queries)
 	plannedCreateUC := &planned_order_uc.CreatePlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedListUC := &planned_order_uc.ListPlannedOrdersUseCase{Repo: plannedRepo, Auth: authService}
-	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService, Params: planningParamsRepo, Items: itemRepo}
+	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService, Params: planningParamsRepo, Items: itemRepo,
+		Centros: independentDemandRepo}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
 
 	// Firmer=plannedFirmUC: accepting an MRP suggestion also fires the firm step,

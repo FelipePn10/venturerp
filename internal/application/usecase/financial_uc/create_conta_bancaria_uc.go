@@ -10,7 +10,6 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
-	"github.com/shopspring/decimal"
 )
 
 type CreateContaBancariaUseCase struct {
@@ -37,7 +36,7 @@ func (uc *CreateContaBancariaUseCase) Execute(
 		Digito:       dto.Digito,
 		Descricao:    dto.Descricao,
 		Titular:      dto.Titular,
-		SaldoInicial: decimal.NewFromFloat(dto.SaldoInicial),
+		SaldoInicial: dto.SaldoInicial,
 		ChavePix:     dto.ChavePix,
 		TipoChavePix: dto.TipoChavePix,
 		IsActive:     true,

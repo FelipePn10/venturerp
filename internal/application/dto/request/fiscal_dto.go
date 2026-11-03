@@ -18,15 +18,15 @@ type CreateFiscalEntryDTO struct {
 	RazaoSocialEmitente string                     `json:"razao_social_emitente"`
 	IEEmitente          *string                    `json:"ie_emitente,omitempty"`
 	UFEmitente          *string                    `json:"uf_emitente,omitempty"`
-	ValorProdutos       float64                    `json:"valor_produtos"`
-	ValorFrete          float64                    `json:"valor_frete"`
-	ValorSeguro         float64                    `json:"valor_seguro"`
-	ValorDesconto       float64                    `json:"valor_desconto"`
-	ValorIPI            float64                    `json:"valor_ipi"`
-	ValorICMS           float64                    `json:"valor_icms"`
-	ValorPIS            float64                    `json:"valor_pis"`
-	ValorCOFINS         float64                    `json:"valor_cofins"`
-	ValorTotal          float64                    `json:"valor_total"`
+	ValorProdutos       decimal.Decimal            `json:"valor_produtos"`
+	ValorFrete          decimal.Decimal            `json:"valor_frete"`
+	ValorSeguro         decimal.Decimal            `json:"valor_seguro"`
+	ValorDesconto       decimal.Decimal            `json:"valor_desconto"`
+	ValorIPI            decimal.Decimal            `json:"valor_ipi"`
+	ValorICMS           decimal.Decimal            `json:"valor_icms"`
+	ValorPIS            decimal.Decimal            `json:"valor_pis"`
+	ValorCOFINS         decimal.Decimal            `json:"valor_cofins"`
+	ValorTotal          decimal.Decimal            `json:"valor_total"`
 	TipoDocumento       string                     `json:"tipo_documento"`
 	PurchaseOrderCode   *int64                     `json:"purchase_order_code,omitempty"`
 	CteCode             *int64                     `json:"cte_code,omitempty"`
@@ -58,36 +58,36 @@ type CreateFiscalEntryItemDTO struct {
 	SupplierItemCode *string `json:"supplier_item_code,omitempty"`
 	// LembrarVinculo memoriza o código do fornecedor para este item: a próxima
 	// nota dele já vem conciliada.
-	LembrarVinculo        bool    `json:"lembrar_vinculo,omitempty"`
-	UOM                   *string `json:"uom,omitempty"`
-	Ncm                   *string `json:"ncm,omitempty"`
-	Cfop                  string  `json:"cfop"`
-	Quantity              float64 `json:"quantity"`
-	UnitPrice             float64 `json:"unit_price"`
-	TotalPrice            float64 `json:"total_price"`
-	BaseICMS              float64 `json:"base_icms"`
-	AliqICMS              float64 `json:"aliq_icms"`
-	ValorICMS             float64 `json:"valor_icms"`
-	BaseIPI               float64 `json:"base_ipi"`
-	AliqIPI               float64 `json:"aliq_ipi"`
-	ValorIPI              float64 `json:"valor_ipi"`
-	ValorPIS              float64 `json:"valor_pis"`
-	ValorCOFINS           float64 `json:"valor_cofins"`
-	CstICMS               *string `json:"cst_icms,omitempty"`
-	CstIPI                *string `json:"cst_ipi,omitempty"`
-	CstPIS                *string `json:"cst_pis,omitempty"`
-	CstCOFINS             *string `json:"cst_cofins,omitempty"`
-	GeraCreditoICMS       bool    `json:"gera_credito_icms"`
-	GeraCreditoIPI        bool    `json:"gera_credito_ipi"`
-	GeraCreditoPIS        bool    `json:"gera_credito_pis"`
-	GeraCreditoCOFINS     bool    `json:"gera_credito_cofins"`
-	Description           *string `json:"description,omitempty"`
-	Notes                 *string `json:"notes,omitempty"`
-	PlanoContasID         *int64  `json:"plano_contas_id,omitempty"`
-	CentroCustoID         *int64  `json:"centro_custo_id,omitempty"`
-	EntryOperationCode    *int64  `json:"entry_operation_code,omitempty"`
-	WarehouseID           *int64  `json:"warehouse_id,omitempty"`
-	PurchaseOrderItemCode *int64  `json:"purchase_order_item_code,omitempty"`
+	LembrarVinculo        bool            `json:"lembrar_vinculo,omitempty"`
+	UOM                   *string         `json:"uom,omitempty"`
+	Ncm                   *string         `json:"ncm,omitempty"`
+	Cfop                  string          `json:"cfop"`
+	Quantity              decimal.Decimal `json:"quantity"`
+	UnitPrice             decimal.Decimal `json:"unit_price"`
+	TotalPrice            decimal.Decimal `json:"total_price"`
+	BaseICMS              decimal.Decimal `json:"base_icms"`
+	AliqICMS              decimal.Decimal `json:"aliq_icms"`
+	ValorICMS             decimal.Decimal `json:"valor_icms"`
+	BaseIPI               decimal.Decimal `json:"base_ipi"`
+	AliqIPI               decimal.Decimal `json:"aliq_ipi"`
+	ValorIPI              decimal.Decimal `json:"valor_ipi"`
+	ValorPIS              decimal.Decimal `json:"valor_pis"`
+	ValorCOFINS           decimal.Decimal `json:"valor_cofins"`
+	CstICMS               *string         `json:"cst_icms,omitempty"`
+	CstIPI                *string         `json:"cst_ipi,omitempty"`
+	CstPIS                *string         `json:"cst_pis,omitempty"`
+	CstCOFINS             *string         `json:"cst_cofins,omitempty"`
+	GeraCreditoICMS       bool            `json:"gera_credito_icms"`
+	GeraCreditoIPI        bool            `json:"gera_credito_ipi"`
+	GeraCreditoPIS        bool            `json:"gera_credito_pis"`
+	GeraCreditoCOFINS     bool            `json:"gera_credito_cofins"`
+	Description           *string         `json:"description,omitempty"`
+	Notes                 *string         `json:"notes,omitempty"`
+	PlanoContasID         *int64          `json:"plano_contas_id,omitempty"`
+	CentroCustoID         *int64          `json:"centro_custo_id,omitempty"`
+	EntryOperationCode    *int64          `json:"entry_operation_code,omitempty"`
+	WarehouseID           *int64          `json:"warehouse_id,omitempty"`
+	PurchaseOrderItemCode *int64          `json:"purchase_order_item_code,omitempty"`
 }
 
 type ApproveFiscalEntryDTO struct {

@@ -182,7 +182,7 @@ func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto requ
 	entry.ValorICMSST, entry.ValorOutras = dto.ValorICMSST.Round(2), dto.ValorOutras.Round(2)
 	entry.ValorRetPIS, entry.ValorRetCOFINS, entry.ValorRetCSLL = dto.ValorRetPIS.Round(2), dto.ValorRetCOFINS.Round(2), dto.ValorRetCSLL.Round(2)
 	entry.ValorIRRF, entry.ValorRetPrev, entry.ValorISSRet = dto.ValorIRRF.Round(2), dto.ValorRetPrev.Round(2), dto.ValorISSRet.Round(2)
-	if entry.TotalRetencoes().GreaterThan(decimal.NewFromFloat(dto.ValorTotal)) {
+	if entry.TotalRetencoes().GreaterThan(dto.ValorTotal) {
 		return nil, errorsuc.NewValidationError("as retenções passam do total da nota")
 	}
 	entry.StockStatus = entity.StockStatusPendente
@@ -232,15 +232,15 @@ func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto requ
 	// do cabeçalho proporcional ao valor do item.
 	somaProdutos := decimal.Zero
 	for _, it := range itens {
-		somaProdutos = somaProdutos.Add(decimal.NewFromFloat(it.TotalPrice))
+		somaProdutos = somaProdutos.Add(it.TotalPrice)
 	}
-	extras := decimal.NewFromFloat(dto.ValorFrete).Add(decimal.NewFromFloat(dto.ValorSeguro)).Add(dto.ValorICMSST).Add(dto.ValorOutras).Sub(decimal.NewFromFloat(dto.ValorDesconto))
+	extras := dto.ValorFrete.Add(dto.ValorSeguro).Add(dto.ValorICMSST).Add(dto.ValorOutras).Sub(dto.ValorDesconto)
 	for i, it := range itens {
 		if it.Sequence <= 0 {
 			it.Sequence = i + 1
 		}
-		total := decimal.NewFromFloat(it.TotalPrice)
-		it.ValorContabil = total.Add(decimal.NewFromFloat(it.ValorIPI))
+		total := it.TotalPrice
+		it.ValorContabil = total.Add(it.ValorIPI)
 		if somaProdutos.IsPositive() {
 			it.ValorContabil = it.ValorContabil.Add(extras.Mul(total).Div(somaProdutos))
 		}
@@ -251,7 +251,7 @@ func (uc *CreateFiscalEntryUseCase) criarDocumento(ctx context.Context, dto requ
 			aplicarConversao(it, nil, nil)
 		}
 	}
-	entrada.AjustarValorContabil(itens, decimal.NewFromFloat(dto.ValorTotal))
+	entrada.AjustarValorContabil(itens, dto.ValorTotal)
 	if err := conciliacaoAutomatica(ctx, uc.Docs, entry.SupplierCode, itens); err != nil {
 		return nil, err
 	}

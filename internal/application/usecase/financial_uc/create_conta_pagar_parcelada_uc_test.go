@@ -27,7 +27,7 @@ func dinheiro(s string) decimal.Decimal { d, _ := decimal.NewFromString(s); retu
 
 func dtoParcelado(parcelas ...string) request.CreateContaPagarParceladaDTO {
 	dto := request.CreateContaPagarParceladaDTO{CreateContaPagarDTO: request.CreateContaPagarDTO{
-		NumeroDocumento: "FAT-77", TipoDocumento: "OUTROS", DataEmissao: "2026-11-01", ValorBruto: 1000,
+		NumeroDocumento: "FAT-77", TipoDocumento: "OUTROS", DataEmissao: "2026-11-01", ValorBruto: decimal.NewFromFloat(1000),
 	}}
 	for i, v := range parcelas {
 		dto.Parcelas = append(dto.Parcelas, request.ParcelaContaPagarDTO{DataVencimento: "2026-12-" + []string{"01", "02", "03", "04"}[i], Valor: dinheiro(v)})
@@ -52,7 +52,7 @@ func TestParcelada_EntradaMaisParcelasFechaNoTotal(t *testing.T) {
 
 func TestParcelada_DescontoERateioNaoPerdemCentavo(t *testing.T) {
 	dto := dtoParcelado("333.33", "333.33", "333.34")
-	dto.ValorBruto, dto.Desconto = 1010.10, 10.10
+	dto.ValorBruto, dto.Desconto = dinheiro("1010.10"), dinheiro("10.10")
 	dto.Rateios = []request.RateioContaPagarDTO{{PlanoContasID: 1, Valor: dinheiro("333.37")}, {PlanoContasID: 2, Valor: dinheiro("676.73")}}
 	dia := func(s string) time.Time { d, _ := time.Parse("2006-01-02", s); return d }
 	titulos, err := desdobrarTitulo(dto, uuid.New(), dia("2026-11-01"), []time.Time{dia("2026-12-01"), dia("2026-12-02"), dia("2026-12-03")},

@@ -55,7 +55,17 @@ type serviceOrderGenerator interface {
 	LinkRequisitionToProduction(context.Context, int64, int64) error
 }
 
+// CentrosDeCusto traduz o código do centro (o que a ordem planejada guarda)
+// para o id (o que a OF guarda).
+type CentrosDeCusto interface {
+	IDDoCentro(ctx context.Context, code int64) (*int64, error)
+}
+
 type FirmPlannedOrderUseCase struct {
+	// Centros traduz o centro da ordem planejada para a OF. Sem ele a OF nasce
+	// sem centro (antes recebia o código no lugar do id: outro centro, ou a
+	// chave estrangeira recusava).
+	Centros              CentrosDeCusto
 	TransitionAtomically func(context.Context, request.TransitionPlannedOrderDTO) ([]*response.PlannedOrderResponse, error)
 	CreateAtomically     productionuc.AtomicOrderCreator
 	Repo                 repository.PlannedOrderRepository
@@ -344,6 +354,13 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		mask = *order.Mask
 	}
 	plannedID := order.ID
+	var centroID *int64
+	if order.CostCenterCode != nil && uc.Centros != nil {
+		var err error
+		if centroID, err = uc.Centros.IDDoCentro(ctx, *order.CostCenterCode); err != nil {
+			return nil, err
+		}
+	}
 	machineID := order.MachineCode
 	if machineID != nil {
 		if resolver, ok := uc.Repo.(interface {
@@ -379,7 +396,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		ctx = context.WithValue(ctx, contextkey.ItemCodeTranslatedKey, true)
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{
 			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: decimal.NewFromFloat(order.Quantity),
-			StartDate: startDate, EndDate: endDate, CostCenterID: order.CostCenterCode,
+			StartDate: startDate, EndDate: endDate, CostCenterID: centroID,
 			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: machineID,
 			Priority: order.Priority, Notes: order.Notes,
 		})
@@ -396,7 +413,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		Mask:           mask,
 		PlannedQty:     decimal.NewFromFloat(order.Quantity),
 		Status:         productionentity.StatusOpen,
-		CostCenterID:   order.CostCenterCode,
+		CostCenterID:   centroID,
 		EmployeeID:     order.EmployeeCode,
 		WarehouseID:    order.WarehouseCode,
 		MachineID:      machineID,

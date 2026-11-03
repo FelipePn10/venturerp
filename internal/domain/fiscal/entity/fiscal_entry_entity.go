@@ -30,15 +30,15 @@ type FiscalEntry struct {
 	RazaoSocialEmitente string
 	IEEmitente          *string
 	UFEmitente          *string
-	ValorProdutos       float64
-	ValorFrete          float64
-	ValorSeguro         float64
-	ValorDesconto       float64
-	ValorIPI            float64
-	ValorICMS           float64
-	ValorPIS            float64
-	ValorCOFINS         float64
-	ValorTotal          float64
+	ValorProdutos       decimal.Decimal
+	ValorFrete          decimal.Decimal
+	ValorSeguro         decimal.Decimal
+	ValorDesconto       decimal.Decimal
+	ValorIPI            decimal.Decimal
+	ValorICMS           decimal.Decimal
+	ValorPIS            decimal.Decimal
+	ValorCOFINS         decimal.Decimal
+	ValorTotal          decimal.Decimal
 	TipoDocumento       string
 	PurchaseOrderCode   *int64
 	SupplierCode        *int64
@@ -103,7 +103,7 @@ func (e *FiscalEntry) TotalRetencoes() decimal.Decimal {
 
 // ValorAPagar é o que vai ao fornecedor: o total da nota menos as retenções.
 func (e *FiscalEntry) ValorAPagar() decimal.Decimal {
-	return decimal.NewFromFloat(e.ValorTotal).Round(2).Sub(e.TotalRetencoes())
+	return e.ValorTotal.Round(2).Sub(e.TotalRetencoes())
 }
 
 type FiscalEntryItem struct {
@@ -120,17 +120,17 @@ type FiscalEntryItem struct {
 	UOM                *string
 	Ncm                *string
 	Cfop               string
-	Quantity           float64
-	UnitPrice          float64
-	TotalPrice         float64
-	BaseICMS           float64
-	AliqICMS           float64
-	ValorICMS          float64
-	BaseIPI            float64
-	AliqIPI            float64
-	ValorIPI           float64
-	ValorPIS           float64
-	ValorCOFINS        float64
+	Quantity           decimal.Decimal
+	UnitPrice          decimal.Decimal
+	TotalPrice         decimal.Decimal
+	BaseICMS           decimal.Decimal
+	AliqICMS           decimal.Decimal
+	ValorICMS          decimal.Decimal
+	BaseIPI            decimal.Decimal
+	AliqIPI            decimal.Decimal
+	ValorIPI           decimal.Decimal
+	ValorPIS           decimal.Decimal
+	ValorCOFINS        decimal.Decimal
 	CstICMS            *string
 	CstIPI             *string
 	CstPIS             *string

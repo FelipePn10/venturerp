@@ -119,7 +119,7 @@ func TestIntegration_AdiantamentoContabilizado(t *testing.T) {
 	aplicar := &financial_uc.AplicarAdiantamentoUseCase{Repo: finRepo, Auth: auth, Contabil: pg}
 	cancelar := &financial_uc.CancelarAdiantamentoUseCase{Repo: finRepo, Auth: auth}
 	pagar := func(valor float64) request.CreateAdiantamentoDTO {
-		return request.CreateAdiantamentoDTO{Tipo: "PAGAR", ParceiroID: &fornecedor, ContaBancariaID: banco, DataAdiantamento: hoje, ValorOriginal: valor}
+		return request.CreateAdiantamentoDTO{Tipo: "PAGAR", ParceiroID: &fornecedor, ContaBancariaID: banco, DataAdiantamento: hoje, ValorOriginal: decimal.NewFromFloat(valor)}
 	}
 	saldoBanco := func() decimal.Decimal {
 		var s decimal.Decimal
@@ -147,7 +147,7 @@ func TestIntegration_AdiantamentoContabilizado(t *testing.T) {
 		t.Fatalf("adiantamento: %v", err)
 	}
 	// 3. Aplicado 400 no título avulso.
-	if _, err := aplicar.Execute(ctx, adv.ID, request.AplicarAdiantamentoDTO{ContaTipo: "PAGAR", ContaID: titulo, Valor: 400, DataAplicacao: &hoje}); err != nil {
+	if _, err := aplicar.Execute(ctx, adv.ID, request.AplicarAdiantamentoDTO{ContaTipo: "PAGAR", ContaID: titulo, Valor: decimal.NewFromFloat(400), DataAplicacao: &hoje}); err != nil {
 		t.Fatalf("aplicação: %v", err)
 	}
 	// 4. Outro, cancelado.
@@ -159,7 +159,7 @@ func TestIntegration_AdiantamentoContabilizado(t *testing.T) {
 		t.Fatalf("cancelamento: %v", err)
 	}
 	// 5. Recebido de cliente.
-	if _, err := criar.Execute(ctx, request.CreateAdiantamentoDTO{Tipo: "RECEBER", ParceiroID: &cliente, ContaBancariaID: banco, DataAdiantamento: hoje, ValorOriginal: 300}); err != nil {
+	if _, err := criar.Execute(ctx, request.CreateAdiantamentoDTO{Tipo: "RECEBER", ParceiroID: &cliente, ContaBancariaID: banco, DataAdiantamento: hoje, ValorOriginal: decimal.NewFromFloat(300)}); err != nil {
 		t.Fatalf("adiantamento de cliente: %v", err)
 	}
 

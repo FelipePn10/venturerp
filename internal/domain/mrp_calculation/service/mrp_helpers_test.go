@@ -466,3 +466,43 @@ func TestExplodeFromBOM_IgnoraMaterialDoCliente(t *testing.T) {
 		t.Error("nem o que está abaixo dele")
 	}
 }
+
+// Lote por período: as necessidades do item na mesma semana viram uma
+// entrada, na data da primeira; o item sem período segue separado.
+func TestAgruparEntradasPorPeriodo(t *testing.T) {
+	d := func(s string) time.Time { v, _ := time.Parse("2006-01-02", s); return v }
+	inputs := []*entity.MRPInput{
+		{ItemCode: 1, NeedDate: d("2026-11-05"), Quantity: decimal.NewFromInt(3)},
+		{ItemCode: 1, NeedDate: d("2026-11-03"), Quantity: decimal.NewFromInt(2)},
+		{ItemCode: 1, NeedDate: d("2026-11-10"), Quantity: decimal.NewFromInt(4)},
+		{ItemCode: 2, NeedDate: d("2026-11-03"), Quantity: decimal.NewFromInt(1)},
+		{ItemCode: 2, NeedDate: d("2026-11-04"), Quantity: decimal.NewFromInt(1)},
+	}
+	periodo := func(item int64) string {
+		if item == 1 {
+			return entity.LotePeriodoSemana
+		}
+		return entity.LotePeriodoNenhum
+	}
+	out := agruparEntradas(inputs, false, periodo)
+	if len(out) != 4 {
+		t.Fatalf("entradas: %d", len(out))
+	}
+	var semana1 *entity.MRPInput
+	for _, o := range out {
+		if o.ItemCode == 1 && o.NeedDate.Equal(d("2026-11-03")) {
+			semana1 = o
+		}
+	}
+	if semana1 == nil || !semana1.Quantity.Equal(decimal.NewFromInt(5)) {
+		t.Fatalf("semana de 02/11 do item 1: %+v", out)
+	}
+	if !inputs[0].Quantity.Equal(decimal.NewFromInt(3)) {
+		t.Fatal("agrupar não altera as necessidades de origem (pegging)")
+	}
+	for i := 1; i < len(out); i++ {
+		if out[i].NeedDate.Before(out[i-1].NeedDate) {
+			t.Fatal("resultado em ordem de data")
+		}
+	}
+}
