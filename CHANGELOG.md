@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.2] — 2026-11-03
+
+- fix(estoque): reserva do produzido no lote e no endereço, de volta no estorno (`484612e2`)
+
 ## [v1.10.0] — 2026-11-03
 
 - feat(mrp): política de lote, reserva do produzido, avisos de demanda e valores em decimal (`bc3ea7cd`)
