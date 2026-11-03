@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.3] — 2026-11-03
+
+- refactor(compras): pedido, requisição, cotação, contratos, alçada e importação em decimal (`596b3a2c`)
+
 ## [v1.10.2] — 2026-11-03
 
 - fix(estoque): reserva do produzido no lote e no endereço, de volta no estorno (`484612e2`)
