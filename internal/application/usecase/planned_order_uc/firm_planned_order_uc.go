@@ -316,9 +316,9 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 			RequisitionCode: created.Code,
 			Sequence:        int32(i + 1),
 			ItemCode:        *op.ServiceItemCode,
-			Quantity:        order.Quantity,
+			Quantity:        decimal.NewFromFloat(order.Quantity),
 			UOM:             &serv,
-			SuggestedPrice:  op.CostPerUnit,
+			SuggestedPrice:  decimal.NewFromFloat(op.CostPerUnit),
 			Application:     &app,
 			// O serviço é gasto do centro de custo da ordem.
 			CostCenterCode: order.CostCenterCode,

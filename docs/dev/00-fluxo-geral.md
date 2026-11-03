@@ -239,6 +239,16 @@ Dois caminhos para firmar, dependendo de onde a sugestão está:
 > inspeção, aviso/divergência, checklist, etiquetas, contratos, alçadas, EDI,
 > importação e IQF. A disposição de inspeção gera transferências de estoque da
 > quarentena para o destino aprovado ou bloqueado.
+>
+> ✅ **valores em decimal (1.10.3):** pedido de compra, requisição, cotação,
+> contratos, alçada, importação e inspeção calculam e gravam em `decimal`
+> (entrada da API aceita número ou texto; a resposta continua número). A alçada
+> compara o valor exato com o teto. O rateio das despesas da importação é feito
+> na escala da coluna (4 casas) e a última linha leva a diferença — a soma das
+> partes fecha com o total — e o custo nacionalizado sai da parte gravada.
+> `generate-orders` (requisição e cotação) devolve os pedidos no formato do
+> `GET /api/purchase-order/{code}`. Pontuações (IQF, qualidade, entrega) e valores
+> medidos na inspeção seguem em `float` (indicador e metrologia).
 
 ---
 

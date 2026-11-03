@@ -3,6 +3,7 @@ package purchase_quotation_uc
 import (
 	"context"
 	"errors"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -189,10 +190,10 @@ func TestNewPurchaseQuotation_Validation(t *testing.T) {
 
 func TestRequisitionItemBalance(t *testing.T) {
 	item := &reqentity.PurchaseRequisitionItem{
-		Quantity:    100,
-		AttendedQty: 40,
+		Quantity:    decimal.NewFromFloat(100),
+		AttendedQty: decimal.NewFromFloat(40),
 	}
-	if item.Balance() != 60 {
+	if !item.Balance().Equal(decimal.NewFromFloat(60)) {
 		t.Errorf("Balance = %v, want 60", item.Balance())
 	}
 }

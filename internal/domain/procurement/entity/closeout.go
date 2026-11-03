@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -35,8 +36,8 @@ type ReceivingNoticeItem struct {
 	PurchaseOrderItemCode *int64
 	ItemCode              int64
 	Mask                  string
-	ExpectedQty           float64
-	ReceivedQty           float64
+	ExpectedQty           decimal.Decimal
+	ReceivedQty           decimal.Decimal
 	Unit                  *string
 	Notes                 *string
 }
@@ -50,10 +51,10 @@ type ReceivingDivergence struct {
 	ItemCode              *int64
 	Mask                  string
 	DivergenceType        string
-	ExpectedQty           float64
-	ActualQty             float64
-	ExpectedPrice         *float64
-	ActualPrice           *float64
+	ExpectedQty           decimal.Decimal
+	ActualQty             decimal.Decimal
+	ExpectedPrice         *decimal.Decimal
+	ActualPrice           *decimal.Decimal
 	Resolution            string
 	AffectsSupplierScore  bool
 	Notes                 *string
@@ -88,8 +89,8 @@ type SupplierEDILine struct {
 	PurchaseOrderItemCode *int64
 	ItemCode              *int64
 	Mask                  string
-	ConfirmedQty          float64
-	ConfirmedPrice        float64
+	ConfirmedQty          decimal.Decimal
+	ConfirmedPrice        decimal.Decimal
 	ConfirmedDate         *time.Time
 	Divergence            *string
 	Notes                 *string
@@ -106,7 +107,7 @@ type ImportProcess struct {
 	Reference         *string
 	Incoterm          *string
 	Currency          string
-	ExchangeRate      float64
+	ExchangeRate      decimal.Decimal
 	ApportionBasis    string
 	Status            string
 	Notes             *string
@@ -123,11 +124,11 @@ type ImportProcessItem struct {
 	ProcessID           int64
 	ItemCode            int64
 	Mask                string
-	Quantity            float64
-	Weight              float64
-	FobUnitPrice        float64
-	ApportionedExpenses float64
-	LandedUnitCost      float64
+	Quantity            decimal.Decimal
+	Weight              decimal.Decimal
+	FobUnitPrice        decimal.Decimal
+	ApportionedExpenses decimal.Decimal
+	LandedUnitCost      decimal.Decimal
 	Notes               *string
 }
 
@@ -135,7 +136,7 @@ type ImportExpense struct {
 	ID          int64
 	ProcessID   int64
 	ExpenseType string
-	Amount      float64
+	Amount      decimal.Decimal
 	InItemCost  bool
 	Notes       *string
 }
@@ -179,17 +180,17 @@ func ComputeLandedCosts(p *ImportProcess) {
 		return
 	}
 	rate := p.ExchangeRate
-	if rate <= 0 {
-		rate = 1
+	if !rate.IsPositive() {
+		rate = decimal.NewFromInt(1)
 	}
-	var expensesInCost float64
+	expensesInCost := decimal.Zero
 	for _, e := range p.Expenses {
 		if e.InItemCost {
-			expensesInCost += e.Amount
+			expensesInCost = expensesInCost.Add(e.Amount)
 		}
 	}
-	bases := make([]float64, len(p.Items))
-	var totalBasis float64
+	bases := make([]decimal.Decimal, len(p.Items))
+	totalBasis := decimal.Zero
 	for i, it := range p.Items {
 		switch p.ApportionBasis {
 		case "WEIGHT":
@@ -197,25 +198,30 @@ func ComputeLandedCosts(p *ImportProcess) {
 		case "QUANTITY":
 			bases[i] = it.Quantity
 		default: // VALUE
-			bases[i] = it.Quantity * it.FobUnitPrice * rate
+			bases[i] = it.Quantity.Mul(it.FobUnitPrice).Mul(rate)
 		}
-		totalBasis += bases[i]
+		totalBasis = totalBasis.Add(bases[i])
 	}
+	// O rateio é exato, arredondado na escala da coluna (4 casas); a última
+	// linha leva a diferença, para a soma das partes fechar com o total.
+	distribuido := decimal.Zero
 	for i, it := range p.Items {
-		var share float64
+		var parte decimal.Decimal
 		switch {
-		case totalBasis > 0:
-			share = bases[i] / totalBasis
-		case len(p.Items) > 0:
-			share = 1.0 / float64(len(p.Items))
+		case i == len(p.Items)-1:
+			parte = expensesInCost.Sub(distribuido)
+		case totalBasis.IsPositive():
+			parte = expensesInCost.Mul(bases[i]).DivRound(totalBasis, 4)
+		default:
+			parte = expensesInCost.DivRound(decimal.NewFromInt(int64(len(p.Items))), 4)
 		}
-		it.ApportionedExpenses = expensesInCost * share
-		fobLocalTotal := it.Quantity * it.FobUnitPrice * rate
-		landedTotal := fobLocalTotal + it.ApportionedExpenses
-		if it.Quantity > 0 {
-			it.LandedUnitCost = landedTotal / it.Quantity
+		distribuido = distribuido.Add(parte)
+		it.ApportionedExpenses = parte
+		landedTotal := it.Quantity.Mul(it.FobUnitPrice).Mul(rate).Add(parte)
+		if it.Quantity.IsPositive() {
+			it.LandedUnitCost = landedTotal.DivRound(it.Quantity, 6)
 		} else {
-			it.LandedUnitCost = 0
+			it.LandedUnitCost = decimal.Zero
 		}
 	}
 }
@@ -223,7 +229,7 @@ func ComputeLandedCosts(p *ImportProcess) {
 // DetectEDILineDivergence compares a supplier-confirmed line against the purchase
 // order line and returns a comma-separated list of divergence codes (QTY, PRICE,
 // DATE), or an empty string when everything matches within tolerance.
-func DetectEDILineDivergence(poQty, poPrice float64, poDate *time.Time, confirmedQty, confirmedPrice float64, confirmedDate *time.Time, qtyTol, priceTol float64) string {
+func DetectEDILineDivergence(poQty, poPrice decimal.Decimal, poDate *time.Time, confirmedQty, confirmedPrice decimal.Decimal, confirmedDate *time.Time, qtyTol, priceTol decimal.Decimal) string {
 	var codes []string
 	if !within(poQty, confirmedQty, qtyTol) {
 		codes = append(codes, "QTY")
@@ -251,15 +257,11 @@ func HomologationStatusForIQF(iqf, homologatedMin, conditionalMin float64) strin
 	}
 }
 
-func within(a, b, tol float64) bool {
-	diff := a - b
-	if diff < 0 {
-		diff = -diff
+func within(a, b, tol decimal.Decimal) bool {
+	if tol.IsNegative() {
+		tol = decimal.Zero
 	}
-	if tol < 0 {
-		tol = 0
-	}
-	return diff <= tol+1e-9
+	return !a.Sub(b).Abs().GreaterThan(tol)
 }
 
 func sameDay(a, b time.Time) bool {

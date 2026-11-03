@@ -116,7 +116,7 @@ func (uc *AcompanhamentoUseCase) RegistrarFollowup(ctx context.Context, pedido, 
 	default:
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está %s; o acompanhamento de entrega vale para pedido aprovado", po.Code, entity.RotuloSituacao(po.Status)))
 	}
-	if it.Status == entity.PurchaseOrderItemStatusCANCELLED || it.Saldo() <= 0.0001 {
+	if it.Status == entity.PurchaseOrderItemStatusCANCELLED || !it.Saldo().GreaterThan(decimal.New(1, -4)) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d não tem saldo a receber", it.Sequence))
 	}
 	data, err := dataOpcional(&dto.DataPrometida, "prometida")

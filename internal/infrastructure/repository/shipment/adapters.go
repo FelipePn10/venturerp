@@ -68,17 +68,17 @@ func (a *PurchaseOrderAdapter) GetByCode(ctx context.Context, code int64) (*ship
 		Code:         po.Code,
 		CarrierCode:  po.CarrierCode,
 		SupplierCode: po.SupplierCode,
-		TotalWeight:  po.FreightValue,
+		TotalWeight:  po.FreightValue.InexactFloat64(),
 	}
 	for _, it := range po.Items {
 		h.Items = append(h.Items, shipment_uc.PurchaseOrderItemHeader{
 			ItemCode:     it.ItemCode,
-			RequestedQty: it.RequestedQty,
-			UnitPrice:    it.UnitPrice,
-			TotalPrice:   it.TotalPrice,
-			IPIPct:       it.IPIPct,
-			ICMSPct:      it.ICMSPct,
-			ICMSSTPct:    it.ICMSSTPct,
+			RequestedQty: it.RequestedQty.InexactFloat64(),
+			UnitPrice:    it.UnitPrice.InexactFloat64(),
+			TotalPrice:   it.TotalPrice.InexactFloat64(),
+			IPIPct:       it.IPIPct.InexactFloat64(),
+			ICMSPct:      it.ICMSPct.InexactFloat64(),
+			ICMSSTPct:    it.ICMSSTPct.InexactFloat64(),
 		})
 	}
 	return h, nil

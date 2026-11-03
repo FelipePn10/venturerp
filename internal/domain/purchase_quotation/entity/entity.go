@@ -2,6 +2,7 @@ package entity
 
 import (
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ type PurchaseQuotationItem struct {
 	QuotationCode int64
 	Sequence      int32
 	ItemCode      int64
-	Quantity      float64
+	Quantity      decimal.Decimal
 	UOM           *string
 	DeliveryDate  *time.Time
 	SourceType    QuotationSourceType
@@ -86,7 +87,7 @@ type PurchaseQuotationPrice struct {
 	ID              int64
 	QuotationItemID int64
 	SupplierCode    int64
-	UnitPrice       float64
+	UnitPrice       decimal.Decimal
 	LeadTimeDays    int32
 	PaymentTermCode *int64
 	Notes           *string

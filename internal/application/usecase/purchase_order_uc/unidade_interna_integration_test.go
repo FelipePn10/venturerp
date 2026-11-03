@@ -4,6 +4,7 @@ package purchase_order_uc_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -65,7 +66,7 @@ func TestPedidoDeCompraGuardaUnidadeInternaComPrecisao(t *testing.T) {
 	}
 	pedidos = append(pedidos, po.Code)
 	kg := "KG"
-	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: item, RequestedQty: 100, UnitPrice: 6.246, PurchaseUOM: &kg, WarehouseID: &almox}); err != nil {
+	if _, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: item, RequestedQty: decimal.NewFromFloat(100), UnitPrice: decimal.NewFromFloat(6.246), PurchaseUOM: &kg, WarehouseID: &almox}); err != nil {
 		t.Fatal(err)
 	}
 	var qtd, preco string

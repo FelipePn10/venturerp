@@ -17,7 +17,7 @@ func (tolerancePORepo) GetByCode(context.Context, int64) (*poentity.PurchaseOrde
 	return &poentity.PurchaseOrder{Code: 1, SupplierCode: &s}, nil
 }
 func (tolerancePORepo) ListItems(context.Context, int64) ([]*poentity.PurchaseOrderItem, error) {
-	return []*poentity.PurchaseOrderItem{{ItemCode: 10, RequestedQty: 5, UnitPrice: 2}}, nil
+	return []*poentity.PurchaseOrderItem{{ItemCode: 10, RequestedQty: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(2)}}, nil
 }
 
 type toleranceEval struct{ action string }

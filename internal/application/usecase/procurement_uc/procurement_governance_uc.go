@@ -3,6 +3,7 @@ package procurement_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"time"
 
@@ -42,7 +43,8 @@ func (uc *UseCase) ComputeSupplierScorecard(ctx context.Context, dto request.Com
 		return nil, err
 	}
 
-	quality := ratioScore(agg.InspectedQty-agg.RejectedQty, agg.InspectedQty)
+	// Indicador (percentual): float de propósito.
+	quality := ratioScore(agg.InspectedQty.Sub(agg.RejectedQty).InexactFloat64(), agg.InspectedQty.InexactFloat64())
 	delivery := ratioScore(float64(agg.TotalReceipts-agg.LateReceipts), float64(agg.TotalReceipts))
 	commercial := defaultScore(dto.CommercialScore)
 	service := defaultScore(dto.ServiceScore)
@@ -120,10 +122,10 @@ func (uc *UseCase) CreateApprovalLimit(ctx context.Context, dto request.CreateAp
 	if dto.Scope != "GLOBAL" && (dto.ScopeRef == nil || *dto.ScopeRef == "") {
 		return nil, errorsuc.NewValidationError("scope_ref é obrigatório quando o escopo não é GLOBAL")
 	}
-	if dto.AutoApproveMax < 0 {
+	if dto.AutoApproveMax.IsNegative() {
 		return nil, errorsuc.NewValidationError("limite de aprovação automática deve ser maior ou igual a zero")
 	}
-	if dto.BlockAbove != nil && *dto.BlockAbove < dto.AutoApproveMax {
+	if dto.BlockAbove != nil && dto.BlockAbove.LessThan(dto.AutoApproveMax) {
 		return nil, errorsuc.NewValidationError("limite de bloqueio deve ser maior ou igual ao limite de aprovação automática")
 	}
 	if dto.Currency == "" {
@@ -180,7 +182,7 @@ func (uc *UseCase) ListApprovalLimits(ctx context.Context, enterpriseCode int64)
 // EvaluatePurchaseApproval resolves the applicable approval rule for a purchase
 // amount. When no rule is configured the purchase is auto-approvable (no alçada
 // control). Implements the purchase_order_uc.ApprovalPolicy port.
-func (uc *UseCase) EvaluatePurchaseApproval(ctx context.Context, enterpriseCode int64, supplierCode *int64, amount float64) (*entity.ApprovalDecision, error) {
+func (uc *UseCase) EvaluatePurchaseApproval(ctx context.Context, enterpriseCode int64, supplierCode *int64, amount decimal.Decimal) (*entity.ApprovalDecision, error) {
 	authEnterprise, authErr := uc.Auth.EnterpriseCode(ctx)
 	if authErr != nil {
 		return nil, authErr
@@ -203,9 +205,10 @@ func (uc *UseCase) EvaluatePurchaseApproval(ctx context.Context, enterpriseCode 
 		Ceiling:     limit.AutoApproveMax,
 		HardCeiling: limit.BlockAbove,
 		LimitID:     &limit.ID,
-		AutoApprove: amount <= limit.AutoApproveMax+0.0001,
+		// Valores em centavos, comparados exatos.
+		AutoApprove: !amount.GreaterThan(limit.AutoApproveMax),
 	}
-	if limit.BlockAbove != nil && amount > *limit.BlockAbove+0.0001 {
+	if limit.BlockAbove != nil && amount.GreaterThan(*limit.BlockAbove) {
 		decision.Blocked = true
 	}
 	return decision, nil
@@ -267,7 +270,7 @@ func (uc *UseCase) CreateSupplierContract(ctx context.Context, dto request.Creat
 		if it.ItemCode <= 0 {
 			return nil, errorsuc.NewValidationError("contract item requires item_code")
 		}
-		if it.ContractedQty < 0 || it.UnitPrice < 0 {
+		if it.ContractedQty.IsNegative() || it.UnitPrice.IsNegative() {
 			return nil, errorsuc.NewValidationError("as quantidades e os preços dos itens do contrato devem ser maiores ou iguais a zero")
 		}
 		contract.Items = append(contract.Items, &entity.SupplierContractItem{
@@ -325,7 +328,7 @@ func (uc *UseCase) ConsumeSupplierContract(ctx context.Context, id int64, dto re
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.Quantity <= 0 {
+	if !dto.Quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 	contract, err := uc.Repo.GetSupplierContract(ctx, id)
@@ -355,9 +358,9 @@ func (uc *UseCase) ListPurchaseMovementHistory(ctx context.Context, supplierCode
 	}
 	out := make([]*response.PurchaseMovementHistoryResponse, 0, len(rows))
 	for _, h := range rows {
-		open := h.RequestedQty - h.ReceivedQty - h.CancelledQty
-		if open < 0 {
-			open = 0
+		open := h.RequestedQty.Sub(h.ReceivedQty).Sub(h.CancelledQty)
+		if open.IsNegative() {
+			open = decimal.Zero
 		}
 		out = append(out, &response.PurchaseMovementHistoryResponse{
 			SupplierCode:      h.SupplierCode,
@@ -365,11 +368,11 @@ func (uc *UseCase) ListPurchaseMovementHistory(ctx context.Context, supplierCode
 			OrderNumber:       h.OrderNumber,
 			ItemCode:          h.ItemCode,
 			Mask:              h.Mask,
-			RequestedQty:      h.RequestedQty,
-			ReceivedQty:       h.ReceivedQty,
-			CancelledQty:      h.CancelledQty,
-			OpenQty:           open,
-			UnitPrice:         h.UnitPrice,
+			RequestedQty:      h.RequestedQty.InexactFloat64(),
+			ReceivedQty:       h.ReceivedQty.InexactFloat64(),
+			CancelledQty:      h.CancelledQty.InexactFloat64(),
+			OpenQty:           open.InexactFloat64(),
+			UnitPrice:         h.UnitPrice.InexactFloat64(),
 			Status:            h.Status,
 			EmissionDate:      h.EmissionDate,
 			DeliveryDate:      h.DeliveryDate,
@@ -411,8 +414,8 @@ func toApprovalLimitResponse(l *entity.ApprovalLimit) *response.ApprovalLimitRes
 		Scope:          l.Scope,
 		ScopeRef:       l.ScopeRef,
 		Currency:       l.Currency,
-		AutoApproveMax: l.AutoApproveMax,
-		BlockAbove:     l.BlockAbove,
+		AutoApproveMax: l.AutoApproveMax.InexactFloat64(),
+		BlockAbove:     floatPtr(l.BlockAbove),
 		IsActive:       l.IsActive,
 		ValidFrom:      l.ValidFrom,
 		ValidTo:        l.ValidTo,
@@ -451,11 +454,11 @@ func toSupplierContractItemResponse(it *entity.SupplierContractItem) *response.S
 		ItemCode:      it.ItemCode,
 		Mask:          it.Mask,
 		Unit:          it.Unit,
-		ContractedQty: it.ContractedQty,
-		ConsumedQty:   it.ConsumedQty,
-		RemainingQty:  it.RemainingQty(),
-		UnitPrice:     it.UnitPrice,
-		MinOrderQty:   it.MinOrderQty,
+		ContractedQty: it.ContractedQty.InexactFloat64(),
+		ConsumedQty:   it.ConsumedQty.InexactFloat64(),
+		RemainingQty:  it.RemainingQty().InexactFloat64(),
+		UnitPrice:     it.UnitPrice.InexactFloat64(),
+		MinOrderQty:   it.MinOrderQty.InexactFloat64(),
 		Notes:         it.Notes,
 	}
 }

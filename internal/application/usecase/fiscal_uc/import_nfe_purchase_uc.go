@@ -121,7 +121,7 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 
 	movementsCreated := 0
 	var skipped []string
-	receivedByItem := make(map[int64]float64)
+	receivedByItem := make(map[int64]decimal.Decimal)
 
 	for _, item := range nfe.Items {
 		itemCode, parseErr := strconv.ParseInt(item.CodigoProduto, 10, 64)
@@ -146,7 +146,7 @@ func (uc *ImportNFePurchaseUseCase) Execute(ctx context.Context, dto ImportNFePu
 			skipped = append(skipped, fmt.Sprintf("item %d: não gravado na nota: %v", item.NumeroItem, err))
 			continue
 		}
-		receivedByItem[itemCode] += item.QuantidadeComercial
+		receivedByItem[itemCode] = receivedByItem[itemCode].Add(decimal.NewFromFloat(item.QuantidadeComercial))
 
 		refType := stockentity.ReferenceTypeNFEntry
 		mov := &stockentity.StockMovement{

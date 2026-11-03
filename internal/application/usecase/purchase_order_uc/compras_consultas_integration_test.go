@@ -4,6 +4,7 @@ package purchase_order_uc_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"testing"
@@ -108,17 +109,17 @@ func TestComprasConsultasIntegracao(t *testing.T) {
 		t.Fatal(err)
 	}
 	pedidos = append(pedidos, po.Code)
-	linha, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: item, RequestedQty: 8, UnitPrice: 10, DeliveryDate: &atrasada})
+	linha, err := incluir.Execute(ctx, request.CreatePurchaseOrderItemDTO{PurchaseOrderCode: po.Code, ItemCode: item, RequestedQty: decimal.NewFromFloat(8), UnitPrice: decimal.NewFromFloat(10), DeliveryDate: &atrasada})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Recebimento antes da aprovação é recusado (a guarda está no repositório).
-	if _, err := repo.RegisterItemReceipts(ctx, po.Code, map[int64]float64{linha.Code: 1}); err == nil || !strings.Contains(err.Error(), "aprove") {
+	if _, err := repo.RegisterItemReceipts(ctx, po.Code, map[int64]decimal.Decimal{linha.Code: decimal.NewFromInt(1)}); err == nil || !strings.Contains(err.Error(), "aprove") {
 		t.Fatalf("receber rascunho: %v", err)
 	}
 	if _, err := (&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: repo, Auth: authReceber{auth}}).Execute(ctx,
-		request.ReceivePurchaseOrderDTO{PurchaseOrderCode: po.Code, Items: []request.ReceivePurchaseOrderItemDTO{{PurchaseOrderItemCode: linha.Code, Quantity: 1, WarehouseID: almox}}}); err == nil {
+		request.ReceivePurchaseOrderDTO{PurchaseOrderCode: po.Code, Items: []request.ReceivePurchaseOrderItemDTO{{PurchaseOrderItemCode: linha.Code, Quantity: decimal.NewFromFloat(1), WarehouseID: almox}}}); err == nil {
 		t.Fatal("recebimento direto de rascunho deveria ser recusado")
 	}
 	// Rascunho não vai ao fornecedor.
@@ -190,13 +191,13 @@ func TestComprasConsultasIntegracao(t *testing.T) {
 	gerar := &purchase_requisition_uc.GeneratePurchaseOrdersUseCase{Reqs: reqRepo.New(q, pool), POs: repo, Auth: auth,
 		Geracao: &purchase_order_uc.Geracao{Repo: repo, Almoxarifados: repo, Aprovacao: aprovar}}
 	res, err := gerar.Execute(ctx, request.GeneratePurchaseOrdersDTO{EnterpriseCode: enterpriseCode, CreatedBy: uid,
-		Selections: []request.GenerationSelection{{RequisitionItemID: reqItem, QtyToAttend: 4, SupplierCode: &fornecedor}}})
+		Selections: []request.GenerationSelection{{RequisitionItemID: reqItem, QtyToAttend: decimal.NewFromFloat(4), SupplierCode: &fornecedor}}})
 	if err != nil || len(res.Orders) != 1 {
 		t.Fatalf("gerar pela requisição: %+v (%v)", res, err)
 	}
 	gerado := res.Orders[0]
 	pedidos = append(pedidos, gerado.Code)
-	if gerado.Status != "APPROVED" || gerado.AlcadaStatus != "A" || gerado.TotalNet != 80 {
+	if gerado.Status != "APPROVED" || gerado.AlcadaStatus != "A" || !gerado.TotalNet.Equal(decimal.NewFromFloat(80)) {
 		t.Fatalf("pedido gerado: %s/%s total %v avisos %v", gerado.Status, gerado.AlcadaStatus, gerado.TotalNet, res.Skipped)
 	}
 	linhas, _ := repo.ListItems(ctx, gerado.Code)

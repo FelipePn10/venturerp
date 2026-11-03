@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/google/uuid"
@@ -35,8 +36,8 @@ func TestRequisitionItem_Balance(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			it := &PurchaseRequisitionItem{Quantity: tc.qty, AttendedQty: tc.attended, CancelledQty: tc.cancelled}
-			if got := it.Balance(); got != tc.want {
+			it := &PurchaseRequisitionItem{Quantity: decimal.NewFromFloat(tc.qty), AttendedQty: decimal.NewFromFloat(tc.attended), CancelledQty: decimal.NewFromFloat(tc.cancelled)}
+			if got := it.Balance(); !got.Equal(decimal.NewFromFloat(tc.want)) {
 				t.Errorf("Balance() = %v, want %v", got, tc.want)
 			}
 		})

@@ -5,6 +5,7 @@ package purchase_requisition_uc_test
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"testing"
 
 	"github.com/google/uuid"
@@ -86,7 +87,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	reqUC := purchase_requisition_uc.NewPurchaseRequisitionUseCase(reqRepository)
 	req, err := reqUC.Create(ctx, request.CreatePurchaseRequisitionDTO{
 		EnterpriseCode: 1, CreatedBy: uuid.New(),
-		Items: []request.RequisitionItemInput{{ItemCode: itemCode, Quantity: 10, SuggestedPrice: 5}},
+		Items: []request.RequisitionItemInput{{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), SuggestedPrice: decimal.NewFromFloat(5)}},
 	})
 	if err != nil {
 		t.Fatalf("create requisition: %v", err)
@@ -131,7 +132,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	}
 	res, err := gen.Execute(ctx, request.GeneratePurchaseOrdersDTO{
 		EnterpriseCode: 1, CreatedBy: uuid.New(),
-		Selections: []request.GenerationSelection{{RequisitionItemID: reqItemID, QtyToAttend: 10}},
+		Selections: []request.GenerationSelection{{RequisitionItemID: reqItemID, QtyToAttend: decimal.NewFromFloat(10)}},
 	})
 	if err != nil {
 		t.Fatalf("GeneratePurchaseOrders: %v", err)
@@ -153,10 +154,10 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	if po.SupplierCode == nil || *po.SupplierCode != supplierCode {
 		t.Errorf("PO supplier = %v, want %d", po.SupplierCode, supplierCode)
 	}
-	if len(po.Items) != 1 || po.Items[0].ItemCode != itemCode || po.Items[0].RequestedQty != 10 {
+	if len(po.Items) != 1 || po.Items[0].ItemCode != itemCode || !po.Items[0].RequestedQty.Equal(decimal.NewFromFloat(10)) {
 		t.Fatalf("unexpected PO item: %+v", po.Items)
 	}
-	if po.Items[0].UnitPrice != 5 {
+	if !po.Items[0].UnitPrice.Equal(decimal.NewFromFloat(5)) {
 		t.Errorf("PO item price = %v, want 5 (from requisition suggested price)", po.Items[0].UnitPrice)
 	}
 
@@ -165,7 +166,7 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetItem: %v", err)
 	}
-	if item.AttendedQty != 10 || item.Balance() != 0 {
+	if !item.AttendedQty.Equal(decimal.NewFromFloat(10)) || !item.Balance().IsZero() {
 		t.Errorf("requisition attendance = %v (balance %v), want 10 / 0", item.AttendedQty, item.Balance())
 	}
 }

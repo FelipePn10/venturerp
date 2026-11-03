@@ -3,12 +3,15 @@ package entity
 import (
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 func ptr(s string) *string { return &s }
 
 func linha(qtd, preco, desc, ipi float64) *PurchaseOrderItem {
-	return &PurchaseOrderItem{RequestedQty: qtd, UnitPrice: preco, DiscountPct: desc, IPIPct: ipi, IsActive: true, Status: PurchaseOrderItemStatusOPEN}
+	n := decimal.NewFromFloat
+	return &PurchaseOrderItem{RequestedQty: n(qtd), UnitPrice: n(preco), DiscountPct: n(desc), IPIPct: n(ipi), IsActive: true, Status: PurchaseOrderItemStatusOPEN}
 }
 
 func TestCalcularTotais(t *testing.T) {
@@ -17,7 +20,7 @@ func TestCalcularTotais(t *testing.T) {
 	removida := linha(5, 100, 0, 0)
 	removida.IsActive = false
 	comResiduo := linha(10, 2, 0, 0)
-	comResiduo.CancelledQty = 4 // conta 6 × 2 = 12
+	comResiduo.CancelledQty = decimal.NewFromFloat(4) // conta 6 × 2 = 12
 
 	itens := []*PurchaseOrderItem{linha(10, 5, 10, 5), cancelada, removida, comResiduo}
 	casos := []struct {
@@ -26,10 +29,10 @@ func TestCalcularTotais(t *testing.T) {
 		bruto, liquido  string
 		frete, desconto string
 	}{
-		{"CIF não soma frete", PurchaseOrder{FreightType: "CIF", FreightValue: 30}, "62", "59.25", "0", "5"},
-		{"FOB valor fechado", PurchaseOrder{FreightType: "FOB", FreightValue: 30}, "62", "89.25", "30", "5"},
-		{"FOB por unidade", PurchaseOrder{FreightType: "fob", FreightValue: 0.5, FreightValueMode: ptr("UNITARIO")}, "62", "67.25", "8", "5"},
-		{"FOB percentual da mercadoria", PurchaseOrder{FreightType: "FOB", FreightValue: 10, FreightValueType: ptr("PERCENTUAL")}, "62", "64.95", "5.7", "5"},
+		{"CIF não soma frete", PurchaseOrder{FreightType: "CIF", FreightValue: decimal.NewFromFloat(30)}, "62", "59.25", "0", "5"},
+		{"FOB valor fechado", PurchaseOrder{FreightType: "FOB", FreightValue: decimal.NewFromFloat(30)}, "62", "89.25", "30", "5"},
+		{"FOB por unidade", PurchaseOrder{FreightType: "fob", FreightValue: decimal.NewFromFloat(0.5), FreightValueMode: ptr("UNITARIO")}, "62", "67.25", "8", "5"},
+		{"FOB percentual da mercadoria", PurchaseOrder{FreightType: "FOB", FreightValue: decimal.NewFromFloat(10), FreightValueType: ptr("PERCENTUAL")}, "62", "64.95", "5.7", "5"},
 	}
 	for _, c := range casos {
 		tot := CalcularTotais(&c.capa, itens)
@@ -37,7 +40,7 @@ func TestCalcularTotais(t *testing.T) {
 			t.Errorf("%s: bruto=%s desc=%s ipi=%s frete=%s liquido=%s", c.nome, tot.Bruto, tot.Desconto, tot.IPI, tot.Frete, tot.Liquido)
 		}
 		c.capa.AplicarTotais(tot)
-		if c.capa.TotalGross != 62 {
+		if !c.capa.TotalGross.Equal(decimal.NewFromFloat(62)) {
 			t.Errorf("%s: total_gross=%v", c.nome, c.capa.TotalGross)
 		}
 	}
@@ -64,11 +67,11 @@ func TestEditavelEVoltaParaRascunho(t *testing.T) {
 func TestSituacaoPelasLinhas(t *testing.T) {
 	aberta := linha(10, 1, 0, 0)
 	recebidaEmParte := linha(10, 1, 0, 0)
-	recebidaEmParte.ReceivedQty = 4
+	recebidaEmParte.ReceivedQty = decimal.NewFromFloat(4)
 	fechadaComResiduo := linha(10, 1, 0, 0)
-	fechadaComResiduo.ReceivedQty, fechadaComResiduo.CancelledQty, fechadaComResiduo.Status = 4, 6, PurchaseOrderItemStatusRECEIVED
+	fechadaComResiduo.ReceivedQty, fechadaComResiduo.CancelledQty, fechadaComResiduo.Status = decimal.NewFromFloat(4), decimal.NewFromFloat(6), PurchaseOrderItemStatusRECEIVED
 	cancelada := linha(10, 1, 0, 0)
-	cancelada.CancelledQty, cancelada.Status = 10, PurchaseOrderItemStatusCANCELLED
+	cancelada.CancelledQty, cancelada.Status = decimal.NewFromFloat(10), PurchaseOrderItemStatusCANCELLED
 
 	casos := []struct {
 		nome  string
@@ -87,10 +90,10 @@ func TestSituacaoPelasLinhas(t *testing.T) {
 			t.Errorf("%s: %s, quer %s", c.nome, got, c.quer)
 		}
 	}
-	if s := fechadaComResiduo.Saldo(); s != 0 {
+	if s := fechadaComResiduo.Saldo(); !s.IsZero() {
 		t.Errorf("saldo da linha fechada = %v", s)
 	}
-	if TotalDaLinha(3, 0.1, 0) != 0.3 || TotalDaLinha(10, 5, 10) != 45 {
+	if TotalDaLinha(decimal.NewFromFloat(3), decimal.NewFromFloat(0.1), decimal.Zero).String() != "0.3" || TotalDaLinha(decimal.NewFromFloat(10), decimal.NewFromFloat(5), decimal.NewFromFloat(10)).String() != "45" {
 		t.Errorf("total da linha sem arredondamento binário")
 	}
 }
@@ -146,9 +149,9 @@ func TestDiasDeAtrasoEDataPrevista(t *testing.T) {
 
 func TestValoresAFaturar(t *testing.T) {
 	e1, e2 := dia("2026-10-10"), dia("2026-10-20")
-	capa := &PurchaseOrder{EmissionDate: dia("2026-10-01"), FreightType: "FOB", FreightValue: 20}
+	capa := &PurchaseOrder{EmissionDate: dia("2026-10-01"), FreightType: "FOB", FreightValue: decimal.NewFromFloat(20)}
 	a := linha(10, 5, 0, 0) // 50, metade faturada
-	a.InvoicedQty = 5
+	a.InvoicedQty = decimal.NewFromFloat(5)
 	a.DeliveryDate = &e1
 	b := linha(2, 40, 10, 5) // 80 − 8 + 3,60 = 75,60
 	b.DeliveryDate = &e2
@@ -165,11 +168,11 @@ func TestValoresAFaturar(t *testing.T) {
 	if !got[1].Entrega.Equal(e2) || got[1].Valor.String() != "87.91" {
 		t.Errorf("grupo 2: %s %s", got[1].Entrega.Format("2006-01-02"), got[1].Valor)
 	}
-	a.InvoicedQty, b.InvoicedQty = 10, 2
+	a.InvoicedQty, b.InvoicedQty = decimal.NewFromFloat(10), decimal.NewFromFloat(2)
 	if len(ValoresAFaturar(capa, []*PurchaseOrderItem{a, b})) != 0 {
 		t.Error("tudo faturado não deixa previsão")
 	}
-	if (&PurchaseOrderItem{RequestedQty: 5, InvoicedQty: 7, IsActive: true}).SaldoAFaturar() != 0 {
+	if !(&PurchaseOrderItem{RequestedQty: decimal.NewFromFloat(5), InvoicedQty: decimal.NewFromFloat(7), IsActive: true}).SaldoAFaturar().IsZero() {
 		t.Error("faturado a mais não vira saldo negativo")
 	}
 }

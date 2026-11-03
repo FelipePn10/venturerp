@@ -34,7 +34,7 @@ func (uc *CancelPurchaseOrderUseCase) Execute(ctx context.Context, code int64) e
 		return err
 	}
 	for _, it := range itens {
-		if it.ReceivedQty > 0 {
+		if it.ReceivedQty.IsPositive() {
 			return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d já tem recebimento (linha %d); elimine o saldo das linhas em aberto em vez de cancelar o pedido", code, it.Sequence))
 		}
 	}

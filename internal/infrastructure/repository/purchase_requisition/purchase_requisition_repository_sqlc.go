@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
@@ -86,11 +87,11 @@ func (r *PurchaseRequisitionRepositorySQLC) AddItem(ctx context.Context, item *e
 		RequisitionCode:   item.RequisitionCode,
 		Sequence:          item.Sequence,
 		ItemCode:          item.ItemCode,
-		Quantity:          pgutil.ToPgNumericFromFloat64(item.Quantity),
+		Quantity:          pgutil.ToPgNumericFromDecimal(item.Quantity),
 		Uom:               pgutil.ToPgTextFromPtr(item.UOM),
 		CostCenterCode:    item.CostCenterCode,
 		AccountingAccount: pgutil.ToPgTextFromPtr(item.AccountingAccount),
-		SuggestedPrice:    pgutil.ToPgNumericFromFloat64(item.SuggestedPrice),
+		SuggestedPrice:    pgutil.ToPgNumericFromDecimal(item.SuggestedPrice),
 		DeliveryDate:      pgutil.ToPgDateFromPtr(item.DeliveryDate),
 		Application:       pgutil.ToPgTextFromPtr(item.Application),
 		UtilizationType:   pgutil.ToPgTextFromPtr(item.UtilizationType),
@@ -135,7 +136,7 @@ func (r *PurchaseRequisitionRepositorySQLC) GetItem(ctx context.Context, id int6
 	return itemToEntity(row), nil
 }
 
-func (r *PurchaseRequisitionRepositorySQLC) RegisterAttendance(ctx context.Context, itemID int64, qty float64) (*entity.PurchaseRequisitionItem, error) {
+func (r *PurchaseRequisitionRepositorySQLC) RegisterAttendance(ctx context.Context, itemID int64, qty decimal.Decimal) (*entity.PurchaseRequisitionItem, error) {
 	empresa, err := tenant.Code(ctx)
 	if err != nil {
 		return nil, err
@@ -143,7 +144,7 @@ func (r *PurchaseRequisitionRepositorySQLC) RegisterAttendance(ctx context.Conte
 	row, err := r.q.RegisterRequisitionItemAttendance(ctx, sqlc.RegisterRequisitionItemAttendanceParams{
 		EnterpriseCode: empresa,
 		ID:             itemID,
-		AttendedQty:    pgutil.ToPgNumericFromFloat64(qty),
+		AttendedQty:    pgutil.ToPgNumericFromDecimal(qty),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item de requisição %d não encontrado", itemID))
@@ -198,13 +199,13 @@ func itemToEntity(row sqlc.PurchaseRequisitionItem) *entity.PurchaseRequisitionI
 		RequisitionCode:   row.RequisitionCode,
 		Sequence:          row.Sequence,
 		ItemCode:          row.ItemCode,
-		Quantity:          pgutil.FromPgNumericToFloat64(row.Quantity),
-		AttendedQty:       pgutil.FromPgNumericToFloat64(row.AttendedQty),
-		CancelledQty:      pgutil.FromPgNumericToFloat64(row.CancelledQty),
+		Quantity:          pgutil.FromPgNumericToDecimal(row.Quantity),
+		AttendedQty:       pgutil.FromPgNumericToDecimal(row.AttendedQty),
+		CancelledQty:      pgutil.FromPgNumericToDecimal(row.CancelledQty),
 		UOM:               pgutil.FromPgTextPtr(row.Uom),
 		CostCenterCode:    row.CostCenterCode,
 		AccountingAccount: pgutil.FromPgTextPtr(row.AccountingAccount),
-		SuggestedPrice:    pgutil.FromPgNumericToFloat64(row.SuggestedPrice),
+		SuggestedPrice:    pgutil.FromPgNumericToDecimal(row.SuggestedPrice),
 		DeliveryDate:      pgutil.FromPgDateToPtr(row.DeliveryDate),
 		Application:       pgutil.FromPgTextPtr(row.Application),
 		UtilizationType:   pgutil.FromPgTextPtr(row.UtilizationType),

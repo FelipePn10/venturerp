@@ -221,7 +221,7 @@ func (c *ConsultasPG) ComprasDoItem(ctx context.Context, itemCode int64, desde t
 	rows, err := c.db.Query(ctx, `
 		SELECT fe.id, fe.numero_nf, fe.data_entrada, fe.supplier_code,
 		       COALESCE(s.name, fe.razao_social_emitente, ''), fi.quantity::float8, COALESCE(fi.uom, ''), fi.unit_price::float8,
-		       q.qtd::float8, q.custo::float8
+		       q.qtd::float8, q.custo::float8, COALESCE(ROUND(q.custo / NULLIF(q.qtd, 0), 6), 0)::float8
 		  FROM fiscal_entry_items fi
 		  JOIN fiscal_entries fe ON fe.id = fi.fiscal_entry_id AND fe.enterprise_id = $1
 		  LEFT JOIN suppliers s ON s.code = fe.supplier_code
@@ -239,13 +239,11 @@ func (c *ConsultasPG) ComprasDoItem(ctx context.Context, itemCode int64, desde t
 		var x purchase_order_uc.CompraDoItem
 		var entrada pgtype.Date
 		if err := rows.Scan(&x.FiscalEntryID, &x.NumeroNF, &entrada, &x.SupplierCode, &x.SupplierName, &x.Quantidade, &x.Unidade,
-			&x.PrecoNota, &x.QtdEstoque, &x.CustoAquisicao); err != nil {
+			&x.PrecoNota, &x.QtdEstoque, &x.CustoAquisicao, &x.CustoEstoque); err != nil {
 			return nil, err
 		}
+		// O custo por unidade de estoque é dividido no banco, em numeric.
 		x.DataEntrada = entrada.Time
-		if x.QtdEstoque > 0 {
-			x.CustoEstoque = x.CustoAquisicao / x.QtdEstoque
-		}
 		out = append(out, x)
 	}
 	return out, rows.Err()

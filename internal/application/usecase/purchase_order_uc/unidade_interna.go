@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -34,10 +35,10 @@ type UnidadeInterna struct {
 // Unidade de compra diferente sem conversão é recusada.
 func (u *UnidadeInterna) Preencher(ctx context.Context, l *entity.PurchaseOrderItem) error {
 	if u == nil || u.Unidades == nil {
-		if l.InternalQty <= 0 {
+		if !l.InternalQty.IsPositive() {
 			l.InternalQty = l.RequestedQty
 		}
-		if l.InternalPrice <= 0 {
+		if !l.InternalPrice.IsPositive() {
 			l.InternalPrice = l.UnitPrice
 		}
 		return nil
@@ -70,16 +71,20 @@ func (u *UnidadeInterna) Preencher(ctx context.Context, l *entity.PurchaseOrderI
 	if u.Conversor == nil {
 		return semConversao
 	}
-	q, achou, err := u.Conversor.ConvertQuantity(ctx, l.ItemCode, l.RequestedQty, compra, estoque)
+	qf, achou, err := u.Conversor.ConvertQuantity(ctx, l.ItemCode, l.RequestedQty.InexactFloat64(), compra, estoque)
 	if err != nil {
 		return err
 	}
-	if !achou || q <= 0 {
+	q := decimal.NewFromFloat(qf)
+	if !achou || !q.Round(6).IsPositive() {
 		return semConversao
 	}
-	l.InternalQty = q
+	// A quantidade gravada tem 6 casas (escala da coluna); o preço é dividido
+	// pela quantidade exata convertida — dividir pela arredondada mudava o preço
+	// (115,8975 KG = 17,9999981 M: 723,90 ÷ 18 ≠ 723,90 ÷ 17,9999981).
+	l.InternalQty = q.Round(6)
 	// Preço por unidade de estoque: o mesmo valor da linha dividido pela
 	// quantidade convertida (não depende de uma segunda leitura do fator).
-	l.InternalPrice = l.UnitPrice * l.RequestedQty / q
+	l.InternalPrice = l.UnitPrice.Mul(l.RequestedQty).DivRound(q, 10) // escala da coluna internal_price
 	return nil
 }

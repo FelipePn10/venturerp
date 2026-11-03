@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -203,13 +204,13 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 func canonicalPurchaseOrderItems(inputs []request.CreatePurchaseOrderItemDTO) ([]*entity.PurchaseOrderItem, error) {
 	items := make([]*entity.PurchaseOrderItem, 0, len(inputs))
 	for i, input := range inputs {
-		if input.ItemCode <= 0 || input.RequestedQty <= 0 {
+		if input.ItemCode <= 0 || !input.RequestedQty.IsPositive() {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("item e quantidade positiva são obrigatórios na linha %d", i+1))
 		}
 		if input.WarehouseID == nil || *input.WarehouseID <= 0 {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("depósito é obrigatório na linha %d", i+1))
 		}
-		if input.UnitPrice < 0 || input.DiscountPct < 0 || input.DiscountPct > 100 {
+		if input.UnitPrice.IsNegative() || input.DiscountPct.IsNegative() || input.DiscountPct.GreaterThan(decimal.NewFromInt(100)) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("preço ou desconto inválido na linha %d", i+1))
 		}
 		line := &entity.PurchaseOrderItem{

@@ -3,6 +3,8 @@ package purchase_requisition_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -34,22 +36,24 @@ type GeneratePurchaseOrdersUseCase struct {
 }
 
 type GeneratePurchaseOrdersResult struct {
-	Orders  []*poentity.PurchaseOrder `json:"orders"`
-	Skipped []string                  `json:"skipped,omitempty"`
+	// Orders é para o código; a API devolve Pedidos (formato do GET do pedido).
+	Orders  []*poentity.PurchaseOrder         `json:"-"`
+	Pedidos []*response.PurchaseOrderResponse `json:"orders"`
+	Skipped []string                          `json:"skipped,omitempty"`
 }
 
 type genLine struct {
 	reqItemID int64
 	reqCode   int64
 	itemCode  int64
-	qty       float64
-	balance   float64
+	qty       decimal.Decimal
+	balance   decimal.Decimal
 	uom       *string
 	costCtr   *int64
 	acct      *string
 	utiliz    *string
 	delivery  *time.Time
-	suggested float64
+	suggested decimal.Decimal
 }
 
 func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto request.GeneratePurchaseOrdersDTO) (*GeneratePurchaseOrdersResult, error) {
@@ -73,7 +77,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 	var supplierOrder []int64
 
 	for _, sel := range dto.Selections {
-		if sel.QtyToAttend <= 0 {
+		if !sel.QtyToAttend.IsPositive() {
 			continue
 		}
 		reqItem, err := uc.Reqs.GetItem(ctx, sel.RequisitionItemID)
@@ -182,13 +186,13 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		items := make([]*poentity.PurchaseOrderItem, 0, len(lines))
 		for i, ln := range lines {
 			unitPrice := ln.suggested
-			if unitPrice == 0 && priceTable != nil && uc.PriceProvider != nil {
+			if unitPrice.IsZero() && priceTable != nil && uc.PriceProvider != nil {
 				p, _, found, errPreco := uc.PriceProvider.GetItemPrice(ctx, *priceTable, ln.itemCode, &sc)
 				if errPreco != nil {
 					return nil, fmt.Errorf("lendo o preço do item na tabela: %w", errPreco)
 				}
 				if found {
-					unitPrice = p
+					unitPrice = decimal.NewFromFloat(p)
 				}
 			}
 			reqItemID, reqCode := ln.reqItemID, ln.reqCode
@@ -237,10 +241,10 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		// Register attendance back on the requisition items (capped at balance).
 		for _, ln := range lines {
 			attend := ln.qty
-			if attend > ln.balance {
+			if attend.GreaterThan(ln.balance) {
 				attend = ln.balance
 			}
-			if attend > 0 {
+			if attend.IsPositive() {
 				if _, aerr := uc.Reqs.RegisterAttendance(ctx, ln.reqItemID, attend); aerr != nil {
 					result.Skipped = append(result.Skipped, fmt.Sprintf("pedido %d gerado, mas o atendimento do item %d da requisição não foi registrado: %v", created.Code, ln.reqItemID, aerr))
 				}
@@ -248,5 +252,6 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		}
 	}
 
+	result.Pedidos = purchase_order_uc.ToPurchaseOrderResponses(result.Orders)
 	return result, nil
 }

@@ -1,23 +1,26 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreatePurchaseOrderDTO struct {
-	EnterpriseCode      int64     `json:"-"`
-	Status              string    `json:"status"`
-	Origin              string    `json:"origin"`
-	EmissionDate        string    `json:"emission_date"`
-	DeliveryDate        *string   `json:"delivery_date,omitempty"`
-	SupplierCode        *int64    `json:"supplier_code,omitempty"`
-	PaymentTermCode     *int64    `json:"payment_term_code,omitempty"`
-	CurrencyCode        string    `json:"currency_code"`
-	ShippingAddressCode *int64    `json:"shipping_address_code,omitempty"`
-	Notes               *string   `json:"notes,omitempty"`
-	TotalGross          float64   `json:"total_gross"`
-	TotalNet            float64   `json:"total_net"`
-	TotalDiscount       float64   `json:"total_discount"`
-	IsFirm              bool      `json:"is_firm"`
-	CreatedBy           uuid.UUID `json:"-"`
+	EnterpriseCode      int64           `json:"-"`
+	Status              string          `json:"status"`
+	Origin              string          `json:"origin"`
+	EmissionDate        string          `json:"emission_date"`
+	DeliveryDate        *string         `json:"delivery_date,omitempty"`
+	SupplierCode        *int64          `json:"supplier_code,omitempty"`
+	PaymentTermCode     *int64          `json:"payment_term_code,omitempty"`
+	CurrencyCode        string          `json:"currency_code"`
+	ShippingAddressCode *int64          `json:"shipping_address_code,omitempty"`
+	Notes               *string         `json:"notes,omitempty"`
+	TotalGross          decimal.Decimal `json:"total_gross"`
+	TotalNet            decimal.Decimal `json:"total_net"`
+	TotalDiscount       decimal.Decimal `json:"total_discount"`
+	IsFirm              bool            `json:"is_firm"`
+	CreatedBy           uuid.UUID       `json:"-"`
 	// Comercial / fiscal (capa) — opcionais; quando vazios e houver fornecedor,
 	// são preenchidos a partir dos defaults do fornecedor.
 	PriceTableCode   *int64  `json:"price_table_code,omitempty"`
@@ -26,17 +29,17 @@ type CreatePurchaseOrderDTO struct {
 	RequestTypeCode  *int64  `json:"request_type_code,omitempty"`
 	CurrencyDate     *string `json:"currency_date,omitempty"`
 	// Transporte
-	FreightType            string  `json:"freight_type,omitempty"`
-	FreightValueType       *string `json:"freight_value_type,omitempty"`
-	FreightValueMode       *string `json:"freight_value_mode,omitempty"`
-	FreightValue           float64 `json:"freight_value,omitempty"`
-	CarrierCode            *int64  `json:"carrier_code,omitempty"`
-	RedispatchCarrierCode  *int64  `json:"redispatch_carrier_code,omitempty"`
-	RedispatchFreightType  *string `json:"redispatch_freight_type,omitempty"`
-	RedispatchFreightValue float64 `json:"redispatch_freight_value,omitempty"`
+	FreightType            string          `json:"freight_type,omitempty"`
+	FreightValueType       *string         `json:"freight_value_type,omitempty"`
+	FreightValueMode       *string         `json:"freight_value_mode,omitempty"`
+	FreightValue           decimal.Decimal `json:"freight_value,omitempty"`
+	CarrierCode            *int64          `json:"carrier_code,omitempty"`
+	RedispatchCarrierCode  *int64          `json:"redispatch_carrier_code,omitempty"`
+	RedispatchFreightType  *string         `json:"redispatch_freight_type,omitempty"`
+	RedispatchFreightValue decimal.Decimal `json:"redispatch_freight_value,omitempty"`
 	// Adiantamento / importação / outros
 	AdvanceDate  *string                      `json:"advance_date,omitempty"`
-	AdvanceValue float64                      `json:"advance_value,omitempty"`
+	AdvanceValue decimal.Decimal              `json:"advance_value,omitempty"`
 	IncotermCode *string                      `json:"incoterm_code,omitempty"`
 	ShipmentDate *string                      `json:"shipment_date,omitempty"`
 	TalaoNumber  *string                      `json:"talao_number,omitempty"`
@@ -47,48 +50,48 @@ type CreatePurchaseOrderDTO struct {
 // internal UM/qty/price and IPI% are resolved automatically (price table,
 // conversões por item, classificação fiscal) when not provided.
 type CreatePurchaseOrderItemDTO struct {
-	PurchaseOrderCode         int64    `json:"-"`
-	ItemCode                  int64    `json:"item_code"`
-	Mask                      string   `json:"mask,omitempty"`
-	RequestedQty              float64  `json:"requested_qty"`
-	UnitPrice                 float64  `json:"unit_price,omitempty"`
-	PurchaseUOM               *string  `json:"purchase_uom,omitempty"`
-	InternalUOM               *string  `json:"internal_uom,omitempty"`
-	WarehouseID               *int64   `json:"warehouse_id,omitempty"`
-	DiscountPct               float64  `json:"discount_pct,omitempty"`
-	IPIPct                    *float64 `json:"ipi_pct,omitempty"`
-	ICMSPct                   float64  `json:"icms_pct,omitempty"`
-	ICMSSTPct                 float64  `json:"icms_st_pct,omitempty"`
-	TolerancePct              float64  `json:"tolerance_pct,omitempty"`
-	DeliveryDate              *string  `json:"delivery_date,omitempty"`
-	PromisedDate              *string  `json:"promised_date,omitempty"`
-	OperationTypeCode         *int64   `json:"operation_type_code,omitempty"`
-	InvoiceTypeCode           *int64   `json:"invoice_type_code,omitempty"`
-	AccountingAccount         *string  `json:"accounting_account,omitempty"`
-	CostCenterCode            *int64   `json:"cost_center_code,omitempty"`
-	FiscalClassificationCode  *int64   `json:"fiscal_classification_code,omitempty"`
-	RequesterEmployeeCode     *int64   `json:"requester_employee_code,omitempty"`
-	ContractCode              *int64   `json:"contract_code,omitempty"`
-	QuotationCode             *int64   `json:"quotation_code,omitempty"`
-	PlannedOrderCode          *int64   `json:"planned_order_code,omitempty"`
-	DemandType                *string  `json:"demand_type,omitempty"`
-	DemandCode                *int64   `json:"demand_code,omitempty"`
-	SalesOrderCode            *int64   `json:"sales_order_code,omitempty"`
-	ProductionOrderID         *int64   `json:"production_order_id,omitempty"`
-	PurchaseRequisitionCode   *int64   `json:"purchase_requisition_code,omitempty"`
-	PurchaseRequisitionItemID *int64   `json:"purchase_requisition_item_id,omitempty"`
-	UtilizationType           *string  `json:"utilization_type,omitempty"`
-	Notes                     *string  `json:"notes,omitempty"`
+	PurchaseOrderCode         int64            `json:"-"`
+	ItemCode                  int64            `json:"item_code"`
+	Mask                      string           `json:"mask,omitempty"`
+	RequestedQty              decimal.Decimal  `json:"requested_qty"`
+	UnitPrice                 decimal.Decimal  `json:"unit_price,omitempty"`
+	PurchaseUOM               *string          `json:"purchase_uom,omitempty"`
+	InternalUOM               *string          `json:"internal_uom,omitempty"`
+	WarehouseID               *int64           `json:"warehouse_id,omitempty"`
+	DiscountPct               decimal.Decimal  `json:"discount_pct,omitempty"`
+	IPIPct                    *decimal.Decimal `json:"ipi_pct,omitempty"`
+	ICMSPct                   decimal.Decimal  `json:"icms_pct,omitempty"`
+	ICMSSTPct                 decimal.Decimal  `json:"icms_st_pct,omitempty"`
+	TolerancePct              decimal.Decimal  `json:"tolerance_pct,omitempty"`
+	DeliveryDate              *string          `json:"delivery_date,omitempty"`
+	PromisedDate              *string          `json:"promised_date,omitempty"`
+	OperationTypeCode         *int64           `json:"operation_type_code,omitempty"`
+	InvoiceTypeCode           *int64           `json:"invoice_type_code,omitempty"`
+	AccountingAccount         *string          `json:"accounting_account,omitempty"`
+	CostCenterCode            *int64           `json:"cost_center_code,omitempty"`
+	FiscalClassificationCode  *int64           `json:"fiscal_classification_code,omitempty"`
+	RequesterEmployeeCode     *int64           `json:"requester_employee_code,omitempty"`
+	ContractCode              *int64           `json:"contract_code,omitempty"`
+	QuotationCode             *int64           `json:"quotation_code,omitempty"`
+	PlannedOrderCode          *int64           `json:"planned_order_code,omitempty"`
+	DemandType                *string          `json:"demand_type,omitempty"`
+	DemandCode                *int64           `json:"demand_code,omitempty"`
+	SalesOrderCode            *int64           `json:"sales_order_code,omitempty"`
+	ProductionOrderID         *int64           `json:"production_order_id,omitempty"`
+	PurchaseRequisitionCode   *int64           `json:"purchase_requisition_code,omitempty"`
+	PurchaseRequisitionItemID *int64           `json:"purchase_requisition_item_id,omitempty"`
+	UtilizationType           *string          `json:"utilization_type,omitempty"`
+	Notes                     *string          `json:"notes,omitempty"`
 }
 
 // ApprovePurchaseSuggestionDTO approves an MRP purchase suggestion (a PURCHASE
 // planned order) and generates a purchase order. PlannedOrderCode comes from the
 // URL; the body carries the buyer's choices.
 type ApprovePurchaseSuggestionDTO struct {
-	PlannedOrderCode int64     `json:"-"`
-	EnterpriseCode   int64     `json:"-"`
-	SupplierCode     *int64    `json:"supplier_code,omitempty"`
-	UnitPrice        float64   `json:"unit_price"`
-	Notes            *string   `json:"notes,omitempty"`
-	CreatedBy        uuid.UUID `json:"-"`
+	PlannedOrderCode int64           `json:"-"`
+	EnterpriseCode   int64           `json:"-"`
+	SupplierCode     *int64          `json:"supplier_code,omitempty"`
+	UnitPrice        decimal.Decimal `json:"unit_price"`
+	Notes            *string         `json:"notes,omitempty"`
+	CreatedBy        uuid.UUID       `json:"-"`
 }

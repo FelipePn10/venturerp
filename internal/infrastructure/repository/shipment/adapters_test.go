@@ -143,16 +143,16 @@ func TestPurchaseOrderAdapter(t *testing.T) {
 	fake := &fakePurchaseOrderRepo{
 		resp: &purchaseentity.PurchaseOrder{
 			Code:         55,
-			FreightValue: 200.0,
+			FreightValue: decimal.NewFromFloat(200.0),
 			Items: []*purchaseentity.PurchaseOrderItem{
 				{
 					ItemCode:     500,
-					RequestedQty: 100,
-					UnitPrice:    15.50,
-					TotalPrice:   1550.00,
-					IPIPct:       4,
-					ICMSPct:      12,
-					ICMSSTPct:    0,
+					RequestedQty: decimal.NewFromFloat(100),
+					UnitPrice:    decimal.NewFromFloat(15.50),
+					TotalPrice:   decimal.NewFromFloat(1550.00),
+					IPIPct:       decimal.NewFromFloat(4),
+					ICMSPct:      decimal.NewFromFloat(12),
+					ICMSSTPct:    decimal.NewFromFloat(0),
 				},
 			},
 		},

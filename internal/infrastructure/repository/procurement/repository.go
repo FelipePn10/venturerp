@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -713,7 +714,7 @@ func (r *Repository) FindContractItem(ctx context.Context, contractID, itemCode 
 
 // ConsumeContractItem atomically increases consumed_qty without exceeding the
 // contracted balance, returning the updated line.
-func (r *Repository) ConsumeContractItem(ctx context.Context, contractItemID int64, qty float64) (*entity.SupplierContractItem, error) {
+func (r *Repository) ConsumeContractItem(ctx context.Context, contractItemID int64, qty decimal.Decimal) (*entity.SupplierContractItem, error) {
 	emp, err := empresa(ctx)
 	if err != nil {
 		return nil, err
@@ -728,7 +729,7 @@ func (r *Repository) ConsumeContractItem(ctx context.Context, contractItemID int
 		contractItemID, qty, emp).Scan(
 		&it.ID, &it.ContractID, &it.ItemCode, &it.Mask, &it.Unit, &it.ContractedQty, &it.ConsumedQty, &it.UnitPrice, &it.MinOrderQty, &it.Notes)
 	if err == pgx.ErrNoRows {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("o consumo de %.4f excede o saldo contratado do item de contrato %d", qty, contractItemID))
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("o consumo de %s excede o saldo contratado do item de contrato %d", qty.StringFixed(4), contractItemID))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("consuming contract item: %w", err)
