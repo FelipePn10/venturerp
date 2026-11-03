@@ -214,14 +214,16 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 			return nil, err
 		}
 		d.SeriesGravadas = gravadas
-		// O produzido para amostra, feira, projeto… fica reservado para a
-		// demanda da OF: nenhum pedido de venda o pega antes da saída.
-		mask := ""
-		if d.Mask != nil {
-			mask = *d.Mask
+	}
+	// O produzido para amostra, feira, projeto… fica reservado para a demanda
+	// da OF: nenhum pedido de venda o pega antes da saída. Reserva só o que
+	// entrou de fato (a OF de beneficiamento não dá entrada), na linha de saldo
+	// e no lote do movimento.
+	for _, movement := range movements {
+		if movement.ItemCode != d.ItemCode {
+			continue // coproduto e requisição de componente
 		}
-		if _, err := stockrepository.ReservarProduzidoParaDemandasTx(ctx, tx, enterpriseID, d.ProductionOrderID, d.ItemCode, mask,
-			d.WarehouseID, d.Quantity, d.CreatedBy); err != nil {
+		if _, err := stockrepository.ReservarEntradaDaOFTx(ctx, tx, enterpriseID, d.ProductionOrderID, movement, d.CreatedBy); err != nil {
 			return nil, err
 		}
 	}

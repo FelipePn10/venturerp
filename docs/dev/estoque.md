@@ -125,6 +125,13 @@ almoxarifado de linha da OF.
 
 > A autorização da NF-e de saída consome as reservas do pedido automaticamente.
 
+**Reserva da demanda independente** (`reference_type = DEMANDA_INDEPENDENTE`,
+`reserva_demanda_pg.go`): a entrega da OF de uma demanda de finalidade própria
+(amostra, feira, consumo interno, assistência, projeto) reserva o que entrou, na
+mesma transação e na linha do movimento — almoxarifado, endereço e lote, porque a
+onda de separação lê o saldo do lote. A saída com essa referência consome a
+reserva; o estorno da saída a refaz; encerrar ou cancelar a demanda libera o resto.
+
 ## 4. Inventário (`/api/inventory`; `/api/stock/inventories` por compatibilidade)
 
 | Método | Rota | Ação |

@@ -15,8 +15,9 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 )
 
-// O produzido pela OF da demanda de amostra fica reservado para ela; a saída
-// para a finalidade consome a reserva e o encerramento libera o resto. A
+// O produzido pela OF da demanda de amostra fica reservado para ela, no lote em
+// que entrou; o estoque livre de antes não. A saída para a finalidade consome a
+// reserva, o estorno da saída a refaz e o encerramento libera o resto. A
 // demanda de estoque (expectativa de venda) não reserva nada.
 func TestReservaDoProduzidoParaADemanda(t *testing.T) {
 	pool := testutil.Pool(t)
@@ -52,19 +53,26 @@ func TestReservaDoProduzidoParaADemanda(t *testing.T) {
 	testutil.Exec(t, pool, `INSERT INTO independent_demand_orders(enterprise_id,demand_id,production_order_id,quantity,created_by)
 		VALUES($1,$2,$3,5,$5),($1,$4,$3,4,$5)`, a.ID, amostra, of, estoque, ator)
 
-	entrega := func(q int64) decimal.Decimal {
+	ref, ofCode := stockentity.ReferenceTypeProductionOrder, of
+	repo := stockrepo.NewStockRepositorySQLC(pool)
+	// Estoque livre de antes da OF: não é da demanda e não pode ser reservado.
+	if _, err := repo.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: code, WarehouseID: almox,
+		MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromInt(4), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	entrega := func(q int64, lote string) decimal.Decimal {
 		t.Helper()
 		tx, err := pool.Begin(bg)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = tx.Rollback(bg) }()
-		ref, ofCode := stockentity.ReferenceTypeProductionOrder, of
-		if err := stockrepo.CreateMovementTx(a.Ctx, tx, a.ID, &stockentity.StockMovement{ItemCode: code, WarehouseID: almox,
-			MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromInt(q), ReferenceType: &ref, ReferenceCode: &ofCode, CreatedBy: ator}); err != nil {
+		m := &stockentity.StockMovement{ItemCode: code, WarehouseID: almox, MovementType: stockentity.MovementTypeProductionEntry,
+			Quantity: decimal.NewFromInt(q), ReferenceType: &ref, ReferenceCode: &ofCode, Lot: &lote, CreatedBy: ator}
+		if err := stockrepo.CreateMovementTx(a.Ctx, tx, a.ID, m); err != nil {
 			t.Fatal(err)
 		}
-		r, err := stockrepo.ReservarProduzidoParaDemandasTx(a.Ctx, tx, a.ID, of, code, "", almox, decimal.NewFromInt(q), ator)
+		r, err := stockrepo.ReservarEntradaDaOFTx(a.Ctx, tx, a.ID, of, m, ator)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,43 +81,57 @@ func TestReservaDoProduzidoParaADemanda(t *testing.T) {
 		}
 		return r
 	}
-	// Entrega de 3: tudo para a amostra (a demanda de estoque não reserva).
-	if r := entrega(3); !r.Equal(decimal.NewFromInt(3)) {
-		t.Fatalf("reservado na primeira entrega: %s", r)
+	reservadoNoSaldo := func() decimal.Decimal {
+		return qtd(`SELECT SUM(reserved_qty) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, a.ID, code)
 	}
-	// Entrega de 6: só faltam 2 para a amostra; o resto fica livre.
-	if r := entrega(6); !r.Equal(decimal.NewFromInt(2)) {
-		t.Fatalf("reservado na segunda entrega: %s", r)
+	reservadoNoLote := func(lote string) decimal.Decimal {
+		return qtd(`SELECT COALESCE(SUM(reserved_qty),0) FROM stock_lot_balances WHERE enterprise_id=$1 AND item_code=$2 AND lot=$3`, a.ID, code, lote)
 	}
-	if v := qtd(`SELECT SUM(reserved_qty) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, a.ID, code); !v.Equal(decimal.NewFromInt(5)) {
-		t.Fatalf("saldo reservado: %s", v)
+	reservaAtiva := func() decimal.Decimal {
+		return qtd(`SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE enterprise_id=$1 AND reference_code=1 AND status='ACTIVE'`, a.ID)
 	}
+	igual := func(o string, v decimal.Decimal, n int64) {
+		t.Helper()
+		if !v.Equal(decimal.NewFromInt(n)) {
+			t.Fatalf("%s: %s, esperado %d", o, v, n)
+		}
+	}
+	// Entrega de 3 no lote L1: tudo para a amostra (a demanda de estoque não reserva).
+	igual("reservado na primeira entrega", entrega(3, "L1"), 3)
+	// Entrega de 6 no lote L2: só faltam 2 para a amostra; o resto fica livre.
+	igual("reservado na segunda entrega", entrega(6, "L2"), 2)
+	igual("saldo reservado", reservadoNoSaldo(), 5)
+	// A reserva fica no lote em que a peça entrou — é ele que a onda de separação lê.
+	igual("lote L1 reservado", reservadoNoLote("L1"), 3)
+	igual("lote L2 reservado", reservadoNoLote("L2"), 2)
 
 	// Saída de 2 para a amostra consome a reserva.
-	repo := stockrepo.NewStockRepositorySQLC(pool)
-	ref, dem := stockentity.ReferenceTypeIndependentDemand, int64(1)
-	if _, err := repo.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: code, WarehouseID: almox, MovementType: stockentity.MovementTypeOut,
-		Quantity: decimal.NewFromInt(2), ReferenceType: &ref, ReferenceCode: &dem, CreatedBy: ator}); err != nil {
+	dem := int64(1)
+	refDem := stockentity.ReferenceTypeIndependentDemand
+	saida, err := repo.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: code, WarehouseID: almox, MovementType: stockentity.MovementTypeOut,
+		Quantity: decimal.NewFromInt(2), ReferenceType: &refDem, ReferenceCode: &dem, CreatedBy: ator})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if v := qtd(`SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE enterprise_id=$1 AND reference_code=1 AND status='ACTIVE'`, a.ID); !v.Equal(decimal.NewFromInt(3)) {
-		t.Fatalf("reserva depois da saída: %s", v)
-	}
-	if v := qtd(`SELECT SUM(reserved_qty) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, a.ID, code); !v.Equal(decimal.NewFromInt(3)) {
-		t.Fatalf("saldo reservado depois da saída: %s", v)
-	}
+	igual("reserva depois da saída", reservaAtiva(), 3)
+	igual("saldo reservado depois da saída", reservadoNoSaldo(), 3)
+	igual("lote L1 depois da saída", reservadoNoLote("L1"), 1)
 
-	// Encerrar a demanda libera o resto da reserva.
+	// Estornada a saída, a peça volta reservada para a amostra.
+	if _, err := repo.EstornarMovimento(a.Ctx, saida.ID, ator, "saiu por engano"); err != nil {
+		t.Fatalf("estorno: %v", err)
+	}
+	igual("reserva depois do estorno", reservaAtiva(), 5)
+	igual("saldo reservado depois do estorno", reservadoNoSaldo(), 5)
+
+	// Encerrar a demanda libera o resto da reserva, no saldo e nos lotes.
 	demRepo := demandpg.NewIndependentDemandRepositorySQLC(sqlc.New(pool)).ComDB(pool)
 	if ok, err := demRepo.Encerrar(a.Ctx, 1, "ENCERRADA", "a feira foi cancelada", ator); err != nil || !ok {
 		t.Fatalf("encerrar: %v %v", ok, err)
 	}
-	if v := qtd(`SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE enterprise_id=$1 AND reference_code=1 AND status='ACTIVE'`, a.ID); !v.IsZero() {
-		t.Fatalf("reserva depois de encerrar: %s", v)
-	}
-	if v := qtd(`SELECT SUM(reserved_qty) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, a.ID, code); !v.IsZero() {
-		t.Fatalf("saldo reservado depois de encerrar: %s", v)
-	}
+	igual("reserva depois de encerrar", reservaAtiva(), 0)
+	igual("saldo reservado depois de encerrar", reservadoNoSaldo(), 0)
+	igual("lotes depois de encerrar", reservadoNoLote("L1").Add(reservadoNoLote("L2")), 0)
 	// A outra empresa não enxerga nada disso.
 	if n := scalar(`SELECT count(*) FROM stock_reservations WHERE enterprise_id=$1`, b.ID); n != 0 {
 		t.Fatalf("reserva vazou para outra empresa: %d", n)
