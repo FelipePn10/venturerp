@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.0] — 2026-11-03
+
+- feat(mrp): política de lote, reserva do produzido, avisos de demanda e valores em decimal (`bc3ea7cd`)
+
 ## [v1.9.1] — 2026-11-02
 
 - feat: beneficiamento completo, travas fiscais da NF-e e adiantamentos contabilizados (`564deb0d`)
