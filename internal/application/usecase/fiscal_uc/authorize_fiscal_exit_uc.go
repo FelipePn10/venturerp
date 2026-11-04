@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"log/slog"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -383,24 +384,24 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 			CodigoNCM:                      ncm,
 			CFOP:                           cfop,
 			UnidadeComercial:               unidade,
-			QuantidadeComercial:            it.Quantity,
-			ValorUnitarioComercial:         it.UnitPrice,
-			ValorBruto:                     it.TotalPrice,
+			QuantidadeComercial:            it.Quantity.InexactFloat64(),
+			ValorUnitarioComercial:         it.UnitPrice.InexactFloat64(),
+			ValorBruto:                     it.TotalPrice.InexactFloat64(),
 			CodigoSituacaoTributariaICMS:   cstICMS,
 			ModalidadeBaseCalculoICMS:      3,
-			ValorBaseCalculoICMS:           it.BaseICMS,
+			ValorBaseCalculoICMS:           it.BaseICMS.InexactFloat64(),
 			AliquotaICMS:                   percentualXML(it.AliqICMS),
-			ValorICMS:                      it.ValorICMS,
+			ValorICMS:                      it.ValorICMS.InexactFloat64(),
 			CodigoSituacaoTributariaIPI:    cstIPI,
 			AliquotaIPI:                    percentualXML(it.AliqIPI),
-			ValorIPI:                       it.ValorIPI,
-			BaseIPI:                        it.BaseIPI,
+			ValorIPI:                       it.ValorIPI.InexactFloat64(),
+			BaseIPI:                        it.BaseIPI.InexactFloat64(),
 			CodigoSituacaoTributariaPIS:    cstPIS,
 			AliquotaPIS:                    percentualXML(it.AliqPIS),
-			ValorPIS:                       it.ValorPIS,
+			ValorPIS:                       it.ValorPIS.InexactFloat64(),
 			CodigoSituacaoTributariaCOFINS: cstCOFINS,
 			AliquotaCOFINS:                 percentualXML(it.AliqCOFINS),
-			ValorCOFINS:                    it.ValorCOFINS,
+			ValorCOFINS:                    it.ValorCOFINS.InexactFloat64(),
 			OrigemMercadoria:               origem,
 		}
 
@@ -410,26 +411,24 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 		// usa o da configuração, como antes.
 		// Diferimento total (beneficiamento) tem valor zero e pDif de 100%: a SEFAZ
 		// recusa o CST 51 sem o grupo (rejeição 929).
-		if cstICMS == "51" && (it.ValorICMSDiferido > 0 || it.ICMSDiferimentoPct > 0) {
+		if cstICMS == "51" && (it.ValorICMSDiferido.IsPositive() || it.ICMSDiferimentoPct.IsPositive()) {
 			pct := it.ICMSDiferimentoPct
-			if pct <= 0 {
-				pct, _ = engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100)).Float64()
+			if !pct.IsPositive() {
+				pct = engine.FracaoDiferimento(cfg.IcmsDiferimentoPercentual).Mul(decimal.NewFromInt(100))
 			}
-			nfeIt.PercentualDiferimento = &pct
-			nfeIt.ValorICMSDiferido = &it.ValorICMSDiferido
+			nfeIt.PercentualDiferimento = fptr(pct)
+			nfeIt.ValorICMSDiferido = fptr(it.ValorICMSDiferido)
 		}
-		if it.ICMSReducaoBasePct > 0 {
-			red := it.ICMSReducaoBasePct
-			nfeIt.PercentualReducaoBC = &red
+		if it.ICMSReducaoBasePct.IsPositive() {
+			nfeIt.PercentualReducaoBC = fptr(it.ICMSReducaoBasePct)
 		}
-		if it.AliqCreditoSimples > 0 {
-			aliq, valor := it.AliqCreditoSimples, it.ValorCreditoSimples
-			nfeIt.AliquotaCreditoSimples, nfeIt.ValorCreditoSimples = &aliq, &valor
+		if it.AliqCreditoSimples.IsPositive() {
+			nfeIt.AliquotaCreditoSimples, nfeIt.ValorCreditoSimples = fptr(it.AliqCreditoSimples), fptr(it.ValorCreditoSimples)
 		}
-		if it.ICMSUFDestBase > 0 {
+		if it.ICMSUFDestBase.IsPositive() {
 			nfeIt.UFDest = &focusnfe.NFEItemUFDest{
-				Base: it.ICMSUFDestBase, AliquotaInterna: it.ICMSUFDestAliqInterna, AliquotaInterestadual: it.ICMSAliqInterestadual,
-				ValorDestino: it.ICMSUFDestValor, PercentualFCP: it.FCPUFDestPct, ValorFCP: it.FCPUFDestValor,
+				Base: it.ICMSUFDestBase.InexactFloat64(), AliquotaInterna: it.ICMSUFDestAliqInterna.InexactFloat64(), AliquotaInterestadual: it.ICMSAliqInterestadual.InexactFloat64(),
+				ValorDestino: it.ICMSUFDestValor.InexactFloat64(), PercentualFCP: it.FCPUFDestPct.InexactFloat64(), ValorFCP: it.FCPUFDestValor.InexactFloat64(),
 			}
 		}
 		if it.CodigoBeneficioFiscal != nil {
@@ -437,20 +436,17 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 		}
 
 		// Substituição Tributária (CST 10/70) — populated when the engine computed ST
-		if it.ValorICMSST > 0 || it.BaseICMSST > 0 {
+		if it.ValorICMSST.IsPositive() || it.BaseICMSST.IsPositive() {
 			modST := 4 // 4 = MVA (margem de valor agregado)
 			mvaPct := percentualXML(it.MVA)
 			aliqST := percentualXML(it.AliqICMSST)
-			baseST := it.BaseICMSST
-			valorST := it.ValorICMSST
 			nfeIt.ModalidadeBaseCalculoICMSST = &modST
 			nfeIt.PercentualMVAICMSST = &mvaPct
-			nfeIt.BaseCalculoICMSST = &baseST
+			nfeIt.BaseCalculoICMSST = fptr(it.BaseICMSST)
 			nfeIt.AliquotaICMSST = &aliqST
-			nfeIt.ValorICMSST = &valorST
-			if it.ICMSSTReducaoBasePct > 0 {
-				red := it.ICMSSTReducaoBasePct
-				nfeIt.PercentualReducaoBCST = &red
+			nfeIt.ValorICMSST = fptr(it.ValorICMSST)
+			if it.ICMSSTReducaoBasePct.IsPositive() {
+				nfeIt.PercentualReducaoBCST = fptr(it.ICMSSTReducaoBasePct)
 			}
 		}
 
@@ -484,8 +480,15 @@ type registroEnvioFocus interface {
 
 // percentualXML: a fração gravada (0,07) em percentual para o XML (7), com
 // quatro casas. Multiplicar em float deixava 7.000000000000001 no payload.
-func percentualXML(fracao float64) float64 {
-	return decimal.NewFromFloat(fracao).Mul(decimal.NewFromInt(100)).Round(4).InexactFloat64()
+// fptr leva um valor da nota ao payload da Focus, que é JSON numérico (float):
+// a conversão fica na fronteira, depois de toda a conta em decimal.
+func fptr(d decimal.Decimal) *float64 {
+	f := d.InexactFloat64()
+	return &f
+}
+
+func percentualXML(fracao decimal.Decimal) float64 {
+	return fracao.Mul(decimal.NewFromInt(100)).Round(4).InexactFloat64()
 }
 
 // situacaoDaNota diz a situação da nota como a tela mostra, para a mensagem ao usuário.

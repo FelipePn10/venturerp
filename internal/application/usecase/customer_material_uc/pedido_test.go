@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer_material/entity"
 )
@@ -124,7 +126,7 @@ func TestFaturarTrazOServicoDoPedido(t *testing.T) {
 		t.Fatal(err)
 	}
 	servico := notas.itens[0]
-	if servico.Cfop != "5124" || servico.TotalPrice != 230 || servico.Description == nil || *servico.Description != "SERVICO INDUSTRIALIZACAO" {
+	if servico.Cfop != "5124" || !servico.TotalPrice.Equal(decimal.NewFromFloat(230)) || servico.Description == nil || *servico.Description != "SERVICO INDUSTRIALIZACAO" {
 		t.Fatalf("linha de serviço não veio do pedido: %+v", servico)
 	}
 	if servico.SalesOrderItemCode == nil || *servico.SalesOrderItemCode != 71 {
@@ -181,7 +183,7 @@ func TestFaturarPedidoComVariasLinhasPedeAEscolha(t *testing.T) {
 	if _, err := uc2.Faturar(context.Background(), req, autorValido); err != nil {
 		t.Fatal(err)
 	}
-	if *notas2.itens[0].SalesOrderItemCode != 72 || notas2.itens[0].TotalPrice != 50 {
+	if *notas2.itens[0].SalesOrderItemCode != 72 || !notas2.itens[0].TotalPrice.Equal(decimal.NewFromFloat(50)) {
 		t.Fatalf("faturou a linha errada: %+v", notas2.itens[0])
 	}
 }

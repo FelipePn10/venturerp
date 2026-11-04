@@ -88,7 +88,7 @@ func TestIntegration_ReformaContabilizacaoEApuracao(t *testing.T) {
 			numero, emissao, actor, ibs, cbs, empresa).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
-		return &entity.FiscalExit{ID: id, NumeroNF: numero, Serie: "1", DataEmissao: emissao, ValorProdutos: 1000, ValorTotal: 1000}
+		return &entity.FiscalExit{ID: id, NumeroNF: numero, Serie: "1", DataEmissao: emissao, ValorProdutos: decimal.NewFromFloat(1000), ValorTotal: decimal.NewFromFloat(1000)}
 	}
 	saldo := func() map[int64]decimal.Decimal {
 		m := map[int64]decimal.Decimal{}

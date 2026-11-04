@@ -46,15 +46,15 @@ type FaturarPedidoUseCase struct {
 // FaturarPedidoDTO é o pedido de faturamento. Itens vazios fatura tudo o que
 // está pendente; com itens, só as linhas e quantidades informadas.
 type FaturarPedidoDTO struct {
-	SalesOrderCode   int64    `json:"sales_order_code"`
-	DataEmissao      string   `json:"data_emissao"`
-	DataSaida        *string  `json:"data_saida,omitempty"`
-	Serie            string   `json:"serie"`
-	Cfop             string   `json:"cfop"`
-	NaturezaOperacao string   `json:"natureza_operacao"`
-	ValorFrete       *float64 `json:"valor_frete,omitempty"`
-	ValorSeguro      *float64 `json:"valor_seguro,omitempty"`
-	ValorDesconto    *float64 `json:"valor_desconto,omitempty"`
+	SalesOrderCode   int64            `json:"sales_order_code"`
+	DataEmissao      string           `json:"data_emissao"`
+	DataSaida        *string          `json:"data_saida,omitempty"`
+	Serie            string           `json:"serie"`
+	Cfop             string           `json:"cfop"`
+	NaturezaOperacao string           `json:"natureza_operacao"`
+	ValorFrete       *decimal.Decimal `json:"valor_frete,omitempty"`
+	ValorSeguro      *decimal.Decimal `json:"valor_seguro,omitempty"`
+	ValorDesconto    *decimal.Decimal `json:"valor_desconto,omitempty"`
 	// FinalidadeCompra e InvoiceTypeID: vazios = a finalidade do pedido (ou do
 	// cliente) e nenhum tipo de nota.
 	FinalidadeCompra *string             `json:"finalidade_compra,omitempty"`
@@ -298,9 +298,9 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 			ItemCode:           &itemCode,
 			Ncm:                strPtr(e.linha.cadastro.NCM),
 			Cfop:               e.cfop,
-			Quantity:           e.qtd.InexactFloat64(),
-			UnitPrice:          e.linha.unitario.InexactFloat64(),
-			TotalPrice:         total.InexactFloat64(),
+			Quantity:           e.qtd,
+			UnitPrice:          e.linha.unitario,
+			TotalPrice:         total,
 			OrigemMercadoria:   origem,
 			Description:        &desc,
 			SalesOrderItemCode: &linhaCode,
@@ -315,11 +315,11 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	if totalPedido := pedido.TotalNet; totalPedido.IsPositive() && produtos.LessThan(totalPedido) {
 		proporcao = produtos.Div(totalPedido)
 	}
-	rateado := func(informado *float64, doPedido float64) float64 {
+	rateado := func(informado *decimal.Decimal, doPedido decimal.Decimal) decimal.Decimal {
 		if informado != nil {
 			return *informado
 		}
-		return decimal.NewFromFloat(doPedido).Mul(proporcao).Round(2).InexactFloat64()
+		return doPedido.Mul(proporcao).Round(2)
 	}
 
 	var dataSaida *string
@@ -334,10 +334,10 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 		CustomerCode:     pedido.CustomerCode,
 		Cfop:             cfop,
 		NaturezaOperacao: strings.ToUpper(strings.TrimSpace(dto.NaturezaOperacao)),
-		ValorProdutos:    produtos.InexactFloat64(),
-		ValorFrete:       rateado(dto.ValorFrete, pedido.FreightValue.InexactFloat64()),
-		ValorSeguro:      rateado(dto.ValorSeguro, pedido.InsuranceValue.InexactFloat64()),
-		ValorDesconto:    rateado(dto.ValorDesconto, pedido.DiscountValue.InexactFloat64()),
+		ValorProdutos:    produtos,
+		ValorFrete:       rateado(dto.ValorFrete, pedido.FreightValue),
+		ValorSeguro:      rateado(dto.ValorSeguro, pedido.InsuranceValue),
+		ValorDesconto:    rateado(dto.ValorDesconto, pedido.DiscountValue),
 		SalesOrderCode:   &pedido.Code,
 		SourceType:       &origem,
 		FinalidadeCompra: dto.FinalidadeCompra,

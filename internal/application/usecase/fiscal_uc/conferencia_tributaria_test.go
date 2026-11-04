@@ -65,7 +65,7 @@ func TestConferirTributacao(t *testing.T) {
 		t.Fatalf("CSOSN no regime normal: %v", n)
 	}
 	comST := linha("102", true)
-	comST.ValorICMSST = 10
+	comST.ValorICMSST = decimal.NewFromFloat(10)
 	if n := niveis(conferirTributacao(nota("PR", sp("1")), []*entity.FiscalExitItem{comST}, simples)); n["itens[1].cst_icms"] != NivelImpede {
 		t.Fatalf("CSOSN 102 com ST: %v", n)
 	}
@@ -84,7 +84,7 @@ func TestConferirTributacao(t *testing.T) {
 		t.Fatalf("linha isenta: %v", n)
 	}
 	comGrupo := linha("00", true)
-	comGrupo.ICMSUFDestBase, comGrupo.ICMSUFDestAliqInterna, comGrupo.FCPUFDestPct = 1050, 17, 2
+	comGrupo.ICMSUFDestBase, comGrupo.ICMSUFDestAliqInterna, comGrupo.FCPUFDestPct = decimal.NewFromFloat(1050), decimal.NewFromFloat(17), decimal.NewFromFloat(2)
 	if n := niveis(conferirTributacao(nota("GO", nil), []*entity.FiscalExitItem{comGrupo}, normal)); n["itens[1].difal"] != "" || n["itens[1].difal_aliquotas"] != NivelAtencao {
 		t.Fatalf("com grupo DIFAL: %v", n)
 	}
@@ -112,12 +112,12 @@ func TestIndicadoresDestinatario(t *testing.T) {
 
 func TestPercentualXMLSemResiduoDeFloat(t *testing.T) {
 	for in, quer := range map[float64]float64{0.07: 7, 0.195: 19.5, 0.0165: 1.65, 0.076: 7.6, 0.502439: 50.2439, 0: 0} {
-		if got := percentualXML(in); got != quer {
+		if got := percentualXML(decimal.NewFromFloat(in)); got != quer {
 			t.Errorf("percentualXML(%v) = %v, quer %v", in, got, quer)
 		}
 	}
-	if pctTexto(19.5) != "19,50" {
-		t.Fatalf("pctTexto: %s", pctTexto(19.5))
+	if pctTexto(decimal.NewFromFloat(19.5)) != "19,50" {
+		t.Fatalf("pctTexto: %s", pctTexto(decimal.NewFromFloat(19.5)))
 	}
 }
 
@@ -126,7 +126,7 @@ func TestConferirCFOPDoDestino(t *testing.T) {
 	regra := int64(1)
 	linha := func(cfop string, st float64) *entity.FiscalExitItem {
 		cst := "00"
-		return &entity.FiscalExitItem{Sequence: 1, Cfop: cfop, CstICMS: &cst, RegraICMSIPIID: &regra, ValorICMSST: st, ICMSUFDestBase: 1}
+		return &entity.FiscalExitItem{Sequence: 1, Cfop: cfop, CstICMS: &cst, RegraICMSIPIID: &regra, ValorICMSST: decimal.NewFromFloat(st), ICMSUFDestBase: decimal.NewFromFloat(1)}
 	}
 	nota := func(uf string) *entity.FiscalExit {
 		ie := "1"
@@ -193,10 +193,10 @@ func TestDispositivosAplicados(t *testing.T) {
 	if got := p.DispositivosAplicados("contribuinte", engine.TaxItemResult{CSTICMS: "00"}); len(got) != 0 {
 		t.Fatalf("tributada integral não cita benefício: %v", got)
 	}
-	if got := p.DispositivosAplicados("contribuinte", engine.TaxItemResult{CSTICMS: "51", ValorICMSDiferido: 75}); len(got) != 1 || got[0] != "Diferimento art. 28" {
+	if got := p.DispositivosAplicados("contribuinte", engine.TaxItemResult{CSTICMS: "51", ValorICMSDiferido: decimal.NewFromFloat(75)}); len(got) != 1 || got[0] != "Diferimento art. 28" {
 		t.Fatalf("diferimento: %v", got)
 	}
-	if got := p.DispositivosAplicados("contribuinte", engine.TaxItemResult{CSTICMS: "20", ReducaoBaseICMSPct: 33}); len(got) != 2 {
+	if got := p.DispositivosAplicados("contribuinte", engine.TaxItemResult{CSTICMS: "20", ReducaoBaseICMSPct: decimal.NewFromFloat(33)}); len(got) != 2 {
 		t.Fatalf("redução (CST 20 + redução): %v", got)
 	}
 }

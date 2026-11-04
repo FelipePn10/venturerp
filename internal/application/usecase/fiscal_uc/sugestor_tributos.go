@@ -62,7 +62,7 @@ func (s *SugestorTributos) SugerirTributos(ctx context.Context, q ports.Consulta
 	item := q.ItemCode
 	op := OperacaoTributavel{
 		UFDestino: uf, IE: dest.IEDestinatario, TipoPessoa: dest.TipoPessoa, Cliente: dest.CustomerCode, Pedido: q.SalesOrderCode,
-		Itens: []LinhaTributavel{{ItemCode: &item, Ncm: &ncm, Quantidade: q.Quantidade.InexactFloat64(), ValorUnitario: q.ValorUnitario.InexactFloat64(), Origem: origem}},
+		Itens: []LinhaTributavel{{ItemCode: &item, Ncm: &ncm, Quantidade: q.Quantidade, ValorUnitario: q.ValorUnitario, Origem: origem}},
 	}
 	if q.Finalidade != nil {
 		op.Finalidade = *q.Finalidade
@@ -79,13 +79,13 @@ func (s *SugestorTributos) SugerirTributos(ctx context.Context, q ports.Consulta
 	r := t.Resultado.Itens[0]
 	cem := decimal.NewFromInt(100)
 	out := &ports.TributosSugeridos{
-		IPIPct:    decimal.NewFromFloat(r.AliquotaIPI).Mul(cem).Round(4),
-		ICMSPct:   decimal.NewFromFloat(r.AliquotaICMS).Mul(cem).Round(4),
-		PISPct:    decimal.NewFromFloat(r.AliquotaPIS).Mul(cem).Round(4),
-		COFINSPct: decimal.NewFromFloat(r.AliquotaCOFINS).Mul(cem).Round(4),
+		IPIPct:    r.AliquotaIPI.Mul(cem).Round(4),
+		ICMSPct:   r.AliquotaICMS.Mul(cem).Round(4),
+		PISPct:    r.AliquotaPIS.Mul(cem).Round(4),
+		COFINSPct: r.AliquotaCOFINS.Mul(cem).Round(4),
 	}
-	if produtos := q.Quantidade.Mul(q.ValorUnitario); produtos.IsPositive() && r.ValorICMSST > 0 {
-		out.STPct = decimal.NewFromFloat(r.ValorICMSST).Div(produtos).Mul(cem).Round(4)
+	if produtos := q.Quantidade.Mul(q.ValorUnitario); produtos.IsPositive() && r.ValorICMSST.IsPositive() {
+		out.STPct = r.ValorICMSST.Div(produtos).Mul(cem).Round(4)
 	}
 	if p := t.Regras[0]; p != nil {
 		id := p.ID

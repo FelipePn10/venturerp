@@ -4,6 +4,7 @@ package fiscal_test
 
 import (
 	"context"
+	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
@@ -46,12 +47,12 @@ func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 		DataEmissao:      time.Now(),
 		Cfop:             "5401",
 		NaturezaOperacao: "Venda com ST",
-		ValorProdutos:    1000,
-		ValorIPI:         50,
-		ValorICMS:        120,
-		BaseICMSST:       1470,
-		ValorICMSST:      56.40,
-		ValorTotal:       1106.40,
+		ValorProdutos:    decimal.NewFromFloat(1000),
+		ValorIPI:         decimal.NewFromFloat(50),
+		ValorICMS:        decimal.NewFromFloat(120),
+		BaseICMSST:       decimal.NewFromFloat(1470),
+		ValorICMSST:      decimal.NewFromFloat(56.40),
+		ValorTotal:       decimal.NewFromFloat(1106.40),
 		Status:           entity.ExitStatusDraft,
 		CreatedBy:        user,
 	}
@@ -68,16 +69,16 @@ func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 		FiscalExitID: created.ID,
 		Sequence:     1,
 		Cfop:         "5401",
-		Quantity:     1,
-		UnitPrice:    1000,
-		TotalPrice:   1000,
-		BaseICMS:     1000,
-		AliqICMS:     0.12,
-		ValorICMS:    120,
-		BaseICMSST:   1470,
-		AliqICMSST:   0.12,
-		ValorICMSST:  56.40,
-		MVA:          0.40,
+		Quantity:     decimal.NewFromFloat(1),
+		UnitPrice:    decimal.NewFromFloat(1000),
+		TotalPrice:   decimal.NewFromFloat(1000),
+		BaseICMS:     decimal.NewFromFloat(1000),
+		AliqICMS:     decimal.NewFromFloat(0.12),
+		ValorICMS:    decimal.NewFromFloat(120),
+		BaseICMSST:   decimal.NewFromFloat(1470),
+		AliqICMSST:   decimal.NewFromFloat(0.12),
+		ValorICMSST:  decimal.NewFromFloat(56.40),
+		MVA:          decimal.NewFromFloat(0.40),
 		CstICMS:      strptr("10"),
 	}
 	if _, err := repo.CreateExitItem(ctx, item); err != nil {
@@ -89,8 +90,8 @@ func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetExitByID: %v", err)
 	}
-	if got.BaseICMSST != 1470 || got.ValorICMSST != 56.40 {
-		t.Errorf("exit ST header = base %.2f valor %.2f, want 1470/56.40", got.BaseICMSST, got.ValorICMSST)
+	if !got.BaseICMSST.Equal(decimal.NewFromFloat(1470)) || !got.ValorICMSST.Equal(decimal.RequireFromString("56.40")) {
+		t.Errorf("exit ST header = base %v valor %v, want 1470/56.40", got.BaseICMSST, got.ValorICMSST)
 	}
 
 	// Item round-trip.
@@ -102,8 +103,8 @@ func TestIntegration_FiscalExit_STPersistence(t *testing.T) {
 		t.Fatalf("items = %d, want 1", len(items))
 	}
 	it := items[0]
-	if it.ValorICMSST != 56.40 || it.BaseICMSST != 1470 || it.AliqICMSST != 0.12 || it.MVA != 0.40 {
-		t.Errorf("item ST = base %.2f aliq %.4f valor %.2f mva %.4f, want 1470/0.12/56.40/0.40",
+	if !it.ValorICMSST.Equal(decimal.RequireFromString("56.40")) || !it.BaseICMSST.Equal(decimal.NewFromFloat(1470)) || !it.AliqICMSST.Equal(decimal.NewFromFloat(0.12)) || !it.MVA.Equal(decimal.RequireFromString("0.40")) {
+		t.Errorf("item ST = base %v aliq %v valor %v mva %v, want 1470/0.12/56.40/0.40",
 			it.BaseICMSST, it.AliqICMSST, it.ValorICMSST, it.MVA)
 	}
 	if it.CstICMS == nil || *it.CstICMS != "10" {

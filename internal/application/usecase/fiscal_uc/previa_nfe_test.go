@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 
@@ -37,10 +38,10 @@ func notaBase() *fiscalentity.FiscalExit {
 		DestEmail:               strp("compras@cliente.com.br"),
 		Cfop:                    "6101",
 		NaturezaOperacao:        "VENDA DE PRODUCAO DO ESTABELECIMENTO",
-		ValorProdutos:           1000,
-		ValorIPI:                50,
-		ValorICMS:               120,
-		ValorTotal:              1050,
+		ValorProdutos:           decimal.NewFromFloat(1000),
+		ValorIPI:                decimal.NewFromFloat(50),
+		ValorICMS:               decimal.NewFromFloat(120),
+		ValorTotal:              decimal.NewFromFloat(1050),
 		Status:                  fiscalentity.ExitStatusDraft,
 	}
 }
@@ -58,7 +59,7 @@ func configBase() *fiscalentity.FiscalConfig {
 func itemBase() []*fiscalentity.FiscalExitItem {
 	return []*fiscalentity.FiscalExitItem{{
 		Sequence: 1, ItemCode: i64p(5), Ncm: strp("73269000"), Cfop: "6101",
-		Quantity: 10, UnitPrice: 100, TotalPrice: 1000, Description: strp("BALANCA RN-01001"),
+		Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(100), TotalPrice: decimal.NewFromFloat(1000), Description: strp("BALANCA RN-01001"),
 	}}
 }
 
@@ -84,7 +85,8 @@ func TestPayloadLevaEnderecoDoDestinatario(t *testing.T) {
 
 // ─── Forma de pagamento e duplicatas ────────────────────────────────────────
 
-func planoEm3Parcelas(total float64, emissao time.Time) PlanoDaNota {
+func planoEm3Parcelas(totalD decimal.Decimal, emissao time.Time) PlanoDaNota {
+	total := totalD.InexactFloat64()
 	t30 := emissao.AddDate(0, 0, 28)
 	t60 := emissao.AddDate(0, 0, 56)
 	return PlanoDaNota{
@@ -122,15 +124,15 @@ func TestVendaAPrazoLevaDuplicataEBoleto(t *testing.T) {
 	for _, f := range p.FormaPagamento {
 		soma += f.Valor
 	}
-	if soma < nota.ValorTotal-0.01 || soma > nota.ValorTotal+0.01 {
-		t.Fatalf("as formas de pagamento somam %.2f e a nota vale %.2f", soma, nota.ValorTotal)
+	if vt := nota.ValorTotal.InexactFloat64(); soma < vt-0.01 || soma > vt+0.01 {
+		t.Fatalf("as formas de pagamento somam %.2f e a nota vale %s", soma, nota.ValorTotal)
 	}
 }
 
 func TestVendaAVistaNaoLevaDuplicata(t *testing.T) {
 	nota := notaBase()
 	plano := PlanoDaNota{Parcelas: []customerentity.ParcelaCalculada{{
-		Numero: 1, Valor: decimal.NewFromFloat(nota.ValorTotal), Vencimento: nota.DataEmissao,
+		Numero: 1, Valor: nota.ValorTotal, Vencimento: nota.DataEmissao,
 		Evento: customerentity.BaseEmissao, DiasPrazo: 0,
 	}}}
 	p, _ := montarPayloadNFe(nota, itemBase(), configBase(), plano, reformaPelaLei(t, nota, itemBase(), configBase()))
@@ -296,7 +298,7 @@ func TestNumeroDigitadoJaUsadoERecusado(t *testing.T) {
 	uc := &CreateFiscalExitUseCase{Repo: repo, Auth: authLiberado{}}
 	_, err := uc.Execute(context.Background(), request.CreateFiscalExitDTO{
 		NumeroNF: 763, Serie: "1", DataEmissao: "2026-09-27", Cfop: "5101", NaturezaOperacao: "VENDA",
-		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: 1, UnitPrice: 10, TotalPrice: 10, OrigemMercadoria: "0"}},
+		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(10), TotalPrice: decimal.NewFromFloat(10), OrigemMercadoria: "0"}},
 	})
 	var conflito *errorsuc.ConflictError
 	if !errors.As(err, &conflito) {
@@ -314,7 +316,7 @@ func TestNotaSemNumeroRecebeOProximoDaSequencia(t *testing.T) {
 	uc := &CreateFiscalExitUseCase{Repo: repo, Auth: authLiberado{}}
 	_, err := uc.Execute(context.Background(), request.CreateFiscalExitDTO{
 		DataEmissao: "2026-09-27", Cfop: "5101", NaturezaOperacao: "VENDA",
-		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: 1, UnitPrice: 10, TotalPrice: 10}},
+		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(10), TotalPrice: decimal.NewFromFloat(10)}},
 	})
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)
@@ -334,7 +336,7 @@ func TestNumeroInformadoEhRespeitado(t *testing.T) {
 	uc := &CreateFiscalExitUseCase{Repo: repo, Auth: authLiberado{}}
 	_, err := uc.Execute(context.Background(), request.CreateFiscalExitDTO{
 		NumeroNF: 907, Serie: "2", DataEmissao: "2026-09-27", Cfop: "5101", NaturezaOperacao: "VENDA",
-		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: 1, UnitPrice: 10, TotalPrice: 10}},
+		Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Cfop: "5101", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(10), TotalPrice: decimal.NewFromFloat(10)}},
 	})
 	if err != nil {
 		t.Fatalf("erro inesperado: %v", err)

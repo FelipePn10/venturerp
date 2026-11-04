@@ -29,7 +29,7 @@ type SaidaContabil interface {
 	EstornarEstoqueDaSaida(ctx context.Context, exitID int64, userID uuid.UUID) (int, error)
 }
 
-func moedaF(v float64) decimal.Decimal { return decimal.NewFromFloat(v).Round(2) }
+func moedaF(v decimal.Decimal) decimal.Decimal { return v.Round(2) }
 
 // contabilizarSaida lança a venda depois da autorização. A NF-e já existe na
 // SEFAZ e não se desfaz: falta de conta ou erro viram aviso na resposta, para

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -22,15 +24,15 @@ func TestBuildFocusItems_DefaultsAndScaling(t *testing.T) {
 			ItemCode:   i64p(1001),
 			Ncm:        strp("72142000"),
 			Cfop:       "5101",
-			Quantity:   2,
-			UnitPrice:  100,
-			TotalPrice: 200,
-			BaseICMS:   200,
-			AliqICMS:   0.18, // stored as fraction; must be emitted as 18
-			ValorICMS:  36,
-			AliqIPI:    0.05,
-			AliqPIS:    0.0165,
-			AliqCOFINS: 0.076,
+			Quantity:   decimal.NewFromFloat(2),
+			UnitPrice:  decimal.NewFromFloat(100),
+			TotalPrice: decimal.NewFromFloat(200),
+			BaseICMS:   decimal.NewFromFloat(200),
+			AliqICMS:   decimal.NewFromFloat(0.18), // stored as fraction; must be emitted as 18
+			ValorICMS:  decimal.NewFromFloat(36),
+			AliqIPI:    decimal.NewFromFloat(0.05),
+			AliqPIS:    decimal.NewFromFloat(0.0165),
+			AliqCOFINS: decimal.NewFromFloat(0.076),
 			// CST pointers nil → defaults
 			OrigemMercadoria: "3",
 		},
@@ -90,10 +92,10 @@ func TestBuildFocusItems_SubstituicaoTributaria(t *testing.T) {
 		ItemCode:    i64p(5),
 		Cfop:        "5401",
 		CstICMS:     strp("10"),
-		BaseICMSST:  300,
-		AliqICMSST:  0.18,
-		ValorICMSST: 54,
-		MVA:         0.40,
+		BaseICMSST:  decimal.NewFromFloat(300),
+		AliqICMSST:  decimal.NewFromFloat(0.18),
+		ValorICMSST: decimal.NewFromFloat(54),
+		MVA:         decimal.NewFromFloat(0.40),
 	}}
 	out := buildFocusItems(items, &fiscalentity.FiscalConfig{})
 	it := out[0]
@@ -116,7 +118,7 @@ func TestBuildFocusItems_DiferimentoCST51(t *testing.T) {
 		ItemCode:          i64p(7),
 		Cfop:              "5101",
 		CstICMS:           strp("51"),
-		ValorICMSDiferido: 12,
+		ValorICMSDiferido: decimal.NewFromFloat(12),
 	}}
 	cfg := &fiscalentity.FiscalConfig{IcmsDiferimentoPercentual: 0.33}
 	out := buildFocusItems(items, cfg)
@@ -174,7 +176,7 @@ func (f *fakeSalesRepo) ChangeStatus(_ context.Context, code int64, status sales
 // o CST 51 (rejeição 929). Foi a transmissão real em homologação que mostrou.
 func TestBuildFocusItems_DiferimentoTotalComValorZero(t *testing.T) {
 	cst := "51"
-	out := buildFocusItems([]*fiscalentity.FiscalExitItem{{Sequence: 1, CstICMS: &cst, ICMSDiferimentoPct: 100, Quantity: 1, UnitPrice: 10, TotalPrice: 10}}, &fiscalentity.FiscalConfig{})
+	out := buildFocusItems([]*fiscalentity.FiscalExitItem{{Sequence: 1, CstICMS: &cst, ICMSDiferimentoPct: decimal.NewFromFloat(100), Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(10), TotalPrice: decimal.NewFromFloat(10)}}, &fiscalentity.FiscalConfig{})
 	if out[0].PercentualDiferimento == nil || *out[0].PercentualDiferimento != 100 {
 		t.Fatalf("pDif = %v, esperado 100", out[0].PercentualDiferimento)
 	}

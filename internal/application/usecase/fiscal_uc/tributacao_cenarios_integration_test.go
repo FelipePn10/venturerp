@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
@@ -57,7 +59,17 @@ type cenarioNota struct {
 	cliente            *int64
 }
 
-func perto(a, b float64) bool { return math.Abs(a-b) < 0.01 }
+// perto compara o valor gravado (float ou decimal) com o esperado, a um centavo.
+func perto[T float64 | decimal.Decimal](a T, b float64) bool {
+	var f float64
+	switch v := any(a).(type) {
+	case float64:
+		f = v
+	case decimal.Decimal:
+		f = v.InexactFloat64()
+	}
+	return math.Abs(f-b) < 0.01
+}
 
 // A tributação por cenário de ponta a ponta: a nota é criada pelo caso de uso
 // com os repositórios reais, a linha gravada é relida do banco, a prévia
@@ -85,8 +97,8 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 		dto := request.CreateFiscalExitDTO{
 			Serie: "1", DataEmissao: time.Now().Format("2006-01-02"), UFDestinatario: &uf, CustomerCode: c.cliente,
 			CnpjDestinatario: strPtr("44444444000191"), RazaoSocialDestinatario: strPtr("Cliente"),
-			Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: 1000,
-			Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: 1, UnitPrice: 1000, TotalPrice: 1000, OrigemMercadoria: "0"}},
+			Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: decimal.NewFromFloat(1000),
+			Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1000), TotalPrice: decimal.NewFromFloat(1000), OrigemMercadoria: "0"}},
 		}
 		if c.ie != "" {
 			dto.IEDestinatario = &c.ie
@@ -129,10 +141,10 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 		t.Fatalf("finalidade da nota: %v, quer REVENDA (do cliente)", exit.FinalidadeCompra)
 	}
 	if derefS(it.CstICMS) != "51" || !perto(it.BaseICMS, 1000) || !perto(it.ValorICMS, 195) || !perto(it.ValorICMSDiferido, 75) || !perto(it.ICMSDiferimentoPct, 38.46) {
-		t.Fatalf("revenda PR: CST %s base %.2f ICMS %.2f diferido %.2f pDif %.2f", derefS(it.CstICMS), it.BaseICMS, it.ValorICMS, it.ValorICMSDiferido, it.ICMSDiferimentoPct)
+		t.Fatalf("revenda PR: CST %s base %v ICMS %v diferido %v pDif %v", derefS(it.CstICMS), it.BaseICMS, it.ValorICMS, it.ValorICMSDiferido, it.ICMSDiferimentoPct)
 	}
 	if !perto(exit.ValorICMS, 120) {
-		t.Fatalf("cabeçalho da nota com o ICMS da operação (%.2f), quer o destacado 120,00", exit.ValorICMS)
+		t.Fatalf("cabeçalho da nota com o ICMS da operação (%v), quer o destacado 120,00", exit.ValorICMS)
 	}
 	if derefS(it.CodigoBeneficioFiscal) != "PR830001" {
 		t.Fatalf("cBenef do diferimento da configuração: %q, quer PR830001", derefS(it.CodigoBeneficioFiscal))
@@ -141,8 +153,8 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 	// 2. Contribuinte comprando para uso e consumo: consumidor final, IPI na
 	// base, sem diferimento; o XML vai com consumidor_final = 1 e a IE.
 	exit, it = emitir(cenarioNota{uf: "PR", ie: "9012345679", cliente: &clienteUso})
-	if derefS(it.CstICMS) != "00" || !perto(it.BaseICMS, 1050) || !perto(it.ValorICMS, 204.75) || it.ValorICMSDiferido != 0 {
-		t.Fatalf("uso e consumo PR: CST %s base %.2f ICMS %.2f diferido %.2f", derefS(it.CstICMS), it.BaseICMS, it.ValorICMS, it.ValorICMSDiferido)
+	if derefS(it.CstICMS) != "00" || !perto(it.BaseICMS, 1050) || !perto(it.ValorICMS, 204.75) || !it.ValorICMSDiferido.IsZero() {
+		t.Fatalf("uso e consumo PR: CST %s base %v ICMS %v diferido %v", derefS(it.CstICMS), it.BaseICMS, it.ValorICMS, it.ValorICMSDiferido)
 	}
 	if m := payload(exit.ID); m["consumidor_final"] != 1.0 || m["indicador_inscricao_estadual_destinatario"] != 1.0 {
 		t.Fatalf("uso e consumo: consumidor_final %v indicador IE %v, quer 1 e 1", m["consumidor_final"], m["indicador_inscricao_estadual_destinatario"])
@@ -151,8 +163,8 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 	// 3. Não contribuinte em GO: 7% (Resolução SF 22/89) e o grupo do DIFAL
 	// (interna de GO 19% − 7% sobre 1.050; GO não tem FCP geral) gravado e no XML.
 	exit, it = emitir(cenarioNota{uf: "GO"})
-	if !perto(it.AliqICMS, 0.07) || !perto(it.ValorICMS, 73.5) || !perto(it.ICMSUFDestBase, 1050) || !perto(it.ICMSUFDestValor, 126) || it.FCPUFDestValor != 0 {
-		t.Fatalf("não contribuinte GO: aliq %.4f ICMS %.2f base dest %.2f DIFAL %.2f FCP %.2f", it.AliqICMS, it.ValorICMS, it.ICMSUFDestBase, it.ICMSUFDestValor, it.FCPUFDestValor)
+	if !perto(it.AliqICMS, 0.07) || !perto(it.ValorICMS, 73.5) || !perto(it.ICMSUFDestBase, 1050) || !perto(it.ICMSUFDestValor, 126) || !it.FCPUFDestValor.IsZero() {
+		t.Fatalf("não contribuinte GO: aliq %v ICMS %v base dest %v DIFAL %v FCP %v", it.AliqICMS, it.ValorICMS, it.ICMSUFDestBase, it.ICMSUFDestValor, it.FCPUFDestValor)
 	}
 	m := payload(exit.ID)
 	itemXML := m["items"].([]any)[0].(map[string]any)
@@ -169,7 +181,7 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 	}
 	_, it = emitir(cenarioNota{uf: "SP", ie: "110042490114", finalidade: "REVENDA"})
 	if it.RegraICMSIPIID == nil || *it.RegraICMSIPIID != regraST || derefS(it.CstICMS) != "10" || !perto(it.BaseICMSST, 1577.56) || !perto(it.ValorICMSST, 163.96) {
-		t.Fatalf("ST da regra: regra %v CST %s base ST %.2f ST %.2f", it.RegraICMSIPIID, derefS(it.CstICMS), it.BaseICMSST, it.ValorICMSST)
+		t.Fatalf("ST da regra: regra %v CST %s base ST %v ST %v", it.RegraICMSIPIID, derefS(it.CstICMS), it.BaseICMSST, it.ValorICMSST)
 	}
 
 	// 5. Sem regra, a prévia avisa (empresa não exige regra): ATENÇÃO, não IMPEDE.
@@ -184,7 +196,7 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 
 	// 6. Finalidade inválida é erro de validação, não 500.
 	if _, err := criar.Execute(ctx, request.CreateFiscalExitDTO{Serie: "1", DataEmissao: time.Now().Format("2006-01-02"), UFDestinatario: strPtr("PR"),
-		FinalidadeCompra: strPtr("REVENDER"), Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Quantity: 1, UnitPrice: 1}}}); err == nil || !strings.Contains(err.Error(), "finalidade") {
+		FinalidadeCompra: strPtr("REVENDER"), Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1)}}}); err == nil || !strings.Contains(err.Error(), "finalidade") {
 		t.Fatalf("finalidade inválida: %v", err)
 	}
 }
@@ -205,8 +217,8 @@ func TestIntegration_ExigenciaDeRegraImpedeTransmissao(t *testing.T) {
 		t.Helper()
 		ncm := "73269090"
 		res, err := criar.Execute(ctx, request.CreateFiscalExitDTO{Serie: "1", DataEmissao: time.Now().Format("2006-01-02"), UFDestinatario: strPtr("PR"), IEDestinatario: strPtr("9012345678"),
-			CnpjDestinatario: strPtr("44444444000191"), RazaoSocialDestinatario: strPtr("Cliente"), Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: 100,
-			Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: 1, UnitPrice: 100, TotalPrice: 100, OrigemMercadoria: "0"}}})
+			CnpjDestinatario: strPtr("44444444000191"), RazaoSocialDestinatario: strPtr("Cliente"), Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: decimal.NewFromFloat(100),
+			Itens: []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(100), TotalPrice: decimal.NewFromFloat(100), OrigemMercadoria: "0"}}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -248,16 +260,16 @@ func TestIntegration_SimplesNacionalCSOSN(t *testing.T) {
 	previa := &fiscal_uc.PreviaNFeUseCase{Repo: repo, Auth: &infraauth.AuthService{}}
 	ncm := "73269090"
 	res, err := criar.Execute(ctx, request.CreateFiscalExitDTO{Serie: "1", DataEmissao: time.Now().Format("2006-01-02"), UFDestinatario: strPtr("PR"), IEDestinatario: strPtr("9012345678"),
-		CnpjDestinatario: strPtr("44444444000191"), RazaoSocialDestinatario: strPtr("Cliente"), Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: 1000,
+		CnpjDestinatario: strPtr("44444444000191"), RazaoSocialDestinatario: strPtr("Cliente"), Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: decimal.NewFromFloat(1000),
 		FinalidadeCompra: strPtr("REVENDA"),
-		Itens:            []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: 1, UnitPrice: 1000, TotalPrice: 1000, OrigemMercadoria: "0"}}})
+		Itens:            []request.CreateFiscalExitItemDTO{{Sequence: 1, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1000), TotalPrice: decimal.NewFromFloat(1000), OrigemMercadoria: "0"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	itens, _ := repo.GetExitItems(ctx, res.ID)
 	it := itens[0]
-	if derefS(it.CstICMS) != "101" || it.ValorICMS != 0 || it.ValorIPI != 0 || it.ValorPIS != 0 || !perto(it.AliqCreditoSimples, 2.56) || !perto(it.ValorCreditoSimples, 25.6) || derefS(it.CstPIS) != "49" {
-		t.Fatalf("Simples: CSOSN %s ICMS %.2f IPI %.2f PIS %.2f (CST %s) crédito %.2f%% %.2f", derefS(it.CstICMS), it.ValorICMS, it.ValorIPI, it.ValorPIS, derefS(it.CstPIS), it.AliqCreditoSimples, it.ValorCreditoSimples)
+	if derefS(it.CstICMS) != "101" || !it.ValorICMS.IsZero() || !it.ValorIPI.IsZero() || !it.ValorPIS.IsZero() || !perto(it.AliqCreditoSimples, 2.56) || !perto(it.ValorCreditoSimples, 25.6) || derefS(it.CstPIS) != "49" {
+		t.Fatalf("Simples: CSOSN %s ICMS %v IPI %v PIS %v (CST %s) crédito %v%% %v", derefS(it.CstICMS), it.ValorICMS, it.ValorIPI, it.ValorPIS, derefS(it.CstPIS), it.AliqCreditoSimples, it.ValorCreditoSimples)
 	}
 	out, err := previa.Execute(ctx, res.ID)
 	if err != nil {
@@ -296,7 +308,7 @@ func TestIntegration_SimuladorDeTributacao(t *testing.T) {
 	var antes int64
 	_ = pool.QueryRow(ctx, `SELECT count(*) FROM fiscal_exits WHERE enterprise_id=$1`, emp).Scan(&antes)
 	out, err := sim.Execute(ctx, fiscal_uc.SimularTributacaoDTO{UFDestino: strPtr("GO"),
-		Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: 2, ValorUnitario: 500}}})
+		Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: decimal.NewFromFloat(2), ValorUnitario: decimal.NewFromFloat(500)}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +327,7 @@ func TestIntegration_SimuladorDeTributacao(t *testing.T) {
 	if depois != antes {
 		t.Fatalf("o simulador gravou nota: %d → %d", antes, depois)
 	}
-	if _, err := sim.Execute(ctx, fiscal_uc.SimularTributacaoDTO{Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: 1, ValorUnitario: 1}}}); err == nil {
+	if _, err := sim.Execute(ctx, fiscal_uc.SimularTributacaoDTO{Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: decimal.NewFromFloat(1), ValorUnitario: decimal.NewFromFloat(1)}}}); err == nil {
 		t.Fatal("sem UF de destino a simulação tem de pedir a UF")
 	}
 
@@ -337,7 +349,7 @@ func TestIntegration_SimuladorDeTributacao(t *testing.T) {
 	sim.Itens = fiscalpg.NewFiscalEntryDocumentRepositoryPG(repo)
 	codigo := request.TextCode(comercial)
 	out, err = sim.Execute(ctx, fiscal_uc.SimularTributacaoDTO{UFDestino: strPtr("GO"),
-		Itens: []fiscal_uc.SimularTributacaoItemDTO{{ItemCode: &codigo, Quantidade: 1, ValorUnitario: 1000}}})
+		Itens: []fiscal_uc.SimularTributacaoItemDTO{{ItemCode: &codigo, Quantidade: decimal.NewFromFloat(1), ValorUnitario: decimal.NewFromFloat(1000)}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +362,7 @@ func TestIntegration_SimuladorDeTributacao(t *testing.T) {
 	// tem de impedir em vez de mostrar alíquota e MVA errados sem aviso.
 	testutil.Exec(t, pool, `UPDATE fiscal_configs SET uf_empresa='' WHERE enterprise_id=$1`, emp)
 	out, err = sim.Execute(ctx, fiscal_uc.SimularTributacaoDTO{UFDestino: strPtr("PR"),
-		Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: 1, ValorUnitario: 1000}}})
+		Itens: []fiscal_uc.SimularTributacaoItemDTO{{Ncm: strPtr("73269090"), Quantidade: decimal.NewFromFloat(1), ValorUnitario: decimal.NewFromFloat(1000)}}})
 	if err != nil {
 		t.Fatal(err)
 	}

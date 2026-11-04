@@ -45,8 +45,8 @@ type SimularTributacaoDTO struct {
 	FinalidadeCompra *string                    `json:"finalidade_compra,omitempty"`
 	InvoiceTypeID    *int64                     `json:"invoice_type_id,omitempty"`
 	Cfop             string                     `json:"cfop,omitempty"`
-	ValorFrete       float64                    `json:"valor_frete,omitempty"`
-	ValorDesconto    float64                    `json:"valor_desconto,omitempty"`
+	ValorFrete       decimal.Decimal            `json:"valor_frete,omitempty"`
+	ValorDesconto    decimal.Decimal            `json:"valor_desconto,omitempty"`
 	Itens            []SimularTributacaoItemDTO `json:"itens"`
 }
 
@@ -56,8 +56,8 @@ type SimularTributacaoItemDTO struct {
 	ItemCode      *request.TextCode `json:"item_code,omitempty"`
 	Ncm           *string           `json:"ncm,omitempty"`
 	Origem        *string           `json:"origem_mercadoria,omitempty"`
-	Quantidade    float64           `json:"quantidade"`
-	ValorUnitario float64           `json:"valor_unitario"`
+	Quantidade    decimal.Decimal   `json:"quantidade"`
+	ValorUnitario decimal.Decimal   `json:"valor_unitario"`
 }
 
 // SimulacaoTributacao é o resultado: o contexto que valeu, cada linha com a
@@ -132,7 +132,7 @@ type SimulacaoPendencia struct {
 }
 
 // pct: fração do motor (0,12) em percentual (12), com quatro casas.
-func pct(f float64) float64 { return decimal.NewFromFloat(f).Mul(cemDec).Round(4).InexactFloat64() }
+func pct(f decimal.Decimal) float64 { return f.Mul(cemDec).Round(4).InexactFloat64() }
 
 func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTributacaoDTO) (*SimulacaoTributacao, error) {
 	if uc.Auth != nil && !uc.Auth.CanCreateFiscalExit(ctx) {
@@ -190,7 +190,7 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 	linhas := make([]SimulacaoLinha, len(dto.Itens))
 	var pend []SimulacaoPendencia
 	for i, it := range dto.Itens {
-		if it.Quantidade <= 0 {
+		if !it.Quantidade.IsPositive() {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("linha %d: a quantidade deve ser maior que zero", i+1))
 		}
 		ncm, origem := "", "0"
@@ -216,7 +216,7 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 		n := ncm
 		op.Itens = append(op.Itens, LinhaTributavel{ItemCode: internos[i], Ncm: &n, Quantidade: it.Quantidade, ValorUnitario: it.ValorUnitario, Origem: origem})
 		linhas[i] = SimulacaoLinha{Sequencia: i + 1, ItemCode: internos[i], Ncm: engine.NormalizarNCM(ncm), Origem: origem,
-			ValorProdutos: decimal.NewFromFloat(it.Quantidade).Mul(decimal.NewFromFloat(it.ValorUnitario)).Round(2).InexactFloat64()}
+			ValorProdutos: it.Quantidade.Mul(it.ValorUnitario).Round(2).InexactFloat64()}
 	}
 
 	t, err := uc.Tributador.Calcular(ctx, op)
@@ -244,13 +244,13 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 			id := t.Regras[i].ID
 			l.RegraICMSIPI = &id
 		}
-		l.CSTICMS, l.BaseICMS, l.AliqICMSPct, l.ValorICMS = r.CSTICMS, r.BaseICMS, pct(r.AliquotaICMS), r.ValorICMS
-		l.ReducaoBase, l.DiferidoPct, l.ValorDiferido = r.ReducaoBaseICMSPct, r.DiferimentoICMSPct, r.ValorICMSDiferido
-		l.MVAPct, l.BaseICMSST, l.AliqICMSSTPct, l.ValorICMSST = pct(r.MVA), r.BaseICMSST, pct(r.AliquotaICMSST), r.ValorICMSST
-		l.CSTIPI, l.AliqIPIPct, l.ValorIPI = r.CSTIPI, pct(r.AliquotaIPI), r.ValorIPI
-		l.CSTPIS, l.AliqPISPct, l.ValorPIS = r.CSTPIS, pct(r.AliquotaPIS), r.ValorPIS
-		l.CSTCOFINS, l.AliqCOFINSPct, l.ValorCOFINS = r.CSTCOFINS, pct(r.AliquotaCOFINS), r.ValorCOFINS
-		l.ValorDIFAL, l.ValorFCP, l.CreditoSNPct, l.CreditoSN = r.ValorDIFAL, r.ValorFCP, r.AliqCreditoSimplesPct, r.ValorCreditoSimples
+		l.CSTICMS, l.BaseICMS, l.AliqICMSPct, l.ValorICMS = r.CSTICMS, r.BaseICMS.InexactFloat64(), pct(r.AliquotaICMS), r.ValorICMS.InexactFloat64()
+		l.ReducaoBase, l.DiferidoPct, l.ValorDiferido = r.ReducaoBaseICMSPct.InexactFloat64(), r.DiferimentoICMSPct.InexactFloat64(), r.ValorICMSDiferido.InexactFloat64()
+		l.MVAPct, l.BaseICMSST, l.AliqICMSSTPct, l.ValorICMSST = pct(r.MVA), r.BaseICMSST.InexactFloat64(), pct(r.AliquotaICMSST), r.ValorICMSST.InexactFloat64()
+		l.CSTIPI, l.AliqIPIPct, l.ValorIPI = r.CSTIPI, pct(r.AliquotaIPI), r.ValorIPI.InexactFloat64()
+		l.CSTPIS, l.AliqPISPct, l.ValorPIS = r.CSTPIS, pct(r.AliquotaPIS), r.ValorPIS.InexactFloat64()
+		l.CSTCOFINS, l.AliqCOFINSPct, l.ValorCOFINS = r.CSTCOFINS, pct(r.AliquotaCOFINS), r.ValorCOFINS.InexactFloat64()
+		l.ValorDIFAL, l.ValorFCP, l.CreditoSNPct, l.CreditoSN = r.ValorDIFAL.InexactFloat64(), r.ValorFCP.InexactFloat64(), r.AliqCreditoSimplesPct.InexactFloat64(), r.ValorCreditoSimples.InexactFloat64()
 		l.Notas = r.Notas
 		produtos = produtos.Add(decimal.NewFromFloat(l.ValorProdutos))
 	}
@@ -270,7 +270,7 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 		pend = append(pend, SimulacaoPendencia{Nivel: nivel, Mensagem: msg})
 	}
 	for i, r := range t.Resultado.Itens {
-		if (r.CSTICMS == "101" || r.CSTICMS == "201") && r.AliqCreditoSimplesPct <= 0 {
+		if (r.CSTICMS == "101" || r.CSTICMS == "201") && !r.AliqCreditoSimplesPct.IsPositive() {
 			pend = append(pend, SimulacaoPendencia{Nivel: NivelImpede, Mensagem: fmt.Sprintf("linha %d: CSOSN %s sem alíquota de crédito do Simples configurada", i+1, r.CSTICMS)})
 		}
 	}
@@ -279,11 +279,11 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 		out.Pendencias = []SimulacaoPendencia{}
 	}
 	tot := t.Resultado.Totais
-	out.Totais = SimulacaoTotais{BaseICMS: tot.BaseICMS, ValorICMS: tot.ValorICMS, ValorDiferido: tot.ValorDiferido,
-		BaseICMSST: tot.BaseICMSST, ValorICMSST: tot.ValorICMSST, ValorIPI: tot.ValorIPI, ValorPIS: tot.ValorPIS,
-		ValorCOFINS: tot.ValorCOFINS, ValorDIFAL: tot.ValorDIFAL, ValorFCP: tot.ValorFCP}
-	out.ValorTotalNota = produtos.Add(decimal.NewFromFloat(tot.ValorIPI)).Add(decimal.NewFromFloat(tot.ValorICMSST)).
-		Add(decimal.NewFromFloat(dto.ValorFrete)).Sub(decimal.NewFromFloat(dto.ValorDesconto)).Round(2).InexactFloat64()
+	out.Totais = SimulacaoTotais{BaseICMS: tot.BaseICMS.InexactFloat64(), ValorICMS: tot.ValorICMS.InexactFloat64(), ValorDiferido: tot.ValorDiferido.InexactFloat64(),
+		BaseICMSST: tot.BaseICMSST.InexactFloat64(), ValorICMSST: tot.ValorICMSST.InexactFloat64(), ValorIPI: tot.ValorIPI.InexactFloat64(), ValorPIS: tot.ValorPIS.InexactFloat64(),
+		ValorCOFINS: tot.ValorCOFINS.InexactFloat64(), ValorDIFAL: tot.ValorDIFAL.InexactFloat64(), ValorFCP: tot.ValorFCP.InexactFloat64()}
+	out.ValorTotalNota = produtos.Add(tot.ValorIPI).Add(tot.ValorICMSST).
+		Add(dto.ValorFrete).Sub(dto.ValorDesconto).Round(2).InexactFloat64()
 	return out, nil
 }
 

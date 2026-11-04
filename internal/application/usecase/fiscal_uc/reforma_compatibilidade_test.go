@@ -56,23 +56,23 @@ func f64p(v float64) *float64 { return &v }
 // frete, seguro e desconto para ratear.
 func notaCompleta() (*fiscalentity.FiscalExit, []*fiscalentity.FiscalExitItem) {
 	nota := notaBase()
-	nota.ValorProdutos, nota.ValorFrete, nota.ValorSeguro, nota.ValorDesconto = 3000, 90, 15, 60
-	nota.ValorIPI, nota.ValorICMS, nota.ValorICMSST = 150, 288, 45
-	nota.ValorTotal = 3000 + 150 + 45 + 90 + 15 - 60
+	nota.ValorProdutos, nota.ValorFrete, nota.ValorSeguro, nota.ValorDesconto = decimal.NewFromFloat(3000), decimal.NewFromFloat(90), decimal.NewFromFloat(15), decimal.NewFromFloat(60)
+	nota.ValorIPI, nota.ValorICMS, nota.ValorICMSST = decimal.NewFromFloat(150), decimal.NewFromFloat(288), decimal.NewFromFloat(45)
+	nota.ValorTotal = decimal.NewFromFloat(3000 + 150 + 45 + 90 + 15 - 60)
 	cst := func(s string) *string { return &s }
 	itens := []*fiscalentity.FiscalExitItem{
-		{ID: 21, Sequence: 1, ItemCode: i64p(5), Ncm: strp("73269000"), Cfop: "6101", Quantity: 10, UnitPrice: 150, TotalPrice: 1500,
-			BaseICMS: 1500, AliqICMS: 12, ValorICMS: 180, BaseIPI: 1500, AliqIPI: 5, ValorIPI: 75, AliqPIS: 1.65, ValorPIS: 24.75,
-			AliqCOFINS: 7.6, ValorCOFINS: 114, CstICMS: cst("00"), CstIPI: cst("50"), CstPIS: cst("01"), CstCOFINS: cst("01"),
+		{ID: 21, Sequence: 1, ItemCode: i64p(5), Ncm: strp("73269000"), Cfop: "6101", Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(150), TotalPrice: decimal.NewFromFloat(1500),
+			BaseICMS: decimal.NewFromFloat(1500), AliqICMS: decimal.NewFromFloat(12), ValorICMS: decimal.NewFromFloat(180), BaseIPI: decimal.NewFromFloat(1500), AliqIPI: decimal.NewFromFloat(5), ValorIPI: decimal.NewFromFloat(75), AliqPIS: decimal.NewFromFloat(1.65), ValorPIS: decimal.NewFromFloat(24.75),
+			AliqCOFINS: decimal.NewFromFloat(7.6), ValorCOFINS: decimal.NewFromFloat(114), CstICMS: cst("00"), CstIPI: cst("50"), CstPIS: cst("01"), CstCOFINS: cst("01"),
 			OrigemMercadoria: "0", Description: strp("BALANCA RN-01001"), UnidadeComercial: strp("UN")},
-		{ID: 22, Sequence: 2, ItemCode: i64p(6), Ncm: strp("84382000"), Cfop: "6101", Quantity: 2.5, UnitPrice: 400, TotalPrice: 1000,
-			BaseIPI: 1000, AliqIPI: 7.5, ValorIPI: 75, CstICMS: cst("40"), CstIPI: cst("50"), CstPIS: cst("01"), CstCOFINS: cst("01"),
-			AliqPIS: 1.65, ValorPIS: 16.5, AliqCOFINS: 7.6, ValorCOFINS: 76, OrigemMercadoria: "0", Description: strp("PICADOR"),
+		{ID: 22, Sequence: 2, ItemCode: i64p(6), Ncm: strp("84382000"), Cfop: "6101", Quantity: decimal.NewFromFloat(2.5), UnitPrice: decimal.NewFromFloat(400), TotalPrice: decimal.NewFromFloat(1000),
+			BaseIPI: decimal.NewFromFloat(1000), AliqIPI: decimal.NewFromFloat(7.5), ValorIPI: decimal.NewFromFloat(75), CstICMS: cst("40"), CstIPI: cst("50"), CstPIS: cst("01"), CstCOFINS: cst("01"),
+			AliqPIS: decimal.NewFromFloat(1.65), ValorPIS: decimal.NewFromFloat(16.5), AliqCOFINS: decimal.NewFromFloat(7.6), ValorCOFINS: decimal.NewFromFloat(76), OrigemMercadoria: "0", Description: strp("PICADOR"),
 			UnidadeComercial: strp("KG"), CodigoBeneficioFiscal: strp("PR800001")},
-		{ID: 23, Sequence: 3, ItemCode: i64p(7), Ncm: strp("40169300"), Cfop: "6401", Quantity: 4, UnitPrice: 125, TotalPrice: 500,
-			BaseICMS: 500, AliqICMS: 12, ValorICMS: 60, BaseICMSST: 650, AliqICMSST: 18, ValorICMSST: 45, MVA: 30,
-			CstICMS: cst("10"), CstIPI: cst("53"), CstPIS: cst("01"), CstCOFINS: cst("01"), AliqPIS: 1.65, ValorPIS: 8.25,
-			AliqCOFINS: 7.6, ValorCOFINS: 38, OrigemMercadoria: "0", Description: strp("VEDACAO"), UnidadeComercial: strp("PC")},
+		{ID: 23, Sequence: 3, ItemCode: i64p(7), Ncm: strp("40169300"), Cfop: "6401", Quantity: decimal.NewFromFloat(4), UnitPrice: decimal.NewFromFloat(125), TotalPrice: decimal.NewFromFloat(500),
+			BaseICMS: decimal.NewFromFloat(500), AliqICMS: decimal.NewFromFloat(12), ValorICMS: decimal.NewFromFloat(60), BaseICMSST: decimal.NewFromFloat(650), AliqICMSST: decimal.NewFromFloat(18), ValorICMSST: decimal.NewFromFloat(45), MVA: decimal.NewFromFloat(30),
+			CstICMS: cst("10"), CstIPI: cst("53"), CstPIS: cst("01"), CstCOFINS: cst("01"), AliqPIS: decimal.NewFromFloat(1.65), ValorPIS: decimal.NewFromFloat(8.25),
+			AliqCOFINS: decimal.NewFromFloat(7.6), ValorCOFINS: decimal.NewFromFloat(38), OrigemMercadoria: "0", Description: strp("VEDACAO"), UnidadeComercial: strp("PC")},
 	}
 	return nota, itens
 }

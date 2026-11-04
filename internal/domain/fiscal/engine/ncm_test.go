@@ -1,6 +1,10 @@
 package engine
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 func TestNormalizarNCM(t *testing.T) {
 	casos := map[string]string{
@@ -43,7 +47,7 @@ func TestMascaraDoNCMNaoDecideSeOItemETributado(t *testing.T) {
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {
 			params := TaxCalculationParams{
-				Itens:      []TaxItem{{Ncm: c.ncmDoItem, ValorUnitario: 100, Quantidade: 10}},
+				Itens:      []TaxItem{{Ncm: c.ncmDoItem, ValorUnitario: decimal.NewFromFloat(100), Quantidade: decimal.NewFromFloat(10)}},
 				EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 			}
 			tabela := map[string]*NcmTaxConfig{c.ncmDaTabela: tributacao}
@@ -71,7 +75,7 @@ func TestMascaraDoNCMNaoDecideSeOItemETributado(t *testing.T) {
 // casar por prefixo) passaria no teste de cima e tributaria errado.
 func TestNCMAusenteContinuaSemTributacaoDaTabela(t *testing.T) {
 	params := TaxCalculationParams{
-		Itens:      []TaxItem{{Ncm: "99999999", ValorUnitario: 100, Quantidade: 10}},
+		Itens:      []TaxItem{{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(100), Quantidade: decimal.NewFromFloat(10)}},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
 	tabela := map[string]*NcmTaxConfig{"8471.49.00": {AliqIPI: 0.05, CstIPI: "50"}}

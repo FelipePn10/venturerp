@@ -3,9 +3,10 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -68,7 +69,7 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 					fmt.Sprintf("a linha %d tem CFOP %s, mas a venda é %s (destino %s): a SEFAZ recusa", it.Sequence, c, onde, ufDest),
 					fmt.Sprintf("use um CFOP iniciado por %c (por exemplo %c101 ou %c102) e gere a nota novamente", quer, quer, quer))
 			}
-			if it.ValorICMSST > 0 && len(c) == 4 && !cfopDeST[c[1:]] {
+			if it.ValorICMSST.IsPositive() && len(c) == 4 && !cfopDeST[c[1:]] {
 				add(NivelAtencao, fmt.Sprintf("itens[%d].cfop_st", it.Sequence),
 					fmt.Sprintf("a linha %d tem ICMS-ST, mas o CFOP %s não é de venda com substituição tributária", it.Sequence, c),
 					"para venda com ST use 5401/6401 (produção) ou 5403/6403 (revenda)")
@@ -93,11 +94,11 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 			add(NivelImpede, fmt.Sprintf("itens[%d].cst_icms", it.Sequence),
 				fmt.Sprintf("a empresa é do regime normal, mas a linha %d está com CSOSN %s do Simples Nacional", it.Sequence, cst),
 				"confira o regime em VFIS0100 — Configuração Fiscal e gere a nota novamente")
-		case simples && it.ValorICMSST > 0 && !csosnComST[cst]:
+		case simples && it.ValorICMSST.IsPositive() && !csosnComST[cst]:
 			add(NivelImpede, fmt.Sprintf("itens[%d].cst_icms", it.Sequence),
 				fmt.Sprintf("a linha %d calcula ICMS-ST, mas o CSOSN %s é de operação sem substituição", it.Sequence, cst),
 				"use CSOSN 201, 202, 203 ou 900 na regra de ICMS/IPI (VFIS0320), ou tire a MVA, e gere a nota novamente")
-		case simples && (cst == "101" || cst == "201") && it.AliqCreditoSimples <= 0:
+		case simples && (cst == "101" || cst == "201") && !it.AliqCreditoSimples.IsPositive():
 			add(NivelImpede, fmt.Sprintf("itens[%d].credito_simples", it.Sequence),
 				fmt.Sprintf("a linha %d tem CSOSN %s (tributada com crédito) sem a alíquota de crédito do Simples (pCredSN), que a SEFAZ exige", it.Sequence, cst),
 				"informe a alíquota de crédito do Simples em VFIS0100 — Configuração Fiscal, ou troque o CSOSN da regra para 102, e gere a nota novamente")
@@ -111,7 +112,7 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 	if _, indIE := indicadoresDestinatario(exit); interestadual && indIE == 9 && !simples && !tributacaoPropria {
 		for _, it := range items {
 			cst := strings.TrimSpace(derefStr(it.CstICMS))
-			if it.ICMSUFDestBase > 0 || cstICMSSemImpostoProprio[cst] {
+			if it.ICMSUFDestBase.IsPositive() || cstICMSSemImpostoProprio[cst] {
 				continue
 			}
 			add(NivelImpede, fmt.Sprintf("itens[%d].difal", it.Sequence),
@@ -122,11 +123,11 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 	// O DIFAL usa a alíquota interna e o FCP da tabela de ICMS por UF, que
 	// mudam por lei estadual: quem transmite confere o que foi usado.
 	for _, it := range items {
-		if it.ICMSUFDestBase <= 0 {
+		if !it.ICMSUFDestBase.IsPositive() {
 			continue
 		}
 		msg := fmt.Sprintf("a linha %d leva DIFAL para %s com alíquota interna de %s%%", it.Sequence, derefStr(exit.UFDestinatario), pctTexto(it.ICMSUFDestAliqInterna))
-		if it.FCPUFDestPct > 0 {
+		if it.FCPUFDestPct.IsPositive() {
 			msg += fmt.Sprintf(" e FCP de %s%%", pctTexto(it.FCPUFDestPct))
 		}
 		add(NivelAtencao, fmt.Sprintf("itens[%d].difal_aliquotas", it.Sequence), msg,
@@ -173,11 +174,13 @@ func divergenciasDoPedido(ctx context.Context, orders salesrepo.SalesOrderReposi
 		}
 		return nil, fmt.Errorf("lendo as linhas do pedido para conferir a tributação: %w", err)
 	}
-	porCodigo := make(map[int64]float64, len(linhas))
-	icms := make(map[int64]float64, len(linhas))
+	// O pedido de venda ainda guarda o percentual em float (etapa de vendas).
+	porCodigo := make(map[int64]decimal.Decimal, len(linhas))
+	icms := make(map[int64]decimal.Decimal, len(linhas))
 	for _, l := range linhas {
-		porCodigo[l.Code], icms[l.Code] = l.IPIPct, l.ICMSPct
+		porCodigo[l.Code], icms[l.Code] = decimal.NewFromFloat(l.IPIPct), decimal.NewFromFloat(l.ICMSPct)
 	}
+	tolerancia := decimal.New(5, -3)
 	var out []response.PreviaPendenciaNFe
 	for _, it := range items {
 		if it.SalesOrderItemCode == nil {
@@ -187,15 +190,15 @@ func divergenciasDoPedido(ctx context.Context, orders salesrepo.SalesOrderReposi
 		if !ok {
 			continue
 		}
-		ipiNota := it.AliqIPI * 100
-		if math.Abs(ipiNota-ipiPedido) > 0.005 {
+		ipiNota := it.AliqIPI.Mul(decimal.NewFromInt(100))
+		if ipiNota.Sub(ipiPedido).Abs().GreaterThan(tolerancia) {
 			out = append(out, response.PreviaPendenciaNFe{Nivel: NivelAtencao, Campo: fmt.Sprintf("itens[%d].aliq_ipi", it.Sequence),
 				Mensagem:     fmt.Sprintf("a linha %d sai com IPI de %s%% e o pedido foi negociado com %s%%", it.Sequence, pctTexto(ipiNota), pctTexto(ipiPedido)),
 				ComoResolver: "confira com o vendedor: a nota segue a regra de ICMS/IPI; se o pedido estava certo, ajuste a regra em VFIS0320"})
 		}
 		icmsPedido := icms[*it.SalesOrderItemCode]
-		icmsNota := it.AliqICMS * 100
-		if icmsPedido > 0 && len(strings.TrimSpace(derefStr(it.CstICMS))) == 2 && math.Abs(icmsNota-icmsPedido) > 0.005 {
+		icmsNota := it.AliqICMS.Mul(decimal.NewFromInt(100))
+		if icmsPedido.IsPositive() && len(strings.TrimSpace(derefStr(it.CstICMS))) == 2 && icmsNota.Sub(icmsPedido).Abs().GreaterThan(tolerancia) {
 			out = append(out, response.PreviaPendenciaNFe{Nivel: NivelAtencao, Campo: fmt.Sprintf("itens[%d].aliq_icms", it.Sequence),
 				Mensagem:     fmt.Sprintf("a linha %d sai com ICMS de %s%% e o pedido foi negociado com %s%%", it.Sequence, pctTexto(icmsNota), pctTexto(icmsPedido)),
 				ComoResolver: "confira com o vendedor: a nota segue a regra de ICMS/IPI; se o pedido estava certo, ajuste a regra em VFIS0320"})
@@ -205,6 +208,6 @@ func divergenciasDoPedido(ctx context.Context, orders salesrepo.SalesOrderReposi
 }
 
 // pctTexto: percentual com vírgula decimal, como a tela mostra (19,50).
-func pctTexto(v float64) string {
-	return strings.Replace(fmt.Sprintf("%.2f", v), ".", ",", 1)
+func pctTexto(v decimal.Decimal) string {
+	return strings.Replace(v.StringFixed(2), ".", ",", 1)
 }

@@ -3,14 +3,23 @@ package engine
 import (
 	"math"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
-// near checks two float64 values are within epsilon of each other.
-func near(t *testing.T, label string, want, got float64) {
+// near checks the value (float64 or decimal) is within epsilon of want.
+func near[T float64 | decimal.Decimal](t *testing.T, label string, want float64, got T) {
 	t.Helper()
+	var g float64
+	switch v := any(got).(type) {
+	case float64:
+		g = v
+	case decimal.Decimal:
+		g = v.InexactFloat64()
+	}
 	const eps = 0.01
-	if math.Abs(want-got) > eps {
-		t.Errorf("%s: want %.2f, got %.2f", label, want, got)
+	if math.Abs(want-g) > eps {
+		t.Errorf("%s: want %.2f, got %.2f", label, want, g)
 	}
 }
 
@@ -85,8 +94,8 @@ func TestScenario_IntraState_Contributor_Diferimento(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "84714900",
-				ValorUnitario: 1000.00,
-				Quantidade:    1,
+				ValorUnitario: decimal.NewFromFloat(1000.00),
+				Quantidade:    decimal.NewFromFloat(1),
 			},
 		},
 		EmitenteUF:  "PR",
@@ -138,8 +147,8 @@ func TestScenario_IntraState_NonContributor_IPIInBase(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "84714900",
-				ValorUnitario: 1000.00,
-				Quantidade:    1,
+				ValorUnitario: decimal.NewFromFloat(1000.00),
+				Quantidade:    decimal.NewFromFloat(1),
 			},
 		},
 		EmitenteUF:  "PR",
@@ -176,8 +185,8 @@ func TestScenario_Interstate_NonContributor_DIFAL(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "84714900",
-				ValorUnitario: 1000.00,
-				Quantidade:    1,
+				ValorUnitario: decimal.NewFromFloat(1000.00),
+				Quantidade:    decimal.NewFromFloat(1),
 			},
 		},
 		EmitenteUF:  "PR",
@@ -214,8 +223,8 @@ func TestScenario_Interstate_NonContributor_DIFAL_With_FCP(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "84714900",
-				ValorUnitario: 1000.00,
-				Quantidade:    1,
+				ValorUnitario: decimal.NewFromFloat(1000.00),
+				Quantidade:    decimal.NewFromFloat(1),
 			},
 		},
 		EmitenteUF:  "PR",
@@ -250,8 +259,8 @@ func TestScenario_Interstate_Contributor_NoDIFAL(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "84714900",
-				ValorUnitario: 1000.00,
-				Quantidade:    1,
+				ValorUnitario: decimal.NewFromFloat(1000.00),
+				Quantidade:    decimal.NewFromFloat(1),
 			},
 		},
 		EmitenteUF:  "PR",
@@ -285,8 +294,8 @@ func TestScenario_ImportedGoods_SF13_FourPercent(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:              "84714900",
-				ValorUnitario:    1000.00,
-				Quantidade:       1,
+				ValorUnitario:    decimal.NewFromFloat(1000.00),
+				Quantidade:       decimal.NewFromFloat(1),
 				OrigemMercadoria: "3", // importado
 			},
 		},
@@ -315,7 +324,7 @@ func TestScenario_ImportedGoods_Origins(t *testing.T) {
 	for origin, quer := range map[string]float64{"1": 0.04, "2": 0.04, "3": 0.04, "8": 0.04, "0": 0.07, "4": 0.07, "5": 0.07, "6": 0.07, "7": 0.07} {
 		params := TaxCalculationParams{
 			Itens: []TaxItem{
-				{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: origin},
+				{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: origin},
 			},
 			EmitenteUF: "PR", DestinoUF: "BA", DestinoTipo: "contribuinte", Cfop: "6101",
 		}
@@ -336,8 +345,8 @@ func TestScenario_IPI_Zero_When_No_NCM(t *testing.T) {
 		Itens: []TaxItem{
 			{
 				Ncm:           "99999999", // not in NCM table
-				ValorUnitario: 500.00,
-				Quantidade:    2,
+				ValorUnitario: decimal.NewFromFloat(500.00),
+				Quantidade:    decimal.NewFromFloat(2),
 			},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
@@ -359,7 +368,7 @@ func TestScenario_IPI_Zero_When_No_NCM(t *testing.T) {
 func TestScenario_PIS_COFINS_Monofasico_Zero(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "27101259", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "27101259", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
@@ -384,7 +393,7 @@ func TestScenario_PIS_COFINS_Monofasico_Zero(t *testing.T) {
 func TestScenario_NCM_Custom_PIS_COFINS(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "22021000", ValorUnitario: 100, Quantidade: 10},
+			{Ncm: "22021000", ValorUnitario: decimal.NewFromFloat(100), Quantidade: decimal.NewFromFloat(10)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
@@ -409,8 +418,8 @@ func TestScenario_Freight_Apportionment(t *testing.T) {
 	// Freight = 100 → A gets 40, B gets 60
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "99999999", ValorUnitario: 400, Quantidade: 1, ValorFrete: 100},
-			{Ncm: "99999999", ValorUnitario: 600, Quantidade: 1, ValorFrete: 100},
+			{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(400), Quantidade: decimal.NewFromFloat(1), ValorFrete: decimal.NewFromFloat(100)},
+			{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(600), Quantidade: decimal.NewFromFloat(1), ValorFrete: decimal.NewFromFloat(100)},
 		},
 		EmitenteUF: "PR", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "6101",
 	}
@@ -431,8 +440,8 @@ func TestScenario_Discount_Apportionment(t *testing.T) {
 	// Discount 100 across two equal items (each 500)
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "99999999", ValorUnitario: 500, Quantidade: 1, ValorDesconto: 100},
-			{Ncm: "99999999", ValorUnitario: 500, Quantidade: 1, ValorDesconto: 100},
+			{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(500), Quantidade: decimal.NewFromFloat(1), ValorDesconto: decimal.NewFromFloat(100)},
+			{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(500), Quantidade: decimal.NewFromFloat(1), ValorDesconto: decimal.NewFromFloat(100)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
@@ -451,8 +460,8 @@ func TestScenario_Discount_Apportionment(t *testing.T) {
 func TestScenario_Totals_Aggregation(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
-			{Ncm: "84714900", ValorUnitario: 2000, Quantidade: 1},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(2000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
@@ -480,7 +489,7 @@ func TestScenario_Totals_Aggregation(t *testing.T) {
 func TestScenario_PessoaFisica_DIFAL(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "BA", DestinoTipo: "pessoa_fisica", Cfop: "6108",
 	}
@@ -501,7 +510,7 @@ func TestScenario_PessoaFisica_DIFAL(t *testing.T) {
 func TestScenario_IPIZero_NoIPIInBase(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "27101259", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "27101259", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "nao_contribuinte", Cfop: "5102",
 	}
@@ -521,7 +530,7 @@ func TestScenario_IPIZero_NoIPIInBase(t *testing.T) {
 func TestScenario_MultipleQuantity(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 200, Quantidade: 5},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(200), Quantidade: decimal.NewFromFloat(5)},
 		},
 		EmitenteUF: "PR", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "6101",
 	}
@@ -544,7 +553,7 @@ func TestScenario_MultipleQuantity(t *testing.T) {
 func TestScenario_Interstate_SameRegion_12pct(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "SC", DestinoTipo: "contribuinte", Cfop: "6101",
 	}
@@ -563,7 +572,7 @@ func TestScenario_Interstate_SameRegion_12pct(t *testing.T) {
 func TestScenario_Interstate_DefaultRate(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "AM", // not mapped
 		DestinoTipo: "contribuinte", Cfop: "6101",
@@ -581,7 +590,7 @@ func TestScenario_Interstate_DefaultRate(t *testing.T) {
 func TestScenario_ST_IntraState_MVA40(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), MvaPct: decimal.NewFromFloat(0.40)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
 	}
@@ -613,7 +622,7 @@ func TestScenario_ST_IntraState_MVA40(t *testing.T) {
 func TestScenario_ST_Interstate_DestinationInternalRate(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.50},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), MvaPct: decimal.NewFromFloat(0.50)},
 		},
 		EmitenteUF: "PR", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "6401",
 	}
@@ -639,7 +648,7 @@ func TestScenario_ST_Interstate_DestinationInternalRate(t *testing.T) {
 func TestScenario_ST_ReducedBase(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40, RedBaseSTPct: 0.20},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), MvaPct: decimal.NewFromFloat(0.40), RedBaseSTPct: decimal.NewFromFloat(0.20)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
 	}
@@ -662,7 +671,7 @@ func TestScenario_ST_ReducedBase(t *testing.T) {
 func TestScenario_ST_NotComputed_WhenNoMVA(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
@@ -685,7 +694,7 @@ func TestScenario_ST_NotComputed_WhenNoMVA(t *testing.T) {
 func TestScenario_ST_OverrideRate(t *testing.T) {
 	params := TaxCalculationParams{
 		Itens: []TaxItem{
-			{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, MvaPct: 0.40, AliqInternaDestinoST: 0.25},
+			{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), MvaPct: decimal.NewFromFloat(0.40), AliqInternaDestinoST: decimal.NewFromFloat(0.25)},
 		},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5401",
 	}
@@ -703,7 +712,7 @@ func TestScenario_ST_OverrideRate(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestScenario_CenarioString(t *testing.T) {
-	item := TaxItem{Ncm: "84714900", ValorUnitario: 100, Quantidade: 1}
+	item := TaxItem{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(100), Quantidade: decimal.NewFromFloat(1)}
 
 	cases := []struct {
 		emitenteUF  string
@@ -736,14 +745,14 @@ func TestScenario_CenarioString(t *testing.T) {
 func TestScenario_IntraState_Contributor_SemDiferimento_CST00(t *testing.T) {
 	cfg := defaultFiscalConfig()
 	cfg.IcmsDiferimentoPercentual = 0
-	params := TaxCalculationParams{Itens: []TaxItem{{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1}},
+	params := TaxCalculationParams{Itens: []TaxItem{{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)}},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101"}
 	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if it := res.Itens[0]; it.CSTICMS != "00" || it.ValorICMSDiferido != 0 {
-		t.Fatalf("CST = %s, diferido = %.2f; quer CST 00 sem diferido", it.CSTICMS, it.ValorICMSDiferido)
+	if it := res.Itens[0]; it.CSTICMS != "00" || !it.ValorICMSDiferido.IsZero() {
+		t.Fatalf("CST = %s, diferido = %v; quer CST 00 sem diferido", it.CSTICMS, it.ValorICMSDiferido)
 	}
 }
 
@@ -761,7 +770,7 @@ func TestFracaoDiferimento(t *testing.T) {
 // configuração fiscal só vale para UF fora da tabela.
 func TestAliquotaInternaVemDaTabelaDaUF(t *testing.T) {
 	params := TaxCalculationParams{
-		Itens:      []TaxItem{{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1}},
+		Itens:      []TaxItem{{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)}},
 		EmitenteUF: "SP", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "5102",
 	}
 	cfg := defaultFiscalConfig()

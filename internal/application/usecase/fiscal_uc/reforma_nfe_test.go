@@ -60,8 +60,8 @@ func tabelaTeste() map[string]reforma.ClassificacaoOficial {
 
 func duasLinhas() []*fiscalentity.FiscalExitItem {
 	return []*fiscalentity.FiscalExitItem{
-		{ID: 11, Sequence: 1, Cfop: "5101", Quantity: 1, UnitPrice: 1000, TotalPrice: 1000, Description: strp("A")},
-		{ID: 12, Sequence: 2, Cfop: "5910", Quantity: 1, UnitPrice: 500, TotalPrice: 500, Description: strp("B")},
+		{ID: 11, Sequence: 1, Cfop: "5101", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1000), TotalPrice: decimal.NewFromFloat(1000), Description: strp("A")},
+		{ID: 12, Sequence: 2, Cfop: "5910", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(500), TotalPrice: decimal.NewFromFloat(500), Description: strp("B")},
 	}
 }
 
@@ -140,7 +140,7 @@ func TestReformaNaoSeAplicaAoSimples(t *testing.T) {
 func TestAvisoPISCOFINSEm2027(t *testing.T) {
 	nota := notaBase()
 	itens := duasLinhas()
-	itens[0].ValorPIS = 16.5
+	itens[0].ValorPIS = decimal.NewFromFloat(16.5)
 	if avisoPISCOFINSExtintos(nota, itens) != nil {
 		t.Fatal("2026 não avisa")
 	}

@@ -19,11 +19,11 @@ func TestRetornoDeIndustrializacao(t *testing.T) {
 
 // A NF-e 5.911 real: total R$ 412,60, fatura R$ 230,00.
 func TestValorCobradoDaNF5911(t *testing.T) {
-	nota := &FiscalExit{ValorTotal: 412.60}
+	nota := &FiscalExit{ValorTotal: decimal.NewFromFloat(412.60)}
 	itens := []*FiscalExitItem{
-		{Cfop: "5124", TotalPrice: 230.00},
-		{Cfop: "5902", TotalPrice: 142.11},
-		{Cfop: "5902", TotalPrice: 40.49},
+		{Cfop: "5124", TotalPrice: decimal.NewFromFloat(230.00)},
+		{Cfop: "5902", TotalPrice: decimal.NewFromFloat(142.11)},
+		{Cfop: "5902", TotalPrice: decimal.NewFromFloat(40.49)},
 	}
 	if got := ValorCobrado(nota, itens); !got.Equal(decimal.RequireFromString("230")) {
 		t.Fatalf("valor cobrado = %s, esperado 230,00", got)
@@ -31,8 +31,8 @@ func TestValorCobradoDaNF5911(t *testing.T) {
 }
 
 func TestValorCobradoSemRetornoEOTotal(t *testing.T) {
-	nota := &FiscalExit{ValorTotal: 1500.75}
-	if got := ValorCobrado(nota, []*FiscalExitItem{{Cfop: "5101", TotalPrice: 1500.75}}); !got.Equal(decimal.RequireFromString("1500.75")) {
+	nota := &FiscalExit{ValorTotal: decimal.NewFromFloat(1500.75)}
+	if got := ValorCobrado(nota, []*FiscalExitItem{{Cfop: "5101", TotalPrice: decimal.NewFromFloat(1500.75)}}); !got.Equal(decimal.RequireFromString("1500.75")) {
 		t.Fatalf("venda comum deve cobrar o total, veio %s", got)
 	}
 	if got := ValorCobrado(nota, nil); !got.Equal(decimal.RequireFromString("1500.75")) {
@@ -41,8 +41,8 @@ func TestValorCobradoSemRetornoEOTotal(t *testing.T) {
 }
 
 func TestValorCobradoSoDeRetornoEZero(t *testing.T) {
-	nota := &FiscalExit{ValorTotal: 182.60}
-	itens := []*FiscalExitItem{{Cfop: "5902", TotalPrice: 182.60}}
+	nota := &FiscalExit{ValorTotal: decimal.NewFromFloat(182.60)}
+	itens := []*FiscalExitItem{{Cfop: "5902", TotalPrice: decimal.NewFromFloat(182.60)}}
 	if got := ValorCobrado(nota, itens); !got.IsZero() {
 		t.Fatalf("nota só de retorno não cobra nada, veio %s", got)
 	}

@@ -172,29 +172,29 @@ type CreateFiscalExitDTO struct {
 	// Endereço do destinatário. Quando a nota nasce de um pedido de venda ou de
 	// uma carga, o que vier vazio aqui é preenchido pelo endereço de entrega do
 	// cliente (ou pelo de cobrança, quando não há um de entrega).
-	DestLogradouro        *string `json:"dest_logradouro,omitempty"`
-	DestNumero            *string `json:"dest_numero,omitempty"`
-	DestComplemento       *string `json:"dest_complemento,omitempty"`
-	DestBairro            *string `json:"dest_bairro,omitempty"`
-	DestMunicipio         *string `json:"dest_municipio,omitempty"`
-	DestCodigoMunicipio   *string `json:"dest_codigo_municipio,omitempty"`
-	DestCEP               *string `json:"dest_cep,omitempty"`
-	DestEmail             *string `json:"dest_email,omitempty"`
-	DestTelefone          *string `json:"dest_telefone,omitempty"`
-	CustomerCode          *int64  `json:"customer_code,omitempty"`
-	Cfop                  string  `json:"cfop"`
-	NaturezaOperacao      string  `json:"natureza_operacao"`
-	ValorProdutos         float64 `json:"valor_produtos"`
-	ValorFrete            float64 `json:"valor_frete"`
-	ValorSeguro           float64 `json:"valor_seguro"`
-	ValorDesconto         float64 `json:"valor_desconto"`
-	SalesOrderCode        *int64  `json:"sales_order_code,omitempty"`
-	SourceType            *string `json:"source_type,omitempty"`
-	ShipmentLoadCode      *int64  `json:"shipment_load_code,omitempty"`
-	ShipmentCode          *int64  `json:"shipment_code,omitempty"`
-	FiscalCouponNumber    *string `json:"fiscal_coupon_number,omitempty"`
-	FiscalCouponDate      *string `json:"fiscal_coupon_date,omitempty"`
-	FiscalCouponECFSerial *string `json:"fiscal_coupon_ecf_serial,omitempty"`
+	DestLogradouro        *string         `json:"dest_logradouro,omitempty"`
+	DestNumero            *string         `json:"dest_numero,omitempty"`
+	DestComplemento       *string         `json:"dest_complemento,omitempty"`
+	DestBairro            *string         `json:"dest_bairro,omitempty"`
+	DestMunicipio         *string         `json:"dest_municipio,omitempty"`
+	DestCodigoMunicipio   *string         `json:"dest_codigo_municipio,omitempty"`
+	DestCEP               *string         `json:"dest_cep,omitempty"`
+	DestEmail             *string         `json:"dest_email,omitempty"`
+	DestTelefone          *string         `json:"dest_telefone,omitempty"`
+	CustomerCode          *int64          `json:"customer_code,omitempty"`
+	Cfop                  string          `json:"cfop"`
+	NaturezaOperacao      string          `json:"natureza_operacao"`
+	ValorProdutos         decimal.Decimal `json:"valor_produtos"`
+	ValorFrete            decimal.Decimal `json:"valor_frete"`
+	ValorSeguro           decimal.Decimal `json:"valor_seguro"`
+	ValorDesconto         decimal.Decimal `json:"valor_desconto"`
+	SalesOrderCode        *int64          `json:"sales_order_code,omitempty"`
+	SourceType            *string         `json:"source_type,omitempty"`
+	ShipmentLoadCode      *int64          `json:"shipment_load_code,omitempty"`
+	ShipmentCode          *int64          `json:"shipment_code,omitempty"`
+	FiscalCouponNumber    *string         `json:"fiscal_coupon_number,omitempty"`
+	FiscalCouponDate      *string         `json:"fiscal_coupon_date,omitempty"`
+	FiscalCouponECFSerial *string         `json:"fiscal_coupon_ecf_serial,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// pedido e a do cliente; vazia = a deles, ou deduzida do destinatário.
 	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
@@ -208,26 +208,26 @@ type CreateFiscalExitDTO struct {
 }
 
 type CreateFiscalExitItemDTO struct {
-	Sequence int     `json:"sequence"`
-	ItemCode *int64  `json:"item_code,omitempty"`
-	Ncm      *string `json:"ncm,omitempty"`
-	Cfop     string  `json:"cfop"`
-	Quantity float64 `json:"quantity"`
+	Sequence int             `json:"sequence"`
+	ItemCode *int64          `json:"item_code,omitempty"`
+	Ncm      *string         `json:"ncm,omitempty"`
+	Cfop     string          `json:"cfop"`
+	Quantity decimal.Decimal `json:"quantity"`
 	// Quantidade é o nome que o desktop até a 1.9 envia. A API ignorava esse
 	// campo e gravava a linha com quantidade zero; continua aceito porque o
 	// desktop e o backend são atualizados em momentos diferentes.
-	Quantidade       float64 `json:"quantidade,omitempty"`
-	UnitPrice        float64 `json:"unit_price"`
-	TotalPrice       float64 `json:"total_price"`
-	OrigemMercadoria string  `json:"origem_mercadoria"`
-	Description      *string `json:"description,omitempty"`
+	Quantidade       decimal.Decimal `json:"quantidade,omitempty"`
+	UnitPrice        decimal.Decimal `json:"unit_price"`
+	TotalPrice       decimal.Decimal `json:"total_price"`
+	OrigemMercadoria string          `json:"origem_mercadoria"`
+	Description      *string         `json:"description,omitempty"`
 	// ICMS-ST: when MvaPct > 0 the engine computes Substituição Tributária for
 	// this item. MvaPct is a ratio (0.40 = 40%); it may already be the adjusted
 	// MVA for interstate operations. AliqInternaDestinoST overrides the
 	// destination internal rate, and RedBaseSTPct reduces the ST base (ratio).
-	MvaPct               float64 `json:"mva_pct,omitempty"`
-	AliqInternaDestinoST float64 `json:"aliq_interna_destino_st,omitempty"`
-	RedBaseSTPct         float64 `json:"red_base_st_pct,omitempty"`
+	MvaPct               decimal.Decimal `json:"mva_pct,omitempty"`
+	AliqInternaDestinoST decimal.Decimal `json:"aliq_interna_destino_st,omitempty"`
+	RedBaseSTPct         decimal.Decimal `json:"red_base_st_pct,omitempty"`
 	// Linha do pedido de venda faturada, unidade comercial e código do produto
 	// impressos na nota (preenchidos quando a nota nasce do pedido).
 	SalesOrderItemCode *int64  `json:"sales_order_item_code,omitempty"`
@@ -251,24 +251,24 @@ type CreateFiscalExitFromLoadDTO struct {
 	CustomerCode            *int64                       `json:"customer_code,omitempty"`
 	Cfop                    string                       `json:"cfop"`
 	NaturezaOperacao        string                       `json:"natureza_operacao"`
-	ValorFrete              float64                      `json:"valor_frete"`
-	ValorSeguro             float64                      `json:"valor_seguro"`
-	ValorDesconto           float64                      `json:"valor_desconto"`
+	ValorFrete              decimal.Decimal              `json:"valor_frete"`
+	ValorSeguro             decimal.Decimal              `json:"valor_seguro"`
+	ValorDesconto           decimal.Decimal              `json:"valor_desconto"`
 	OrigemMercadoria        string                       `json:"origem_mercadoria,omitempty"`
 	ItemOverrides           []FiscalExitLoadItemOverride `json:"item_overrides,omitempty"`
 }
 
 type FiscalExitLoadItemOverride struct {
-	ShipmentCode         *int64   `json:"shipment_code,omitempty"`
-	ItemCode             int64    `json:"item_code"`
-	UnitPrice            *float64 `json:"unit_price,omitempty"`
-	Ncm                  *string  `json:"ncm,omitempty"`
-	Cfop                 *string  `json:"cfop,omitempty"`
-	OrigemMercadoria     *string  `json:"origem_mercadoria,omitempty"`
-	Description          *string  `json:"description,omitempty"`
-	MvaPct               float64  `json:"mva_pct,omitempty"`
-	AliqInternaDestinoST float64  `json:"aliq_interna_destino_st,omitempty"`
-	RedBaseSTPct         float64  `json:"red_base_st_pct,omitempty"`
+	ShipmentCode         *int64           `json:"shipment_code,omitempty"`
+	ItemCode             int64            `json:"item_code"`
+	UnitPrice            *decimal.Decimal `json:"unit_price,omitempty"`
+	Ncm                  *string          `json:"ncm,omitempty"`
+	Cfop                 *string          `json:"cfop,omitempty"`
+	OrigemMercadoria     *string          `json:"origem_mercadoria,omitempty"`
+	Description          *string          `json:"description,omitempty"`
+	MvaPct               decimal.Decimal  `json:"mva_pct,omitempty"`
+	AliqInternaDestinoST decimal.Decimal  `json:"aliq_interna_destino_st,omitempty"`
+	RedBaseSTPct         decimal.Decimal  `json:"red_base_st_pct,omitempty"`
 }
 
 type UpdateFiscalConfigDTO struct {

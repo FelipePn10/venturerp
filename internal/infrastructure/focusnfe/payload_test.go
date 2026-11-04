@@ -51,7 +51,7 @@ func TestNFEPayloadFormatoFocus(t *testing.T) {
 	}
 	it := m["items"].([]any)[0].(map[string]any)
 	for k, want := range map[string]any{"icms_situacao_tributaria": "00", "icms_aliquota": 18.0, "icms_origem": 0.0, "unidade_tributavel": "UN",
-		"quantidade_tributavel": 2.0, "valor_frete": 3.0, "pis_base_calculo": 10.0, "ipi_situacao_tributaria": "53", "ipi_codigo_enquadramento_legal": "999",
+		"quantidade_tributavel": 2.0, "valor_frete": 3.0, "pis_base_calculo": 13.0, "ipi_situacao_tributaria": "53", "ipi_codigo_enquadramento_legal": "999",
 		"ibs_cbs_situacao_tributaria": "000", "ibs_cbs_classificacao_tributaria": "000001", "cbs_aliquota": 0.9, "ibs_uf_valor": 0.01} {
 		if it[k] != want {
 			t.Errorf("item %s = %v, want %v", k, it[k], want)

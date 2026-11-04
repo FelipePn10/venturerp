@@ -196,7 +196,7 @@ func TestDevolucaoDeVenda(t *testing.T) {
 		t.Fatalf("NF-e de entrada: tipo %v finalidade %d ref %v cfop %s", nf.TipoDocumento, nf.Finalidade, nf.NFeReferenciada, nf.Cfop)
 	}
 	itensNF, _ := fiscal.GetExitItems(a.Ctx, nf.ID)
-	if len(itensNF) != 1 || itensNF[0].Quantity != 6 || itensNF[0].ValorICMS != 108 || itensNF[0].BaseICMS != 600 {
+	if len(itensNF) != 1 || !itensNF[0].Quantity.Equal(decimal.NewFromFloat(6)) || !itensNF[0].ValorICMS.Equal(decimal.NewFromFloat(108)) || !itensNF[0].BaseICMS.Equal(decimal.NewFromFloat(600)) {
 		t.Fatalf("item da NF-e: %+v", itensNF)
 	}
 	// Autorizada na SEFAZ → efetiva.

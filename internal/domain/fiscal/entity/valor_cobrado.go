@@ -31,10 +31,10 @@ func ValorCobrado(exit *FiscalExit, items []*FiscalExitItem) decimal.Decimal {
 	if exit == nil {
 		return decimal.Zero
 	}
-	total := decimal.NewFromFloat(exit.ValorTotal)
+	total := exit.ValorTotal
 	for _, it := range items {
 		if it != nil && RetornoDeIndustrializacao(it.Cfop) {
-			total = total.Sub(decimal.NewFromFloat(it.TotalPrice))
+			total = total.Sub(it.TotalPrice)
 		}
 	}
 	if total.IsNegative() {

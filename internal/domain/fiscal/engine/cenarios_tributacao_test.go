@@ -26,7 +26,7 @@ func calcularCenario(t *testing.T, c cenario) TaxItemResult {
 		c.cfg = defaultFiscalConfig()
 	}
 	if c.item.Ncm == "" {
-		c.item = TaxItem{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: "0", Parametro: c.item.Parametro, MvaPct: c.item.MvaPct}
+		c.item = TaxItem{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: "0", Parametro: c.item.Parametro, MvaPct: c.item.MvaPct}
 	}
 	params := TaxCalculationParams{
 		Itens: []TaxItem{c.item}, EmitenteUF: c.cfg.UFEmpresa, DestinoUF: c.destUF,
@@ -103,7 +103,7 @@ func TestCenario_Interestadual_NaoContribuinte_GrupoDIFAL(t *testing.T) {
 // Importado (origem 1) para não contribuinte: 4% e DIFAL sobre 4%.
 func TestCenario_Importado_NaoContribuinte_DIFALSobre4(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "SP", destTipo: "nao_contribuinte",
-		item: TaxItem{Ncm: "84714900", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: "1"}})
+		item: TaxItem{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: "1"}})
 	near(t, "ICMS 4%", 42, r.ValorICMS)
 	near(t, "interestadual", 4, r.AliqInterestadualPct)
 	near(t, "DIFAL 18-4", 147, r.ValorDIFAL)
@@ -123,14 +123,14 @@ func TestCenario_LucroPresumido_PISCOFINSCumulativo(t *testing.T) {
 // No presumido, a exceção da tabela de NCM (monofásico) continua valendo.
 func TestCenario_LucroPresumido_MonofasicoDaTabela(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", cfg: comRegime(RegimePresumido, 0),
-		item: TaxItem{Ncm: "27101259", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: "0"}})
+		item: TaxItem{Ncm: "27101259", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: "0"}})
 	querCST(t, "CST PIS", "04", r.CSTPIS)
 	near(t, "PIS", 0, r.ValorPIS)
 }
 
 func TestCenario_LucroReal_SemNCMNaTabela_AliquotaBasica(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte",
-		item: TaxItem{Ncm: "99999999", ValorUnitario: 1000, Quantidade: 1, OrigemMercadoria: "0"}})
+		item: TaxItem{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: "0"}})
 	near(t, "PIS", 16.50, r.ValorPIS)
 	near(t, "COFINS", 76, r.ValorCOFINS)
 }
@@ -273,7 +273,7 @@ func TestCenario_TipoDeNota_SemST(t *testing.T) {
 	p := &ParametroICMSIPI{ID: 9, MvaPct: 40}
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", flags: InvoiceTypeFlags{SemST: true}, item: TaxItem{Parametro: p}})
 	near(t, "ST da regra desligada", 0, r.ValorICMSST)
-	r = calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", flags: InvoiceTypeFlags{SemST: true}, item: TaxItem{Parametro: p, MvaPct: 0.40}})
+	r = calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", flags: InvoiceTypeFlags{SemST: true}, item: TaxItem{Parametro: p, MvaPct: decimal.NewFromFloat(0.40)}})
 	near(t, "ST da linha ((1000+50 IPI)×1,4×12% − 120)", 56.40, r.ValorICMSST)
 }
 
