@@ -102,11 +102,11 @@ func (uc *UseCase) Substituir(ctx context.Context, doc entity.Documento, documen
 	return montar(documentCode, gravadas, totais), nil
 }
 
-func percentual(v *float64) (decimal.Decimal, error) {
+func percentual(v *decimal.Decimal) (decimal.Decimal, error) {
 	if v == nil {
 		return decimal.Zero, errorsuc.NewValidationError("informe o percentual de comissão de cada representante")
 	}
-	return decimal.NewFromFloat(*v), nil
+	return *v, nil
 }
 
 func montar(documentCode int64, linhas []*entity.Rateio, totais domrepo.Totais) *response.RateioComissaoResponse {

@@ -7,9 +7,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func pct(v float64) *float64 { return &v }
+func pct(v float64) *decimal.Decimal { d := decimal.NewFromFloat(v); return &d }
 
-func parcela(n int16, dias int16, evento string, percentual *float64) *PaymentInstallment {
+func parcela(n int16, dias int16, evento string, percentual *decimal.Decimal) *PaymentInstallment {
 	return &PaymentInstallment{InstallmentNumber: n, DueDays: dias, BaseEvent: evento, Percentage: percentual, IsActive: true}
 }
 

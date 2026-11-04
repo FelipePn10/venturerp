@@ -2,10 +2,10 @@ package entity
 
 import (
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
-	"math"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -357,7 +357,7 @@ type PaymentCondition struct {
 	CarrierID    *int64
 	AnalysisType PaymentAnalysis
 	ParcelStart  PaymentParcelStart
-	Expenses     float64
+	Expenses     decimal.Decimal
 	AverageTerm  int16
 	IsSpecial    bool
 	IsRevenue    bool
@@ -375,7 +375,7 @@ type PaymentInstallment struct {
 	// Percentage é quanto do total esta parcela leva. Nulo em TODAS as parcelas
 	// da condição significa divisão em partes iguais — o comportamento que
 	// existia antes de a condição saber trabalhar com percentual.
-	Percentage *float64
+	Percentage *decimal.Decimal
 	// BaseEvent é a partir de quando os dias contam: emissão, entrada (no ato),
 	// entrega ou faturamento. Vazio equivale a emissão.
 	BaseEvent    string
@@ -429,8 +429,8 @@ type SalesTable struct {
 	Description                string
 	ValidityStart              *time.Time
 	ValidityEnd                *time.Time
-	ToleranceMinPct            float64
-	ToleranceMaxPct            float64
+	ToleranceMinPct            decimal.Decimal
+	ToleranceMaxPct            decimal.Decimal
 	PriceFormation             PriceFormation
 	DecimalPlaces              int16
 	IsActive                   bool
@@ -444,29 +444,29 @@ type SalesTable struct {
 }
 
 type SalesPriceFormationInput struct {
-	BaseCost      float64
-	MarkupPct     float64
-	MarginPct     float64
-	ExpensesPct   float64
-	TaxesPct      float64
-	FreightPct    float64
-	CommissionPct float64
-	DiscountPct   float64
+	BaseCost      decimal.Decimal
+	MarkupPct     decimal.Decimal
+	MarginPct     decimal.Decimal
+	ExpensesPct   decimal.Decimal
+	TaxesPct      decimal.Decimal
+	FreightPct    decimal.Decimal
+	CommissionPct decimal.Decimal
+	DiscountPct   decimal.Decimal
 	DecimalPlaces int16
 }
 
 type SalesPriceFormationResult struct {
-	BaseCost                float64
-	SuggestedPrice          float64
-	MarkupPct               float64
-	MarginPct               float64
-	ExpensesPct             float64
-	TaxesPct                float64
-	FreightPct              float64
-	CommissionPct           float64
-	DiscountPct             float64
-	ContributionMarginPct   float64
-	ContributionMarginValue float64
+	BaseCost                decimal.Decimal
+	SuggestedPrice          decimal.Decimal
+	MarkupPct               decimal.Decimal
+	MarginPct               decimal.Decimal
+	ExpensesPct             decimal.Decimal
+	TaxesPct                decimal.Decimal
+	FreightPct              decimal.Decimal
+	CommissionPct           decimal.Decimal
+	DiscountPct             decimal.Decimal
+	ContributionMarginPct   decimal.Decimal
+	ContributionMarginValue decimal.Decimal
 }
 
 type SalesCostSource string
@@ -490,18 +490,18 @@ type SalesPricePolicy struct {
 	Sequence       int64
 	PolicyScope    string
 	PolicyTypes    string
-	MarkupPct      float64
-	MarginPct      float64
-	MaxMarginPct   float64
-	IdealMarginPct float64
-	MarginStepPct  float64
-	ExpensesPct    float64
-	TaxesPct       float64
-	FreightPct     float64
-	CommissionPct  float64
-	DiscountPct    float64
-	MinMarginPct   float64
-	MaxDiscountPct float64
+	MarkupPct      decimal.Decimal
+	MarginPct      decimal.Decimal
+	MaxMarginPct   decimal.Decimal
+	IdealMarginPct decimal.Decimal
+	MarginStepPct  decimal.Decimal
+	ExpensesPct    decimal.Decimal
+	TaxesPct       decimal.Decimal
+	FreightPct     decimal.Decimal
+	CommissionPct  decimal.Decimal
+	DiscountPct    decimal.Decimal
+	MinMarginPct   decimal.Decimal
+	MaxDiscountPct decimal.Decimal
 	IncidencesJSON string
 	SalesTableID   *int64
 	ValidityStart  *time.Time
@@ -543,14 +543,14 @@ type CommercialPolicy struct {
 	Kind                   CommercialPolicyKind
 	ChoiceType             CommercialPolicyChoiceType
 	CalcType               CommercialPolicyCalcType
-	PercentValue           float64
-	FixedValue             float64
-	MaxPercent             float64
-	MaxValue               float64
-	MinGrossValue          float64
-	MaxGrossValue          float64
-	MinQuantity            float64
-	MaxQuantity            float64
+	PercentValue           decimal.Decimal
+	FixedValue             decimal.Decimal
+	MaxPercent             decimal.Decimal
+	MaxValue               decimal.Decimal
+	MinGrossValue          decimal.Decimal
+	MaxGrossValue          decimal.Decimal
+	MinQuantity            decimal.Decimal
+	MaxQuantity            decimal.Decimal
 	Priority               int64
 	Sequence               int64
 	Stackable              bool
@@ -591,10 +591,10 @@ type CommercialPolicyLine struct {
 	SequenceNumber int64
 	Description    *string
 	CalcType       CommercialPolicyCalcType
-	PercentValue   float64
-	FixedValue     float64
-	MinValue       float64
-	MaxValue       float64
+	PercentValue   decimal.Decimal
+	FixedValue     decimal.Decimal
+	MinValue       decimal.Decimal
+	MaxValue       decimal.Decimal
 	VariablesJSON  string
 	ValidityStart  *time.Time
 	ValidityEnd    *time.Time
@@ -786,16 +786,16 @@ func (p *CommercialPolicy) CommercialPolicyMatches(ctx CommercialPolicyContext, 
 	if p.ValidityEnd != nil && now.After(p.ValidityEnd.Add(24*time.Hour)) {
 		return false
 	}
-	if p.MinGrossValue > 0 && ctx.GrossValue.LessThan(dec(p.MinGrossValue)) {
+	if p.MinGrossValue.IsPositive() && ctx.GrossValue.LessThan(p.MinGrossValue) {
 		return false
 	}
-	if p.MaxGrossValue > 0 && ctx.GrossValue.GreaterThan(dec(p.MaxGrossValue)) {
+	if p.MaxGrossValue.IsPositive() && ctx.GrossValue.GreaterThan(p.MaxGrossValue) {
 		return false
 	}
-	if p.MinQuantity > 0 && ctx.Quantity.LessThan(dec(p.MinQuantity)) {
+	if p.MinQuantity.IsPositive() && ctx.Quantity.LessThan(p.MinQuantity) {
 		return false
 	}
-	if p.MaxQuantity > 0 && ctx.Quantity.GreaterThan(dec(p.MaxQuantity)) {
+	if p.MaxQuantity.IsPositive() && ctx.Quantity.GreaterThan(p.MaxQuantity) {
 		return false
 	}
 	return matchInt64Ptr(p.CustomerCode, ctx.CustomerCode) &&
@@ -811,10 +811,6 @@ func (p *CommercialPolicy) CommercialPolicyMatches(ctx CommercialPolicyContext, 
 		matchStringPtr(p.ItemClassification, ctx.ItemClassification)
 }
 
-// dec: a configuração da política vem do banco (numeric) como float64; o
-// decimal pelo menor texto que a representa devolve o valor digitado.
-func dec(f float64) decimal.Decimal { return decimal.NewFromFloat(f) }
-
 // CommercialPolicyValue: o valor da política sobre baseValue, em decimal,
 // arredondado a centavos. Devolve também o tipo, o percentual e o valor fixo usados.
 func (p *CommercialPolicy) CommercialPolicyValue(baseValue decimal.Decimal, now time.Time) (decimal.Decimal, CommercialPolicyCalcType, decimal.Decimal, decimal.Decimal, error) {
@@ -828,7 +824,7 @@ func (p *CommercialPolicy) CommercialPolicyValue(baseValue decimal.Decimal, now 
 		fixedValue = line.FixedValue
 		maxValue = line.MaxValue
 	}
-	pctD, fixedD, maxD, maxPctD := dec(percentValue), dec(fixedValue), dec(maxValue), dec(p.MaxPercent)
+	pctD, fixedD, maxD, maxPctD := percentValue, fixedValue, maxValue, p.MaxPercent
 	if !ValidCommercialPolicyCalcType(calcType) {
 		return decimal.Zero, calcType, pctD, fixedD, domainerr.NewValidation("tipo de cálculo da política comercial inválido: use percentual, valor fixo ou tabela")
 	}
@@ -879,9 +875,9 @@ type SalesTablePriceHistory struct {
 	SalesTableID      int64
 	SalesTableCode    int64
 	ItemCode          string
-	OldPrice          *float64
-	NewPrice          float64
-	BaseCost          *float64
+	OldPrice          *decimal.Decimal
+	NewPrice          decimal.Decimal
+	BaseCost          *decimal.Decimal
 	Source            string
 	PolicyCode        *int64
 	Reason            *string
@@ -925,10 +921,10 @@ func ValidSalesCostSource(source SalesCostSource) bool {
 }
 
 func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, error) {
-	if in.BaseCost < 0 {
+	if in.BaseCost.IsNegative() {
 		return nil, domainerr.NewValidation("o custo base deve ser maior ou igual a zero")
 	}
-	for name, pct := range map[string]float64{
+	for name, pct := range map[string]decimal.Decimal{
 		"markup_pct":     in.MarkupPct,
 		"margin_pct":     in.MarginPct,
 		"expenses_pct":   in.ExpensesPct,
@@ -937,7 +933,7 @@ func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, er
 		"commission_pct": in.CommissionPct,
 		"discount_pct":   in.DiscountPct,
 	} {
-		if pct < 0 {
+		if pct.IsNegative() {
 			return nil, domainerr.NewValidation(fmt.Sprintf("%s deve ser maior ou igual a zero", name))
 		}
 	}
@@ -945,21 +941,22 @@ func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, er
 		in.DecimalPlaces = 2
 	}
 
-	var price float64
-	if in.MarginPct > 0 || in.ExpensesPct > 0 || in.TaxesPct > 0 || in.FreightPct > 0 || in.CommissionPct > 0 || in.DiscountPct > 0 {
-		loadPct := in.MarginPct + in.ExpensesPct + in.TaxesPct + in.FreightPct + in.CommissionPct + in.DiscountPct
-		if loadPct >= 100 {
+	cem := decimal.NewFromInt(100)
+	um := decimal.NewFromInt(1)
+	loadPct := in.MarginPct.Add(in.ExpensesPct).Add(in.TaxesPct).Add(in.FreightPct).Add(in.CommissionPct).Add(in.DiscountPct)
+	price := in.BaseCost.Mul(um.Add(in.MarkupPct.Div(cem)))
+	if loadPct.IsPositive() {
+		if loadPct.GreaterThanOrEqual(cem) {
 			return nil, domainerr.NewValidation("a soma dos percentuais de margem e carga comercial deve ser menor que 100")
 		}
-		price = in.BaseCost * (1 + in.MarkupPct/100) / (1 - loadPct/100)
-	} else {
-		price = in.BaseCost * (1 + in.MarkupPct/100)
+		price = price.Div(um.Sub(loadPct.Div(cem)))
 	}
-	price = roundMoney(price, in.DecimalPlaces)
-	marginValue := price - in.BaseCost
-	marginPct := 0.0
-	if price > 0 {
-		marginPct = marginValue / price * 100
+	places := int32(in.DecimalPlaces)
+	price = price.Round(places)
+	marginValue := price.Sub(in.BaseCost)
+	marginPct := decimal.Zero
+	if price.IsPositive() {
+		marginPct = marginValue.Div(price).Mul(cem)
 	}
 	return &SalesPriceFormationResult{
 		BaseCost:                in.BaseCost,
@@ -971,14 +968,9 @@ func FormSalesPrice(in SalesPriceFormationInput) (*SalesPriceFormationResult, er
 		FreightPct:              in.FreightPct,
 		CommissionPct:           in.CommissionPct,
 		DiscountPct:             in.DiscountPct,
-		ContributionMarginPct:   roundMoney(marginPct, 4),
-		ContributionMarginValue: roundMoney(marginValue, in.DecimalPlaces),
+		ContributionMarginPct:   marginPct.Round(4),
+		ContributionMarginValue: marginValue.Round(places),
 	}, nil
-}
-
-func roundMoney(v float64, places int16) float64 {
-	factor := math.Pow(10, float64(places))
-	return math.Round(v*factor) / factor
 }
 
 func NewSalesTable(code int64, description string, formation PriceFormation) (*SalesTable, error) {
@@ -1018,15 +1010,15 @@ type InvoiceType struct {
 	Type                    InvoiceTypeKind
 	StockMovement           InvoiceStock
 	ICMSType                InvoiceICMSType
-	ICMSPct                 float64
-	ICMSReductionPct        float64
-	IPIPct                  float64
-	PISPct                  float64
-	COFINSPct               float64
-	ISSQNPct                float64
-	IRPct                   float64
-	CSLLPct                 float64
-	INSSPct                 float64
+	ICMSPct                 decimal.Decimal
+	ICMSReductionPct        decimal.Decimal
+	IPIPct                  decimal.Decimal
+	PISPct                  decimal.Decimal
+	COFINSPct               decimal.Decimal
+	ISSQNPct                decimal.Decimal
+	IRPct                   decimal.Decimal
+	CSLLPct                 decimal.Decimal
+	INSSPct                 decimal.Decimal
 	GeneratesRevenue        bool
 	UpdatesInventory        bool
 	GeneratesFinancialTitle bool
@@ -1050,8 +1042,8 @@ type InvoiceType struct {
 	BaixaPedido        bool
 	GeraTituloDev      bool
 	ExigeSuframa       bool
-	IRPctPresumption   float64
-	CSLLPctPresumption float64
+	IRPctPresumption   decimal.Decimal
+	CSLLPctPresumption decimal.Decimal
 	// FKs
 	CFOPId                   *int64
 	DispositivoLegalIPIId    *int64
@@ -1199,7 +1191,7 @@ type Customer struct {
 	// cliente costuma fazer com a mercadoria; nil = deduzir pela IE.
 	FinalidadeCompra      *string
 	PaymentCondVisibility PaymentCondVisibility
-	CreditLimit           float64
+	CreditLimit           decimal.Decimal
 	Website               *string
 	IsActive              bool
 	Blocked               bool
@@ -1279,10 +1271,10 @@ type SalesTablePrice struct {
 	ID            int64
 	SalesTableID  int64
 	ItemCode      string
-	Price         float64
+	Price         decimal.Decimal
 	UME           *string
 	UMC           *string
-	PriceConv     float64
+	PriceConv     decimal.Decimal
 	Formula       *string
 	Situation     PriceSituation
 	Blocked       bool

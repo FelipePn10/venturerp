@@ -48,12 +48,12 @@ type PoliticaDoPedido struct {
 
 // ConferirDesconto antes de gravar a linha: acima da alçada só passa se houver
 // quem aprove (política de aprovação ativa); senão a linha é recusada.
-func (p *PoliticaDoPedido) ConferirDesconto(ctx context.Context, pct float64) error {
+func (p *PoliticaDoPedido) ConferirDesconto(ctx context.Context, pct decimal.Decimal) error {
 	if p == nil || p.Parametros == nil {
 		return nil
 	}
 	limite, err := p.Parametros.DescontoMaximo(ctx)
-	if err != nil || limite == nil || !decimal.NewFromFloat(pct).GreaterThan(*limite) {
+	if err != nil || limite == nil || !pct.GreaterThan(*limite) {
 		return err
 	}
 	if t, ok := p.Aprovacoes.(temPolitica); ok {
@@ -62,7 +62,7 @@ func (p *PoliticaDoPedido) ConferirDesconto(ctx context.Context, pct float64) er
 		}
 	}
 	return errorsuc.NewValidationError(fmt.Sprintf("desconto de %s%% acima da alçada de %s%%: reduza o desconto ou configure a aprovação \"Pedido bloqueado por política comercial\" (VAPR0100)",
-		decimal.NewFromFloat(pct).String(), limite.String()))
+		pct.String(), limite.String()))
 }
 
 // Aplicar depois de gravar uma linha do pedido: alçada e políticas comerciais.
@@ -105,9 +105,9 @@ func (p *PoliticaDoPedido) aplicar(ctx context.Context, code int64, comPoliticas
 				if it.Status == entity.SalesOrderItemStatusCancelled {
 					continue
 				}
-				if decimal.NewFromFloat(it.DiscountPct).GreaterThan(*limite) {
+				if it.DiscountPct.GreaterThan(*limite) {
 					exige = true
-					motivo = fmt.Sprintf("desconto de %s%% na linha %d acima da alçada de %s%%", decimal.NewFromFloat(it.DiscountPct).String(), it.Sequence, limite.String())
+					motivo = fmt.Sprintf("desconto de %s%% na linha %d acima da alçada de %s%%", it.DiscountPct.String(), it.Sequence, limite.String())
 					break
 				}
 			}
@@ -130,9 +130,9 @@ func (p *PoliticaDoPedido) aplicar(ctx context.Context, code int64, comPoliticas
 		if o.FreightValue.IsZero() && ev.FreightValue.IsPositive() {
 			o.FreightValue, mudou = ev.FreightValue.Round(2), true
 		}
-		if o.CommissionPct == 0 && ev.CommissionValue.IsPositive() && o.TotalGross.IsPositive() {
+		if o.CommissionPct.IsZero() && ev.CommissionValue.IsPositive() && o.TotalGross.IsPositive() {
 			// O pedido guarda a comissão como float (coluna legada); o cálculo é decimal.
-			o.CommissionPct, mudou = ev.CommissionValue.Div(o.TotalGross).Mul(decimal.NewFromInt(100)).Round(4).InexactFloat64(), true
+			o.CommissionPct, mudou = ev.CommissionValue.Div(o.TotalGross).Mul(decimal.NewFromInt(100)).Round(4), true
 		}
 		if mudou {
 			if _, err := p.Repo.Update(ctx, o); err != nil {

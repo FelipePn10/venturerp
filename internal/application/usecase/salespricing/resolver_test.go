@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 )
 
@@ -33,12 +35,12 @@ func (s pricingRepositoryStub) GetSalesTablePrice(context.Context, int64, string
 func TestResolveUsesActiveCurrentSalesTablePrice(t *testing.T) {
 	result, err := Resolve(context.Background(), pricingRepositoryStub{
 		table: &entity.SalesTable{ID: 10, Code: 20, IsActive: true},
-		price: &entity.SalesTablePrice{Price: 123.45, Situation: entity.PriceSituationAtivo},
-	}, 20, 30, 2)
+		price: &entity.SalesTablePrice{Price: decimal.NewFromFloat(123.45), Situation: entity.PriceSituationAtivo},
+	}, 20, 30, decimal.NewFromFloat(2))
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if result.AppliedPrice != 123.45 || result.BasePrice != 123.45 || result.Source != "SALES_TABLE" {
+	if !result.AppliedPrice.Equal(decimal.NewFromFloat(123.45)) || !result.BasePrice.Equal(decimal.NewFromFloat(123.45)) || result.Source != "SALES_TABLE" {
 		t.Fatalf("Resolve() = %+v", result)
 	}
 }
@@ -51,12 +53,12 @@ func TestResolveRejectsExpiredBlockedAndMissingPricesInPortuguese(t *testing.T) 
 		want string
 	}{
 		{"tabela vencida", pricingRepositoryStub{table: &entity.SalesTable{IsActive: true, ValidityEnd: &yesterday}}, "vencida"},
-		{"preço bloqueado", pricingRepositoryStub{table: &entity.SalesTable{ID: 1, IsActive: true}, price: &entity.SalesTablePrice{Price: 10, Blocked: true}}, "bloqueado"},
+		{"preço bloqueado", pricingRepositoryStub{table: &entity.SalesTable{ID: 1, IsActive: true}, price: &entity.SalesTablePrice{Price: decimal.NewFromFloat(10), Blocked: true}}, "bloqueado"},
 		{"preço ausente", pricingRepositoryStub{table: &entity.SalesTable{ID: 1, IsActive: true}}, "não existe preço válido"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := Resolve(context.Background(), tt.repo, 2, 3, 1)
+			_, err := Resolve(context.Background(), tt.repo, 2, 3, decimal.NewFromFloat(1))
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Resolve() error = %v, want %q", err, tt.want)
 			}

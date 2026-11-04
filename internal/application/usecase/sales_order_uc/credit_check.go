@@ -53,7 +53,7 @@ func (c *CreditChecker) Check(ctx context.Context, code int64, pedidos repositor
 	}
 	orderValue := orderExposureValue(order)
 
-	decision := entity.EvaluateCredit(decimal.NewFromFloat(customer.CreditLimit), openReceivables, openOrders, orderValue, customer.Blocked)
+	decision := entity.EvaluateCredit(customer.CreditLimit, openReceivables, openOrders, orderValue, customer.Blocked)
 	if !decision.Approved {
 		if err := pedidos.Block(ctx, code, decision.Reason); err != nil {
 			return false, fmt.Errorf("bloqueando o pedido por crédito: %w", err)

@@ -23,41 +23,49 @@ func (s *sugestorFixo) SugerirTributos(_ context.Context, q ports.ConsultaTribut
 
 func TestPreencherTributos(t *testing.T) {
 	ctx := context.Background()
-	linha := func() (percentuaisDaLinha, *[5]float64) {
-		v := &[5]float64{}
+	linha := func() (percentuaisDaLinha, *[5]decimal.Decimal) {
+		v := &[5]decimal.Decimal{}
 		return percentuaisDaLinha{IPI: &v[0], ICMS: &v[1], PIS: &v[2], COFINS: &v[3], ST: &v[4]}, v
+	}
+	iguais := func(v *[5]decimal.Decimal, w ...float64) bool {
+		for i := range v {
+			if !v[i].Equal(decimal.NewFromFloat(w[i])) {
+				return false
+			}
+		}
+		return true
 	}
 
 	// Sem nada informado: calcula pela regra, sobre o preço com desconto.
 	s := &sugestorFixo{}
 	p, v := linha()
-	if err := preencherTributos(ctx, s, false, 10, 99, decimal.NewFromInt(2), decimal.NewFromInt(100), 10, p); err != nil {
+	if err := preencherTributos(ctx, s, false, 10, 99, decimal.NewFromInt(2), decimal.NewFromInt(100), decimal.NewFromInt(10), p); err != nil {
 		t.Fatal(err)
 	}
-	if *v != [5]float64{5, 19.5, 1.65, 7.6, 4.2} || !s.ultima.ValorUnitario.Equal(decimal.NewFromInt(90)) || *s.ultima.SalesOrderCode != 10 {
+	if !iguais(v, 5, 19.5, 1.65, 7.6, 4.2) || !s.ultima.ValorUnitario.Equal(decimal.NewFromInt(90)) || *s.ultima.SalesOrderCode != 10 {
 		t.Fatalf("calculado: %v consulta %+v", *v, s.ultima)
 	}
 
 	// Percentual digitado não é sobrescrito.
 	s = &sugestorFixo{}
 	p, v = linha()
-	v[0] = 3
-	_ = preencherTributos(ctx, s, false, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), 0, p)
-	if s.chamadas != 0 || v[0] != 3 || v[1] != 0 {
+	v[0] = decimal.NewFromInt(3)
+	_ = preencherTributos(ctx, s, false, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), decimal.Zero, p)
+	if s.chamadas != 0 || !v[0].Equal(decimal.NewFromInt(3)) || !v[1].IsZero() {
 		t.Fatalf("digitado: %v, chamadas %d", *v, s.chamadas)
 	}
 
 	// Manual, mesmo zerado, fica zerado (venda sem imposto por decisão do vendedor).
 	s = &sugestorFixo{}
 	p, v = linha()
-	_ = preencherTributos(ctx, s, true, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), 0, p)
-	if s.chamadas != 0 || *v != [5]float64{} {
+	_ = preencherTributos(ctx, s, true, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), decimal.Zero, p)
+	if s.chamadas != 0 || !iguais(v, 0, 0, 0, 0, 0) {
 		t.Fatalf("manual: %v, chamadas %d", *v, s.chamadas)
 	}
 
 	// Sem sugestor configurado, nada muda.
 	p, v = linha()
-	if err := preencherTributos(ctx, nil, false, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), 0, p); err != nil || *v != [5]float64{} {
+	if err := preencherTributos(ctx, nil, false, 10, 99, decimal.NewFromInt(1), decimal.NewFromInt(100), decimal.Zero, p); err != nil || !iguais(v, 0, 0, 0, 0, 0) {
 		t.Fatalf("sem sugestor: %v %v", *v, err)
 	}
 }

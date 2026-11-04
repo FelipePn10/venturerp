@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
+	"github.com/shopspring/decimal"
 )
 
 type CustomerRepository interface {
@@ -90,13 +91,13 @@ type CustomerRepository interface {
 
 	// ── Sales Table Prices ────────────────────────────────────────────────────
 	CreateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error)
-	UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *float64, error)
+	UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *decimal.Decimal, error)
 	UpdateSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, error)
 	GetSalesTablePriceByID(ctx context.Context, id int64) (*entity.SalesTablePrice, error)
 	GetSalesTablePrice(ctx context.Context, salesTableID int64, itemCode string) (*entity.SalesTablePrice, error)
 	ListSalesTablePrices(ctx context.Context, salesTableID int64) ([]*entity.SalesTablePrice, error)
 	DeleteSalesTablePrice(ctx context.Context, id int64) error
-	ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (float64, string, error)
+	ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (decimal.Decimal, string, error)
 	CreateSalesTablePriceHistory(ctx context.Context, h *entity.SalesTablePriceHistory) (*entity.SalesTablePriceHistory, error)
 	ListSalesTablePriceHistory(ctx context.Context, salesTableCode int64, itemCode *string) ([]*entity.SalesTablePriceHistory, error)
 

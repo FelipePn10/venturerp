@@ -3,21 +3,21 @@ package request
 import "github.com/shopspring/decimal"
 
 type CreateSalesOrderDTO struct {
-	EnterpriseCode            int64   `json:"enterprise_code"`
-	Status                    string  `json:"status"`        // R, P, A, OA, OF
-	Origin                    string  `json:"origin"`        // NORMAL, DEPENDENT, ASSISTANCE, RESERVE, COPY, INTER_FACTORY
-	EmissionDate              string  `json:"emission_date"` // YYYY-MM-DD
-	DeliveryDate              *string `json:"delivery_date,omitempty"`
-	DeliveryDateFirm          bool    `json:"delivery_date_firm"`
-	CustomerCode              *int64  `json:"customer_code,omitempty"`
-	BillingAddressCode        *int64  `json:"billing_address_code,omitempty"`
-	ShippingAddressCode       *int64  `json:"shipping_address_code,omitempty"`
-	RepresentativeCode        *int64  `json:"representative_code,omitempty"`
-	RepresentativeOrderNumber *int64  `json:"representative_order_number,omitempty"`
-	PlanCode                  *int64  `json:"plan_code,omitempty"`
-	SalesDivisionCode         *int64  `json:"sales_division_code,omitempty"`
-	CommissionPct             float64 `json:"commission_pct"`
-	TaxTypeCode               *int64  `json:"tax_type_code,omitempty"`
+	EnterpriseCode            int64           `json:"enterprise_code"`
+	Status                    string          `json:"status"`        // R, P, A, OA, OF
+	Origin                    string          `json:"origin"`        // NORMAL, DEPENDENT, ASSISTANCE, RESERVE, COPY, INTER_FACTORY
+	EmissionDate              string          `json:"emission_date"` // YYYY-MM-DD
+	DeliveryDate              *string         `json:"delivery_date,omitempty"`
+	DeliveryDateFirm          bool            `json:"delivery_date_firm"`
+	CustomerCode              *int64          `json:"customer_code,omitempty"`
+	BillingAddressCode        *int64          `json:"billing_address_code,omitempty"`
+	ShippingAddressCode       *int64          `json:"shipping_address_code,omitempty"`
+	RepresentativeCode        *int64          `json:"representative_code,omitempty"`
+	RepresentativeOrderNumber *int64          `json:"representative_order_number,omitempty"`
+	PlanCode                  *int64          `json:"plan_code,omitempty"`
+	SalesDivisionCode         *int64          `json:"sales_division_code,omitempty"`
+	CommissionPct             decimal.Decimal `json:"commission_pct"`
+	TaxTypeCode               *int64          `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// cliente nesta venda. Na alteração, ausente mantém e vazia limpa.
 	FinalidadeCompra            *string         `json:"finalidade_compra,omitempty"`
@@ -42,10 +42,10 @@ type CreateSalesOrderDTO struct {
 	FreightType                 *string         `json:"freight_type,omitempty"`
 	FreightValue                decimal.Decimal `json:"freight_value"`
 	InsuranceValue              decimal.Decimal `json:"insurance_value"`
-	VolumeQuantity              float64         `json:"volume_quantity"`
+	VolumeQuantity              decimal.Decimal `json:"volume_quantity"`
 	VolumeType                  *string         `json:"volume_type,omitempty"`
-	NetWeight                   float64         `json:"net_weight"`
-	GrossWeight                 float64         `json:"gross_weight"`
+	NetWeight                   decimal.Decimal `json:"net_weight"`
+	GrossWeight                 decimal.Decimal `json:"gross_weight"`
 	DiscountValue               decimal.Decimal `json:"discount_value"`
 	SurchargeValue              decimal.Decimal `json:"surcharge_value"`
 	ProjectCode                 *string         `json:"project_code,omitempty"`
@@ -53,20 +53,20 @@ type CreateSalesOrderDTO struct {
 }
 
 type UpdateSalesOrderDTO struct {
-	Code                      int64   `json:"code"`
-	Status                    string  `json:"status"`
-	Origin                    string  `json:"origin"`
-	DeliveryDate              *string `json:"delivery_date,omitempty"`
-	DeliveryDateFirm          bool    `json:"delivery_date_firm"`
-	CustomerCode              *int64  `json:"customer_code,omitempty"`
-	BillingAddressCode        *int64  `json:"billing_address_code,omitempty"`
-	ShippingAddressCode       *int64  `json:"shipping_address_code,omitempty"`
-	RepresentativeCode        *int64  `json:"representative_code,omitempty"`
-	RepresentativeOrderNumber *int64  `json:"representative_order_number,omitempty"`
-	PlanCode                  *int64  `json:"plan_code,omitempty"`
-	SalesDivisionCode         *int64  `json:"sales_division_code,omitempty"`
-	CommissionPct             float64 `json:"commission_pct"`
-	TaxTypeCode               *int64  `json:"tax_type_code,omitempty"`
+	Code                      int64           `json:"code"`
+	Status                    string          `json:"status"`
+	Origin                    string          `json:"origin"`
+	DeliveryDate              *string         `json:"delivery_date,omitempty"`
+	DeliveryDateFirm          bool            `json:"delivery_date_firm"`
+	CustomerCode              *int64          `json:"customer_code,omitempty"`
+	BillingAddressCode        *int64          `json:"billing_address_code,omitempty"`
+	ShippingAddressCode       *int64          `json:"shipping_address_code,omitempty"`
+	RepresentativeCode        *int64          `json:"representative_code,omitempty"`
+	RepresentativeOrderNumber *int64          `json:"representative_order_number,omitempty"`
+	PlanCode                  *int64          `json:"plan_code,omitempty"`
+	SalesDivisionCode         *int64          `json:"sales_division_code,omitempty"`
+	CommissionPct             decimal.Decimal `json:"commission_pct"`
+	TaxTypeCode               *int64          `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// cliente nesta venda. Na alteração, ausente mantém e vazia limpa.
 	FinalidadeCompra            *string         `json:"finalidade_compra,omitempty"`
@@ -92,10 +92,10 @@ type UpdateSalesOrderDTO struct {
 	FreightType                 *string         `json:"freight_type,omitempty"`
 	FreightValue                decimal.Decimal `json:"freight_value"`
 	InsuranceValue              decimal.Decimal `json:"insurance_value"`
-	VolumeQuantity              float64         `json:"volume_quantity"`
+	VolumeQuantity              decimal.Decimal `json:"volume_quantity"`
 	VolumeType                  *string         `json:"volume_type,omitempty"`
-	NetWeight                   float64         `json:"net_weight"`
-	GrossWeight                 float64         `json:"gross_weight"`
+	NetWeight                   decimal.Decimal `json:"net_weight"`
+	GrossWeight                 decimal.Decimal `json:"gross_weight"`
 	DiscountValue               decimal.Decimal `json:"discount_value"`
 	SurchargeValue              decimal.Decimal `json:"surcharge_value"`
 	ProjectCode                 *string         `json:"project_code,omitempty"`
@@ -168,19 +168,19 @@ type CreateSalesOrderItemDTO struct {
 	Lot              *string         `json:"lot,omitempty"`
 	CouponDelivery   *string         `json:"coupon_delivery,omitempty"`
 	PaidAtCashier    bool            `json:"paid_at_cashier"`
-	IPIPct           float64         `json:"ipi_pct"`
-	ICMSPct          float64         `json:"icms_pct"`
-	PISPct           float64         `json:"pis_pct"`
-	COFINSPct        float64         `json:"cofins_pct"`
-	STPct            float64         `json:"st_pct"`
+	IPIPct           decimal.Decimal `json:"ipi_pct"`
+	ICMSPct          decimal.Decimal `json:"icms_pct"`
+	PISPct           decimal.Decimal `json:"pis_pct"`
+	COFINSPct        decimal.Decimal `json:"cofins_pct"`
+	STPct            decimal.Decimal `json:"st_pct"`
 	// TributosManuais: os percentuais foram digitados pelo vendedor e não são
 	// recalculados. Sem ele, linha com todos os percentuais zerados é tributada
 	// pela regra de ICMS/IPI, como a nota será.
-	TributosManuais bool    `json:"tributos_manuais,omitempty"`
-	DiscountPct     float64 `json:"discount_pct"`
-	UnitWeightNet   float64 `json:"unit_weight_net"`
-	UnitWeightGross float64 `json:"unit_weight_gross"`
-	Notes           *string `json:"notes,omitempty"`
+	TributosManuais bool            `json:"tributos_manuais,omitempty"`
+	DiscountPct     decimal.Decimal `json:"discount_pct"`
+	UnitWeightNet   decimal.Decimal `json:"unit_weight_net"`
+	UnitWeightGross decimal.Decimal `json:"unit_weight_gross"`
+	Notes           *string         `json:"notes,omitempty"`
 }
 
 type UpdateSalesOrderItemDTO struct {
@@ -196,19 +196,19 @@ type UpdateSalesOrderItemDTO struct {
 	Lot              *string         `json:"lot,omitempty"`
 	CouponDelivery   *string         `json:"coupon_delivery,omitempty"`
 	PaidAtCashier    bool            `json:"paid_at_cashier"`
-	IPIPct           float64         `json:"ipi_pct"`
-	ICMSPct          float64         `json:"icms_pct"`
-	PISPct           float64         `json:"pis_pct"`
-	COFINSPct        float64         `json:"cofins_pct"`
-	STPct            float64         `json:"st_pct"`
+	IPIPct           decimal.Decimal `json:"ipi_pct"`
+	ICMSPct          decimal.Decimal `json:"icms_pct"`
+	PISPct           decimal.Decimal `json:"pis_pct"`
+	COFINSPct        decimal.Decimal `json:"cofins_pct"`
+	STPct            decimal.Decimal `json:"st_pct"`
 	// TributosManuais: os percentuais foram digitados pelo vendedor e não são
 	// recalculados. Sem ele, linha com todos os percentuais zerados é tributada
 	// pela regra de ICMS/IPI, como a nota será.
-	TributosManuais bool    `json:"tributos_manuais,omitempty"`
-	DiscountPct     float64 `json:"discount_pct"`
-	UnitWeightNet   float64 `json:"unit_weight_net"`
-	UnitWeightGross float64 `json:"unit_weight_gross"`
-	Notes           *string `json:"notes,omitempty"`
+	TributosManuais bool            `json:"tributos_manuais,omitempty"`
+	DiscountPct     decimal.Decimal `json:"discount_pct"`
+	UnitWeightNet   decimal.Decimal `json:"unit_weight_net"`
+	UnitWeightGross decimal.Decimal `json:"unit_weight_gross"`
+	Notes           *string         `json:"notes,omitempty"`
 }
 
 // SalvarRateioComissaoDTO substitui o rateio inteiro do documento: é assim que
@@ -218,9 +218,9 @@ type SalvarRateioComissaoDTO struct {
 }
 
 type RateioComissaoLinhaDTO struct {
-	RepresentativeCode int64    `json:"representative_code"`
-	Role               string   `json:"role"`
-	CommissionPct      *float64 `json:"commission_pct"`
-	CommissionBase     string   `json:"commission_base"`
-	Notes              *string  `json:"notes"`
+	RepresentativeCode int64            `json:"representative_code"`
+	Role               string           `json:"role"`
+	CommissionPct      *decimal.Decimal `json:"commission_pct"`
+	CommissionBase     string           `json:"commission_base"`
+	Notes              *string          `json:"notes"`
 }

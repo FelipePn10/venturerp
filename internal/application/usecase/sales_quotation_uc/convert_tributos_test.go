@@ -75,7 +75,7 @@ func TestConversaoPreencheICMSPISCOFINSDaRegra(t *testing.T) {
 		t.Fatalf("linhas convertidas: %d", len(pedidos.itens))
 	}
 	l := pedidos.itens[0]
-	if l.IPIPct != 5 || l.STPct != 2 || l.ICMSPct != 19.5 || l.PISPct != 1.65 || l.COFINSPct != 7.6 {
+	if !l.IPIPct.Equal(decimal.NewFromFloat(5)) || !l.STPct.Equal(decimal.NewFromFloat(2)) || !l.ICMSPct.Equal(decimal.NewFromFloat(19.5)) || !l.PISPct.Equal(decimal.NewFromFloat(1.65)) || !l.COFINSPct.Equal(decimal.NewFromFloat(7.6)) {
 		t.Fatalf("linha do pedido: IPI %v ST %v ICMS %v PIS %v COFINS %v", l.IPIPct, l.STPct, l.ICMSPct, l.PISPct, l.COFINSPct)
 	}
 }

@@ -116,8 +116,8 @@ func (uc *SalesOrderReportUseCase) Execute(ctx context.Context, filter repositor
 	}
 	return &response.SalesOrderReportResponse{
 		TotalOrders:            report.TotalOrders,
-		TotalGross:             report.TotalGross,
-		TotalNet:               report.TotalNet,
+		TotalGross:             report.TotalGross.InexactFloat64(),
+		TotalNet:               report.TotalNet.InexactFloat64(),
 		OpenCount:              report.OpenCount,
 		ConfirmedCount:         report.ConfirmedCount,
 		InvoicedCount:          report.InvoicedCount,

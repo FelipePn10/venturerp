@@ -15,8 +15,8 @@ func TestEvaluateCommercialPoliciesAppliesDiscountFreightAndCommission(t *testin
 			Description:  "Volume",
 			Kind:         CommercialPolicyDiscount,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 10,
-			MinQuantity:  5,
+			PercentValue: decimal.NewFromFloat(10),
+			MinQuantity:  decimal.NewFromFloat(5),
 			Stackable:    true,
 			IsActive:     true,
 			ItemCode:     &itemCode,
@@ -27,7 +27,7 @@ func TestEvaluateCommercialPoliciesAppliesDiscountFreightAndCommission(t *testin
 			Description: "Freight",
 			Kind:        CommercialPolicyFreight,
 			CalcType:    CommercialPolicyValue,
-			FixedValue:  50,
+			FixedValue:  decimal.NewFromFloat(50),
 			Stackable:   true,
 			IsActive:    true,
 		},
@@ -37,7 +37,7 @@ func TestEvaluateCommercialPoliciesAppliesDiscountFreightAndCommission(t *testin
 			Description:  "Commission",
 			Kind:         CommercialPolicyCommission,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 5,
+			PercentValue: decimal.NewFromFloat(5),
 			Stackable:    true,
 			IsActive:     true,
 		},
@@ -74,7 +74,7 @@ func TestEvaluateCommercialPoliciesSkipsNonMatchingPolicy(t *testing.T) {
 			Description:  "Wrong item",
 			Kind:         CommercialPolicyDiscount,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 10,
+			PercentValue: decimal.NewFromFloat(10),
 			Stackable:    true,
 			IsActive:     true,
 			ItemCode:     &otherItem,
@@ -95,7 +95,7 @@ func TestEvaluateCommercialPoliciesHonorsNonStackableKind(t *testing.T) {
 			Description:  "First",
 			Kind:         CommercialPolicyDiscount,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 10,
+			PercentValue: decimal.NewFromFloat(10),
 			Stackable:    false,
 			IsActive:     true,
 		},
@@ -104,7 +104,7 @@ func TestEvaluateCommercialPoliciesHonorsNonStackableKind(t *testing.T) {
 			Description:  "Second",
 			Kind:         CommercialPolicyDiscount,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 10,
+			PercentValue: decimal.NewFromFloat(10),
 			Stackable:    true,
 			IsActive:     true,
 		},
@@ -125,7 +125,7 @@ func TestEvaluateCommercialPoliciesUsesPolicyLineWhenPresent(t *testing.T) {
 			Description:  "Line discount",
 			Kind:         CommercialPolicyDiscount,
 			CalcType:     CommercialPolicyPercent,
-			PercentValue: 2,
+			PercentValue: decimal.NewFromFloat(2),
 			Stackable:    true,
 			IsActive:     true,
 			Lines: []*CommercialPolicyLine{
@@ -133,7 +133,7 @@ func TestEvaluateCommercialPoliciesUsesPolicyLineWhenPresent(t *testing.T) {
 					LineNumber:     1,
 					SequenceNumber: 1,
 					CalcType:       CommercialPolicyPercent,
-					PercentValue:   7,
+					PercentValue:   decimal.NewFromFloat(7),
 					IsActive:       true,
 				},
 			},
@@ -153,7 +153,7 @@ func TestEvaluateCommercialPoliciesUsesPolicyLineWhenPresent(t *testing.T) {
 func TestEvaluateCommercialPoliciesDecimalEncadeado(t *testing.T) {
 	var policies []*CommercialPolicy
 	for i := int64(1); i <= 3; i++ {
-		policies = append(policies, &CommercialPolicy{ID: i, Code: i, Kind: CommercialPolicyDiscount, CalcType: CommercialPolicyPercent, PercentValue: 10, Stackable: true, IsActive: true})
+		policies = append(policies, &CommercialPolicy{ID: i, Code: i, Kind: CommercialPolicyDiscount, CalcType: CommercialPolicyPercent, PercentValue: decimal.NewFromFloat(10), Stackable: true, IsActive: true})
 	}
 	got, err := EvaluateCommercialPolicies(policies, CommercialPolicyContext{GrossValue: decimal.RequireFromString("100.10"), Quantity: decimal.NewFromInt(1)})
 	if err != nil {

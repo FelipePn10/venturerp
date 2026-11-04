@@ -2,8 +2,9 @@ package sales_order_uc
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -61,11 +62,11 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	if tableCode == nil {
 		return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
 	}
-	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, itemCode, dto.RequestedQty.InexactFloat64())
+	pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, itemCode, dto.RequestedQty)
 	if err != nil {
 		return nil, err
 	}
-	dto.UnitPrice, dto.PriceTableCode = decimal.NewFromFloat(pricing.AppliedPrice), tableCode
+	dto.UnitPrice, dto.PriceTableCode = pricing.AppliedPrice, tableCode
 	if err := uc.Politica.ConferirDesconto(ctx, dto.DiscountPct); err != nil {
 		return nil, err
 	}
@@ -185,15 +186,15 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 		if tableCode == nil {
 			return nil, errorsuc.NewValidationError("o pedido não possui tabela de preço")
 		}
-		pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, current.ItemCode, dto.RequestedQty.InexactFloat64())
+		pricing, err := salespricing.Resolve(ctx, uc.Prices, *tableCode, current.ItemCode, dto.RequestedQty)
 		if err != nil {
 			return nil, err
 		}
-		dto.UnitPrice = decimal.NewFromFloat(pricing.AppliedPrice)
+		dto.UnitPrice = pricing.AppliedPrice
 	}
 	// Só confere quando o desconto sobe: alterar a quantidade de uma linha já
 	// aceita não deve ser recusado por causa do desconto que ela já tinha.
-	if dto.DiscountPct > current.DiscountPct {
+	if dto.DiscountPct.GreaterThan(current.DiscountPct) {
 		if err := uc.Politica.ConferirDesconto(ctx, dto.DiscountPct); err != nil {
 			return nil, err
 		}

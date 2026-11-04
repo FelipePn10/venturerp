@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -597,7 +599,7 @@ func (r *CustomerRepositorySQLC) CreatePaymentCondition(ctx context.Context, pc 
 		CarrierID:    pc.CarrierID,
 		AnalysisType: sqltypes.PaymentAnalysisEnum(pc.AnalysisType),
 		ParcelStart:  sqltypes.PaymentParcelStartEnum(pc.ParcelStart),
-		Expenses:     pgutil.ToPgNumericFromFloat64(pc.Expenses),
+		Expenses:     pgutil.ToPgNumericFromDecimal(pc.Expenses),
 		AverageTerm:  pc.AverageTerm,
 		IsSpecial:    pc.IsSpecial,
 		IsRevenue:    pc.IsRevenue,
@@ -621,7 +623,7 @@ func (r *CustomerRepositorySQLC) UpdatePaymentCondition(ctx context.Context, pc 
 		CarrierID:    pc.CarrierID,
 		AnalysisType: sqltypes.PaymentAnalysisEnum(pc.AnalysisType),
 		ParcelStart:  sqltypes.PaymentParcelStartEnum(pc.ParcelStart),
-		Expenses:     pgutil.ToPgNumericFromFloat64(pc.Expenses),
+		Expenses:     pgutil.ToPgNumericFromDecimal(pc.Expenses),
 		AverageTerm:  pc.AverageTerm,
 		IsSpecial:    pc.IsSpecial,
 		IsRevenue:    pc.IsRevenue,
@@ -736,7 +738,7 @@ func paymentCondToEntity(row sqlc.PaymentCondition) *entity.PaymentCondition {
 		CarrierID:    row.CarrierID,
 		AnalysisType: entity.PaymentAnalysis(row.AnalysisType),
 		ParcelStart:  entity.PaymentParcelStart(row.ParcelStart),
-		Expenses:     pgutil.FromPgNumericToFloat64(row.Expenses),
+		Expenses:     pgutil.FromPgNumericToDecimal(row.Expenses),
 		AverageTerm:  row.AverageTerm,
 		IsSpecial:    row.IsSpecial,
 		IsRevenue:    row.IsRevenue,
@@ -764,19 +766,19 @@ func installmentToEntity(row sqlc.PaymentConditionInstallment) *entity.PaymentIn
 
 // percentualPg converte o percentual da parcela: nulo é "não informado", e não
 // zero — zero seria uma parcela que não leva nada.
-func percentualPg(v *float64) pgtype.Numeric {
+func percentualPg(v *decimal.Decimal) pgtype.Numeric {
 	if v == nil {
 		return pgtype.Numeric{}
 	}
-	return pgutil.ToPgNumericFromFloat64(*v)
+	return pgutil.ToPgNumericFromDecimal(*v)
 }
 
-func percentualDePg(v pgtype.Numeric) *float64 {
+func percentualDePg(v pgtype.Numeric) *decimal.Decimal {
 	if !v.Valid {
 		return nil
 	}
-	f := pgutil.FromPgNumericToFloat64(v)
-	return &f
+	d := pgutil.FromPgNumericToDecimal(v)
+	return &d
 }
 
 // eventoOuPadrao mantém EMISSAO como o significado de "não informado" — é o que
@@ -801,8 +803,8 @@ func (r *CustomerRepositorySQLC) CreateSalesTable(ctx context.Context, st *entit
 		Description:                st.Description,
 		ValidityStart:              pgutil.ToPgDateFromPtr(st.ValidityStart),
 		ValidityEnd:                pgutil.ToPgDateFromPtr(st.ValidityEnd),
-		ToleranceMinPct:            pgutil.ToPgNumericFromFloat64(st.ToleranceMinPct),
-		ToleranceMaxPct:            pgutil.ToPgNumericFromFloat64(st.ToleranceMaxPct),
+		ToleranceMinPct:            pgutil.ToPgNumericFromDecimal(st.ToleranceMinPct),
+		ToleranceMaxPct:            pgutil.ToPgNumericFromDecimal(st.ToleranceMaxPct),
 		PriceFormation:             sqltypes.PriceFormationEnum(st.PriceFormation),
 		DecimalPlaces:              st.DecimalPlaces,
 		Composition:                sqltypes.TableCompositionEnum(st.Composition),
@@ -828,8 +830,8 @@ func (r *CustomerRepositorySQLC) UpdateSalesTable(ctx context.Context, st *entit
 		Description:                st.Description,
 		ValidityStart:              pgutil.ToPgDateFromPtr(st.ValidityStart),
 		ValidityEnd:                pgutil.ToPgDateFromPtr(st.ValidityEnd),
-		ToleranceMinPct:            pgutil.ToPgNumericFromFloat64(st.ToleranceMinPct),
-		ToleranceMaxPct:            pgutil.ToPgNumericFromFloat64(st.ToleranceMaxPct),
+		ToleranceMinPct:            pgutil.ToPgNumericFromDecimal(st.ToleranceMinPct),
+		ToleranceMaxPct:            pgutil.ToPgNumericFromDecimal(st.ToleranceMaxPct),
 		PriceFormation:             sqltypes.PriceFormationEnum(st.PriceFormation),
 		DecimalPlaces:              st.DecimalPlaces,
 		IsActive:                   st.IsActive,
@@ -886,8 +888,8 @@ func (r *CustomerRepositorySQLC) GetSalesTableByID(ctx context.Context, id int64
 	}
 	st.ValidityStart = pgutil.FromPgDateToPtr(validityStart)
 	st.ValidityEnd = pgutil.FromPgDateToPtr(validityEnd)
-	st.ToleranceMinPct = pgutil.FromPgNumericToFloat64(toleranceMin)
-	st.ToleranceMaxPct = pgutil.FromPgNumericToFloat64(toleranceMax)
+	st.ToleranceMinPct = pgutil.FromPgNumericToDecimal(toleranceMin)
+	st.ToleranceMaxPct = pgutil.FromPgNumericToDecimal(toleranceMax)
 	st.PriceFormation = entity.PriceFormation(formation)
 	st.Composition = entity.TableComposition(composition)
 	st.TableType = entity.TableType(tableType)
@@ -929,8 +931,8 @@ func salesTableToEntity(row sqlc.SalesTable) *entity.SalesTable {
 		Description:                row.Description,
 		ValidityStart:              pgutil.FromPgDateToPtr(row.ValidityStart),
 		ValidityEnd:                pgutil.FromPgDateToPtr(row.ValidityEnd),
-		ToleranceMinPct:            pgutil.FromPgNumericToFloat64(row.ToleranceMinPct),
-		ToleranceMaxPct:            pgutil.FromPgNumericToFloat64(row.ToleranceMaxPct),
+		ToleranceMinPct:            pgutil.FromPgNumericToDecimal(row.ToleranceMinPct),
+		ToleranceMaxPct:            pgutil.FromPgNumericToDecimal(row.ToleranceMaxPct),
 		PriceFormation:             entity.PriceFormation(row.PriceFormation),
 		DecimalPlaces:              row.DecimalPlaces,
 		IsActive:                   row.IsActive,
@@ -1436,15 +1438,15 @@ func (r *CustomerRepositorySQLC) CreateInvoiceType(ctx context.Context, it *enti
 		Type:                    sqltypes.InvoiceTypeEnum(it.Type),
 		StockMovement:           sqltypes.InvoiceStockEnum(it.StockMovement),
 		IcmsType:                sqltypes.InvoiceICMSTypeEnum(it.ICMSType),
-		IcmsPct:                 pgutil.ToPgNumericFromFloat64(it.ICMSPct),
-		IcmsReductionPct:        pgutil.ToPgNumericFromFloat64(it.ICMSReductionPct),
-		IpiPct:                  pgutil.ToPgNumericFromFloat64(it.IPIPct),
-		PisPct:                  pgutil.ToPgNumericFromFloat64(it.PISPct),
-		CofinsPct:               pgutil.ToPgNumericFromFloat64(it.COFINSPct),
-		IssqnPct:                pgutil.ToPgNumericFromFloat64(it.ISSQNPct),
-		IrPct:                   pgutil.ToPgNumericFromFloat64(it.IRPct),
-		CsllPct:                 pgutil.ToPgNumericFromFloat64(it.CSLLPct),
-		InssPct:                 pgutil.ToPgNumericFromFloat64(it.INSSPct),
+		IcmsPct:                 pgutil.ToPgNumericFromDecimal(it.ICMSPct),
+		IcmsReductionPct:        pgutil.ToPgNumericFromDecimal(it.ICMSReductionPct),
+		IpiPct:                  pgutil.ToPgNumericFromDecimal(it.IPIPct),
+		PisPct:                  pgutil.ToPgNumericFromDecimal(it.PISPct),
+		CofinsPct:               pgutil.ToPgNumericFromDecimal(it.COFINSPct),
+		IssqnPct:                pgutil.ToPgNumericFromDecimal(it.ISSQNPct),
+		IrPct:                   pgutil.ToPgNumericFromDecimal(it.IRPct),
+		CsllPct:                 pgutil.ToPgNumericFromDecimal(it.CSLLPct),
+		InssPct:                 pgutil.ToPgNumericFromDecimal(it.INSSPct),
 		GeneratesRevenue:        it.GeneratesRevenue,
 		UpdatesInventory:        it.UpdatesInventory,
 		GeneratesFinancialTitle: it.GeneratesFinancialTitle,
@@ -1464,8 +1466,8 @@ func (r *CustomerRepositorySQLC) CreateInvoiceType(ctx context.Context, it *enti
 		BaixaPedido:             it.BaixaPedido,
 		GeraTituloDev:           it.GeraTituloDev,
 		ExigeSuframa:            it.ExigeSuframa,
-		IrPctPresumption:        pgutil.ToPgNumericFromFloat64(it.IRPctPresumption),
-		CsllPctPresumption:      pgutil.ToPgNumericFromFloat64(it.CSLLPctPresumption),
+		IrPctPresumption:        pgutil.ToPgNumericFromDecimal(it.IRPctPresumption),
+		CsllPctPresumption:      pgutil.ToPgNumericFromDecimal(it.CSLLPctPresumption),
 		// Extended fields (migration 000126)
 		DescriptionNf:            pgutil.ToPgTextFromPtr(it.DescriptionNF),
 		ImpostosNfe:              invoiceTypeImpostosNFe(it),
@@ -1526,15 +1528,15 @@ func (r *CustomerRepositorySQLC) UpdateInvoiceType(ctx context.Context, it *enti
 		Type:                    sqltypes.InvoiceTypeEnum(it.Type),
 		StockMovement:           sqltypes.InvoiceStockEnum(it.StockMovement),
 		IcmsType:                sqltypes.InvoiceICMSTypeEnum(it.ICMSType),
-		IcmsPct:                 pgutil.ToPgNumericFromFloat64(it.ICMSPct),
-		IcmsReductionPct:        pgutil.ToPgNumericFromFloat64(it.ICMSReductionPct),
-		IpiPct:                  pgutil.ToPgNumericFromFloat64(it.IPIPct),
-		PisPct:                  pgutil.ToPgNumericFromFloat64(it.PISPct),
-		CofinsPct:               pgutil.ToPgNumericFromFloat64(it.COFINSPct),
-		IssqnPct:                pgutil.ToPgNumericFromFloat64(it.ISSQNPct),
-		IrPct:                   pgutil.ToPgNumericFromFloat64(it.IRPct),
-		CsllPct:                 pgutil.ToPgNumericFromFloat64(it.CSLLPct),
-		InssPct:                 pgutil.ToPgNumericFromFloat64(it.INSSPct),
+		IcmsPct:                 pgutil.ToPgNumericFromDecimal(it.ICMSPct),
+		IcmsReductionPct:        pgutil.ToPgNumericFromDecimal(it.ICMSReductionPct),
+		IpiPct:                  pgutil.ToPgNumericFromDecimal(it.IPIPct),
+		PisPct:                  pgutil.ToPgNumericFromDecimal(it.PISPct),
+		CofinsPct:               pgutil.ToPgNumericFromDecimal(it.COFINSPct),
+		IssqnPct:                pgutil.ToPgNumericFromDecimal(it.ISSQNPct),
+		IrPct:                   pgutil.ToPgNumericFromDecimal(it.IRPct),
+		CsllPct:                 pgutil.ToPgNumericFromDecimal(it.CSLLPct),
+		InssPct:                 pgutil.ToPgNumericFromDecimal(it.INSSPct),
 		GeneratesRevenue:        it.GeneratesRevenue,
 		UpdatesInventory:        it.UpdatesInventory,
 		GeneratesFinancialTitle: it.GeneratesFinancialTitle,
@@ -1555,8 +1557,8 @@ func (r *CustomerRepositorySQLC) UpdateInvoiceType(ctx context.Context, it *enti
 		BaixaPedido:             it.BaixaPedido,
 		GeraTituloDev:           it.GeraTituloDev,
 		ExigeSuframa:            it.ExigeSuframa,
-		IrPctPresumption:        pgutil.ToPgNumericFromFloat64(it.IRPctPresumption),
-		CsllPctPresumption:      pgutil.ToPgNumericFromFloat64(it.CSLLPctPresumption),
+		IrPctPresumption:        pgutil.ToPgNumericFromDecimal(it.IRPctPresumption),
+		CsllPctPresumption:      pgutil.ToPgNumericFromDecimal(it.CSLLPctPresumption),
 		// Extended fields (migration 000126)
 		DescriptionNf:            pgutil.ToPgTextFromPtr(it.DescriptionNF),
 		ImpostosNfe:              invoiceTypeImpostosNFe(it),
@@ -1652,15 +1654,15 @@ func invoiceTypeToEntity(row sqlc.InvoiceType) *entity.InvoiceType {
 		Type:                    entity.InvoiceTypeKind(row.Type),
 		StockMovement:           entity.InvoiceStock(row.StockMovement),
 		ICMSType:                entity.InvoiceICMSType(row.IcmsType),
-		ICMSPct:                 pgutil.FromPgNumericToFloat64(row.IcmsPct),
-		ICMSReductionPct:        pgutil.FromPgNumericToFloat64(row.IcmsReductionPct),
-		IPIPct:                  pgutil.FromPgNumericToFloat64(row.IpiPct),
-		PISPct:                  pgutil.FromPgNumericToFloat64(row.PisPct),
-		COFINSPct:               pgutil.FromPgNumericToFloat64(row.CofinsPct),
-		ISSQNPct:                pgutil.FromPgNumericToFloat64(row.IssqnPct),
-		IRPct:                   pgutil.FromPgNumericToFloat64(row.IrPct),
-		CSLLPct:                 pgutil.FromPgNumericToFloat64(row.CsllPct),
-		INSSPct:                 pgutil.FromPgNumericToFloat64(row.InssPct),
+		ICMSPct:                 pgutil.FromPgNumericToDecimal(row.IcmsPct),
+		ICMSReductionPct:        pgutil.FromPgNumericToDecimal(row.IcmsReductionPct),
+		IPIPct:                  pgutil.FromPgNumericToDecimal(row.IpiPct),
+		PISPct:                  pgutil.FromPgNumericToDecimal(row.PisPct),
+		COFINSPct:               pgutil.FromPgNumericToDecimal(row.CofinsPct),
+		ISSQNPct:                pgutil.FromPgNumericToDecimal(row.IssqnPct),
+		IRPct:                   pgutil.FromPgNumericToDecimal(row.IrPct),
+		CSLLPct:                 pgutil.FromPgNumericToDecimal(row.CsllPct),
+		INSSPct:                 pgutil.FromPgNumericToDecimal(row.InssPct),
 		GeneratesRevenue:        row.GeneratesRevenue,
 		UpdatesInventory:        row.UpdatesInventory,
 		GeneratesFinancialTitle: row.GeneratesFinancialTitle,
@@ -1681,8 +1683,8 @@ func invoiceTypeToEntity(row sqlc.InvoiceType) *entity.InvoiceType {
 		BaixaPedido:             row.BaixaPedido,
 		GeraTituloDev:           row.GeraTituloDev,
 		ExigeSuframa:            row.ExigeSuframa,
-		IRPctPresumption:        pgutil.FromPgNumericToFloat64(row.IrPctPresumption),
-		CSLLPctPresumption:      pgutil.FromPgNumericToFloat64(row.CsllPctPresumption),
+		IRPctPresumption:        pgutil.FromPgNumericToDecimal(row.IrPctPresumption),
+		CSLLPctPresumption:      pgutil.FromPgNumericToDecimal(row.CsllPctPresumption),
 		// Extended fields (migration 000126)
 		DescriptionNF:            pgutil.FromPgTextPtr(row.DescriptionNf),
 		ImpostosNFe:              impostosNFe,
@@ -1916,7 +1918,7 @@ func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.C
 		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
 		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
-		CreditLimit:           pgutil.ToPgNumericFromFloat64(c.CreditLimit),
+		CreditLimit:           pgutil.ToPgNumericFromDecimal(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
 		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
 		CreatedBy:             pgutil.ToPgUUID(c.CreatedBy),
@@ -1955,7 +1957,7 @@ func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.C
 		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
 		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
-		CreditLimit:           pgutil.ToPgNumericFromFloat64(c.CreditLimit),
+		CreditLimit:           pgutil.ToPgNumericFromDecimal(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
 		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
 		IsActive:              c.IsActive,
@@ -2079,7 +2081,7 @@ func customerToEntity(row sqlc.Customer) *entity.Customer {
 		InvoiceTypeID:         row.InvoiceTypeID,
 		TaxTypeID:             row.TaxTypeID,
 		PaymentCondVisibility: entity.PaymentCondVisibility(row.PaymentCondVisibility),
-		CreditLimit:           pgutil.FromPgNumericToFloat64(row.CreditLimit),
+		CreditLimit:           pgutil.FromPgNumericToDecimal(row.CreditLimit),
 		Website:               pgutil.FromPgTextPtr(row.Website),
 		FinalidadeCompra:      pgutil.FromPgTextPtr(row.FinalidadeCompra),
 		IsActive:              row.IsActive,
@@ -2304,7 +2306,7 @@ func (r *CustomerRepositorySQLC) CreateSalesTablePrice(ctx context.Context, p *e
 	return p, nil
 }
 
-func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *float64, error) {
+func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *entity.SalesTablePrice) (*entity.SalesTablePrice, *decimal.Decimal, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -2348,9 +2350,9 @@ func (r *CustomerRepositorySQLC) UpsertSalesTablePrice(ctx context.Context, p *e
 		return nil, nil, fmt.Errorf("upserting sales table price: %w", err)
 	}
 	out.Situation = entity.PriceSituation(sit)
-	var oldPtr *float64
+	var oldPtr *decimal.Decimal
 	if oldPrice.Valid {
-		v := pgutil.FromPgNumericToFloat64(oldPrice)
+		v := pgutil.FromPgNumericToDecimal(oldPrice)
 		oldPtr = &v
 	}
 	return &out, oldPtr, nil
@@ -2449,13 +2451,13 @@ func (r *CustomerRepositorySQLC) DeleteSalesTablePrice(ctx context.Context, id i
 	return err
 }
 
-func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (float64, string, error) {
+func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode int64, mask string, source entity.SalesCostSource, warehouseID *int64) (decimal.Decimal, string, error) {
 	// O custo é da empresa do item: item de outra empresa não tem custo aqui.
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
-		return 0, string(source), err
+		return decimal.Zero, string(source), err
 	}
-	var value float64
+	var value decimal.Decimal
 	switch source {
 	case entity.SalesCostStandardTotal:
 		err = r.pool.QueryRow(ctx,
@@ -2480,11 +2482,11 @@ func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode 
 	case entity.SalesCostStockLast:
 		return r.resolveStockCost(ctx, itemCode, mask, warehouseID, false)
 	default:
-		return 0, string(source), fmt.Errorf("cost source %s requires informed base_cost", source)
+		return decimal.Zero, string(source), fmt.Errorf("cost source %s requires informed base_cost", source)
 	}
 }
 
-func (r *CustomerRepositorySQLC) resolveStockCost(ctx context.Context, itemCode int64, mask string, warehouseID *int64, avg bool) (float64, string, error) {
+func (r *CustomerRepositorySQLC) resolveStockCost(ctx context.Context, itemCode int64, mask string, warehouseID *int64, avg bool) (decimal.Decimal, string, error) {
 	col := "last_cost"
 	source := "STOCK_LAST"
 	if avg {
@@ -2493,9 +2495,9 @@ func (r *CustomerRepositorySQLC) resolveStockCost(ctx context.Context, itemCode 
 	}
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
-		return 0, source, err
+		return decimal.Zero, source, err
 	}
-	var value float64
+	var value decimal.Decimal
 	if warehouseID != nil {
 		err = r.pool.QueryRow(ctx,
 			fmt.Sprintf(`SELECT %s FROM stock_balances WHERE item_code=$1 AND mask=$2 AND warehouse_id=$3 AND enterprise_id=$4`, col),

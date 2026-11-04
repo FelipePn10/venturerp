@@ -2,9 +2,10 @@ package shipment
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -63,8 +64,8 @@ func TestSalesOrderAdapter(t *testing.T) {
 			Code:             42,
 			TotalGross:       decimal.NewFromInt(1000),
 			TotalNet:         decimal.NewFromInt(850),
-			TotalWeightGross: 120.0,
-			VolumeQuantity:   3,
+			TotalWeightGross: decimal.NewFromFloat(120.0),
+			VolumeQuantity:   decimal.NewFromFloat(3),
 			Items: []*salesentity.SalesOrderItem{
 				{
 					ItemCode:        100,
@@ -72,13 +73,13 @@ func TestSalesOrderAdapter(t *testing.T) {
 					UnitPrice:       decimal.NewFromInt(50),
 					TotalGross:      decimal.NewFromInt(500),
 					TotalNet:        decimal.NewFromInt(425),
-					IPIPct:          5,
-					ICMSPct:         18,
-					PISPct:          1.65,
-					COFINSPct:       7.6,
-					STPct:           0,
-					UnitWeightNet:   2.5,
-					UnitWeightGross: 3.0,
+					IPIPct:          decimal.NewFromFloat(5),
+					ICMSPct:         decimal.NewFromFloat(18),
+					PISPct:          decimal.NewFromFloat(1.65),
+					COFINSPct:       decimal.NewFromFloat(7.6),
+					STPct:           decimal.NewFromFloat(0),
+					UnitWeightNet:   decimal.NewFromFloat(2.5),
+					UnitWeightGross: decimal.NewFromFloat(3.0),
 					DeliveryDate:    &delivery,
 				},
 			},

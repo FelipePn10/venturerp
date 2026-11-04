@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -138,7 +139,7 @@ func (uc *UseCase) GenerateSalesOrder(ctx context.Context, code int64, dto reque
 		DeliveryDateFirm: true, CustomerCode: &rec.CustomerCode, RepresentativeCode: &primary.RepresentativeCode,
 		// SalesPlanCode é uma regra/carteira comercial da recorrência e não o
 		// production_plans.code usado pelo campo PlanCode do pedido.
-		SalesDivisionCode: dto.SalesDivisionCode, CommissionPct: primary.CommissionPercent.InexactFloat64(), // capa do pedido ainda é float (legado)
+		SalesDivisionCode: dto.SalesDivisionCode, CommissionPct: primary.CommissionPercent,
 		PriceTableCode: dto.PriceTableCode, CurrencyCode: "BRL", PaymentTermCode: dto.PaymentTermCode,
 		SaleDate: stringPtr(rec.SaleDate.Format("2006-01-02")), Notes: &notes,
 	})

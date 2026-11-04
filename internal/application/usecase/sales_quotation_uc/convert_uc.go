@@ -18,7 +18,7 @@ import (
 
 // AlcadaDoPedido: a alçada de desconto do pedido (sales_order_uc.PoliticaDoPedido).
 type AlcadaDoPedido interface {
-	ConferirDesconto(ctx context.Context, pct float64) error
+	ConferirDesconto(ctx context.Context, pct decimal.Decimal) error
 	AplicarAlcada(ctx context.Context, code int64) error
 }
 
@@ -72,7 +72,7 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			if !qi.IsActive || qi.Status == quoteentity.SalesQuotationItemStatusCancelled || !qi.RequestedQty.Sub(qi.AttendedQty).Sub(qi.CancelledQty).IsPositive() {
 				continue
 			}
-			if err := uc.Alcada.ConferirDesconto(ctx, qi.DiscountPct.InexactFloat64()); err != nil {
+			if err := uc.Alcada.ConferirDesconto(ctx, qi.DiscountPct); err != nil {
 				return nil, err
 			}
 		}
@@ -130,7 +130,7 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			ShippingAddressCode: q.ShippingAddressCode,
 			RepresentativeCode:  q.RepresentativeCode,
 			SalesDivisionCode:   q.SalesDivisionCode,
-			CommissionPct:       q.CommissionPct.InexactFloat64(),
+			CommissionPct:       q.CommissionPct,
 			PriceTableCode:      q.PriceTableCode,
 			CurrencyCode:        q.CurrencyCode,
 			PaymentTermCode:     q.PaymentTermCode,
@@ -192,12 +192,12 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 				UnitPrice:        quoteItem.UnitPrice,
 				DeliveryDate:     quoteItem.DeliveryDate,
 				DeliveryDateFirm: quoteItem.DeliveryDateFirm,
-				IPIPct:           quoteItem.IPIPct.InexactFloat64(),
-				STPct:            quoteItem.STPct.InexactFloat64(),
+				IPIPct:           quoteItem.IPIPct,
+				STPct:            quoteItem.STPct,
 				ICMSPct:          sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.ICMSPct }),
 				PISPct:           sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.PISPct }),
 				COFINSPct:        sugerido(tributos[quoteItem.Code], func(s *ports.TributosSugeridos) decimal.Decimal { return s.COFINSPct }),
-				DiscountPct:      quoteItem.DiscountPct.InexactFloat64(),
+				DiscountPct:      quoteItem.DiscountPct,
 				TotalGross:       valorProdutos,
 				TotalNet:         valorProdutos,
 				TotalIPI:         valorIPI,
@@ -240,9 +240,9 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 }
 
 // sugerido: o percentual sugerido, ou zero sem sugestão.
-func sugerido(s *ports.TributosSugeridos, campo func(*ports.TributosSugeridos) decimal.Decimal) float64 {
+func sugerido(s *ports.TributosSugeridos, campo func(*ports.TributosSugeridos) decimal.Decimal) decimal.Decimal {
 	if s == nil {
-		return 0
+		return decimal.Zero
 	}
-	return campo(s).InexactFloat64()
+	return campo(s)
 }

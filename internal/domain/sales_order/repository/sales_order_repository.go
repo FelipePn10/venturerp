@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/google/uuid"
 )
@@ -31,8 +33,8 @@ type SalesOrderFilter struct {
 
 type SalesOrderReport struct {
 	TotalOrders            int64
-	TotalGross             float64
-	TotalNet               float64
+	TotalGross             decimal.Decimal
+	TotalNet               decimal.Decimal
 	OpenCount              int64
 	ConfirmedCount         int64
 	InvoicedCount          int64

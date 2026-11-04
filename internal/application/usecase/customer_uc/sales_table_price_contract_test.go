@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -32,7 +34,7 @@ func TestCreateSalesTablePriceResolvesTableIDFromSalesTableCode(t *testing.T) {
 	_, err := uc.CreateSalesTablePrice(context.Background(), request.CreateSalesTablePriceDTO{
 		SalesTableCode: 7,
 		ItemCode:       "4853",
-		Price:          12.34,
+		Price:          decimal.NewFromFloat(12.34),
 	})
 	if err != nil {
 		t.Fatalf("CreateSalesTablePrice() retornou erro: %v", err)

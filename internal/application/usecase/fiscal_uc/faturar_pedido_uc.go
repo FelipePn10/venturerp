@@ -93,7 +93,7 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 		EmissionDate:       pedido.EmissionDate.Format("2006-01-02"),
 		CustomerCode:       pedido.CustomerCode,
 		RepresentativeCode: pedido.RepresentativeCode,
-		CommissionPct:      pedido.CommissionPct,
+		CommissionPct:      pedido.CommissionPct.InexactFloat64(),
 		PaymentTermCode:    pedido.PaymentTermCode,
 		FreightType:        pedido.FreightType,
 		FreightValue:       pedido.FreightValue.InexactFloat64(),
@@ -171,8 +171,8 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 			QuantidadeEmNota:    l.emNota.InexactFloat64(),
 			QuantidadePendente:  l.pendente.InexactFloat64(),
 			PrecoUnitario:       l.unitario.InexactFloat64(),
-			DescontoPct:         l.item.DiscountPct,
-			IPIPct:              l.item.IPIPct,
+			DescontoPct:         l.item.DiscountPct.InexactFloat64(),
+			IPIPct:              l.item.IPIPct.InexactFloat64(),
 			ValorPendente:       valor.InexactFloat64(),
 			CfopSugerido:        cfopDaLinha(out.CfopSugerido, l.cadastro.Comprado),
 		})
@@ -404,8 +404,8 @@ func precoLiquido(it *salesentity.SalesOrderItem) decimal.Decimal {
 		return tn.Div(qtd).Round(4)
 	}
 	preco := it.UnitPrice
-	if it.DiscountPct > 0 {
-		preco = preco.Mul(decimal.NewFromInt(1).Sub(decimal.NewFromFloat(it.DiscountPct).Div(cemDec)))
+	if it.DiscountPct.IsPositive() {
+		preco = preco.Mul(decimal.NewFromInt(1).Sub(it.DiscountPct.Div(cemDec)))
 	}
 	return preco.Round(4)
 }

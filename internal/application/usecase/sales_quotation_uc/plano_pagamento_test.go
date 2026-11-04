@@ -31,7 +31,7 @@ func (c *clientesFake) GetPaymentConditionByCode(context.Context, int64) (*custo
 	return c.condicao, nil
 }
 
-func pct(v float64) *float64 { return &v }
+func pct(v float64) *decimal.Decimal { d := decimal.NewFromFloat(v); return &d }
 
 // O plano é dividido sobre o que o cliente PAGA. Dividindo só o valor dos
 // produtos, cada parcela saía menor que a devida e o plano não fechava com os

@@ -1,8 +1,9 @@
 package entity
 
 import (
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -83,7 +84,7 @@ type SalesOrder struct {
 	RepresentativeOrderNumber *int64
 	PlanCode                  *int64
 	SalesDivisionCode         *int64
-	CommissionPct             float64
+	CommissionPct             decimal.Decimal
 	TaxTypeCode               *int64
 	// FinalidadeCompra do cliente nesta venda (REVENDA, INDUSTRIALIZACAO,
 	// USO_CONSUMO); nil = a do cadastro do cliente.
@@ -97,8 +98,8 @@ type SalesOrder struct {
 	AdditionalDays              int
 	BearerCode                  *int64
 	SaleDate                    *time.Time
-	TotalWeightNet              float64
-	TotalWeightGross            float64
+	TotalWeightNet              decimal.Decimal
+	TotalWeightGross            decimal.Decimal
 	TotalGross                  decimal.Decimal
 	TotalNet                    decimal.Decimal
 	TotalNetNoST                decimal.Decimal
@@ -119,10 +120,10 @@ type SalesOrder struct {
 	FreightType                 *string
 	FreightValue                decimal.Decimal
 	InsuranceValue              decimal.Decimal
-	VolumeQuantity              float64
+	VolumeQuantity              decimal.Decimal
 	VolumeType                  *string
-	NetWeight                   float64
-	GrossWeight                 float64
+	NetWeight                   decimal.Decimal
+	GrossWeight                 decimal.Decimal
 	DiscountValue               decimal.Decimal
 	SurchargeValue              decimal.Decimal
 	ProjectCode                 *string
@@ -165,19 +166,19 @@ type SalesOrderItem struct {
 	Lot              *string
 	CouponDelivery   *string
 	PaidAtCashier    bool
-	IPIPct           float64
-	ICMSPct          float64
-	PISPct           float64
-	COFINSPct        float64
-	STPct            float64
-	DiscountPct      float64
+	IPIPct           decimal.Decimal
+	ICMSPct          decimal.Decimal
+	PISPct           decimal.Decimal
+	COFINSPct        decimal.Decimal
+	STPct            decimal.Decimal
+	DiscountPct      decimal.Decimal
 	TotalGross       decimal.Decimal
 	TotalNet         decimal.Decimal
 	TotalNetWithIPI  decimal.Decimal
 	TotalIPI         decimal.Decimal
 	TotalST          decimal.Decimal
-	UnitWeightNet    float64
-	UnitWeightGross  float64
+	UnitWeightNet    decimal.Decimal
+	UnitWeightGross  decimal.Decimal
 	Status           SalesOrderItemStatus
 	Notes            *string
 	IsActive         bool
@@ -190,12 +191,12 @@ type SalesOrderItem struct {
 // coluna — o mesmo valor que o float gravava, sem o erro de arredondamento.
 func (it *SalesOrderItem) RecalcularTotais() {
 	cem := decimal.NewFromInt(100)
-	unitario := it.UnitPrice.Mul(cem.Sub(decimal.NewFromFloat(it.DiscountPct))).Div(cem)
+	unitario := it.UnitPrice.Mul(cem.Sub(it.DiscountPct)).Div(cem)
 	it.TotalGross = unitario.Mul(it.RequestedQty).Round(4)
-	ipi := it.TotalGross.Mul(decimal.NewFromFloat(it.IPIPct)).Div(cem).Round(4)
+	ipi := it.TotalGross.Mul(it.IPIPct).Div(cem).Round(4)
 	it.TotalIPI = ipi
 	it.TotalNet = it.TotalGross
 	it.TotalNetWithIPI = it.TotalGross.Add(ipi)
-	it.TotalST = it.TotalGross.Mul(decimal.NewFromFloat(it.STPct)).Div(cem).Round(4)
+	it.TotalST = it.TotalGross.Mul(it.STPct).Div(cem).Round(4)
 	it.Balance = it.RequestedQty.Sub(it.AttendedQty).Sub(it.CancelledQty)
 }
