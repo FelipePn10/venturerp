@@ -166,6 +166,9 @@ func TestPurchaseOrderAdapter(t *testing.T) {
 	if h.Code != 55 {
 		t.Errorf("code = %d, want 55", h.Code)
 	}
+	if h.TotalWeight != 0 {
+		t.Errorf("total_weight = %v, want 0 (o frete de R$ 200 não é peso)", h.TotalWeight)
+	}
 	if len(h.Items) != 1 {
 		t.Fatalf("items len = %d, want 1", len(h.Items))
 	}
