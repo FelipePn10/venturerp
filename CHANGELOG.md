@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.4] — 2026-11-04
+
+- refactor(fiscal): motor de tributos e NF-e de saída em decimal; base do PIS/COFINS no payload (`18b2a687`)
+- fix(expedicao): romaneio do pedido de compra deixa de usar o valor do frete como peso (`dc3cbefe`)
+
 ## [v1.10.3] — 2026-11-03
 
 - refactor(compras): pedido, requisição, cotação, contratos, alçada e importação em decimal (`596b3a2c`)
