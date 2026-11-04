@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type Period struct {
 	Code        int64
@@ -18,7 +22,7 @@ type Goal struct {
 	RepresentativeCode int64
 	PeriodCode         int64
 	AnalysisBase       string
-	AwardPct           float64
+	AwardPct           decimal.Decimal
 	Notes              *string
 	IsActive           bool
 	CreatedAt          time.Time
@@ -34,9 +38,9 @@ type GoalItem struct {
 	ItemClassificationCode *int64
 	ItemGroupCode          *int64
 	SalesUOM               *string
-	TargetQuantity         float64
-	TargetValue            float64
-	BonusPct               float64
+	TargetQuantity         decimal.Decimal
+	TargetValue            decimal.Decimal
+	BonusPct               decimal.Decimal
 	IsActive               bool
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
@@ -47,12 +51,12 @@ type GroupTarget struct {
 	PeriodCode          int64
 	CommercialGroupCode int64
 	GoalType            string
-	MinimumValue        float64
-	MinimumBonusPct     float64
-	ProbableValue       float64
-	ProbableBonusPct    float64
-	IdealValue          float64
-	IdealBonusPct       float64
+	MinimumValue        decimal.Decimal
+	MinimumBonusPct     decimal.Decimal
+	ProbableValue       decimal.Decimal
+	ProbableBonusPct    decimal.Decimal
+	IdealValue          decimal.Decimal
+	IdealBonusPct       decimal.Decimal
 	IsActive            bool
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
@@ -64,12 +68,12 @@ type GroupCustomer struct {
 	GroupGoalID        int64
 	CustomerCode       int64
 	RepresentativeCode *int64
-	MinimumValue       float64
-	MinimumBonusPct    float64
-	ProbableValue      float64
-	ProbableBonusPct   float64
-	IdealValue         float64
-	IdealBonusPct      float64
+	MinimumValue       decimal.Decimal
+	MinimumBonusPct    decimal.Decimal
+	ProbableValue      decimal.Decimal
+	ProbableBonusPct   decimal.Decimal
+	IdealValue         decimal.Decimal
+	IdealBonusPct      decimal.Decimal
 	IsActive           bool
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -84,9 +88,9 @@ type Balance struct {
 	CommercialGroupCode *int64
 	CustomerCode        *int64
 	GoalType            string
-	RealizedValue       float64
-	IdealValue          float64
-	BalanceValue        float64
+	RealizedValue       decimal.Decimal
+	IdealValue          decimal.Decimal
+	BalanceValue        decimal.Decimal
 	Notes               *string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time

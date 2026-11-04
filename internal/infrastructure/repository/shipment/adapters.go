@@ -30,24 +30,24 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 		CarrierCode:  so.CarrierCode,
 		CustomerCode: so.CustomerCode,
 		TotalVolumes: int(so.VolumeQuantity.IntPart()),
-		TotalWeight:  so.TotalWeightGross.InexactFloat64(),
-		TotalGross:   so.TotalGross.InexactFloat64(),
-		TotalNet:     so.TotalNet.InexactFloat64(),
+		TotalWeight:  so.TotalWeightGross,
+		TotalGross:   so.TotalGross,
+		TotalNet:     so.TotalNet,
 	}
 	for _, it := range items {
 		h.Items = append(h.Items, shipment_uc.SalesOrderItemHeader{
 			ItemCode:        it.ItemCode,
-			RequestedQty:    it.RequestedQty.InexactFloat64(),
-			UnitPrice:       it.UnitPrice.InexactFloat64(),
-			TotalGross:      it.TotalGross.InexactFloat64(),
-			TotalNet:        it.TotalNet.InexactFloat64(),
-			IPIPct:          it.IPIPct.InexactFloat64(),
-			ICMSPct:         it.ICMSPct.InexactFloat64(),
-			PISPct:          it.PISPct.InexactFloat64(),
-			COFINSPct:       it.COFINSPct.InexactFloat64(),
-			STPct:           it.STPct.InexactFloat64(),
-			UnitWeightNet:   it.UnitWeightNet.InexactFloat64(),
-			UnitWeightGross: it.UnitWeightGross.InexactFloat64(),
+			RequestedQty:    it.RequestedQty,
+			UnitPrice:       it.UnitPrice,
+			TotalGross:      it.TotalGross,
+			TotalNet:        it.TotalNet,
+			IPIPct:          it.IPIPct,
+			ICMSPct:         it.ICMSPct,
+			PISPct:          it.PISPct,
+			COFINSPct:       it.COFINSPct,
+			STPct:           it.STPct,
+			UnitWeightNet:   it.UnitWeightNet,
+			UnitWeightGross: it.UnitWeightGross,
 		})
 	}
 	return h, nil
@@ -74,12 +74,12 @@ func (a *PurchaseOrderAdapter) GetByCode(ctx context.Context, code int64) (*ship
 	for _, it := range po.Items {
 		h.Items = append(h.Items, shipment_uc.PurchaseOrderItemHeader{
 			ItemCode:     it.ItemCode,
-			RequestedQty: it.RequestedQty.InexactFloat64(),
-			UnitPrice:    it.UnitPrice.InexactFloat64(),
-			TotalPrice:   it.TotalPrice.InexactFloat64(),
-			IPIPct:       it.IPIPct.InexactFloat64(),
-			ICMSPct:      it.ICMSPct.InexactFloat64(),
-			ICMSSTPct:    it.ICMSSTPct.InexactFloat64(),
+			RequestedQty: it.RequestedQty,
+			UnitPrice:    it.UnitPrice,
+			TotalPrice:   it.TotalPrice,
+			IPIPct:       it.IPIPct,
+			ICMSPct:      it.ICMSPct,
+			ICMSSTPct:    it.ICMSSTPct,
 		})
 	}
 	return h, nil
@@ -99,8 +99,8 @@ func (a *ProductionOrderAdapter) GetByCode(ctx context.Context, code int64) (*sh
 	h := &shipment_uc.ProductionOrderHeader{
 		Code:        po.ID,
 		ItemCode:    po.ItemCode,
-		PlannedQty:  po.PlannedQty.InexactFloat64(),
-		ProducedQty: po.ProducedQty.InexactFloat64(),
+		PlannedQty:  po.PlannedQty,
+		ProducedQty: po.ProducedQty,
 	}
 	return h, nil
 }

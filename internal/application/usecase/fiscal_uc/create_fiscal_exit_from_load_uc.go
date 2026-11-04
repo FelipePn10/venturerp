@@ -234,9 +234,9 @@ func fiscalItemFromShipmentItem(
 	}
 
 	// O romaneio ainda guarda a quantidade em float (etapa de vendas/expedição).
-	qty := decimal.NewFromFloat(si.Quantity)
+	qty := si.Quantity
 	if si.IsConferred {
-		qty = decimal.NewFromFloat(si.ConferredQty)
+		qty = si.ConferredQty
 	}
 	cfop := dto.Cfop
 	if ov.Cfop != nil && *ov.Cfop != "" {

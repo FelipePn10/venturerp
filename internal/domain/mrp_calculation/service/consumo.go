@@ -3,8 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
@@ -131,7 +132,7 @@ func ConsumiveisDaPrevisao(fs []*forecastentity.SalesForecast, descontarPassadas
 		if f.Mask != nil {
 			mask = *f.Mask
 		}
-		out = append(out, inddemandentity.Consumivel{Chave: inddemandentity.ChaveItem(f.ItemCode, mask), Item: f.ItemCode, Data: data, Quantidade: dq(f.Quantity)})
+		out = append(out, inddemandentity.Consumivel{Chave: inddemandentity.ChaveItem(f.ItemCode, mask), Item: f.ItemCode, Data: data, Quantidade: f.Quantity.Round(6)})
 	}
 	return out
 }

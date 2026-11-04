@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
 )
 
@@ -37,7 +39,7 @@ type RepresentativeReportRow struct {
 	MainEmail            *string
 	RegionCodes          []int64
 	IsActive             bool
-	CommissionPct        float64
+	CommissionPct        decimal.Decimal
 	DebitAccountCode     *int64
 	CreditAccountCode    *int64
 	GeneratedHistoryCode *int64
@@ -49,11 +51,11 @@ type RepresentativeFollowUp struct {
 	CustomerCount      int64
 	QuotationCount     int64
 	OrderCount         int64
-	TotalQuoted        float64
-	TotalOrdered       float64
-	AverageTicket      float64
-	CommissionBase     float64
-	CommissionValue    float64
+	TotalQuoted        decimal.Decimal
+	TotalOrdered       decimal.Decimal
+	AverageTicket      decimal.Decimal
+	CommissionBase     decimal.Decimal
+	CommissionValue    decimal.Decimal
 	LastQuotationDate  *time.Time
 	LastOrderDate      *time.Time
 	Customers          []RepresentativeCustomerFollowUp
@@ -72,8 +74,8 @@ type RepresentativeCustomerFollowUp struct {
 	CustomerCode      int64
 	QuotationCount    int64
 	OrderCount        int64
-	TotalQuoted       float64
-	TotalOrdered      float64
+	TotalQuoted       decimal.Decimal
+	TotalOrdered      decimal.Decimal
 	LastQuotationDate *time.Time
 	LastOrderDate     *time.Time
 }

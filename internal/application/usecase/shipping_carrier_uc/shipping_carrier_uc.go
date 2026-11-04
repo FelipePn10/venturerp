@@ -393,11 +393,11 @@ func descreverRegiao(a *entity.RegiaoAtendida) string {
 	return strings.Join(partes, " · ")
 }
 
-func num(v *float64) decimal.Decimal {
+func num(v *decimal.Decimal) decimal.Decimal {
 	if v == nil {
 		return decimal.Zero
 	}
-	return decimal.NewFromFloat(*v)
+	return *v
 }
 
 func boolOu(v *bool, padrao bool) bool {

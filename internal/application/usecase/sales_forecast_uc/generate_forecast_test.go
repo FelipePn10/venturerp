@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	calendarentity "github.com/FelipePn10/panossoerp/internal/domain/industrial_calendar/entity"
@@ -151,7 +153,7 @@ func TestGenerateSalesForecastCreatesAndSkipsBlockedPeriod(t *testing.T) {
 
 func TestGenerateSalesForecastUpdatesExistingWhenRequested(t *testing.T) {
 	repo := newMemoryForecastRepo()
-	existing, err := entity.NewSalesForecast(1001, nil, 27, 2026, 10, uuid.New())
+	existing, err := entity.NewSalesForecast(1001, nil, 27, 2026, decimal.NewFromFloat(10), uuid.New())
 	if err != nil {
 		t.Fatalf("seed forecast: %v", err)
 	}
@@ -172,7 +174,7 @@ func TestGenerateSalesForecastUpdatesExistingWhenRequested(t *testing.T) {
 
 func TestGenerateSalesForecastSkipsExistingWhenUpdateDisabled(t *testing.T) {
 	repo := newMemoryForecastRepo()
-	existing, err := entity.NewSalesForecast(1001, nil, 27, 2026, 10, uuid.New())
+	existing, err := entity.NewSalesForecast(1001, nil, 27, 2026, decimal.NewFromFloat(10), uuid.New())
 	if err != nil {
 		t.Fatalf("seed forecast: %v", err)
 	}
@@ -202,7 +204,7 @@ func TestCreateMonthlyForecastDistributesByIndustrialWorkdaysAndPutsResidualOnLa
 		ItemCode:        1001,
 		Year:            2026,
 		Month:           2,
-		Quantity:        10,
+		Quantity:        decimal.NewFromFloat(10),
 		AcceptsFraction: false,
 		UpdateExisting:  true,
 	})
@@ -229,8 +231,8 @@ func TestCreateMonthlyForecastDistributesByIndustrialWorkdaysAndPutsResidualOnLa
 func TestGenerateFromERPHistoryAveragesSelectedPeriodAndAppliesProjection(t *testing.T) {
 	repo := newMemoryForecastRepo()
 	repo.history = []*entity.HistoricalDemand{
-		{ItemCode: 1001, PeriodMonth: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Quantity: 90},
-		{ItemCode: 1001, PeriodMonth: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), Quantity: 110},
+		{ItemCode: 1001, PeriodMonth: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), Quantity: decimal.NewFromFloat(90)},
+		{ItemCode: 1001, PeriodMonth: time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC), Quantity: decimal.NewFromFloat(110)},
 	}
 	cal := calendarFake{workdays: map[string][]int{
 		monthKey(2026, 3): {2, 3, 4, 5, 6},

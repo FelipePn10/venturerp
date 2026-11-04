@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
@@ -44,17 +46,17 @@ func TestSalesForecastIsIsolatedByTenant(t *testing.T) {
 	})
 
 	repo := repository.NewSalesForecastRepositorySQLC(sqlc.New(pool), pool)
-	forecastA, _ := entity.NewSalesForecast(991001, nil, 10, 2026, 12, userID)
+	forecastA, _ := entity.NewSalesForecast(991001, nil, 10, 2026, decimal.NewFromFloat(12), userID)
 	createdA, err := repo.CreateForecast(forecastTenantContext(enterpriseA, codeA, userID), forecastA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	forecastB, _ := entity.NewSalesForecast(991001, nil, 10, 2026, 34, userID)
+	forecastB, _ := entity.NewSalesForecast(991001, nil, 10, 2026, decimal.NewFromFloat(34), userID)
 	if _, err = repo.CreateForecast(forecastTenantContext(enterpriseB, codeB, userID), forecastB); err != nil {
 		t.Fatal(err)
 	}
 	listA, err := repo.ListForecasts(forecastTenantContext(enterpriseA, codeA, userID), 2026)
-	if err != nil || len(listA) != 1 || listA[0].Quantity != 12 {
+	if err != nil || len(listA) != 1 || !listA[0].Quantity.Equal(decimal.NewFromFloat(12)) {
 		t.Fatalf("previsão do tenant A incorreta: forecasts=%+v err=%v", listA, err)
 	}
 	if err = repo.DeleteForecast(forecastTenantContext(enterpriseB, codeB, userID), createdA.ID); err != nil {

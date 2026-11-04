@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
 	reprepo "github.com/FelipePn10/panossoerp/internal/domain/representative/repository"
 	goalentity "github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
@@ -102,10 +104,10 @@ func TestRepresentativesAndGoalsAreIsolatedByTenant(t *testing.T) {
 		t.Fatal("empresa B alterou a meta da A")
 	}
 	grupo := int64(7)
-	if _, err := goals.AddGoalItem(b.Ctx, &goalentity.GoalItem{GoalCode: meta.Code, TargetType: "GROUP", ItemGroupCode: &grupo, TargetValue: 1}); err == nil {
+	if _, err := goals.AddGoalItem(b.Ctx, &goalentity.GoalItem{GoalCode: meta.Code, TargetType: "GROUP", ItemGroupCode: &grupo, TargetValue: decimal.NewFromFloat(1)}); err == nil {
 		t.Fatal("empresa B incluiu item na meta da A")
 	}
-	if _, err := goals.AddGoalItem(a.Ctx, &goalentity.GoalItem{GoalCode: meta.Code, TargetType: "GROUP", ItemGroupCode: &grupo, TargetValue: 1000, IsActive: true}); err != nil {
+	if _, err := goals.AddGoalItem(a.Ctx, &goalentity.GoalItem{GoalCode: meta.Code, TargetType: "GROUP", ItemGroupCode: &grupo, TargetValue: decimal.NewFromFloat(1000), IsActive: true}); err != nil {
 		t.Fatalf("empresa A não incluiu item na própria meta: %v", err)
 	}
 
@@ -117,7 +119,7 @@ func TestRepresentativesAndGoalsAreIsolatedByTenant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rel) != 1 || rel[0].RealizedValue != 0 {
+	if len(rel) != 1 || !rel[0].RealizedValue.IsZero() {
 		t.Fatalf("o realizado da A somou pedido da B: %+v", rel)
 	}
 	if rel2, err := goals.Report(b.Ctx, goalrepo.ReportFilter{}); err != nil || len(rel2) != 0 {

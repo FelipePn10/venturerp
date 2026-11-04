@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
 )
 
@@ -42,13 +44,13 @@ type ReportRow struct {
 	PeriodCode          int64
 	PeriodDescription   string
 	AnalysisBase        string
-	TargetValue         float64
-	TargetQuantity      float64
-	RealizedValue       float64
-	RealizedQuantity    float64
-	BalanceValue        float64
-	AchievementPct      float64
-	BonusPct            float64
+	TargetValue         decimal.Decimal
+	TargetQuantity      decimal.Decimal
+	RealizedValue       decimal.Decimal
+	RealizedQuantity    decimal.Decimal
+	BalanceValue        decimal.Decimal
+	AchievementPct      decimal.Decimal
+	BonusPct            decimal.Decimal
 	Status              string
 }
 

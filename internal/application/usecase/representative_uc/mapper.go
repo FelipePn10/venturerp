@@ -64,7 +64,7 @@ func toResponse(rep *entity.Representative) *response.RepresentativeResponse {
 }
 
 func toEnterpriseResponse(row *entity.RepresentativeEnterprise) *response.RepresentativeEnterpriseResponse {
-	return &response.RepresentativeEnterpriseResponse{ID: row.ID, RepresentativeCode: row.RepresentativeCode, EnterpriseCode: row.EnterpriseCode, EnterpriseName: row.EnterpriseName, CommissionPatternCode: row.CommissionPatternCode, CommissionPct: row.CommissionPct, IsDefault: row.IsDefault, IsActive: row.IsActive, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return &response.RepresentativeEnterpriseResponse{ID: row.ID, RepresentativeCode: row.RepresentativeCode, EnterpriseCode: row.EnterpriseCode, EnterpriseName: row.EnterpriseName, CommissionPatternCode: row.CommissionPatternCode, CommissionPct: row.CommissionPct.InexactFloat64(), IsDefault: row.IsDefault, IsActive: row.IsActive, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func toAccountingResponse(row *entity.RepresentativeAccounting) *response.RepresentativeAccountingResponse {
@@ -104,13 +104,14 @@ func toContactResponse(row *entity.RepresentativeContact) *response.Representati
 }
 
 func toReportRowResponse(row repository.RepresentativeReportRow) response.RepresentativeReportRowResponse {
-	return response.RepresentativeReportRowResponse{Code: row.Code, Name: row.Name, TradeName: row.TradeName, TypeCode: row.TypeCode, TypeDescription: row.TypeDescription, State: row.State, City: row.City, MainPhone: row.MainPhone, MainEmail: row.MainEmail, RegionCodes: row.RegionCodes, IsActive: row.IsActive, CommissionPct: row.CommissionPct, DebitAccountCode: row.DebitAccountCode, CreditAccountCode: row.CreditAccountCode, GeneratedHistoryCode: row.GeneratedHistoryCode}
+	return response.RepresentativeReportRowResponse{Code: row.Code, Name: row.Name, TradeName: row.TradeName, TypeCode: row.TypeCode, TypeDescription: row.TypeDescription, State: row.State, City: row.City, MainPhone: row.MainPhone, MainEmail: row.MainEmail, RegionCodes: row.RegionCodes, IsActive: row.IsActive, CommissionPct: row.CommissionPct.InexactFloat64(), DebitAccountCode: row.DebitAccountCode, CreditAccountCode: row.CreditAccountCode, GeneratedHistoryCode: row.GeneratedHistoryCode}
 }
 
 func toFollowUpResponse(row repository.RepresentativeFollowUp) response.RepresentativeFollowUpResponse {
-	out := response.RepresentativeFollowUpResponse{RepresentativeCode: row.RepresentativeCode, RepresentativeName: row.RepresentativeName, CustomerCount: row.CustomerCount, QuotationCount: row.QuotationCount, OrderCount: row.OrderCount, TotalQuoted: row.TotalQuoted, TotalOrdered: row.TotalOrdered, AverageTicket: row.AverageTicket, CommissionBase: row.CommissionBase, CommissionValue: row.CommissionValue, LastQuotationDate: row.LastQuotationDate, LastOrderDate: row.LastOrderDate}
+	out := response.RepresentativeFollowUpResponse{RepresentativeCode: row.RepresentativeCode, RepresentativeName: row.RepresentativeName, CustomerCount: row.CustomerCount, QuotationCount: row.QuotationCount, OrderCount: row.OrderCount, TotalQuoted: row.TotalQuoted.InexactFloat64(), TotalOrdered: row.TotalOrdered.InexactFloat64(), AverageTicket: row.AverageTicket.InexactFloat64(), CommissionBase: row.CommissionBase.InexactFloat64(), CommissionValue: row.CommissionValue.InexactFloat64(), LastQuotationDate: row.LastQuotationDate, LastOrderDate: row.LastOrderDate}
 	for _, customer := range row.Customers {
-		out.Customers = append(out.Customers, response.RepresentativeCustomerFollowUpResponse(customer))
+		out.Customers = append(out.Customers, response.RepresentativeCustomerFollowUpResponse{CustomerCode: customer.CustomerCode, QuotationCount: customer.QuotationCount, OrderCount: customer.OrderCount,
+			TotalQuoted: customer.TotalQuoted.InexactFloat64(), TotalOrdered: customer.TotalOrdered.InexactFloat64(), LastQuotationDate: customer.LastQuotationDate, LastOrderDate: customer.LastOrderDate})
 	}
 	return out
 }

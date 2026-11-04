@@ -3,7 +3,6 @@ package delivery_promise_uc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 	orderrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type DeliveryPromiseUseCase struct {
@@ -40,8 +40,8 @@ type allocationRequest struct {
 	itemCode  int64
 	mask      string
 	tankCode  int64
-	quantity  float64
-	unitPrice float64
+	quantity  decimal.Decimal
+	unitPrice decimal.Decimal
 }
 
 func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.DeliveryPromiseOccupationDTO) ([]response.DeliveryPromiseOccupationDayResponse, error) {
@@ -87,8 +87,8 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 				ItemCode:       line.ItemCode,
 				Mask:           line.Mask,
 				AllocationDate: truncateDate(*lineDate),
-				Quantity:       math.Max(0, line.RequestedQty.Sub(line.AttendedQty).Sub(line.CancelledQty).InexactFloat64()),
-				UnitPrice:      line.UnitPrice.InexactFloat64(),
+				Quantity:       decimal.Max(decimal.Zero, line.RequestedQty.Sub(line.AttendedQty).Sub(line.CancelledQty)),
+				UnitPrice:      line.UnitPrice,
 				Source:         "SALES_ORDER",
 				ReferenceCode:  &order.Code,
 			}
@@ -124,7 +124,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 	if !uc.Auth.CanManageDeliveryPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.DailyCapacity <= 0 {
+	if !dto.DailyCapacity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a capacidade diária deve ser maior que zero")
 	}
 	createdBy, err := uc.Auth.UserID(ctx)
@@ -140,7 +140,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 	planned := []dpentity.TankAllocation{}
 
 	for _, line := range dto.Lines {
-		if line.Quantity <= 0 {
+		if !line.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("a quantidade do item %d deve ser maior que zero", line.ItemCode))
 		}
 		tankCode, warn := uc.tankCode(ctx, line.ItemCode)
@@ -153,13 +153,13 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 			if err != nil {
 				return nil, err
 			}
-			covered := math.Min(qty, available)
-			qty -= covered
-			if covered > 0 {
-				warnings = append(warnings, fmt.Sprintf("item %d: %.4f covered by ATP stock", line.ItemCode, covered))
+			covered := decimal.Min(qty, available)
+			qty = qty.Sub(covered)
+			if covered.IsPositive() {
+				warnings = append(warnings, fmt.Sprintf("item %d: %s covered by ATP stock", line.ItemCode, covered.StringFixed(4)))
 			}
 		}
-		if qty <= 0 {
+		if !qty.IsPositive() {
 			continue
 		}
 		allocs, err := uc.allocateBackwards(ctx, allocationRequest{
@@ -321,17 +321,17 @@ func (uc *DeliveryPromiseUseCase) ExpireReservations(ctx context.Context, now ti
 	return uc.Reservations.ExpireReservations(ctx, now)
 }
 
-func (uc *DeliveryPromiseUseCase) allocateBackwards(ctx context.Context, req allocationRequest, requestedDate time.Time, dailyCapacity float64) ([]dpentity.TankAllocation, error) {
+func (uc *DeliveryPromiseUseCase) allocateBackwards(ctx context.Context, req allocationRequest, requestedDate time.Time, dailyCapacity decimal.Decimal) ([]dpentity.TankAllocation, error) {
 	remaining := req.quantity
 	date := truncateDate(requestedDate)
 	out := []dpentity.TankAllocation{}
-	for remaining > 0 {
+	for remaining.IsPositive() {
 		workday, err := uc.isWorkday(ctx, req.itemCode, req.mask, date)
 		if err != nil {
 			return nil, err
 		}
 		if workday {
-			qty := math.Min(remaining, dailyCapacity)
+			qty := decimal.Min(remaining, dailyCapacity)
 			out = append(out, dpentity.TankAllocation{
 				TankCode:       req.tankCode,
 				ItemCode:       req.itemCode,
@@ -341,7 +341,7 @@ func (uc *DeliveryPromiseUseCase) allocateBackwards(ctx context.Context, req all
 				UnitPrice:      req.unitPrice,
 				Source:         "SIMULATION",
 			})
-			remaining -= qty
+			remaining = remaining.Sub(qty)
 		}
 		date = date.AddDate(0, 0, -1)
 	}
@@ -365,17 +365,17 @@ func (uc *DeliveryPromiseUseCase) tankCode(ctx context.Context, itemCode int64) 
 	return int64(*item.Planning.TankCode), ""
 }
 
-func (uc *DeliveryPromiseUseCase) availableStock(ctx context.Context, itemCode int64, mask string) (float64, error) {
+func (uc *DeliveryPromiseUseCase) availableStock(ctx context.Context, itemCode int64, mask string) (decimal.Decimal, error) {
 	balances, err := uc.Stock.ListBalancesByItem(ctx, itemCode)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
-	total := 0.0
+	total := decimal.Zero
 	for _, balance := range balances {
 		if mask != "" && balance.Mask != mask {
 			continue
 		}
-		total += balance.AvailableQty.InexactFloat64()
+		total = total.Add(balance.AvailableQty)
 	}
 	return total, nil
 }
@@ -424,7 +424,7 @@ func effectiveLineDate(order *orderentity.SalesOrder, line *orderentity.SalesOrd
 	return nil
 }
 
-func ensureDay(days map[string]*dpentity.TankOccupationDay, tankCode int64, date time.Time, capacity float64) *dpentity.TankOccupationDay {
+func ensureDay(days map[string]*dpentity.TankOccupationDay, tankCode int64, date time.Time, capacity decimal.Decimal) *dpentity.TankOccupationDay {
 	key := fmt.Sprintf("%d:%s", tankCode, date.Format(time.DateOnly))
 	if day, ok := days[key]; ok {
 		return day
@@ -436,19 +436,19 @@ func ensureDay(days map[string]*dpentity.TankOccupationDay, tankCode int64, date
 
 func addAllocation(day *dpentity.TankOccupationDay, alloc dpentity.TankAllocation) {
 	day.Allocations = append(day.Allocations, alloc)
-	day.Allocated += alloc.Quantity
-	day.Quantity += alloc.Quantity
-	day.ForecastRevenue += alloc.Quantity * alloc.UnitPrice
-	day.Free = day.Capacity - day.Allocated
-	if day.Capacity > 0 {
-		day.OccupationPct = (day.Allocated / day.Capacity) * 100
+	day.Allocated = day.Allocated.Add(alloc.Quantity)
+	day.Quantity = day.Quantity.Add(alloc.Quantity)
+	day.ForecastRevenue = day.ForecastRevenue.Add(alloc.Quantity.Mul(alloc.UnitPrice))
+	day.Free = day.Capacity.Sub(day.Allocated)
+	if day.Capacity.IsPositive() {
+		day.OccupationPct = day.Allocated.Div(day.Capacity).Mul(decimal.NewFromInt(100))
 	}
 }
 
 func occupationMapToResponse(days map[string]*dpentity.TankOccupationDay) []response.DeliveryPromiseOccupationDayResponse {
 	list := make([]*dpentity.TankOccupationDay, 0, len(days))
 	for _, day := range days {
-		if day.Capacity <= 0 {
+		if !day.Capacity.IsPositive() {
 			day.Warnings = append(day.Warnings, "daily capacity was not informed; free capacity and occupation percentage are indicative")
 		}
 		list = append(list, day)
@@ -464,12 +464,12 @@ func occupationMapToResponse(days map[string]*dpentity.TankOccupationDay) []resp
 		out = append(out, response.DeliveryPromiseOccupationDayResponse{
 			TankCode:        day.TankCode,
 			Date:            day.Date,
-			Capacity:        day.Capacity,
-			Allocated:       day.Allocated,
-			Free:            day.Free,
-			OccupationPct:   day.OccupationPct,
-			Quantity:        day.Quantity,
-			ForecastRevenue: day.ForecastRevenue,
+			Capacity:        day.Capacity.InexactFloat64(),
+			Allocated:       day.Allocated.InexactFloat64(),
+			Free:            day.Free.InexactFloat64(),
+			OccupationPct:   day.OccupationPct.InexactFloat64(),
+			Quantity:        day.Quantity.InexactFloat64(),
+			ForecastRevenue: day.ForecastRevenue.InexactFloat64(),
 			Allocations:     allocationsToResponse(day.Allocations),
 			Warnings:        day.Warnings,
 		})
@@ -485,8 +485,8 @@ func allocationsToResponse(list []dpentity.TankAllocation) []response.DeliveryPr
 			ItemCode:       alloc.ItemCode,
 			Mask:           alloc.Mask,
 			AllocationDate: alloc.AllocationDate,
-			Quantity:       alloc.Quantity,
-			UnitPrice:      alloc.UnitPrice,
+			Quantity:       alloc.Quantity.InexactFloat64(),
+			UnitPrice:      alloc.UnitPrice.InexactFloat64(),
 			Source:         alloc.Source,
 			ReferenceCode:  alloc.ReferenceCode,
 		})

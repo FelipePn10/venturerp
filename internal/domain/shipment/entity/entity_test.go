@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -50,7 +52,7 @@ func TestShipmentStructDefaults(t *testing.T) {
 		Code:             1,
 		Status:           ShipmentStatusOpen,
 		TotalVolumes:     0,
-		TotalGrossWeight: 0,
+		TotalGrossWeight: decimal.NewFromFloat(0),
 		CreatedBy:        uuid.New(),
 	}
 	if s.Items != nil {
@@ -123,12 +125,12 @@ func TestShipmentItemDefaults(t *testing.T) {
 	it := &ShipmentItem{
 		Sequence: 1,
 		ItemCode: 100,
-		Quantity: 10,
+		Quantity: decimal.NewFromFloat(10),
 	}
 	if it.IsConferred {
 		t.Error("IsConferred should be false by default")
 	}
-	if it.ConferredQty != 0 {
+	if !it.ConferredQty.IsZero() {
 		t.Errorf("ConferredQty = %v, want 0", it.ConferredQty)
 	}
 }

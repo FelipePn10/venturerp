@@ -1,8 +1,10 @@
 package entity
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -29,8 +31,8 @@ func NewSalesDivision(
 	allowOutsideLimits bool,
 	minimumDeliveryDays int,
 	financialDelayDays int,
-	pisPercentage float64,
-	cofinsPercentage float64,
+	pisPercentage decimal.Decimal,
+	cofinsPercentage decimal.Decimal,
 	parentDivisionID *int64,
 	createdBy uuid.UUID,
 ) (*SalesDivision, error) {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -31,7 +32,7 @@ func (r *SalesForecastRepositorySQLC) CreateForecast(
 		Mask:         pgutil.ToPgTextFromPtr(f.Mask),
 		Week:         int32(f.Week),
 		Year:         int32(f.Year),
-		Quantity:     pgutil.ToPgNumericFromFloat64(f.Quantity),
+		Quantity:     pgutil.ToPgNumericFromDecimal(f.Quantity),
 		CreatedBy:    pgutil.ToPgUUID(f.CreatedBy),
 		EnterpriseID: enterpriseID,
 	})
@@ -51,7 +52,7 @@ func (r *SalesForecastRepositorySQLC) UpdateForecast(
 	}
 	row, err := r.q.UpdateSalesForecast(ctx, sqlc.UpdateSalesForecastParams{
 		ID:           f.ID,
-		Quantity:     pgutil.ToPgNumericFromFloat64(f.Quantity),
+		Quantity:     pgutil.ToPgNumericFromDecimal(f.Quantity),
 		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
@@ -144,7 +145,7 @@ func (r *SalesForecastRepositorySQLC) ListHistoricalDemand(
 				return nil, err
 			}
 			out = append(out, &entity.HistoricalDemand{
-				ItemCode: itemCode, Mask: emptyStringAsNil(mask), PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToFloat64(quantity),
+				ItemCode: itemCode, Mask: emptyStringAsNil(mask), PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToDecimal(quantity),
 			})
 		}
 		if err := rows.Err(); err != nil {
@@ -166,7 +167,7 @@ func (r *SalesForecastRepositorySQLC) ListHistoricalDemand(
 				return nil, err
 			}
 			out = append(out, &entity.HistoricalDemand{
-				ItemCode: itemCode, Mask: mask, PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToFloat64(quantity),
+				ItemCode: itemCode, Mask: mask, PeriodMonth: pgutil.FromPgDate(period), Quantity: pgutil.FromPgNumericToDecimal(quantity),
 			})
 		}
 		if err := rows.Err(); err != nil {
@@ -258,13 +259,13 @@ func (r *SalesForecastRepositorySQLC) CreateAppropriation(
 	}
 	row, err := r.q.CreateAppropriationTable(ctx, sqlc.CreateAppropriationTableParams{
 		Description:  a.Description,
-		MondayPct:    pgutil.ToPgNumericFromFloat64(a.MondayPct),
-		TuesdayPct:   pgutil.ToPgNumericFromFloat64(a.TuesdayPct),
-		WednesdayPct: pgutil.ToPgNumericFromFloat64(a.WednesdayPct),
-		ThursdayPct:  pgutil.ToPgNumericFromFloat64(a.ThursdayPct),
-		FridayPct:    pgutil.ToPgNumericFromFloat64(a.FridayPct),
-		SaturdayPct:  pgutil.ToPgNumericFromFloat64(a.SaturdayPct),
-		SundayPct:    pgutil.ToPgNumericFromFloat64(a.SundayPct),
+		MondayPct:    pgutil.ToPgNumericFromDecimal(a.MondayPct),
+		TuesdayPct:   pgutil.ToPgNumericFromDecimal(a.TuesdayPct),
+		WednesdayPct: pgutil.ToPgNumericFromDecimal(a.WednesdayPct),
+		ThursdayPct:  pgutil.ToPgNumericFromDecimal(a.ThursdayPct),
+		FridayPct:    pgutil.ToPgNumericFromDecimal(a.FridayPct),
+		SaturdayPct:  pgutil.ToPgNumericFromDecimal(a.SaturdayPct),
+		SundayPct:    pgutil.ToPgNumericFromDecimal(a.SundayPct),
 		IsDefault:    a.IsDefault,
 		CreatedBy:    pgutil.ToPgUUID(a.CreatedBy),
 		EnterpriseID: enterpriseID,
@@ -286,13 +287,13 @@ func (r *SalesForecastRepositorySQLC) UpdateAppropriation(
 	row, err := r.q.UpdateAppropriationTable(ctx, sqlc.UpdateAppropriationTableParams{
 		ID:           a.ID,
 		Description:  a.Description,
-		MondayPct:    pgutil.ToPgNumericFromFloat64(a.MondayPct),
-		TuesdayPct:   pgutil.ToPgNumericFromFloat64(a.TuesdayPct),
-		WednesdayPct: pgutil.ToPgNumericFromFloat64(a.WednesdayPct),
-		ThursdayPct:  pgutil.ToPgNumericFromFloat64(a.ThursdayPct),
-		FridayPct:    pgutil.ToPgNumericFromFloat64(a.FridayPct),
-		SaturdayPct:  pgutil.ToPgNumericFromFloat64(a.SaturdayPct),
-		SundayPct:    pgutil.ToPgNumericFromFloat64(a.SundayPct),
+		MondayPct:    pgutil.ToPgNumericFromDecimal(a.MondayPct),
+		TuesdayPct:   pgutil.ToPgNumericFromDecimal(a.TuesdayPct),
+		WednesdayPct: pgutil.ToPgNumericFromDecimal(a.WednesdayPct),
+		ThursdayPct:  pgutil.ToPgNumericFromDecimal(a.ThursdayPct),
+		FridayPct:    pgutil.ToPgNumericFromDecimal(a.FridayPct),
+		SaturdayPct:  pgutil.ToPgNumericFromDecimal(a.SaturdayPct),
+		SundayPct:    pgutil.ToPgNumericFromDecimal(a.SundayPct),
 		EnterpriseID: enterpriseID,
 	})
 	if err != nil {
@@ -358,7 +359,7 @@ func forecastRowToEntity(row sqlc.SalesForecast) *entity.SalesForecast {
 		Mask:      pgutil.FromPgTextPtr(row.Mask),
 		Week:      int(row.Week),
 		Year:      int(row.Year),
-		Quantity:  pgutil.FromPgNumericToFloat64(row.Quantity),
+		Quantity:  pgutil.FromPgNumericToDecimal(row.Quantity),
 		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),
 		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
@@ -396,13 +397,13 @@ func appropriationRowToEntity(row sqlc.AppropriationTable) *entity.Appropriation
 	return &entity.AppropriationTable{
 		ID:           row.ID,
 		Description:  row.Description,
-		MondayPct:    pgutil.FromPgNumericToFloat64(row.MondayPct),
-		TuesdayPct:   pgutil.FromPgNumericToFloat64(row.TuesdayPct),
-		WednesdayPct: pgutil.FromPgNumericToFloat64(row.WednesdayPct),
-		ThursdayPct:  pgutil.FromPgNumericToFloat64(row.ThursdayPct),
-		FridayPct:    pgutil.FromPgNumericToFloat64(row.FridayPct),
-		SaturdayPct:  pgutil.FromPgNumericToFloat64(row.SaturdayPct),
-		SundayPct:    pgutil.FromPgNumericToFloat64(row.SundayPct),
+		MondayPct:    pgutil.FromPgNumericToDecimal(row.MondayPct),
+		TuesdayPct:   pgutil.FromPgNumericToDecimal(row.TuesdayPct),
+		WednesdayPct: pgutil.FromPgNumericToDecimal(row.WednesdayPct),
+		ThursdayPct:  pgutil.FromPgNumericToDecimal(row.ThursdayPct),
+		FridayPct:    pgutil.FromPgNumericToDecimal(row.FridayPct),
+		SaturdayPct:  pgutil.FromPgNumericToDecimal(row.SaturdayPct),
+		SundayPct:    pgutil.FromPgNumericToDecimal(row.SundayPct),
 		IsDefault:    row.IsDefault,
 		CreatedAt:    pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:    pgutil.FromPgTimestamptz(row.UpdatedAt),

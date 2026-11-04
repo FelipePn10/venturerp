@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -27,8 +29,8 @@ type SalesDivision struct {
 	AllowFreePaymentTerms   bool
 	MinimumDeliveryDays     int
 	FinancialDelayDays      int
-	PISPercentage           float64
-	CofinsPercentage        float64
+	PISPercentage           decimal.Decimal
+	CofinsPercentage        decimal.Decimal
 	ParentDivisionID        *int64
 	IsActive                bool
 	CreatedAt               time.Time

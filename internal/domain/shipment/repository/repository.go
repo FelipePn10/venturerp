@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/google/uuid"
 )
@@ -33,8 +35,8 @@ type LoadFilter struct {
 type TransportInput struct {
 	CarrierCode       *int64
 	FreightModality   *string
-	FreightValue      float64
-	InsuranceValue    float64
+	FreightValue      decimal.Decimal
+	InsuranceValue    decimal.Decimal
 	VehiclePlate      *string
 	DriverName        *string
 	DriverDocument    *string
@@ -80,9 +82,9 @@ type LoadMonitorRow struct {
 	TotalShipments     int
 	TotalFiscalNotes   int
 	TotalVolumes       int
-	TotalNetWeight     float64
-	TotalGrossWeight   float64
-	TotalCubageM3      float64
+	TotalNetWeight     decimal.Decimal
+	TotalGrossWeight   decimal.Decimal
+	TotalCubageM3      decimal.Decimal
 	OpenShipments      int
 	SeparatedShipments int
 	ConferredShipments int
@@ -101,7 +103,7 @@ type SeparationMonitorRow struct {
 	ConferredItems   int
 	DivergentItems   int
 	TotalVolumes     int
-	TotalGrossWeight float64
+	TotalGrossWeight decimal.Decimal
 }
 
 type LogisticPanelSummary struct {
@@ -117,7 +119,7 @@ type LogisticPanelSummary struct {
 	BoxesOccupied      int
 	BoxesAvailable     int
 	TotalVolumes       int
-	TotalGrossWeight   float64
+	TotalGrossWeight   decimal.Decimal
 }
 
 type ShipmentRepository interface {
@@ -141,7 +143,7 @@ type ShipmentRepository interface {
 	AddItem(ctx context.Context, item *entity.ShipmentItem) (*entity.ShipmentItem, error)
 	ListItems(ctx context.Context, shipmentID int64) ([]*entity.ShipmentItem, error)
 	GetItem(ctx context.Context, itemID int64) (*entity.ShipmentItem, error)
-	ConferItem(ctx context.Context, itemID int64, conferredQty float64) error
+	ConferItem(ctx context.Context, itemID int64, conferredQty decimal.Decimal) error
 
 	AddVolume(ctx context.Context, v *entity.ShipmentVolume) (*entity.ShipmentVolume, error)
 	ListVolumes(ctx context.Context, shipmentID int64) ([]*entity.ShipmentVolume, error)

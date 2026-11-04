@@ -3,7 +3,6 @@ package sales_forecast_uc
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type GenerateSalesForecastUseCase struct {
@@ -165,11 +165,14 @@ func (uc *GenerateSalesForecastUseCase) executeStatistical(
 		return nil, erroDeRegra(err)
 	}
 
-	weekly := map[forecastWeek]float64{}
+	// O modelo estatístico (suavização) trabalha em float; a quantidade prevista
+	// entra em decimal aqui, na fronteira.
+	weekly := map[forecastWeek]decimal.Decimal{}
 	for i, quantity := range statistical.Result.Forecasts {
 		periodDate := startDate.AddDate(0, 0, i*7)
 		year, week := periodDate.ISOWeek()
-		weekly[forecastWeek{Year: year, Week: week}] += quantity
+		k := forecastWeek{Year: year, Week: week}
+		weekly[k] = weekly[k].Add(decimal.NewFromFloat(quantity))
 	}
 	return upsertWeeklyForecasts(ctx, uc.Repo, userID, dto.ItemCode, dto.Mask, weekly, dto.UpdateExisting, statistical.Result.Model, statistical.Result.MAPE)
 }
@@ -180,7 +183,7 @@ func upsertWeeklyForecasts(
 	userID uuid.UUID,
 	itemCode int64,
 	mask *string,
-	weekly map[forecastWeek]float64,
+	weekly map[forecastWeek]decimal.Decimal,
 	updateExisting bool,
 	model string,
 	mape float64,
@@ -276,7 +279,7 @@ type forecastMonth struct {
 type averageDemand struct {
 	ItemCode int64
 	Mask     *string
-	Quantity float64
+	Quantity decimal.Decimal
 }
 
 func distributeMonthByWorkdays(
@@ -284,13 +287,13 @@ func distributeMonthByWorkdays(
 	calendar calendarrepo.IndustrialCalendarRepository,
 	year int,
 	month int,
-	quantity float64,
+	quantity decimal.Decimal,
 	acceptsFraction bool,
 	residualWeek string,
 	fromLimit *time.Time,
 	toLimit *time.Time,
-) (map[forecastWeek]float64, error) {
-	if quantity <= 0 {
+) (map[forecastWeek]decimal.Decimal, error) {
+	if !quantity.IsPositive() {
 		return nil, entity.ErrInvalidQuantity
 	}
 	workdays, err := workdaysForMonth(ctx, calendar, year, month)
@@ -328,24 +331,24 @@ func distributeMonthByWorkdays(
 	})
 
 	totalWorkdays := len(filtered)
-	weekly := map[forecastWeek]float64{}
-	allocated := 0.0
+	weekly := map[forecastWeek]decimal.Decimal{}
+	allocated := decimal.Zero
 	for _, week := range weeks {
-		raw := quantity * float64(workdaysByWeek[week]) / float64(totalWorkdays)
+		raw := quantity.Mul(decimal.NewFromInt(int64(workdaysByWeek[week]))).Div(decimal.NewFromInt(int64(totalWorkdays)))
 		if acceptsFraction {
-			weekly[week] = round4(raw)
+			weekly[week] = raw.Round(4)
 		} else {
-			weekly[week] = math.Floor(raw)
+			weekly[week] = raw.Floor()
 		}
-		allocated += weekly[week]
+		allocated = allocated.Add(weekly[week])
 	}
-	residual := round4(quantity - allocated)
-	if residual != 0 {
+	residual := quantity.Sub(allocated).Round(4)
+	if !residual.IsZero() {
 		target := weeks[len(weeks)-1]
 		if strings.EqualFold(residualWeek, "FIRST") {
 			target = weeks[0]
 		}
-		weekly[target] = round4(weekly[target] + residual)
+		weekly[target] = weekly[target].Add(residual).Round(4)
 	}
 	return weekly, nil
 }
@@ -381,7 +384,7 @@ func averageHistoryByItemMask(history []*entity.HistoricalDemand, divisor int, p
 	type aggregate struct {
 		itemCode int64
 		mask     *string
-		total    float64
+		total    decimal.Decimal
 	}
 	aggregates := map[string]*aggregate{}
 	for _, row := range history {
@@ -389,15 +392,15 @@ func averageHistoryByItemMask(history []*entity.HistoricalDemand, divisor int, p
 		if aggregates[key] == nil {
 			aggregates[key] = &aggregate{itemCode: row.ItemCode, mask: row.Mask}
 		}
-		aggregates[key].total += row.Quantity
+		aggregates[key].total = aggregates[key].total.Add(row.Quantity)
 	}
 	out := make([]averageDemand, 0, len(aggregates))
-	factor := 1 + projectionPct/100
+	factor := decimal.NewFromInt(1).Add(decimal.NewFromFloat(projectionPct).Div(decimal.NewFromInt(100)))
 	for _, aggregate := range aggregates {
 		out = append(out, averageDemand{
 			ItemCode: aggregate.itemCode,
 			Mask:     aggregate.mask,
-			Quantity: round4((aggregate.total / float64(divisor)) * factor),
+			Quantity: aggregate.total.Div(decimal.NewFromInt(int64(divisor))).Mul(factor).Round(4),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -464,10 +467,6 @@ func maskKey(mask *string) string {
 		return ""
 	}
 	return *mask
-}
-
-func round4(value float64) float64 {
-	return math.Round(value*10000) / 10000
 }
 
 func toForecastDataPoints(history []request.DataPoint) []forecast_uc.DataPoint {

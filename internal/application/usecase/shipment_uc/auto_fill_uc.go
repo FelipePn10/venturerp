@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
@@ -19,25 +21,25 @@ type SalesOrderHeader struct {
 	CarrierCode  *int64
 	CustomerCode *int64
 	TotalVolumes int
-	TotalWeight  float64
-	TotalGross   float64
-	TotalNet     float64
+	TotalWeight  decimal.Decimal
+	TotalGross   decimal.Decimal
+	TotalNet     decimal.Decimal
 	Items        []SalesOrderItemHeader
 }
 
 type SalesOrderItemHeader struct {
 	ItemCode        int64
-	RequestedQty    float64
-	UnitPrice       float64
-	TotalGross      float64
-	TotalNet        float64
-	IPIPct          float64
-	ICMSPct         float64
-	PISPct          float64
-	COFINSPct       float64
-	STPct           float64
-	UnitWeightNet   float64
-	UnitWeightGross float64
+	RequestedQty    decimal.Decimal
+	UnitPrice       decimal.Decimal
+	TotalGross      decimal.Decimal
+	TotalNet        decimal.Decimal
+	IPIPct          decimal.Decimal
+	ICMSPct         decimal.Decimal
+	PISPct          decimal.Decimal
+	COFINSPct       decimal.Decimal
+	STPct           decimal.Decimal
+	UnitWeightNet   decimal.Decimal
+	UnitWeightGross decimal.Decimal
 }
 
 type PurchaseOrderReader interface {
@@ -48,18 +50,18 @@ type PurchaseOrderHeader struct {
 	Code         int64
 	CarrierCode  *int64
 	SupplierCode *int64
-	TotalWeight  float64
+	TotalWeight  decimal.Decimal
 	Items        []PurchaseOrderItemHeader
 }
 
 type PurchaseOrderItemHeader struct {
 	ItemCode     int64
-	RequestedQty float64
-	UnitPrice    float64
-	TotalPrice   float64
-	IPIPct       float64
-	ICMSPct      float64
-	ICMSSTPct    float64
+	RequestedQty decimal.Decimal
+	UnitPrice    decimal.Decimal
+	TotalPrice   decimal.Decimal
+	IPIPct       decimal.Decimal
+	ICMSPct      decimal.Decimal
+	ICMSSTPct    decimal.Decimal
 }
 
 type ProductionOrderReader interface {
@@ -69,14 +71,14 @@ type ProductionOrderReader interface {
 type ProductionOrderHeader struct {
 	Code        int64
 	ItemCode    int64
-	PlannedQty  float64
-	ProducedQty float64
+	PlannedQty  decimal.Decimal
+	ProducedQty decimal.Decimal
 	Items       []ProductionOrderItemHeader
 }
 
 type ProductionOrderItemHeader struct {
 	ItemCode    int64
-	ConsumedQty float64
+	ConsumedQty decimal.Decimal
 }
 
 type ShipmentAutoFillUseCase struct {
@@ -194,7 +196,7 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromProductionOrder(ctx context.Conte
 	}
 
 	qty := po.ProducedQty
-	if qty == 0 {
+	if qty.IsZero() {
 		qty = po.PlannedQty
 	}
 
@@ -214,7 +216,7 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromProductionOrder(ctx context.Conte
 	}
 
 	seq := 1
-	if qty > 0 {
+	if qty.IsPositive() {
 		item := &entity.ShipmentItem{
 			ShipmentID: created.ID,
 			Sequence:   seq,

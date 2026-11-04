@@ -3,9 +3,10 @@ package shipment_uc
 import (
 	"context"
 	"fmt"
+	"time"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/shopspring/decimal"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
@@ -62,9 +63,9 @@ type CreateShipmentInput struct {
 	ProductionOrderCode *int64
 	CarrierCode         *int64
 	TotalVolumes        int
-	TotalNetWeight      float64
-	TotalGrossWeight    float64
-	TotalCubageM3       float64
+	TotalNetWeight      decimal.Decimal
+	TotalGrossWeight    decimal.Decimal
+	TotalCubageM3       decimal.Decimal
 	Notes               *string
 	CreatedBy           uuid.UUID
 }
@@ -102,9 +103,9 @@ type AddShipmentItemInput struct {
 	ItemCode           int64
 	SalesOrderItemCode *int64
 	WarehouseID        *int64
-	Quantity           float64
-	UnitNetWeight      float64
-	UnitGrossWeight    float64
+	Quantity           decimal.Decimal
+	UnitNetWeight      decimal.Decimal
+	UnitGrossWeight    decimal.Decimal
 	Notes              *string
 }
 
@@ -180,7 +181,7 @@ func (uc *ShipmentUseCase) ListByProductionOrder(ctx context.Context, code int64
 // ConferItem records the checked (conferred) quantity of a line. A divergence
 // from the planned quantity is preserved (not silently accepted) and surfaces
 // when shipping.
-func (uc *ShipmentUseCase) ConferItem(ctx context.Context, shipmentCode, itemID int64, conferredQty float64) error {
+func (uc *ShipmentUseCase) ConferItem(ctx context.Context, shipmentCode, itemID int64, conferredQty decimal.Decimal) error {
 	ship, err := uc.Repo.GetByCode(ctx, shipmentCode)
 	if err != nil {
 		return err
@@ -188,7 +189,7 @@ func (uc *ShipmentUseCase) ConferItem(ctx context.Context, shipmentCode, itemID 
 	if ship.Status == entity.ShipmentStatusShipped || ship.Status == entity.ShipmentStatusCancelled {
 		return errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não pode ser conferido no status %s", shipmentCode, ship.Status))
 	}
-	if conferredQty < 0 {
+	if conferredQty.IsNegative() {
 		return errorsuc.NewValidationError("quantidade conferida não pode ser negativa")
 	}
 	return uc.Repo.ConferItem(ctx, itemID, conferredQty)
@@ -288,11 +289,11 @@ type AddVolumeInput struct {
 	ShipmentCode int64
 	VolumeNumber int
 	PackageType  string
-	NetWeight    float64
-	GrossWeight  float64
-	LengthCm     float64
-	WidthCm      float64
-	HeightCm     float64
+	NetWeight    decimal.Decimal
+	GrossWeight  decimal.Decimal
+	LengthCm     decimal.Decimal
+	WidthCm      decimal.Decimal
+	HeightCm     decimal.Decimal
 	Marking      *string
 	Contents     *string
 }
@@ -375,13 +376,13 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 			wh = *it.WarehouseID
 		}
 		qty := it.Quantity
-		if qty <= 0 {
+		if !qty.IsPositive() {
 			continue
 		}
 		if _, err := estoque.CreateReservation(ctx, &stockentity.StockReservation{
 			ItemCode:          it.ItemCode,
 			WarehouseID:       wh,
-			Quantity:          decimal.NewFromFloat(qty),
+			Quantity:          qty,
 			ReferenceType:     reservationRefShipment,
 			ReferenceCode:     ship.Code,
 			ReferenceItemCode: it.SalesOrderItemCode,

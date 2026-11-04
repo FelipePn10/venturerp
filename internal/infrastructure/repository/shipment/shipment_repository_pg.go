@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
@@ -460,7 +462,7 @@ func (r *ShipmentRepositoryPG) GetItem(ctx context.Context, itemID int64) (*enti
 	return it, nil
 }
 
-func (r *ShipmentRepositoryPG) ConferItem(ctx context.Context, itemID int64, conferredQty float64) error {
+func (r *ShipmentRepositoryPG) ConferItem(ctx context.Context, itemID int64, conferredQty decimal.Decimal) error {
 	enterpriseID, tenantErr := tenant.ID(ctx)
 	if tenantErr != nil {
 		return tenantErr

@@ -1,26 +1,28 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 type CreateSalesForecastDTO struct {
-	ItemCode int64   `json:"item_code"`
-	Mask     *string `json:"mask,omitempty"`
-	Week     int     `json:"week"`
-	Year     int     `json:"year"`
-	Quantity float64 `json:"quantity"`
+	ItemCode int64           `json:"item_code"`
+	Mask     *string         `json:"mask,omitempty"`
+	Week     int             `json:"week"`
+	Year     int             `json:"year"`
+	Quantity decimal.Decimal `json:"quantity"`
 }
 
 type UpdateSalesForecastDTO struct {
-	ID       int64   `json:"id"`
-	Quantity float64 `json:"quantity"`
+	ID       int64           `json:"id"`
+	Quantity decimal.Decimal `json:"quantity"`
 }
 
 type CreateMonthlySalesForecastDTO struct {
-	ItemCode        int64   `json:"item_code"`
-	Mask            *string `json:"mask,omitempty"`
-	Year            int     `json:"year"`
-	Month           int     `json:"month"`
-	Quantity        float64 `json:"quantity"`
-	AcceptsFraction bool    `json:"accepts_fraction"`
-	UpdateExisting  bool    `json:"update_existing"`
+	ItemCode        int64           `json:"item_code"`
+	Mask            *string         `json:"mask,omitempty"`
+	Year            int             `json:"year"`
+	Month           int             `json:"month"`
+	Quantity        decimal.Decimal `json:"quantity"`
+	AcceptsFraction bool            `json:"accepts_fraction"`
+	UpdateExisting  bool            `json:"update_existing"`
 }
 
 type CreateForecastBlockDTO struct {
@@ -30,27 +32,27 @@ type CreateForecastBlockDTO struct {
 }
 
 type CreateAppropriationTableDTO struct {
-	Description  string  `json:"description"`
-	MondayPct    float64 `json:"monday_pct"`
-	TuesdayPct   float64 `json:"tuesday_pct"`
-	WednesdayPct float64 `json:"wednesday_pct"`
-	ThursdayPct  float64 `json:"thursday_pct"`
-	FridayPct    float64 `json:"friday_pct"`
-	SaturdayPct  float64 `json:"saturday_pct"`
-	SundayPct    float64 `json:"sunday_pct"`
-	IsDefault    bool    `json:"is_default"`
+	Description  string          `json:"description"`
+	MondayPct    decimal.Decimal `json:"monday_pct"`
+	TuesdayPct   decimal.Decimal `json:"tuesday_pct"`
+	WednesdayPct decimal.Decimal `json:"wednesday_pct"`
+	ThursdayPct  decimal.Decimal `json:"thursday_pct"`
+	FridayPct    decimal.Decimal `json:"friday_pct"`
+	SaturdayPct  decimal.Decimal `json:"saturday_pct"`
+	SundayPct    decimal.Decimal `json:"sunday_pct"`
+	IsDefault    bool            `json:"is_default"`
 }
 
 type UpdateAppropriationTableDTO struct {
-	ID           int64   `json:"id"`
-	Description  string  `json:"description"`
-	MondayPct    float64 `json:"monday_pct"`
-	TuesdayPct   float64 `json:"tuesday_pct"`
-	WednesdayPct float64 `json:"wednesday_pct"`
-	ThursdayPct  float64 `json:"thursday_pct"`
-	FridayPct    float64 `json:"friday_pct"`
-	SaturdayPct  float64 `json:"saturday_pct"`
-	SundayPct    float64 `json:"sunday_pct"`
+	ID           int64           `json:"id"`
+	Description  string          `json:"description"`
+	MondayPct    decimal.Decimal `json:"monday_pct"`
+	TuesdayPct   decimal.Decimal `json:"tuesday_pct"`
+	WednesdayPct decimal.Decimal `json:"wednesday_pct"`
+	ThursdayPct  decimal.Decimal `json:"thursday_pct"`
+	FridayPct    decimal.Decimal `json:"friday_pct"`
+	SaturdayPct  decimal.Decimal `json:"saturday_pct"`
+	SundayPct    decimal.Decimal `json:"sunday_pct"`
 }
 
 type SetDefaultAppropriationDTO struct {

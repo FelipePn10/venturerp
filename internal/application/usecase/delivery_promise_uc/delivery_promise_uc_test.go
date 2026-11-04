@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	calendarentity "github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/entity"
 )
 
@@ -61,9 +63,9 @@ func TestAllocateBackwardsSplitsCapacityAndSkipsNonWorkdays(t *testing.T) {
 		itemCode:  1001,
 		mask:      "A",
 		tankCode:  7,
-		quantity:  12,
-		unitPrice: 10,
-	}, time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC), 5)
+		quantity:  decimal.NewFromFloat(12),
+		unitPrice: decimal.NewFromFloat(10),
+	}, time.Date(2026, 7, 3, 0, 0, 0, 0, time.UTC), decimal.NewFromFloat(5))
 	if err != nil {
 		t.Fatalf("allocateBackwards returned error: %v", err)
 	}
@@ -77,8 +79,8 @@ func TestAllocateBackwardsSplitsCapacityAndSkipsNonWorkdays(t *testing.T) {
 		if got := allocations[i].AllocationDate.Format(time.DateOnly); got != wantDates[i] {
 			t.Fatalf("allocation %d date = %s, want %s", i, got, wantDates[i])
 		}
-		if allocations[i].Quantity != wantQty[i] {
-			t.Fatalf("allocation %d qty = %.2f, want %.2f", i, allocations[i].Quantity, wantQty[i])
+		if !allocations[i].Quantity.Equal(decimal.NewFromFloat(wantQty[i])) {
+			t.Fatalf("allocation %d qty = %s, want %v", i, allocations[i].Quantity, wantQty[i])
 		}
 	}
 }

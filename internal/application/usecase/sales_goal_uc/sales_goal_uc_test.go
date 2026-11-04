@@ -3,6 +3,8 @@ package sales_goal_uc
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 )
 
@@ -17,7 +19,7 @@ func TestGoalItemRequiresExactlyOneTarget(t *testing.T) {
 
 func TestGoalItemInfersTargetType(t *testing.T) {
 	item := int64(10)
-	got, err := goalItemFromDTO(request.SalesGoalItemDTO{GoalCode: 1, ItemCode: &item, TargetValue: 100})
+	got, err := goalItemFromDTO(request.SalesGoalItemDTO{GoalCode: 1, ItemCode: &item, TargetValue: decimal.NewFromFloat(100)})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

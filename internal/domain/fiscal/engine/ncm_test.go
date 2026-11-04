@@ -97,7 +97,7 @@ func TestTabelaComMascaraDuplicadaEDeterministica(t *testing.T) {
 	}
 	primeira := NormalizarTabelaNCM(tabela)["84714900"].AliqIPI
 	for i := 0; i < 50; i++ {
-		if got := NormalizarTabelaNCM(tabela)["84714900"].AliqIPI; got != primeira {
+		if got := NormalizarTabelaNCM(tabela)["84714900"].AliqIPI; !got.Equal(primeira) {
 			t.Fatalf("resultado variou entre execuções: %v e %v", primeira, got)
 		}
 	}
