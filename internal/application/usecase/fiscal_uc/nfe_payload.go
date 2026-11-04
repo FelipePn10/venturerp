@@ -3,9 +3,10 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/shopspring/decimal"
 
@@ -60,7 +61,7 @@ func resolverPlanoDaNota(
 	// volta junto (CFOP 5902/5903) e não é cobrado: a fatura da NF-e 5.911 é de
 	// R$ 230,00 sobre R$ 412,60 de nota.
 	total := entity.ValorCobrado(exit, items)
-	if total.IsZero() && exit.ValorTotal > 0 {
+	if total.IsZero() && exit.ValorTotal.IsPositive() {
 		plano.Origem, plano.SemCobranca = "SEM_COBRANCA", true
 		return plano, nil
 	}
@@ -227,7 +228,7 @@ func montarPayloadNFe(
 		}
 	}
 	if len(formas) == 0 {
-		formas = append(formas, focusnfe.NFEFormaPagamento{FormaPagamento: "01", Valor: exit.ValorTotal})
+		formas = append(formas, focusnfe.NFEFormaPagamento{FormaPagamento: "01", Valor: exit.ValorTotal.InexactFloat64()})
 	}
 	// Só devolve material do cliente: não há o que pagar.
 	if plano.SemCobranca {
@@ -256,17 +257,17 @@ func montarPayloadNFe(
 	ratearAcessoriasNFe(itens, exit)
 	retrato := aplicarReforma(rt, items, itens)
 	modFrete := 9
-	if exit.ValorFrete > 0 {
+	if exit.ValorFrete.IsPositive() {
 		modFrete = 0 // por conta do emitente (CIF)
 	}
 
 	payload := focusnfe.NFEPayload{
 		ModalidadeFrete:   modFrete,
-		ValorProdutos:     exit.ValorProdutos,
-		ValorTotal:        exit.ValorTotal,
-		ValorFrete:        exit.ValorFrete,
-		ValorSeguro:       exit.ValorSeguro,
-		ValorDesc:         exit.ValorDesconto,
+		ValorProdutos:     exit.ValorProdutos.InexactFloat64(),
+		ValorTotal:        exit.ValorTotal.InexactFloat64(),
+		ValorFrete:        exit.ValorFrete.InexactFloat64(),
+		ValorSeguro:       exit.ValorSeguro.InexactFloat64(),
+		ValorDesc:         exit.ValorDesconto.InexactFloat64(),
 		NaturezaOperacao:  exit.NaturezaOperacao,
 		DataEmissao:       dataHoraEmissao(exit.DataEmissao, time.Now()),
 		TipoDocumento:     tipoOuSaida(exit.TipoDocumento),
@@ -378,8 +379,8 @@ func ratearAcessoriasNFe(itens []focusnfe.NFEItem, exit *entity.FiscalExit) {
 	if !total.IsPositive() {
 		return
 	}
-	ratear := func(valor float64, set func(i int, v float64)) {
-		v := decimal.NewFromFloat(valor).Round(2)
+	ratear := func(valor decimal.Decimal, set func(i int, v float64)) {
+		v := valor.Round(2)
 		if !v.IsPositive() {
 			return
 		}

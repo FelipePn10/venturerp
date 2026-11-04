@@ -291,8 +291,8 @@ func TestIntegration_CicloContabil(t *testing.T) {
 		Quantity: decimal.NewFromFloat(500), ReferenceType: &ref, ReferenceCode: &exitID, CreatedBy: actor}); err != nil {
 		t.Fatal(err)
 	}
-	exit := &entity.FiscalExit{ID: exitID, NumeroNF: 9001, Serie: "1", DataEmissao: time.Now(), ValorProdutos: 5000, ValorIPI: 250, ValorICMS: 600,
-		ValorPIS: 82.5, ValorCOFINS: 380, ValorTotal: 5250}
+	exit := &entity.FiscalExit{ID: exitID, NumeroNF: 9001, Serie: "1", DataEmissao: time.Now(), ValorProdutos: decimal.NewFromFloat(5000), ValorIPI: decimal.NewFromFloat(250), ValorICMS: decimal.NewFromFloat(600),
+		ValorPIS: decimal.NewFromFloat(82.5), ValorCOFINS: decimal.NewFromFloat(380), ValorTotal: decimal.NewFromFloat(5250)}
 	if avisos := contabilizarSaida(ctx, pg, exit, nil, true); len(avisos) > 0 {
 		t.Fatalf("contabilização da venda: %v", avisos)
 	}

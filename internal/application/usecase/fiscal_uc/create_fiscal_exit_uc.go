@@ -3,9 +3,10 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/shopspring/decimal"
 
@@ -56,13 +57,13 @@ func conferirLinhasDaNota(itens []request.CreateFiscalExitItemDTO) error {
 		return errorsuc.NewValidationError("inclua ao menos um item na nota")
 	}
 	for i := range itens {
-		if itens[i].Quantity == 0 {
+		if itens[i].Quantity.IsZero() {
 			itens[i].Quantity = itens[i].Quantidade
 		}
-		if itens[i].Quantity <= 0 {
+		if !itens[i].Quantity.IsPositive() {
 			return errorsuc.NewValidationError(fmt.Sprintf("informe a quantidade do item da linha %d", i+1))
 		}
-		if itens[i].UnitPrice < 0 {
+		if itens[i].UnitPrice.IsNegative() {
 			return errorsuc.NewValidationError(fmt.Sprintf("o preço do item da linha %d não pode ser negativo", i+1))
 		}
 	}
@@ -202,14 +203,14 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		ValorIPI:                taxResult.Totais.ValorIPI,
 		// ICMS destacado (vICMS do XML): o da operação menos o diferido. É o que
 		// vai para o livro, a apuração e o "ICMS a recolher" da contabilização.
-		ValorICMS:   decimal.NewFromFloat(taxResult.Totais.ValorICMS).Sub(decimal.NewFromFloat(taxResult.Totais.ValorDiferido)).Round(2).InexactFloat64(),
+		ValorICMS:   taxResult.Totais.ValorICMS.Sub(taxResult.Totais.ValorDiferido).Round(2),
 		ValorPIS:    taxResult.Totais.ValorPIS,
 		ValorCOFINS: taxResult.Totais.ValorCOFINS,
 		BaseICMSST:  taxResult.Totais.BaseICMSST,
 		ValorICMSST: taxResult.Totais.ValorICMSST,
 		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto
 		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário)
-		ValorTotal:            dto.ValorProdutos + taxResult.Totais.ValorIPI + taxResult.Totais.ValorICMSST + dto.ValorFrete + dto.ValorSeguro - dto.ValorDesconto,
+		ValorTotal:            dto.ValorProdutos.Add(taxResult.Totais.ValorIPI).Add(taxResult.Totais.ValorICMSST).Add(dto.ValorFrete).Add(dto.ValorSeguro).Sub(dto.ValorDesconto),
 		SalesOrderCode:        dto.SalesOrderCode,
 		SourceType:            dto.SourceType,
 		ShipmentLoadCode:      dto.ShipmentLoadCode,
@@ -230,7 +231,7 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	credito := decimal.Zero
 	for i, r := range taxResult.Itens {
 		legais = append(legais, regras[i].DispositivosAplicados(destTipo, r)...)
-		credito = credito.Add(decimal.NewFromFloat(r.ValorCreditoSimples))
+		credito = credito.Add(r.ValorCreditoSimples)
 	}
 	exit.InformacoesComplementares = informacoesComplementares(dto.InformacoesComplementares, trib.Regime == engine.RegimeSimples,
 		credito, trib.Config.AliquotaCreditoSimples, semRepetir(legais))

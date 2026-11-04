@@ -3,9 +3,11 @@ package customer_material_uc
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer_material/entity"
@@ -159,8 +161,8 @@ func TestFaturarGravaNotaComTresLinhas(t *testing.T) {
 	if notas.itens[0].CstPIS == nil || *notas.itens[0].CstPIS != "01" {
 		t.Error("a linha do serviço saiu sem CST 01 de PIS")
 	}
-	if notas.itens[0].ValorPIS != 1.5 || notas.itens[0].ValorCOFINS != 6.9 {
-		t.Errorf("PIS/COFINS = %.2f/%.2f, esperado 1.50/6.90",
+	if !notas.itens[0].ValorPIS.Equal(decimal.NewFromFloat(1.5)) || !notas.itens[0].ValorCOFINS.Equal(decimal.NewFromFloat(6.9)) {
+		t.Errorf("PIS/COFINS = %v/%v, esperado 1.50/6.90",
 			notas.itens[0].ValorPIS, notas.itens[0].ValorCOFINS)
 	}
 
@@ -175,11 +177,11 @@ func TestFaturarGravaNotaComTresLinhas(t *testing.T) {
 		if item.CstPIS == nil || *item.CstPIS != "49" {
 			t.Errorf("CST de PIS do material = %v, esperado 49", item.CstPIS)
 		}
-		if item.ValorPIS != 0 || item.ValorCOFINS != 0 {
-			t.Errorf("a linha de material saiu com valor de PIS/COFINS: %.2f/%.2f", item.ValorPIS, item.ValorCOFINS)
+		if !item.ValorPIS.IsZero() || !item.ValorCOFINS.IsZero() {
+			t.Errorf("a linha de material saiu com valor de PIS/COFINS: %v/%v", item.ValorPIS, item.ValorCOFINS)
 		}
-		if item.ValorICMS != 0 {
-			t.Errorf("a linha de material saiu com ICMS %.2f", item.ValorICMS)
+		if !item.ValorICMS.IsZero() {
+			t.Errorf("a linha de material saiu com ICMS %v", item.ValorICMS)
 		}
 		// ⚠️ Unidade e código do produto: sem eles o autorizador manda "UN" fixo e
 		// `cProd` "0". O material da Usimac é em KG, com o código do cliente.
@@ -192,8 +194,8 @@ func TestFaturarGravaNotaComTresLinhas(t *testing.T) {
 	}
 
 	// Total da nota real.
-	if notas.saida.ValorTotal != 412.6 {
-		t.Errorf("total da nota = %.2f, esperado 412.60", notas.saida.ValorTotal)
+	if !notas.saida.ValorTotal.Equal(decimal.NewFromFloat(412.6)) {
+		t.Errorf("total da nota = %v, esperado 412.60", notas.saida.ValorTotal)
 	}
 	// A nota nasce em RASCUNHO: a transmissão é passo separado.
 	if notas.saida.Status != fiscalentity.ExitStatusDraft {
@@ -472,7 +474,7 @@ func TestNotaLevaOTextoLegalEAOrigem(t *testing.T) {
 	if notas.saida.InformacoesComplementares == nil || !strings.Contains(*notas.saida.InformacoesComplementares, "CAT 22/2007") {
 		t.Fatalf("texto legal fora da nota: %v", notas.saida.InformacoesComplementares)
 	}
-	if len(notas.itens) < 2 || notas.itens[0].ICMSDiferimentoPct != 100 || notas.itens[1].ICMSDiferimentoPct != 0 {
+	if len(notas.itens) < 2 || !notas.itens[0].ICMSDiferimentoPct.Equal(decimal.NewFromFloat(100)) || !notas.itens[1].ICMSDiferimentoPct.IsZero() {
 		t.Fatalf("pDif de 100%% só no serviço: %+v", notas.itens)
 	}
 	if notas.saida.NFeReferenciada == nil || *notas.saida.NFeReferenciada != chave {

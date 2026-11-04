@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"io"
 	"log/slog"
 	"math"
@@ -14,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -444,7 +446,12 @@ func (it NFEItem) campos() map[string]any {
 			m["ipi_valor"] = it.ValorIPI
 		}
 	}
-	baseContrib := it.ValorBruto - it.ValorDesconto
+	// Base do PIS/COFINS = a do motor de tributos (produtos + frete − desconto
+	// da linha), em decimal e com centavos: base × alíquota tem de bater com o
+	// valor enviado. Antes ia bruto − desconto em float (sem o frete, e com
+	// resíduo como 457.73999999999995).
+	baseContrib := decimal.NewFromFloat(it.ValorBruto).Add(decimal.NewFromFloat(it.ValorFrete)).
+		Sub(decimal.NewFromFloat(it.ValorDesconto)).Round(2).InexactFloat64()
 	if it.ValorPIS > 0 {
 		m["pis_base_calculo"] = baseContrib
 		m["pis_aliquota_porcentual"] = it.AliquotaPIS

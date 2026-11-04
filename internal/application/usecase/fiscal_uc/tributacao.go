@@ -60,7 +60,7 @@ type OperacaoTributavel struct {
 	TipoNotaID *int64
 	Cfop       string
 	// Frete e desconto da nota inteira; o motor rateia pelo valor das linhas.
-	ValorFrete, ValorDesconto float64
+	ValorFrete, ValorDesconto decimal.Decimal
 	Itens                     []LinhaTributavel
 }
 
@@ -68,11 +68,11 @@ type OperacaoTributavel struct {
 type LinhaTributavel struct {
 	ItemCode      *int64
 	Ncm           *string
-	Quantidade    float64
-	ValorUnitario float64
+	Quantidade    decimal.Decimal
+	ValorUnitario decimal.Decimal
 	Origem        string
 	// ST informada à mão (fração); vence a MVA da regra.
-	MvaPct, AliqInternaDestinoST, RedBaseSTPct float64
+	MvaPct, AliqInternaDestinoST, RedBaseSTPct decimal.Decimal
 }
 
 // TributacaoCalculada é o resultado com o contexto que o produziu.

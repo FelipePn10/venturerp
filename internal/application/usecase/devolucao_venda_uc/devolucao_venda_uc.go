@@ -167,7 +167,7 @@ func (uc *UseCase) GerarNF(ctx context.Context, id int64) (*dom.Devolucao, error
 	for _, it := range origItens {
 		porID[it.ID] = it
 	}
-	fl := func(v decimal.Decimal) float64 { return v.Round(2).InexactFloat64() }
+	fl := func(v decimal.Decimal) decimal.Decimal { return v.Round(2) }
 	var produtos, icms, ipi, pis, cofins, st, baseST decimal.Decimal
 	for _, it := range d.Itens {
 		produtos, icms, ipi, pis, cofins, st = produtos.Add(it.ValorProdutos), icms.Add(it.ICMS), ipi.Add(it.IPI), pis.Add(it.PIS), cofins.Add(it.COFINS), st.Add(it.ST)
@@ -205,7 +205,7 @@ func (uc *UseCase) GerarNF(ctx context.Context, id int64) (*dom.Devolucao, error
 		cfop := it.CFOP
 		item := &entity.FiscalExitItem{
 			FiscalExitID: criada.ID, Sequence: i + 1, ItemCode: o.ItemCode, Ncm: o.Ncm, Cfop: cfop,
-			Quantity: it.Quantidade.InexactFloat64(), UnitPrice: o.UnitPrice, TotalPrice: fl(it.ValorProdutos),
+			Quantity: it.Quantidade, UnitPrice: o.UnitPrice, TotalPrice: fl(it.ValorProdutos),
 			BaseICMS: fl(it.BaseICMS), AliqICMS: o.AliqICMS, ValorICMS: fl(it.ICMS), BaseIPI: fl(it.BaseIPI), AliqIPI: o.AliqIPI, ValorIPI: fl(it.IPI),
 			AliqPIS: o.AliqPIS, ValorPIS: fl(it.PIS), AliqCOFINS: o.AliqCOFINS, ValorCOFINS: fl(it.COFINS), BaseICMSST: fl(it.BaseST), AliqICMSST: o.AliqICMSST, ValorICMSST: fl(it.ST),
 			CstICMS: o.CstICMS, CstIPI: o.CstIPI, CstPIS: o.CstPIS, CstCOFINS: o.CstCOFINS, OrigemMercadoria: o.OrigemMercadoria,

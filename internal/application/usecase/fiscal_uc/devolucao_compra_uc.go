@@ -3,9 +3,10 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -64,8 +65,6 @@ type DevolucaoCompraDTO struct {
 	DestCodigoMunicipio *string `json:"dest_codigo_municipio,omitempty"`
 	DestCEP             *string `json:"dest_cep,omitempty"`
 }
-
-func f2d(v float64) decimal.Decimal { return decimal.NewFromFloat(v) }
 
 func origemDoItem(it *entity.FiscalEntryItem, devolvida decimal.Decimal) devolucao.Origem {
 	o := devolucao.Origem{
@@ -217,7 +216,7 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 		ipi, icms, pis, cofins, baseST, st = ipi.Add(l.IPI), icms.Add(l.ICMS), pis.Add(l.PIS), cofins.Add(l.COFINS), baseST.Add(l.BaseST), st.Add(l.ST)
 		total = total.Add(l.ValorContabil())
 	}
-	fl := func(v decimal.Decimal) float64 { return v.Round(2).InexactFloat64() }
+	fl := func(v decimal.Decimal) decimal.Decimal { return v.Round(2) }
 	exit.ValorProdutos, exit.ValorFrete, exit.ValorSeguro, exit.ValorDesconto = fl(produtos), fl(frete), fl(seguro), fl(desconto)
 	exit.ValorIPI, exit.ValorICMS, exit.ValorPIS, exit.ValorCOFINS = fl(ipi), fl(icms), fl(pis), fl(cofins)
 	exit.BaseICMSST, exit.ValorICMSST, exit.ValorTotal = fl(baseST), fl(st), fl(total)
@@ -231,7 +230,7 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 	}
 	for i, l := range linhas {
 		it := porID[l.Origem.ItemID]
-		q := l.Quantidade.InexactFloat64()
+		q := l.Quantidade
 		entryItem := it.ID
 		cod := ""
 		if it.ItemCode != nil {
@@ -241,8 +240,8 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 		cstICMS := devolucao.CSTICMS(deref(it.CstICMS), emitenteSimples)
 		item := &entity.FiscalExitItem{
 			FiscalExitID: criada.ID, Sequence: i + 1, ItemCode: it.ItemCode, Ncm: it.Ncm,
-			Cfop: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior), Quantity: q, UnitPrice: it.UnitPrice.InexactFloat64(), TotalPrice: fl(l.Total),
-			BaseICMS: fl(l.BaseICMS), AliqICMS: it.AliqICMS.InexactFloat64(), ValorICMS: fl(l.ICMS), BaseIPI: fl(l.BaseIPI), AliqIPI: it.AliqIPI.InexactFloat64(), ValorIPI: fl(l.IPI),
+			Cfop: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior), Quantity: q, UnitPrice: it.UnitPrice, TotalPrice: fl(l.Total),
+			BaseICMS: fl(l.BaseICMS), AliqICMS: it.AliqICMS, ValorICMS: fl(l.ICMS), BaseIPI: fl(l.BaseIPI), AliqIPI: it.AliqIPI, ValorIPI: fl(l.IPI),
 			ValorPIS: fl(l.PIS), ValorCOFINS: fl(l.COFINS), BaseICMSST: fl(l.BaseST), ValorICMSST: fl(l.ST),
 			CstICMS: &cstICMS, CstIPI: it.CstIPI, CstPIS: it.CstPIS, CstCOFINS: it.CstCOFINS,
 			OrigemMercadoria: firstNonEmpty(deref(it.Origem), "0"), Description: it.Description, UnidadeComercial: it.UOM,
@@ -366,19 +365,19 @@ func (uc *DevolucaoCompraUseCase) Efetivar(ctx context.Context, exit *entity.Fis
 				fator = *it.FatorConversao
 			}
 			saidas = append(saidas, repository.SaidaDevolucao{FiscalEntryItemID: it.ID, ItemCode: *it.ItemCode, WarehouseID: *it.WarehouseID,
-				Quantidade: f2d(x.Quantity).Mul(fator).Round(6)})
+				Quantidade: x.Quantity.Mul(fator).Round(6)})
 		}
 		if it.GeraCreditoICMS {
-			creditos["ICMS"] = creditos["ICMS"].Add(f2d(x.ValorICMS))
+			creditos["ICMS"] = creditos["ICMS"].Add(x.ValorICMS)
 		}
 		if it.GeraCreditoIPI {
-			creditos["IPI"] = creditos["IPI"].Add(f2d(x.ValorIPI))
+			creditos["IPI"] = creditos["IPI"].Add(x.ValorIPI)
 		}
 		if it.GeraCreditoPIS {
-			creditos["PIS"] = creditos["PIS"].Add(f2d(x.ValorPIS))
+			creditos["PIS"] = creditos["PIS"].Add(x.ValorPIS)
 		}
 		if it.GeraCreditoCOFINS {
-			creditos["COFINS"] = creditos["COFINS"].Add(f2d(x.ValorCOFINS))
+			creditos["COFINS"] = creditos["COFINS"].Add(x.ValorCOFINS)
 		}
 	}
 	p, err := uc.Docs.AccountingParams(ctx)
@@ -392,7 +391,7 @@ func (uc *DevolucaoCompraUseCase) Efetivar(ctx context.Context, exit *entity.Fis
 		return uc.loteDevolucao(ctx, exit, doc, porID, custos, creditos, p)
 	}
 	res, err := uc.Devolucoes.EfetivarDevolucao(ctx, repository.EfetivacaoDevolucao{
-		ExitID: exit.ID, EntryID: doc.ID, NumeroNF: exit.NumeroNF, Valor: f2d(exit.ValorTotal).Round(2),
+		ExitID: exit.ID, EntryID: doc.ID, NumeroNF: exit.NumeroNF, Valor: exit.ValorTotal.Round(2),
 		FornecedorCode: doc.SupplierCode, FornecedorCNPJ: doc.CnpjEmitente, Data: exit.DataEmissao, Saidas: saidas, Montar: montar, UserID: userID,
 	})
 	if err != nil {
@@ -421,7 +420,7 @@ func (uc *DevolucaoCompraUseCase) loteDevolucao(ctx context.Context, exit *entit
 		return nil, err
 	}
 	d := contabilizacao.Devolucao{
-		Total: f2d(exit.ValorTotal).Round(2), Fornecedores: ptrConta(p.FornecedoresAccountID), Variacao: p.DespesaPadraoAccountID,
+		Total: exit.ValorTotal.Round(2), Fornecedores: ptrConta(p.FornecedoresAccountID), Variacao: p.DespesaPadraoAccountID,
 		Historico: fmt.Sprintf("Devolução NF-e %d/%s da NF %d de %s", exit.NumeroNF, exit.Serie, doc.NumeroNF, doc.RazaoSocialEmitente),
 	}
 	for id, custo := range custos {
@@ -540,16 +539,16 @@ func (uc *DevolucaoCompraUseCase) Desfazer(ctx context.Context, exit *entity.Fis
 		}
 		it := porID[*x.FiscalEntryItemID]
 		if it.GeraCreditoICMS {
-			creditos["ICMS"] = creditos["ICMS"].Add(f2d(x.ValorICMS))
+			creditos["ICMS"] = creditos["ICMS"].Add(x.ValorICMS)
 		}
 		if it.GeraCreditoIPI {
-			creditos["IPI"] = creditos["IPI"].Add(f2d(x.ValorIPI))
+			creditos["IPI"] = creditos["IPI"].Add(x.ValorIPI)
 		}
 		if it.GeraCreditoPIS {
-			creditos["PIS"] = creditos["PIS"].Add(f2d(x.ValorPIS))
+			creditos["PIS"] = creditos["PIS"].Add(x.ValorPIS)
 		}
 		if it.GeraCreditoCOFINS {
-			creditos["COFINS"] = creditos["COFINS"].Add(f2d(x.ValorCOFINS))
+			creditos["COFINS"] = creditos["COFINS"].Add(x.ValorCOFINS)
 		}
 	}
 	return append(avisos, uc.apuracao(ctx, exit.DataEmissao, creditos, decimal.NewFromInt(1))...)

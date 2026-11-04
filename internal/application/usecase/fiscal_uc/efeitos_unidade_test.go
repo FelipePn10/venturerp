@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -36,7 +38,7 @@ func (c conversorSaida) ConvertQuantity(_ context.Context, item int64, q float64
 
 func linhaSaida(id, item int64, uom string, qtd float64) *entity.FiscalExitItem {
 	u := uom
-	return &entity.FiscalExitItem{ID: id, ItemCode: &item, UnidadeComercial: &u, Quantity: qtd}
+	return &entity.FiscalExitItem{ID: id, ItemCode: &item, UnidadeComercial: &u, Quantity: decimal.NewFromFloat(qtd)}
 }
 
 func TestBaixaDaNotaNaUnidadeDeEstoque(t *testing.T) {
@@ -52,7 +54,7 @@ func TestBaixaDaNotaNaUnidadeDeEstoque(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if q[1] != 24 {
+	if !q[1].Equal(decimal.NewFromFloat(24)) {
 		t.Fatalf("2 CX de 12 UN devem baixar 24 UN, veio %v", q[1])
 	}
 	if _, ok := q[2]; ok {

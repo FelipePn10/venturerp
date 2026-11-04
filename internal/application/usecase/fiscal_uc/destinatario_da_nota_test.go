@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 )
 
@@ -40,24 +42,24 @@ func TestFaltandoNoEnderecoDizOQueASefazExige(t *testing.T) {
 }
 
 func TestLinhaSemQuantidadeERecusada(t *testing.T) {
-	err := conferirLinhasDaNota([]request.CreateFiscalExitItemDTO{{Quantity: 2}, {UnitPrice: 50, TotalPrice: 100}})
+	err := conferirLinhasDaNota([]request.CreateFiscalExitItemDTO{{Quantity: decimal.NewFromFloat(2)}, {UnitPrice: decimal.NewFromFloat(50), TotalPrice: decimal.NewFromFloat(100)}})
 	if err == nil || !strings.Contains(err.Error(), "linha 2") {
 		t.Fatalf("a linha sem quantidade passou ou não foi indicada: %v", err)
 	}
 	if err := conferirLinhasDaNota(nil); err == nil {
 		t.Fatal("nota sem itens passou")
 	}
-	if err := conferirLinhasDaNota([]request.CreateFiscalExitItemDTO{{Quantity: 1, UnitPrice: -1}}); err == nil {
+	if err := conferirLinhasDaNota([]request.CreateFiscalExitItemDTO{{Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(-1)}}); err == nil {
 		t.Fatal("preço negativo passou")
 	}
 }
 
 func TestQuantidadeDoDesktopAntigoContinuaValendo(t *testing.T) {
-	itens := []request.CreateFiscalExitItemDTO{{Quantidade: 3, UnitPrice: 10}}
+	itens := []request.CreateFiscalExitItemDTO{{Quantidade: decimal.NewFromFloat(3), UnitPrice: decimal.NewFromFloat(10)}}
 	if err := conferirLinhasDaNota(itens); err != nil {
 		t.Fatal(err)
 	}
-	if itens[0].Quantity != 3 {
+	if !itens[0].Quantity.Equal(decimal.NewFromFloat(3)) {
 		t.Fatalf("quantidade = %v, queria 3", itens[0].Quantity)
 	}
 }

@@ -181,7 +181,7 @@ func avisoPISCOFINSExtintos(exit *entity.FiscalExit, items []*entity.FiscalExitI
 		return nil
 	}
 	for _, it := range items {
-		if it.ValorPIS > 0 || it.ValorCOFINS > 0 {
+		if it.ValorPIS.IsPositive() || it.ValorCOFINS.IsPositive() {
 			return []response.PreviaPendenciaNFe{{
 				Nivel: NivelAtencao, Campo: "itens.pis_cofins",
 				Mensagem:     fmt.Sprintf("a linha %d tem PIS/COFINS, extintos a partir de 1º/01/2027 (LC 214/2025, art. 542)", it.Sequence),

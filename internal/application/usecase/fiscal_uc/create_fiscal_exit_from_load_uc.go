@@ -3,7 +3,9 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -220,20 +222,21 @@ func fiscalItemFromShipmentItem(
 		orderItem = orderItems[si.ItemCode]
 	}
 
-	unitPrice := 0.0
+	unitPrice := decimal.Zero
 	if orderItem != nil {
-		unitPrice = orderItem.UnitPrice.InexactFloat64()
+		unitPrice = orderItem.UnitPrice
 	}
 	if ov.UnitPrice != nil {
 		unitPrice = *ov.UnitPrice
 	}
-	if unitPrice <= 0 {
+	if !unitPrice.IsPositive() {
 		return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf("item %d do romaneio %d sem preço; vincule o romaneio a um pedido de venda", si.ItemCode, shipmentCode))
 	}
 
-	qty := si.Quantity
+	// O romaneio ainda guarda a quantidade em float (etapa de vendas/expedição).
+	qty := decimal.NewFromFloat(si.Quantity)
 	if si.IsConferred {
-		qty = si.ConferredQty
+		qty = decimal.NewFromFloat(si.ConferredQty)
 	}
 	cfop := dto.Cfop
 	if ov.Cfop != nil && *ov.Cfop != "" {
@@ -258,7 +261,7 @@ func fiscalItemFromShipmentItem(
 		Cfop:                 cfop,
 		Quantity:             qty,
 		UnitPrice:            unitPrice,
-		TotalPrice:           qty * unitPrice,
+		TotalPrice:           qty.Mul(unitPrice),
 		OrigemMercadoria:     origem,
 		Description:          &desc,
 		MvaPct:               ov.MvaPct,
@@ -331,10 +334,10 @@ func codigoDoCadastro(c fiscalrepo.ItemCandidate) string {
 	return fmt.Sprintf("%d", c.Code)
 }
 
-func sumFiscalExitItems(items []request.CreateFiscalExitItemDTO) float64 {
-	total := 0.0
+func sumFiscalExitItems(items []request.CreateFiscalExitItemDTO) decimal.Decimal {
+	total := decimal.Zero
 	for _, it := range items {
-		total += it.TotalPrice
+		total = total.Add(it.TotalPrice)
 	}
 	return total
 }

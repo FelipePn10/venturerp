@@ -3,9 +3,10 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -233,7 +234,7 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 	plano = planoDoTipoNota(plano, efeitos)
 	// Tipo de nota que não mexe no estoque não pede depósito nem conversão de unidade.
 	var depositos map[int64]int64
-	var quantidades map[int64]float64
+	var quantidades map[int64]decimal.Decimal
 	if efeitos.MovimentaEstoque {
 		if depositos, err = e.depositos(ctx, exit, items); err != nil {
 			return err
@@ -336,7 +337,7 @@ func gerarTitulos(ctx context.Context, fin financialRepo.FinancialRepository, ex
 	parcelas := plano.Parcelas
 	if len(parcelas) == 0 {
 		parcelas = []customerentity.ParcelaCalculada{{
-			Numero: 1, Valor: decimal.NewFromFloat(exit.ValorTotal),
+			Numero: 1, Valor: exit.ValorTotal,
 			Vencimento: exit.DataEmissao.AddDate(0, 0, 30), Descricao: "30 dias",
 		}}
 	}
@@ -379,8 +380,8 @@ func gerarTitulos(ctx context.Context, fin financialRepo.FinancialRepository, ex
 // (uCom — a de venda) para a unidade de estoque do item. A nota de 2 CX de um
 // item estocado em UN baixava 2 UN; agora baixa 2 × o fator da caixa. Unidade
 // diferente sem conversão é recusada: a baixa sairia com o número errado.
-func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.FiscalExitItem) (map[int64]float64, error) {
-	out := map[int64]float64{}
+func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.FiscalExitItem) (map[int64]decimal.Decimal, error) {
+	out := map[int64]decimal.Decimal{}
 	for _, it := range items {
 		if it.ItemCode == nil || it.UnidadeComercial == nil || strings.TrimSpace(*it.UnidadeComercial) == "" || e.Itens == nil {
 			continue
@@ -407,21 +408,21 @@ func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.F
 		if e.Conversor == nil {
 			return nil, semConversao
 		}
-		q, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity, daNota, doEstoque)
+		qf, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity.InexactFloat64(), daNota, doEstoque)
 		if err != nil {
 			return nil, err
 		}
 		if !achou {
 			return nil, semConversao
 		}
-		out[it.ID] = q
+		out[it.ID] = decimal.NewFromFloat(qf)
 	}
 	return out, nil
 }
 
 // baixarEstoque lança a saída de cada item no depósito resolvido e consome as
 // reservas do pedido.
-func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, quantidades map[int64]float64, userID uuid.UUID) error {
+func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, quantidades map[int64]decimal.Decimal, userID uuid.UUID) error {
 	if estoque == nil {
 		return nil
 	}
@@ -439,7 +440,7 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 			ItemCode:     *it.ItemCode,
 			WarehouseID:  depositos[*it.ItemCode],
 			MovementType: stockentity.MovementTypeOut,
-			Quantity:     decimal.NewFromFloat(qtd),
+			Quantity:     qtd,
 			// Sem preço: a saída é valorizada pelo custo médio (é o custo que sai
 			// do estoque e o CMV da venda).
 			ReferenceType: &refType,

@@ -93,10 +93,10 @@ func (p *ParametroICMSIPI) DispositivosAplicados(destinoTipo string, r TaxItemRe
 	case "20", "30", "40", "41", "50", "60", "70", "90", "300", "400", "500":
 		add(escolher(p.Dispositivos.ICMSContrib, p.Dispositivos.ICMSNaoContrib))
 	}
-	if r.ReducaoBaseICMSPct > 0 {
+	if r.ReducaoBaseICMSPct.IsPositive() {
 		add(escolher(p.Dispositivos.ReducaoContrib, p.Dispositivos.ReducaoNaoContrib))
 	}
-	if r.ValorICMSDiferido > 0 {
+	if r.ValorICMSDiferido.IsPositive() {
 		add(p.Dispositivos.Diferimento)
 	}
 	redIPI := p.NaoContrib.RedIPIPct > 0

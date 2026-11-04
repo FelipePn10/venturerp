@@ -22,9 +22,9 @@ func notaBoa(agora time.Time) (*entity.FiscalExit, []*entity.FiscalExitItem, *en
 		Bairro: "CENTRO", Municipio: "CURITIBA", UFEmpresa: "PR", CEP: "80010000", RegimeTributario: "3"}
 	nota := &entity.FiscalExit{Finalidade: 1, DataEmissao: agora, CnpjDestinatario: sp(cnpjEmitenteTeste), UFDestinatario: sp("PR"), DestCEP: sp("80010000"),
 		RazaoSocialDestinatario: sp("CLIENTE"), DestLogradouro: sp("RUA B"), DestNumero: sp("2"), DestBairro: sp("CENTRO"), DestMunicipio: sp("CURITIBA"),
-		ValorProdutos: 100, ValorTotal: 110, ValorIPI: 5, ValorFrete: 5}
+		ValorProdutos: decimal.NewFromFloat(100), ValorTotal: decimal.NewFromFloat(110), ValorIPI: decimal.NewFromFloat(5), ValorFrete: decimal.NewFromFloat(5)}
 	item := int64(7)
-	linha := &entity.FiscalExitItem{Sequence: 1, ItemCode: &item, Description: sp("PECA"), Ncm: sp("73181500"), Cfop: "5101", Quantity: 2, UnitPrice: 50, TotalPrice: 100}
+	linha := &entity.FiscalExitItem{Sequence: 1, ItemCode: &item, Description: sp("PECA"), Ncm: sp("73181500"), Cfop: "5101", Quantity: decimal.NewFromFloat(2), UnitPrice: decimal.NewFromFloat(50), TotalPrice: decimal.NewFromFloat(100)}
 	return nota, []*entity.FiscalExitItem{linha}, cfg
 }
 
@@ -60,13 +60,19 @@ func TestConferirDocumentoDaNota(t *testing.T) {
 		}, "nfe_referenciada"},
 		{"linha sem NCM", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.Ncm = nil }, "itens[1].ncm"},
 		{"CFOP sem 4 dígitos", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.Cfop = "510" }, "itens[1].cfop"},
-		{"quantidade zero", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.Quantity = 0 }, "itens[1].quantidade"},
-		{"conta da linha não fecha", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.UnitPrice = 60 }, "itens[1].total"},
+		{"quantidade zero", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			l.Quantity = decimal.NewFromFloat(0)
+		}, "itens[1].quantidade"},
+		{"conta da linha não fecha", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			l.UnitPrice = decimal.NewFromFloat(60)
+		}, "itens[1].total"},
 		{"soma das linhas não fecha", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) {
-			n.ValorProdutos = 90
-			n.ValorTotal = 100
+			n.ValorProdutos = decimal.NewFromFloat(90)
+			n.ValorTotal = decimal.NewFromFloat(100)
 		}, "valor_produtos"},
-		{"total não fecha", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) { n.ValorTotal = 111 }, "valor_total"},
+		{"total não fecha", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			n.ValorTotal = decimal.NewFromFloat(111)
+		}, "valor_total"},
 	}
 	for _, c := range casos {
 		t.Run(c.nome, func(t *testing.T) {

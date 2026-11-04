@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -45,17 +47,17 @@ type FiscalExit struct {
 	CustomerCode     *int64
 	Cfop             string
 	NaturezaOperacao string
-	ValorProdutos    float64
-	ValorFrete       float64
-	ValorSeguro      float64
-	ValorDesconto    float64
-	ValorIPI         float64
-	ValorICMS        float64
-	ValorPIS         float64
-	ValorCOFINS      float64
-	BaseICMSST       float64
-	ValorICMSST      float64
-	ValorTotal       float64
+	ValorProdutos    decimal.Decimal
+	ValorFrete       decimal.Decimal
+	ValorSeguro      decimal.Decimal
+	ValorDesconto    decimal.Decimal
+	ValorIPI         decimal.Decimal
+	ValorICMS        decimal.Decimal
+	ValorPIS         decimal.Decimal
+	ValorCOFINS      decimal.Decimal
+	BaseICMSST       decimal.Decimal
+	ValorICMSST      decimal.Decimal
+	ValorTotal       decimal.Decimal
 	SalesOrderCode   *int64
 	SourceType       *string
 	// CustomerMaterialRemittanceID liga a nota à remessa de beneficiamento que a
@@ -107,24 +109,24 @@ type FiscalExitItem struct {
 	ItemCode          *int64
 	Ncm               *string
 	Cfop              string
-	Quantity          float64
-	UnitPrice         float64
-	TotalPrice        float64
-	BaseICMS          float64
-	AliqICMS          float64
-	ValorICMS         float64
-	ValorICMSDiferido float64
-	BaseIPI           float64
-	AliqIPI           float64
-	ValorIPI          float64
-	AliqPIS           float64
-	ValorPIS          float64
-	AliqCOFINS        float64
-	ValorCOFINS       float64
-	BaseICMSST        float64
-	AliqICMSST        float64
-	ValorICMSST       float64
-	MVA               float64
+	Quantity          decimal.Decimal
+	UnitPrice         decimal.Decimal
+	TotalPrice        decimal.Decimal
+	BaseICMS          decimal.Decimal
+	AliqICMS          decimal.Decimal
+	ValorICMS         decimal.Decimal
+	ValorICMSDiferido decimal.Decimal
+	BaseIPI           decimal.Decimal
+	AliqIPI           decimal.Decimal
+	ValorIPI          decimal.Decimal
+	AliqPIS           decimal.Decimal
+	ValorPIS          decimal.Decimal
+	AliqCOFINS        decimal.Decimal
+	ValorCOFINS       decimal.Decimal
+	BaseICMSST        decimal.Decimal
+	AliqICMSST        decimal.Decimal
+	ValorICMSST       decimal.Decimal
+	MVA               decimal.Decimal
 	CstICMS           *string
 	CstIPI            *string
 	CstPIS            *string
@@ -154,20 +156,20 @@ type FiscalExitItem struct {
 	RegraICMSIPIID *int64
 	// ICMSReducaoBasePct (pRedBC) e ICMSDiferimentoPct (pDif) da linha, em %.
 	// Zero no diferimento = linha antiga: vale o da configuração fiscal.
-	ICMSReducaoBasePct float64
-	ICMSDiferimentoPct float64
+	ICMSReducaoBasePct decimal.Decimal
+	ICMSDiferimentoPct decimal.Decimal
 	// ICMSSTReducaoBasePct: pRedBCST (%) da linha.
-	ICMSSTReducaoBasePct float64
+	ICMSSTReducaoBasePct decimal.Decimal
 	// Simples Nacional: pCredSN (%) e vCredICMSSN.
-	AliqCreditoSimples  float64
-	ValorCreditoSimples float64
+	AliqCreditoSimples  decimal.Decimal
+	ValorCreditoSimples decimal.Decimal
 	// Grupo ICMSUFDest (DIFAL a não contribuinte): base, alíquotas em % e valores.
-	ICMSUFDestBase        float64
-	ICMSUFDestAliqInterna float64
-	ICMSAliqInterestadual float64
-	ICMSUFDestValor       float64
-	FCPUFDestPct          float64
-	FCPUFDestValor        float64
+	ICMSUFDestBase        decimal.Decimal
+	ICMSUFDestAliqInterna decimal.Decimal
+	ICMSAliqInterestadual decimal.Decimal
+	ICMSUFDestValor       decimal.Decimal
+	FCPUFDestPct          decimal.Decimal
+	FCPUFDestValor        decimal.Decimal
 	// ClassTribIBSCBS é o cClassTrib próprio da linha (sobrescreve o do CFOP e
 	// o da classificação fiscal). ReformaEnviada é o grupo IBS/CBS transmitido.
 	ClassTribIBSCBS *string

@@ -2,10 +2,11 @@ package fiscal_uc
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -148,7 +149,7 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 	if fiscal.created == nil || fiscal.created.SourceType == nil || *fiscal.created.SourceType != "LOAD" {
 		t.Fatalf("source metadata not persisted: %+v", fiscal.created)
 	}
-	if len(fiscal.items) != 1 || fiscal.items[0].UnitPrice != 50 || fiscal.items[0].TotalPrice != 100 {
+	if len(fiscal.items) != 1 || !fiscal.items[0].UnitPrice.Equal(decimal.NewFromFloat(50)) || !fiscal.items[0].TotalPrice.Equal(decimal.NewFromFloat(100)) {
 		t.Fatalf("items not generated from order price: %+v", fiscal.items)
 	}
 	if len(shipment.linkedFiscalExit) != 1 || shipment.linkedFiscalExit[0] != 5001 {

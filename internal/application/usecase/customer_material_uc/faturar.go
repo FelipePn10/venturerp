@@ -258,10 +258,10 @@ func (uc *UseCase) criarRascunho(
 		DataEmissao:      emissao,
 		Cfop:             CFOPServico,
 		NaturezaOperacao: nota.NaturezaOperacao,
-		ValorProdutos:    paraFloat(nota.ValorTotal),
-		ValorPIS:         paraFloat(nota.ValorPIS),
-		ValorCOFINS:      paraFloat(nota.ValorCOFINS),
-		ValorTotal:       paraFloat(nota.ValorTotal),
+		ValorProdutos:    nota.ValorTotal,
+		ValorPIS:         nota.ValorPIS,
+		ValorCOFINS:      nota.ValorCOFINS,
+		ValorTotal:       nota.ValorTotal,
 		// Rascunho de propósito: a transmissão é passo separado, e é ela que confere
 		// se o saldo já foi baixado.
 		Status:         fiscalentity.ExitStatusDraft,
@@ -299,9 +299,9 @@ func (uc *UseCase) gravarLinhas(ctx context.Context, notaID int64, nota *NotaDeR
 			Sequence:         linha.Sequencia,
 			Ncm:              textoOuNil(linha.NCM),
 			Cfop:             linha.CFOP,
-			Quantity:         paraFloat(linha.Quantidade),
-			UnitPrice:        paraFloat(linha.ValorUnit),
-			TotalPrice:       paraFloat(linha.ValorTotal),
+			Quantity:         linha.Quantidade,
+			UnitPrice:        linha.ValorUnit,
+			TotalPrice:       linha.ValorTotal,
 			CstICMS:          textoOuNil(linha.CSTICMS),
 			Description:      textoOuNil(linha.Descricao),
 			OrigemMercadoria: "0",
@@ -318,22 +318,22 @@ func (uc *UseCase) gravarLinhas(ctx context.Context, notaID int64, nota *NotaDeR
 			ICMSDiferimentoPct: diferimentoDaLinha(linha.CSTICMS),
 			// ICMS zero nas duas pontas: diferimento no serviço, suspensão no
 			// material. Explícito para ninguém supor que faltou calcular.
-			BaseICMS:  0,
-			AliqICMS:  0,
-			ValorICMS: 0,
+			BaseICMS:  decimal.NewFromFloat(0),
+			AliqICMS:  decimal.NewFromFloat(0),
+			ValorICMS: decimal.NewFromFloat(0),
 		}
 		// O CST de PIS/COFINS vai SEMPRE, mesmo com valor zero: no material que volta
 		// é o CST 49 ("outras operações de saída"), e deixar o campo vazio faria o
 		// autorizador cair no padrão "01", declarando o material como tributado.
 		if linha.CSTPIS != "" {
 			item.CstPIS = textoOuNil(linha.CSTPIS)
-			item.AliqPIS = paraFloat(linha.AliqPIS)
-			item.ValorPIS = paraFloat(linha.ValorPIS)
+			item.AliqPIS = linha.AliqPIS
+			item.ValorPIS = linha.ValorPIS
 		}
 		if linha.CSTCOFINS != "" {
 			item.CstCOFINS = textoOuNil(linha.CSTCOFINS)
-			item.AliqCOFINS = paraFloat(linha.AliqCOFINS)
-			item.ValorCOFINS = paraFloat(linha.ValorCOFINS)
+			item.AliqCOFINS = linha.AliqCOFINS
+			item.ValorCOFINS = linha.ValorCOFINS
 		}
 		if _, err := uc.Notas.CreateExitItem(ctx, item); err != nil {
 			return fmt.Errorf("gravar a linha %d da nota: %w", linha.Sequencia, err)
@@ -428,11 +428,11 @@ func aplicarDestinatario(saida *fiscalentity.FiscalExit, d DadosDoDestinatario) 
 	saida.DestTelefone = textoOuNil(d.Telefone)
 }
 
-func diferimentoDaLinha(cst string) float64 {
+func diferimentoDaLinha(cst string) decimal.Decimal {
 	if cst == CSTICMSServico {
-		return 100
+		return decimal.NewFromInt(100)
 	}
-	return 0
+	return decimal.Zero
 }
 
 // DescartarNota desfaz a nota de beneficiamento que não foi autorizada e devolve o
@@ -483,11 +483,4 @@ func textoOuNil(valor string) *string {
 		return nil
 	}
 	return &limpo
-}
-
-// paraFloat converte para o tipo que a entidade fiscal usa. A conversão acontece
-// só aqui, na borda: todo o cálculo até este ponto foi decimal.
-func paraFloat(v decimal.Decimal) float64 {
-	f, _ := v.Float64()
-	return f
 }

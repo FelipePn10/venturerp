@@ -403,9 +403,9 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        codigo_beneficio_fiscal, ibscbs_cclass_trib, ibscbs_cst_enviado, ibscbs_cclass_enviado, ibscbs_origem,
 		        ibscbs_base::float8, ibs_uf_valor::float8, ibs_mun_valor::float8, cbs_valor::float8, cbs_aliquota_efetiva::float8,
 		        regra_icms_ipi_id,
-		        icms_reducao_base_pct::float8, icms_diferimento_pct::float8, aliq_credito_simples::float8, valor_credito_simples::float8,
-		        icms_uf_dest_base::float8, icms_uf_dest_aliq_interna::float8, icms_aliq_interestadual::float8, icms_uf_dest_valor::float8,
-		        fcp_uf_dest_pct::float8, fcp_uf_dest_valor::float8, icms_st_reducao_base_pct::float8,
+		        icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
+		        icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor,
+		        fcp_uf_dest_pct, fcp_uf_dest_valor, icms_st_reducao_base_pct,
 		        fiscal_exit_item_origem_id
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {

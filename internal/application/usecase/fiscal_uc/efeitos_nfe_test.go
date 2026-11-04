@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -117,9 +119,9 @@ func TestEfeitosAutorizacao_BaixaPeloDepositoDaLinhaOuPadrao(t *testing.T) {
 	}}
 	exit := &fiscalentity.FiscalExit{ID: 99, SalesOrderCode: i64p(500), DataEmissao: time.Now()}
 	itens := []*fiscalentity.FiscalExitItem{
-		{ItemCode: i64p(1001), Quantity: 5},
-		{ItemCode: i64p(1002), Quantity: 3},
-		{ItemCode: nil, Quantity: 9}, // serviço/sem item: não movimenta
+		{ItemCode: i64p(1001), Quantity: decimal.NewFromFloat(5)},
+		{ItemCode: i64p(1002), Quantity: decimal.NewFromFloat(3)},
+		{ItemCode: nil, Quantity: decimal.NewFromFloat(9)}, // serviço/sem item: não movimenta
 	}
 	ef, pend := efeitosDeTeste(exit, itens, EfeitosRepos{Estoque: stock, Pedidos: sales}, itensFalsos{1002: 8})
 
@@ -151,7 +153,7 @@ func TestEfeitosAutorizacao_BaixaPeloDepositoDaLinhaOuPadrao(t *testing.T) {
 // de transmitir: depois de autorizada, a nota não volta.
 func TestEfeitosPreConferencia_ItemSemDepositoRecusa(t *testing.T) {
 	exit := &fiscalentity.FiscalExit{ID: 1}
-	itens := []*fiscalentity.FiscalExitItem{{ItemCode: i64p(1003), Description: strp("Chapa 3mm"), Quantity: 1}}
+	itens := []*fiscalentity.FiscalExitItem{{ItemCode: i64p(1003), Description: strp("Chapa 3mm"), Quantity: decimal.NewFromFloat(1)}}
 	ef, _ := efeitosDeTeste(exit, itens, EfeitosRepos{}, itensFalsos{1003: 0})
 
 	err := ef.PreConferirDepositos(context.Background(), exit, itens)
@@ -164,7 +166,7 @@ func TestEfeitosPreConferencia_ItemSemDepositoRecusa(t *testing.T) {
 // resolve — a transação real desfaz o que já entrou.
 func TestEfeitosAutorizacao_FalhaFicaPendente(t *testing.T) {
 	exit := &fiscalentity.FiscalExit{ID: 5, DataEmissao: time.Now()}
-	itens := []*fiscalentity.FiscalExitItem{{ItemCode: i64p(1001), Quantity: 1}}
+	itens := []*fiscalentity.FiscalExitItem{{ItemCode: i64p(1001), Quantity: decimal.NewFromFloat(1)}}
 	ef, pend := efeitosDeTeste(exit, itens, EfeitosRepos{Estoque: &estoqueQueFalha{}}, itensFalsos{1001: 3})
 
 	err := ef.Executar(context.Background(), 5, fiscalentity.PendenciaAutorizacao, uuid.New())
@@ -181,7 +183,7 @@ func TestEfeitosAutorizacao_FalhaFicaPendente(t *testing.T) {
 func TestEfeitosAutorizacao_TituloGuardaOCodigoDoCliente(t *testing.T) {
 	fin := &titulosCapturados{}
 	cliente := int64(77)
-	exit := &fiscalentity.FiscalExit{ID: 55, NumeroNF: 10, CustomerCode: &cliente, ValorTotal: 100, DataEmissao: time.Now()}
+	exit := &fiscalentity.FiscalExit{ID: 55, NumeroNF: 10, CustomerCode: &cliente, ValorTotal: decimal.NewFromFloat(100), DataEmissao: time.Now()}
 	ef, _ := efeitosDeTeste(exit, nil, EfeitosRepos{Financeiro: fin}, nil)
 	ef.Customers = clientesFalsos{}
 	ef.GeraTitulos = true

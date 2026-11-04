@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	seriedom "github.com/FelipePn10/panossoerp/internal/domain/posvenda/serie"
 	"strings"
 	"time"
+
+	seriedom "github.com/FelipePn10/panossoerp/internal/domain/posvenda/serie"
 
 	"github.com/shopspring/decimal"
 
@@ -160,15 +161,15 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		out.Itens = append(out.Itens, response.PreviaItemNFe{
 			ID: it.ID, Sequence: it.Sequence, ItemCode: it.ItemCode, Descricao: derefStr(it.Description),
 			Ncm: derefStr(it.Ncm), Cfop: it.Cfop, UM: unidade,
-			Quantidade: it.Quantity, ValorUnit: it.UnitPrice, ValorTotal: it.TotalPrice,
+			Quantidade: it.Quantity.InexactFloat64(), ValorUnit: it.UnitPrice.InexactFloat64(), ValorTotal: it.TotalPrice.InexactFloat64(),
 			Origem:  it.OrigemMercadoria,
 			CstICMS: derefStr(it.CstICMS), RegraICMSIPI: it.RegraICMSIPIID,
-			ReducaoBaseICMSPct: it.ICMSReducaoBasePct, ValorCreditoSimples: it.ValorCreditoSimples,
-			ValorDIFAL: it.ICMSUFDestValor, ValorFCPUFDest: it.FCPUFDestValor, BaseICMS: it.BaseICMS, AliqICMS: it.AliqICMS, ValorICMS: it.ValorICMS,
-			CstIPI: derefStr(it.CstIPI), AliqIPI: it.AliqIPI, ValorIPI: it.ValorIPI,
-			CstPIS: derefStr(it.CstPIS), ValorPIS: it.ValorPIS,
-			CstCOFINS: derefStr(it.CstCOFINS), ValorCOFINS: it.ValorCOFINS,
-			BaseICMSST: it.BaseICMSST, ValorICMSST: it.ValorICMSST, MVA: it.MVA,
+			ReducaoBaseICMSPct: it.ICMSReducaoBasePct.InexactFloat64(), ValorCreditoSimples: it.ValorCreditoSimples.InexactFloat64(),
+			ValorDIFAL: it.ICMSUFDestValor.InexactFloat64(), ValorFCPUFDest: it.FCPUFDestValor.InexactFloat64(), BaseICMS: it.BaseICMS.InexactFloat64(), AliqICMS: it.AliqICMS.InexactFloat64(), ValorICMS: it.ValorICMS.InexactFloat64(),
+			CstIPI: derefStr(it.CstIPI), AliqIPI: it.AliqIPI.InexactFloat64(), ValorIPI: it.ValorIPI.InexactFloat64(),
+			CstPIS: derefStr(it.CstPIS), ValorPIS: it.ValorPIS.InexactFloat64(),
+			CstCOFINS: derefStr(it.CstCOFINS), ValorCOFINS: it.ValorCOFINS.InexactFloat64(),
+			BaseICMSST: it.BaseICMSST.InexactFloat64(), ValorICMSST: it.ValorICMSST.InexactFloat64(), MVA: it.MVA.InexactFloat64(),
 		})
 		for _, r := range retrato {
 			if r.ItemID != it.ID {
@@ -182,10 +183,10 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	}
 
 	out.Totais = response.PreviaTotaisNFe{
-		ValorProdutos: exit.ValorProdutos, ValorFrete: exit.ValorFrete, ValorSeguro: exit.ValorSeguro,
-		ValorDesconto: exit.ValorDesconto, ValorIPI: exit.ValorIPI, ValorICMS: exit.ValorICMS,
-		BaseICMSST: exit.BaseICMSST, ValorICMSST: exit.ValorICMSST,
-		ValorPIS: exit.ValorPIS, ValorCOFINS: exit.ValorCOFINS, ValorTotalNF: exit.ValorTotal,
+		ValorProdutos: exit.ValorProdutos.InexactFloat64(), ValorFrete: exit.ValorFrete.InexactFloat64(), ValorSeguro: exit.ValorSeguro.InexactFloat64(),
+		ValorDesconto: exit.ValorDesconto.InexactFloat64(), ValorIPI: exit.ValorIPI.InexactFloat64(), ValorICMS: exit.ValorICMS.InexactFloat64(),
+		BaseICMSST: exit.BaseICMSST.InexactFloat64(), ValorICMSST: exit.ValorICMSST.InexactFloat64(),
+		ValorPIS: exit.ValorPIS.InexactFloat64(), ValorCOFINS: exit.ValorCOFINS.InexactFloat64(), ValorTotalNF: exit.ValorTotal.InexactFloat64(),
 		Conferencia: fmt.Sprintf(
 			"produtos %s + IPI %s + ICMS-ST %s + frete %s + seguro %s − desconto %s = %s (o ICMS próprio, %s, está embutido no preço e não soma)",
 			reais(exit.ValorProdutos), reais(exit.ValorIPI), reais(exit.ValorICMSST), reais(exit.ValorFrete),
@@ -289,7 +290,7 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		if _, ok := errorsuc.AsValidation(err); !ok {
 			return nil, err
 		}
-		quantidades = map[int64]float64{}
+		quantidades = map[int64]decimal.Decimal{}
 	}
 	type chave struct{ item, almox int64 }
 	necessario := map[chave]decimal.Decimal{}
@@ -315,7 +316,7 @@ func (uc *PreviaNFeUseCase) faltasDeEstoque(ctx context.Context, exit *entity.Fi
 		if _, ok := necessario[k]; !ok {
 			ordem = append(ordem, k)
 		}
-		necessario[k] = necessario[k].Add(decimal.NewFromFloat(q))
+		necessario[k] = necessario[k].Add(q)
 	}
 	var out []response.PreviaPendenciaNFe
 	for _, k := range ordem {
@@ -449,11 +450,11 @@ func conferirNota(
 			impede(fmt.Sprintf("itens[%d].cfop", it.Sequence), fmt.Sprintf("%s está sem CFOP", ref),
 				"informe o CFOP da operação na nota (venda no estado 5101/5102, fora do estado 6101/6102)")
 		}
-		if it.Quantity <= 0 {
+		if !it.Quantity.IsPositive() {
 			impede(fmt.Sprintf("itens[%d].quantidade", it.Sequence), fmt.Sprintf("%s está com quantidade zero", ref),
 				"corrija a quantidade do item")
 		}
-		if it.UnitPrice <= 0 {
+		if !it.UnitPrice.IsPositive() {
 			impede(fmt.Sprintf("itens[%d].valor_unitario", it.Sequence), fmt.Sprintf("%s está com preço zero", ref),
 				"informe o preço do item; verifique se há preço vigente na tabela de venda em VCST0202")
 		}
@@ -464,7 +465,7 @@ func conferirNota(
 				fmt.Sprintf("%s tem CST %s, e a SEFAZ do %s exige o código de benefício fiscal (cBenef) para ele", ref, cst, strings.ToUpper(cfg.UFEmpresa)),
 				"cadastre o código de benefício no parâmetro de ICMS/IPI do item ou do NCM em VFIS0320 — Parâmetros ICMS/IPI e gere a nota de novo")
 		}
-		if it.ValorICMSST > 0 {
+		if it.ValorICMSST.IsPositive() {
 			atencao(fmt.Sprintf("itens[%d].cest", it.Sequence),
 				fmt.Sprintf("%s tem ICMS-ST calculado; itens com substituição tributária normalmente exigem CEST", ref),
 				"informe o CEST na classificação fiscal do item em VENT0200 — Cadastro de Itens, aba Contábil")
@@ -472,7 +473,7 @@ func conferirNota(
 	}
 
 	// ── Totais
-	if exit.ValorTotal <= 0 {
+	if !exit.ValorTotal.IsPositive() {
 		impede("valor_total", "o valor total da nota é zero", "verifique preços e quantidades dos itens")
 	}
 
@@ -550,9 +551,8 @@ func rotuloFormaPagamento(codigo string) string {
 	}
 }
 
-func reais(v float64) string {
-	s := fmt.Sprintf("%.2f", v)
-	return "R$ " + strings.Replace(s, ".", ",", 1)
+func reais(v decimal.Decimal) string {
+	return "R$ " + strings.Replace(v.StringFixed(2), ".", ",", 1)
 }
 
 // ufExigeBeneficioFiscal: UFs em que a SEFAZ exige o cBenef nos CSTs com

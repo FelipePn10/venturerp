@@ -4,9 +4,10 @@ package fiscal_uc_test
 
 import (
 	"context"
-	"math"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
@@ -62,14 +63,14 @@ func TestIntegration_NotaDeSaidaUsaParametroICMSIPI(t *testing.T) {
 	uc := &fiscal_uc.CreateFiscalExitUseCase{Repo: fiscalRepo, Auth: &infraauth.AuthService{},
 		Beneficios: fiscalpg.NewBeneficioFiscalPG(pool), Parametros: fiscalpg.NewParametroICMSIPIPG(pool)}
 	linha := func(seq int, item int64, ncm string) request.CreateFiscalExitItemDTO {
-		return request.CreateFiscalExitItemDTO{Sequence: seq, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: 1, UnitPrice: 1000, TotalPrice: 1000, OrigemMercadoria: "0"}
+		return request.CreateFiscalExitItemDTO{Sequence: seq, ItemCode: &item, Ncm: &ncm, Cfop: "5102", Quantity: decimal.NewFromFloat(1), UnitPrice: decimal.NewFromFloat(1000), TotalPrice: decimal.NewFromFloat(1000), OrigemMercadoria: "0"}
 	}
 	uf := "PR"
 	emitir := func(ie *string) []*entity.FiscalExitItem {
 		t.Helper()
 		res, err := uc.Execute(ctx, request.CreateFiscalExitDTO{
 			Serie: "1", DataEmissao: time.Now().Format("2006-01-02"), UFDestinatario: &uf, IEDestinatario: ie,
-			Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: 3000,
+			Cfop: "5102", NaturezaOperacao: "Venda", ValorProdutos: decimal.NewFromFloat(3000),
 			Itens: []request.CreateFiscalExitItemDTO{linha(1, comum, "73269090"), linha(2, isento, "73082000"), linha(3, geral, "73089010")},
 		})
 		if err != nil {
@@ -91,9 +92,8 @@ func TestIntegration_NotaDeSaidaUsaParametroICMSIPI(t *testing.T) {
 		if it.RegraICMSIPIID != nil {
 			r = *it.RegraICMSIPIID
 		}
-		perto := func(a, b float64) bool { return math.Abs(a-b) < 0.01 }
 		if got != cst || !perto(it.AliqICMS, aliq) || !perto(it.BaseICMS, base) || !perto(it.ValorICMS, icms) || !perto(it.ValorICMSDiferido, diferido) || r != regra {
-			t.Fatalf("%s: CST %s aliq %.4f base %.2f ICMS %.2f diferido %.2f regra %d; quer CST %s aliq %.4f base %.2f ICMS %.2f diferido %.2f regra %d",
+			t.Fatalf("%s: CST %s aliq %v base %v ICMS %v diferido %v regra %d; quer CST %s aliq %v base %v ICMS %v diferido %v regra %d",
 				nome, got, it.AliqICMS, it.BaseICMS, it.ValorICMS, it.ValorICMSDiferido, r, cst, aliq, base, icms, diferido, regra)
 		}
 	}

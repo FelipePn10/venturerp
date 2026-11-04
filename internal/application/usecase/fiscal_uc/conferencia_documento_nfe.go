@@ -137,7 +137,7 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 		if msg := cfopForaDoDestino(it.Cfop, ufDest, cfg.UFEmpresa, entradaPropria, exit.Finalidade); msg != "" {
 			impede(campo+".cfop", linha+": "+msg, refazerLinha)
 		}
-		qtd, preco, total := decimal.NewFromFloat(it.Quantity), decimal.NewFromFloat(it.UnitPrice), decimal.NewFromFloat(it.TotalPrice)
+		qtd, preco, total := it.Quantity, it.UnitPrice, it.TotalPrice
 		somaLinhas = somaLinhas.Add(total)
 		if normal && !qtd.IsPositive() {
 			impede(campo+".quantidade", linha+": informe a quantidade", refazerLinha)
@@ -154,13 +154,13 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 
 	// ── Totais: a SEFAZ soma de novo e recusa a nota que não fecha.
 	toleranciaTotal := decimal.RequireFromString("0.02")
-	produtos := decimal.NewFromFloat(exit.ValorProdutos)
+	produtos := exit.ValorProdutos
 	if len(items) > 0 && somaLinhas.Sub(produtos).Abs().GreaterThan(toleranciaTotal) {
 		impede("valor_produtos", fmt.Sprintf("a soma das linhas (%s) não fecha com o total de produtos da nota (%s)", somaLinhas.StringFixed(2), produtos.StringFixed(2)), refazerLinha)
 	}
-	esperado := produtos.Add(decimal.NewFromFloat(exit.ValorIPI)).Add(decimal.NewFromFloat(exit.ValorICMSST)).
-		Add(decimal.NewFromFloat(exit.ValorFrete)).Add(decimal.NewFromFloat(exit.ValorSeguro)).Sub(decimal.NewFromFloat(exit.ValorDesconto))
-	total := decimal.NewFromFloat(exit.ValorTotal)
+	esperado := produtos.Add(exit.ValorIPI).Add(exit.ValorICMSST).
+		Add(exit.ValorFrete).Add(exit.ValorSeguro).Sub(exit.ValorDesconto)
+	total := exit.ValorTotal
 	if total.Sub(esperado).Abs().GreaterThan(toleranciaTotal) {
 		impede("valor_total", fmt.Sprintf("o total da nota (%s) não fecha com produtos + IPI + ICMS-ST + frete + seguro − desconto (%s)", total.StringFixed(2), esperado.StringFixed(2)), refazerLinha)
 	}
