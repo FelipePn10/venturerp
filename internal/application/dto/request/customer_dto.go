@@ -114,28 +114,28 @@ type CarrierGroupMemberDTO struct {
 // ─── Payment Conditions ───────────────────────────────────────────────────────
 
 type CreatePaymentConditionDTO struct {
-	Description  string  `json:"description"`
-	CarrierCode  *int64  `json:"carrier_code,omitempty"`
-	AnalysisType string  `json:"analysis_type"` // SEMPRE_ANALISA | BLOQUEIA_SEMPRE | LIBERA_SEM_ANALISE
-	ParcelStart  string  `json:"parcel_start"`  // EMISSAO | PROXIMO_MES | PROXIMA_QUINZENA
-	Expenses     float64 `json:"expenses"`
-	AverageTerm  int16   `json:"average_term"`
-	IsSpecial    bool    `json:"is_special"`
-	IsRevenue    bool    `json:"is_revenue"`
-	IsAtSight    bool    `json:"is_at_sight"`
+	Description  string          `json:"description"`
+	CarrierCode  *int64          `json:"carrier_code,omitempty"`
+	AnalysisType string          `json:"analysis_type"` // SEMPRE_ANALISA | BLOQUEIA_SEMPRE | LIBERA_SEM_ANALISE
+	ParcelStart  string          `json:"parcel_start"`  // EMISSAO | PROXIMO_MES | PROXIMA_QUINZENA
+	Expenses     decimal.Decimal `json:"expenses"`
+	AverageTerm  int16           `json:"average_term"`
+	IsSpecial    bool            `json:"is_special"`
+	IsRevenue    bool            `json:"is_revenue"`
+	IsAtSight    bool            `json:"is_at_sight"`
 }
 
 type UpdatePaymentConditionDTO struct {
-	Description  string  `json:"description"`
-	CarrierCode  *int64  `json:"carrier_code,omitempty"`
-	AnalysisType string  `json:"analysis_type"`
-	ParcelStart  string  `json:"parcel_start"`
-	Expenses     float64 `json:"expenses"`
-	AverageTerm  int16   `json:"average_term"`
-	IsSpecial    bool    `json:"is_special"`
-	IsRevenue    bool    `json:"is_revenue"`
-	IsAtSight    bool    `json:"is_at_sight"`
-	IsActive     *bool   `json:"is_active,omitempty"`
+	Description  string          `json:"description"`
+	CarrierCode  *int64          `json:"carrier_code,omitempty"`
+	AnalysisType string          `json:"analysis_type"`
+	ParcelStart  string          `json:"parcel_start"`
+	Expenses     decimal.Decimal `json:"expenses"`
+	AverageTerm  int16           `json:"average_term"`
+	IsSpecial    bool            `json:"is_special"`
+	IsRevenue    bool            `json:"is_revenue"`
+	IsAtSight    bool            `json:"is_at_sight"`
+	IsActive     *bool           `json:"is_active,omitempty"`
 }
 
 type AddInstallmentDTO struct {
@@ -149,7 +149,7 @@ type AddInstallmentDTO struct {
 	// Percentage é quanto do total esta parcela leva. Nulo em todas = divisão em
 	// partes iguais. Informado em parte delas, a condição é recusada: não há como
 	// adivinhar quanto vai no resto.
-	Percentage *float64 `json:"percentage,omitempty"`
+	Percentage *decimal.Decimal `json:"percentage,omitempty"`
 	// BaseEvent: EMISSAO (padrão), ENTRADA (no ato), ENTREGA ou FATURAMENTO.
 	BaseEvent *string `json:"base_event,omitempty"`
 }
@@ -157,77 +157,77 @@ type AddInstallmentDTO struct {
 // ─── Sales Tables ─────────────────────────────────────────────────────────────
 
 type CreateSalesTableDTO struct {
-	Description                string     `json:"description"`
-	ValidityStart              *time.Time `json:"validity_start,omitempty"`
-	ValidityEnd                *time.Time `json:"validity_end,omitempty"`
-	ToleranceMinPct            float64    `json:"tolerance_min_pct"`
-	ToleranceMaxPct            float64    `json:"tolerance_max_pct"`
-	PriceFormation             string     `json:"price_formation"`
-	DecimalPlaces              int16      `json:"decimal_places"`
-	Composition                string     `json:"composition"` // EXWORK | CIF | FOB
-	TableType                  string     `json:"table_type"`  // NORMAL | PROMOCIONAL
-	BaseDate                   string     `json:"base_date"`   // PEDIDO | DATA_ATUAL
-	AllowItemsBelowCent        bool       `json:"allow_items_below_cent"`
-	ICMSInterestadualPorDentro bool       `json:"icms_interestadual_por_dentro"`
-	Observation                *string    `json:"observation,omitempty"`
+	Description                string          `json:"description"`
+	ValidityStart              *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd                *time.Time      `json:"validity_end,omitempty"`
+	ToleranceMinPct            decimal.Decimal `json:"tolerance_min_pct"`
+	ToleranceMaxPct            decimal.Decimal `json:"tolerance_max_pct"`
+	PriceFormation             string          `json:"price_formation"`
+	DecimalPlaces              int16           `json:"decimal_places"`
+	Composition                string          `json:"composition"` // EXWORK | CIF | FOB
+	TableType                  string          `json:"table_type"`  // NORMAL | PROMOCIONAL
+	BaseDate                   string          `json:"base_date"`   // PEDIDO | DATA_ATUAL
+	AllowItemsBelowCent        bool            `json:"allow_items_below_cent"`
+	ICMSInterestadualPorDentro bool            `json:"icms_interestadual_por_dentro"`
+	Observation                *string         `json:"observation,omitempty"`
 }
 
 type UpdateSalesTableDTO struct {
-	Code                       int64      `json:"code"`
-	Description                string     `json:"description"`
-	ValidityStart              *time.Time `json:"validity_start,omitempty"`
-	ValidityEnd                *time.Time `json:"validity_end,omitempty"`
-	ToleranceMinPct            float64    `json:"tolerance_min_pct"`
-	ToleranceMaxPct            float64    `json:"tolerance_max_pct"`
-	PriceFormation             string     `json:"price_formation"`
-	DecimalPlaces              int16      `json:"decimal_places"`
-	IsActive                   *bool      `json:"is_active,omitempty"`
-	Composition                string     `json:"composition"`
-	TableType                  string     `json:"table_type"`
-	BaseDate                   string     `json:"base_date"`
-	AllowItemsBelowCent        bool       `json:"allow_items_below_cent"`
-	ICMSInterestadualPorDentro bool       `json:"icms_interestadual_por_dentro"`
-	Observation                *string    `json:"observation,omitempty"`
+	Code                       int64           `json:"code"`
+	Description                string          `json:"description"`
+	ValidityStart              *time.Time      `json:"validity_start,omitempty"`
+	ValidityEnd                *time.Time      `json:"validity_end,omitempty"`
+	ToleranceMinPct            decimal.Decimal `json:"tolerance_min_pct"`
+	ToleranceMaxPct            decimal.Decimal `json:"tolerance_max_pct"`
+	PriceFormation             string          `json:"price_formation"`
+	DecimalPlaces              int16           `json:"decimal_places"`
+	IsActive                   *bool           `json:"is_active,omitempty"`
+	Composition                string          `json:"composition"`
+	TableType                  string          `json:"table_type"`
+	BaseDate                   string          `json:"base_date"`
+	AllowItemsBelowCent        bool            `json:"allow_items_below_cent"`
+	ICMSInterestadualPorDentro bool            `json:"icms_interestadual_por_dentro"`
+	Observation                *string         `json:"observation,omitempty"`
 }
 
 // ─── Invoice Types ────────────────────────────────────────────────────────────
 
 type CreateInvoiceTypeDTO struct {
-	Description             string  `json:"description"`
-	Type                    string  `json:"type"`
-	StockMovement           string  `json:"stock_movement"`
-	ICMSType                string  `json:"icms_type"`
-	ICMSPct                 float64 `json:"icms_pct"`
-	ICMSReductionPct        float64 `json:"icms_reduction_pct"`
-	IPIPct                  float64 `json:"ipi_pct"`
-	PISPct                  float64 `json:"pis_pct"`
-	COFINSPct               float64 `json:"cofins_pct"`
-	ISSQNPct                float64 `json:"issqn_pct"`
-	IRPct                   float64 `json:"ir_pct"`
-	CSLLPct                 float64 `json:"csll_pct"`
-	INSSPct                 float64 `json:"inss_pct"`
-	GeneratesRevenue        bool    `json:"generates_revenue"`
-	UpdatesInventory        bool    `json:"updates_inventory"`
-	GeneratesFinancialTitle bool    `json:"generates_financial_title"`
-	ConsidersGoals          bool    `json:"considers_goals"`
-	CalcSubstitutionTax     bool    `json:"calc_substitution_tax"`
-	CalcICMSDeferral        bool    `json:"calc_icms_deferral"`
-	CalcPISCOFINS           bool    `json:"calc_pis_cofins"`
-	CalcDIFAL               bool    `json:"calc_difal"`
-	RequiresSalesOrder      bool    `json:"requires_sales_order"`
-	ListsFiscalBooks        bool    `json:"lists_fiscal_books"`
+	Description             string          `json:"description"`
+	Type                    string          `json:"type"`
+	StockMovement           string          `json:"stock_movement"`
+	ICMSType                string          `json:"icms_type"`
+	ICMSPct                 decimal.Decimal `json:"icms_pct"`
+	ICMSReductionPct        decimal.Decimal `json:"icms_reduction_pct"`
+	IPIPct                  decimal.Decimal `json:"ipi_pct"`
+	PISPct                  decimal.Decimal `json:"pis_pct"`
+	COFINSPct               decimal.Decimal `json:"cofins_pct"`
+	ISSQNPct                decimal.Decimal `json:"issqn_pct"`
+	IRPct                   decimal.Decimal `json:"ir_pct"`
+	CSLLPct                 decimal.Decimal `json:"csll_pct"`
+	INSSPct                 decimal.Decimal `json:"inss_pct"`
+	GeneratesRevenue        bool            `json:"generates_revenue"`
+	UpdatesInventory        bool            `json:"updates_inventory"`
+	GeneratesFinancialTitle bool            `json:"generates_financial_title"`
+	ConsidersGoals          bool            `json:"considers_goals"`
+	CalcSubstitutionTax     bool            `json:"calc_substitution_tax"`
+	CalcICMSDeferral        bool            `json:"calc_icms_deferral"`
+	CalcPISCOFINS           bool            `json:"calc_pis_cofins"`
+	CalcDIFAL               bool            `json:"calc_difal"`
+	RequiresSalesOrder      bool            `json:"requires_sales_order"`
+	ListsFiscalBooks        bool            `json:"lists_fiscal_books"`
 	// NF-e / FocusNFE fields
-	ModelNF            *string `json:"model_nf,omitempty"`
-	CSTICMS            *string `json:"cst_icms,omitempty"`
-	CSOSNTICMS         *string `json:"csosn_icms,omitempty"`
-	CSTIPI             *string `json:"cst_ipi,omitempty"`
-	CSTPIS             *string `json:"cst_pis,omitempty"`
-	CSTCOFINS          *string `json:"cst_cofins,omitempty"`
-	BaixaPedido        bool    `json:"baixa_pedido"`
-	GeraTituloDev      bool    `json:"gera_titulo_dev"`
-	ExigeSuframa       bool    `json:"exige_suframa"`
-	IRPctPresumption   float64 `json:"ir_pct_presumption"`
-	CSLLPctPresumption float64 `json:"csll_pct_presumption"`
+	ModelNF            *string         `json:"model_nf,omitempty"`
+	CSTICMS            *string         `json:"cst_icms,omitempty"`
+	CSOSNTICMS         *string         `json:"csosn_icms,omitempty"`
+	CSTIPI             *string         `json:"cst_ipi,omitempty"`
+	CSTPIS             *string         `json:"cst_pis,omitempty"`
+	CSTCOFINS          *string         `json:"cst_cofins,omitempty"`
+	BaixaPedido        bool            `json:"baixa_pedido"`
+	GeraTituloDev      bool            `json:"gera_titulo_dev"`
+	ExigeSuframa       bool            `json:"exige_suframa"`
+	IRPctPresumption   decimal.Decimal `json:"ir_pct_presumption"`
+	CSLLPctPresumption decimal.Decimal `json:"csll_pct_presumption"`
 	// Extended fields (migration 000126)
 	DescriptionNF            *string `json:"description_nf,omitempty"`
 	ImpostosNFe              *string `json:"impostos_nfe,omitempty"`
@@ -269,140 +269,140 @@ type CreateInvoiceTypeDTO struct {
 }
 
 type UpdateInvoiceTypeDTO struct {
-	Code                     int64   `json:"code"`
-	Description              string  `json:"description"`
-	Type                     string  `json:"type"`
-	StockMovement            string  `json:"stock_movement"`
-	ICMSType                 string  `json:"icms_type"`
-	ICMSPct                  float64 `json:"icms_pct"`
-	ICMSReductionPct         float64 `json:"icms_reduction_pct"`
-	IPIPct                   float64 `json:"ipi_pct"`
-	PISPct                   float64 `json:"pis_pct"`
-	COFINSPct                float64 `json:"cofins_pct"`
-	ISSQNPct                 float64 `json:"issqn_pct"`
-	IRPct                    float64 `json:"ir_pct"`
-	CSLLPct                  float64 `json:"csll_pct"`
-	INSSPct                  float64 `json:"inss_pct"`
-	GeneratesRevenue         bool    `json:"generates_revenue"`
-	UpdatesInventory         bool    `json:"updates_inventory"`
-	GeneratesFinancialTitle  bool    `json:"generates_financial_title"`
-	ConsidersGoals           bool    `json:"considers_goals"`
-	CalcSubstitutionTax      bool    `json:"calc_substitution_tax"`
-	CalcICMSDeferral         bool    `json:"calc_icms_deferral"`
-	CalcPISCOFINS            bool    `json:"calc_pis_cofins"`
-	CalcDIFAL                bool    `json:"calc_difal"`
-	RequiresSalesOrder       bool    `json:"requires_sales_order"`
-	ListsFiscalBooks         bool    `json:"lists_fiscal_books"`
-	IsActive                 *bool   `json:"is_active,omitempty"`
-	ModelNF                  *string `json:"model_nf,omitempty"`
-	CSTICMS                  *string `json:"cst_icms,omitempty"`
-	CSOSNTICMS               *string `json:"csosn_icms,omitempty"`
-	CSTIPI                   *string `json:"cst_ipi,omitempty"`
-	CSTPIS                   *string `json:"cst_pis,omitempty"`
-	CSTCOFINS                *string `json:"cst_cofins,omitempty"`
-	BaixaPedido              bool    `json:"baixa_pedido"`
-	GeraTituloDev            bool    `json:"gera_titulo_dev"`
-	ExigeSuframa             bool    `json:"exige_suframa"`
-	IRPctPresumption         float64 `json:"ir_pct_presumption"`
-	CSLLPctPresumption       float64 `json:"csll_pct_presumption"`
-	DescriptionNF            *string `json:"description_nf,omitempty"`
-	ImpostosNFe              *string `json:"impostos_nfe,omitempty"`
-	CFOPId                   *int64  `json:"cfop_id,omitempty"`
-	DispositivoLegalIPIId    *int64  `json:"dispositivo_legal_ipi_id,omitempty"`
-	DispositivoLegalICMSId   *int64  `json:"dispositivo_legal_icms_id,omitempty"`
-	DispositivoLegalICMSSTId *int64  `json:"dispositivo_legal_icms_st_id,omitempty"`
-	DispositivoLegalPISId    *int64  `json:"dispositivo_legal_pis_id,omitempty"`
-	DispositivoLegalCOFINSId *int64  `json:"dispositivo_legal_cofins_id,omitempty"`
-	HierarchyIPI             *string `json:"hierarchy_ipi,omitempty"`
-	HierarchyICMS            *string `json:"hierarchy_icms,omitempty"`
-	HierarchyICMSST          *string `json:"hierarchy_icms_st,omitempty"`
-	HierarchyPIS             *string `json:"hierarchy_pis,omitempty"`
-	HierarchyCOFINS          *string `json:"hierarchy_cofins,omitempty"`
-	IPITransferSalesTableId  *int64  `json:"ipi_transfer_sales_table_id,omitempty"`
-	ListaValorContabil       bool    `json:"lista_valor_contabil"`
-	ListaRegistroSaida       bool    `json:"lista_registro_saida"`
-	ListaICMSIPI             bool    `json:"lista_icms_ipi"`
-	SintegraSpedFiscal       bool    `json:"sintegra_sped_fiscal"`
-	CalcFomentar             bool    `json:"calc_fomentar"`
-	ExcecaoFomentar          bool    `json:"excecao_fomentar"`
-	CompRessRetST            bool    `json:"comp_ress_ret_st"`
-	CalcReducao              bool    `json:"calc_reducao"`
-	ComplementoItens         bool    `json:"complemento_itens"`
-	BuscaTipoNF              bool    `json:"busca_tipo_nf"`
-	ICMSSTUltEntrada         bool    `json:"icms_st_ult_entrada"`
-	SomenteConsultaLotes     bool    `json:"somente_consulta_lotes"`
-	CalcImpIBPT              bool    `json:"calc_imp_ibpt"`
-	CredPresumidoICMS        bool    `json:"cred_presumido_icms"`
-	CIAP                     bool    `json:"ciap"`
-	VlrAgregadoBaseSubst     bool    `json:"vlr_agregado_base_subst"`
-	ContratoFacon            bool    `json:"contrato_facon"`
-	DescICMSLicitacoes       bool    `json:"desc_icms_licitacoes"`
-	Sisdeclara               bool    `json:"sisdeclara"`
-	CodClasTrib              *string `json:"cod_clas_trib,omitempty"`
-	CodClasTribTribReg       *string `json:"cod_clas_trib_trib_reg,omitempty"`
-	CodMotivoRestCompICMSST  *string `json:"cod_motivo_rest_comp_icms_st,omitempty"`
-	CodBeneficioFiscal       *string `json:"cod_beneficio_fiscal,omitempty"`
+	Code                     int64           `json:"code"`
+	Description              string          `json:"description"`
+	Type                     string          `json:"type"`
+	StockMovement            string          `json:"stock_movement"`
+	ICMSType                 string          `json:"icms_type"`
+	ICMSPct                  decimal.Decimal `json:"icms_pct"`
+	ICMSReductionPct         decimal.Decimal `json:"icms_reduction_pct"`
+	IPIPct                   decimal.Decimal `json:"ipi_pct"`
+	PISPct                   decimal.Decimal `json:"pis_pct"`
+	COFINSPct                decimal.Decimal `json:"cofins_pct"`
+	ISSQNPct                 decimal.Decimal `json:"issqn_pct"`
+	IRPct                    decimal.Decimal `json:"ir_pct"`
+	CSLLPct                  decimal.Decimal `json:"csll_pct"`
+	INSSPct                  decimal.Decimal `json:"inss_pct"`
+	GeneratesRevenue         bool            `json:"generates_revenue"`
+	UpdatesInventory         bool            `json:"updates_inventory"`
+	GeneratesFinancialTitle  bool            `json:"generates_financial_title"`
+	ConsidersGoals           bool            `json:"considers_goals"`
+	CalcSubstitutionTax      bool            `json:"calc_substitution_tax"`
+	CalcICMSDeferral         bool            `json:"calc_icms_deferral"`
+	CalcPISCOFINS            bool            `json:"calc_pis_cofins"`
+	CalcDIFAL                bool            `json:"calc_difal"`
+	RequiresSalesOrder       bool            `json:"requires_sales_order"`
+	ListsFiscalBooks         bool            `json:"lists_fiscal_books"`
+	IsActive                 *bool           `json:"is_active,omitempty"`
+	ModelNF                  *string         `json:"model_nf,omitempty"`
+	CSTICMS                  *string         `json:"cst_icms,omitempty"`
+	CSOSNTICMS               *string         `json:"csosn_icms,omitempty"`
+	CSTIPI                   *string         `json:"cst_ipi,omitempty"`
+	CSTPIS                   *string         `json:"cst_pis,omitempty"`
+	CSTCOFINS                *string         `json:"cst_cofins,omitempty"`
+	BaixaPedido              bool            `json:"baixa_pedido"`
+	GeraTituloDev            bool            `json:"gera_titulo_dev"`
+	ExigeSuframa             bool            `json:"exige_suframa"`
+	IRPctPresumption         decimal.Decimal `json:"ir_pct_presumption"`
+	CSLLPctPresumption       decimal.Decimal `json:"csll_pct_presumption"`
+	DescriptionNF            *string         `json:"description_nf,omitempty"`
+	ImpostosNFe              *string         `json:"impostos_nfe,omitempty"`
+	CFOPId                   *int64          `json:"cfop_id,omitempty"`
+	DispositivoLegalIPIId    *int64          `json:"dispositivo_legal_ipi_id,omitempty"`
+	DispositivoLegalICMSId   *int64          `json:"dispositivo_legal_icms_id,omitempty"`
+	DispositivoLegalICMSSTId *int64          `json:"dispositivo_legal_icms_st_id,omitempty"`
+	DispositivoLegalPISId    *int64          `json:"dispositivo_legal_pis_id,omitempty"`
+	DispositivoLegalCOFINSId *int64          `json:"dispositivo_legal_cofins_id,omitempty"`
+	HierarchyIPI             *string         `json:"hierarchy_ipi,omitempty"`
+	HierarchyICMS            *string         `json:"hierarchy_icms,omitempty"`
+	HierarchyICMSST          *string         `json:"hierarchy_icms_st,omitempty"`
+	HierarchyPIS             *string         `json:"hierarchy_pis,omitempty"`
+	HierarchyCOFINS          *string         `json:"hierarchy_cofins,omitempty"`
+	IPITransferSalesTableId  *int64          `json:"ipi_transfer_sales_table_id,omitempty"`
+	ListaValorContabil       bool            `json:"lista_valor_contabil"`
+	ListaRegistroSaida       bool            `json:"lista_registro_saida"`
+	ListaICMSIPI             bool            `json:"lista_icms_ipi"`
+	SintegraSpedFiscal       bool            `json:"sintegra_sped_fiscal"`
+	CalcFomentar             bool            `json:"calc_fomentar"`
+	ExcecaoFomentar          bool            `json:"excecao_fomentar"`
+	CompRessRetST            bool            `json:"comp_ress_ret_st"`
+	CalcReducao              bool            `json:"calc_reducao"`
+	ComplementoItens         bool            `json:"complemento_itens"`
+	BuscaTipoNF              bool            `json:"busca_tipo_nf"`
+	ICMSSTUltEntrada         bool            `json:"icms_st_ult_entrada"`
+	SomenteConsultaLotes     bool            `json:"somente_consulta_lotes"`
+	CalcImpIBPT              bool            `json:"calc_imp_ibpt"`
+	CredPresumidoICMS        bool            `json:"cred_presumido_icms"`
+	CIAP                     bool            `json:"ciap"`
+	VlrAgregadoBaseSubst     bool            `json:"vlr_agregado_base_subst"`
+	ContratoFacon            bool            `json:"contrato_facon"`
+	DescICMSLicitacoes       bool            `json:"desc_icms_licitacoes"`
+	Sisdeclara               bool            `json:"sisdeclara"`
+	CodClasTrib              *string         `json:"cod_clas_trib,omitempty"`
+	CodClasTribTribReg       *string         `json:"cod_clas_trib_trib_reg,omitempty"`
+	CodMotivoRestCompICMSST  *string         `json:"cod_motivo_rest_comp_icms_st,omitempty"`
+	CodBeneficioFiscal       *string         `json:"cod_beneficio_fiscal,omitempty"`
 }
 
 // ─── Sales Table Prices ────────────────────────────────────────────────────────
 
 type CreateSalesTablePriceDTO struct {
-	SalesTableID   int64    `json:"sales_table_id"`
-	SalesTableCode int64    `json:"sales_table_code"`
-	ItemCode       TextCode `json:"item_code"`
-	Price          float64  `json:"price"`
-	UME            *string  `json:"ume,omitempty"`
-	UMC            *string  `json:"umc,omitempty"`
-	PriceConv      float64  `json:"price_conv"`
-	Formula        *string  `json:"formula,omitempty"`
-	Situation      string   `json:"situation"`
-	Blocked        bool     `json:"blocked"`
-	Observation    *string  `json:"observation,omitempty"`
-	ProductLineID  *int64   `json:"product_line_id,omitempty"`
-	ItemMask       *string  `json:"item_mask,omitempty"`
+	SalesTableID   int64           `json:"sales_table_id"`
+	SalesTableCode int64           `json:"sales_table_code"`
+	ItemCode       TextCode        `json:"item_code"`
+	Price          decimal.Decimal `json:"price"`
+	UME            *string         `json:"ume,omitempty"`
+	UMC            *string         `json:"umc,omitempty"`
+	PriceConv      decimal.Decimal `json:"price_conv"`
+	Formula        *string         `json:"formula,omitempty"`
+	Situation      string          `json:"situation"`
+	Blocked        bool            `json:"blocked"`
+	Observation    *string         `json:"observation,omitempty"`
+	ProductLineID  *int64          `json:"product_line_id,omitempty"`
+	ItemMask       *string         `json:"item_mask,omitempty"`
 }
 
 type UpdateSalesTablePriceDTO struct {
-	ID            int64   `json:"id"`
-	Price         float64 `json:"price"`
-	UME           *string `json:"ume,omitempty"`
-	UMC           *string `json:"umc,omitempty"`
-	PriceConv     float64 `json:"price_conv"`
-	Formula       *string `json:"formula,omitempty"`
-	Situation     string  `json:"situation"`
-	Blocked       bool    `json:"blocked"`
-	Observation   *string `json:"observation,omitempty"`
-	ProductLineID *int64  `json:"product_line_id,omitempty"`
-	ItemMask      *string `json:"item_mask,omitempty"`
+	ID            int64           `json:"id"`
+	Price         decimal.Decimal `json:"price"`
+	UME           *string         `json:"ume,omitempty"`
+	UMC           *string         `json:"umc,omitempty"`
+	PriceConv     decimal.Decimal `json:"price_conv"`
+	Formula       *string         `json:"formula,omitempty"`
+	Situation     string          `json:"situation"`
+	Blocked       bool            `json:"blocked"`
+	Observation   *string         `json:"observation,omitempty"`
+	ProductLineID *int64          `json:"product_line_id,omitempty"`
+	ItemMask      *string         `json:"item_mask,omitempty"`
 }
 
 type PriceSalesItemDTO struct {
-	SalesTableCode int64    `json:"sales_table_code"`
-	ItemCode       TextCode `json:"item_code"`
-	Quantity       float64  `json:"quantity"`
+	SalesTableCode int64           `json:"sales_table_code"`
+	ItemCode       TextCode        `json:"item_code"`
+	Quantity       decimal.Decimal `json:"quantity"`
 }
 
 type ResolveSalesTablesForItemDTO struct {
 	ItemCode     string
 	CustomerCode *int64
-	Quantity     float64
+	Quantity     decimal.Decimal
 	Unit         string
 	Currency     string
 	ReferenceAt  time.Time
 }
 
 type FormSalesPriceDTO struct {
-	SalesTableCode int64    `json:"sales_table_code"`
-	PolicyCode     *int64   `json:"policy_code,omitempty"`
-	ItemCode       TextCode `json:"item_code,omitempty"`
-	BaseCost       float64  `json:"base_cost"`
-	MarkupPct      float64  `json:"markup_pct"`
-	MarginPct      float64  `json:"margin_pct"`
-	ExpensesPct    float64  `json:"expenses_pct"`
-	TaxesPct       float64  `json:"taxes_pct"`
-	FreightPct     float64  `json:"freight_pct"`
-	CommissionPct  float64  `json:"commission_pct"`
-	DiscountPct    float64  `json:"discount_pct"`
+	SalesTableCode int64           `json:"sales_table_code"`
+	PolicyCode     *int64          `json:"policy_code,omitempty"`
+	ItemCode       TextCode        `json:"item_code,omitempty"`
+	BaseCost       decimal.Decimal `json:"base_cost"`
+	MarkupPct      decimal.Decimal `json:"markup_pct"`
+	MarginPct      decimal.Decimal `json:"margin_pct"`
+	ExpensesPct    decimal.Decimal `json:"expenses_pct"`
+	TaxesPct       decimal.Decimal `json:"taxes_pct"`
+	FreightPct     decimal.Decimal `json:"freight_pct"`
+	CommissionPct  decimal.Decimal `json:"commission_pct"`
+	DiscountPct    decimal.Decimal `json:"discount_pct"`
 }
 
 type CreateSalesPricePolicyDTO struct {
@@ -412,18 +412,18 @@ type CreateSalesPricePolicyDTO struct {
 	Sequence       int64           `json:"sequence"`
 	PolicyScope    string          `json:"policy_scope"`
 	PolicyTypes    string          `json:"policy_types"`
-	MarkupPct      float64         `json:"markup_pct"`
-	MarginPct      float64         `json:"margin_pct"`
-	MaxMarginPct   float64         `json:"max_margin_pct"`
-	IdealMarginPct float64         `json:"ideal_margin_pct"`
-	MarginStepPct  float64         `json:"margin_step_pct"`
-	ExpensesPct    float64         `json:"expenses_pct"`
-	TaxesPct       float64         `json:"taxes_pct"`
-	FreightPct     float64         `json:"freight_pct"`
-	CommissionPct  float64         `json:"commission_pct"`
-	DiscountPct    float64         `json:"discount_pct"`
-	MinMarginPct   float64         `json:"min_margin_pct"`
-	MaxDiscountPct float64         `json:"max_discount_pct"`
+	MarkupPct      decimal.Decimal `json:"markup_pct"`
+	MarginPct      decimal.Decimal `json:"margin_pct"`
+	MaxMarginPct   decimal.Decimal `json:"max_margin_pct"`
+	IdealMarginPct decimal.Decimal `json:"ideal_margin_pct"`
+	MarginStepPct  decimal.Decimal `json:"margin_step_pct"`
+	ExpensesPct    decimal.Decimal `json:"expenses_pct"`
+	TaxesPct       decimal.Decimal `json:"taxes_pct"`
+	FreightPct     decimal.Decimal `json:"freight_pct"`
+	CommissionPct  decimal.Decimal `json:"commission_pct"`
+	DiscountPct    decimal.Decimal `json:"discount_pct"`
+	MinMarginPct   decimal.Decimal `json:"min_margin_pct"`
+	MaxDiscountPct decimal.Decimal `json:"max_discount_pct"`
 	IncidencesJSON json.RawMessage `json:"incidences_json"`
 	SalesTableCode *int64          `json:"sales_table_code,omitempty"`
 	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
@@ -439,18 +439,18 @@ type UpdateSalesPricePolicyDTO struct {
 	Sequence       int64           `json:"sequence"`
 	PolicyScope    string          `json:"policy_scope"`
 	PolicyTypes    string          `json:"policy_types"`
-	MarkupPct      float64         `json:"markup_pct"`
-	MarginPct      float64         `json:"margin_pct"`
-	MaxMarginPct   float64         `json:"max_margin_pct"`
-	IdealMarginPct float64         `json:"ideal_margin_pct"`
-	MarginStepPct  float64         `json:"margin_step_pct"`
-	ExpensesPct    float64         `json:"expenses_pct"`
-	TaxesPct       float64         `json:"taxes_pct"`
-	FreightPct     float64         `json:"freight_pct"`
-	CommissionPct  float64         `json:"commission_pct"`
-	DiscountPct    float64         `json:"discount_pct"`
-	MinMarginPct   float64         `json:"min_margin_pct"`
-	MaxDiscountPct float64         `json:"max_discount_pct"`
+	MarkupPct      decimal.Decimal `json:"markup_pct"`
+	MarginPct      decimal.Decimal `json:"margin_pct"`
+	MaxMarginPct   decimal.Decimal `json:"max_margin_pct"`
+	IdealMarginPct decimal.Decimal `json:"ideal_margin_pct"`
+	MarginStepPct  decimal.Decimal `json:"margin_step_pct"`
+	ExpensesPct    decimal.Decimal `json:"expenses_pct"`
+	TaxesPct       decimal.Decimal `json:"taxes_pct"`
+	FreightPct     decimal.Decimal `json:"freight_pct"`
+	CommissionPct  decimal.Decimal `json:"commission_pct"`
+	DiscountPct    decimal.Decimal `json:"discount_pct"`
+	MinMarginPct   decimal.Decimal `json:"min_margin_pct"`
+	MaxDiscountPct decimal.Decimal `json:"max_discount_pct"`
 	IncidencesJSON json.RawMessage `json:"incidences_json"`
 	SalesTableCode *int64          `json:"sales_table_code,omitempty"`
 	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
@@ -474,14 +474,14 @@ type CreateCommercialPolicyDTO struct {
 	Kind                   string          `json:"kind"`
 	ChoiceType             string          `json:"choice_type"`
 	CalcType               string          `json:"calc_type"`
-	PercentValue           float64         `json:"percent_value"`
-	FixedValue             float64         `json:"fixed_value"`
-	MaxPercent             float64         `json:"max_percent"`
-	MaxValue               float64         `json:"max_value"`
-	MinGrossValue          float64         `json:"min_gross_value"`
-	MaxGrossValue          float64         `json:"max_gross_value"`
-	MinQuantity            float64         `json:"min_quantity"`
-	MaxQuantity            float64         `json:"max_quantity"`
+	PercentValue           decimal.Decimal `json:"percent_value"`
+	FixedValue             decimal.Decimal `json:"fixed_value"`
+	MaxPercent             decimal.Decimal `json:"max_percent"`
+	MaxValue               decimal.Decimal `json:"max_value"`
+	MinGrossValue          decimal.Decimal `json:"min_gross_value"`
+	MaxGrossValue          decimal.Decimal `json:"max_gross_value"`
+	MinQuantity            decimal.Decimal `json:"min_quantity"`
+	MaxQuantity            decimal.Decimal `json:"max_quantity"`
 	Priority               int64           `json:"priority"`
 	Sequence               int64           `json:"sequence"`
 	Stackable              bool            `json:"stackable"`
@@ -517,14 +517,14 @@ type UpdateCommercialPolicyDTO struct {
 	Kind                   string          `json:"kind"`
 	ChoiceType             string          `json:"choice_type"`
 	CalcType               string          `json:"calc_type"`
-	PercentValue           float64         `json:"percent_value"`
-	FixedValue             float64         `json:"fixed_value"`
-	MaxPercent             float64         `json:"max_percent"`
-	MaxValue               float64         `json:"max_value"`
-	MinGrossValue          float64         `json:"min_gross_value"`
-	MaxGrossValue          float64         `json:"max_gross_value"`
-	MinQuantity            float64         `json:"min_quantity"`
-	MaxQuantity            float64         `json:"max_quantity"`
+	PercentValue           decimal.Decimal `json:"percent_value"`
+	FixedValue             decimal.Decimal `json:"fixed_value"`
+	MaxPercent             decimal.Decimal `json:"max_percent"`
+	MaxValue               decimal.Decimal `json:"max_value"`
+	MinGrossValue          decimal.Decimal `json:"min_gross_value"`
+	MaxGrossValue          decimal.Decimal `json:"max_gross_value"`
+	MinQuantity            decimal.Decimal `json:"min_quantity"`
+	MaxQuantity            decimal.Decimal `json:"max_quantity"`
 	Priority               int64           `json:"priority"`
 	Sequence               int64           `json:"sequence"`
 	Stackable              bool            `json:"stackable"`
@@ -575,10 +575,10 @@ type CommercialPolicyLineDTO struct {
 	SequenceNumber int64           `json:"sequence_number"`
 	Description    *string         `json:"description,omitempty"`
 	CalcType       string          `json:"calc_type"`
-	PercentValue   float64         `json:"percent_value"`
-	FixedValue     float64         `json:"fixed_value"`
-	MinValue       float64         `json:"min_value"`
-	MaxValue       float64         `json:"max_value"`
+	PercentValue   decimal.Decimal `json:"percent_value"`
+	FixedValue     decimal.Decimal `json:"fixed_value"`
+	MinValue       decimal.Decimal `json:"min_value"`
+	MaxValue       decimal.Decimal `json:"max_value"`
 	VariablesJSON  json.RawMessage `json:"variables_json"`
 	ValidityStart  *time.Time      `json:"validity_start,omitempty"`
 	ValidityEnd    *time.Time      `json:"validity_end,omitempty"`
@@ -652,34 +652,34 @@ type CreateCustomerDTO struct {
 	TaxTypeCode           *int64     `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO). Na alteração,
 	// ausente mantém a atual e vazia ("") limpa.
-	FinalidadeCompra      *string   `json:"finalidade_compra,omitempty"`
-	PaymentCondVisibility string    `json:"payment_cond_visibility"` // SOMENTE_VINCULADOS | VINCULADOS_E_NENHUM | TODOS
-	CreditLimit           float64   `json:"credit_limit"`
-	Website               *string   `json:"website,omitempty"`
-	CreatedBy             uuid.UUID `json:"created_by"`
+	FinalidadeCompra      *string         `json:"finalidade_compra,omitempty"`
+	PaymentCondVisibility string          `json:"payment_cond_visibility"` // SOMENTE_VINCULADOS | VINCULADOS_E_NENHUM | TODOS
+	CreditLimit           decimal.Decimal `json:"credit_limit"`
+	Website               *string         `json:"website,omitempty"`
+	CreatedBy             uuid.UUID       `json:"created_by"`
 }
 
 type UpdateCustomerDTO struct {
-	ID                    int64      `json:"id"`
-	Name                  string     `json:"name"`
-	TradeName             *string    `json:"trade_name,omitempty"`
-	StateRegistration     *string    `json:"state_registration,omitempty"`
-	MunicipalRegistration *string    `json:"municipal_registration,omitempty"`
-	SuframaCode           *string    `json:"suframa_code,omitempty"`
-	SuframaExpiry         *time.Time `json:"suframa_expiry,omitempty"`
-	RegionID              *int64     `json:"region_id,omitempty"`
-	MarketSegmentID       *int64     `json:"market_segment_id,omitempty"`
-	CustomerTypeID        *int64     `json:"customer_type_id,omitempty"`
-	PaymentConditionID    *int64     `json:"payment_condition_id,omitempty"`
-	SalesTableID          *int64     `json:"sales_table_id,omitempty"`
-	CarrierID             *int64     `json:"carrier_id,omitempty"`
-	CarrierGroupID        *int64     `json:"carrier_group_id,omitempty"`
-	InvoiceTypeID         *int64     `json:"invoice_type_id,omitempty"`
-	TaxTypeID             *int64     `json:"tax_type_id,omitempty"`
-	PaymentCondVisibility string     `json:"payment_cond_visibility"`
-	CreditLimit           float64    `json:"credit_limit"`
-	Website               *string    `json:"website,omitempty"`
-	IsActive              *bool      `json:"is_active,omitempty"`
+	ID                    int64           `json:"id"`
+	Name                  string          `json:"name"`
+	TradeName             *string         `json:"trade_name,omitempty"`
+	StateRegistration     *string         `json:"state_registration,omitempty"`
+	MunicipalRegistration *string         `json:"municipal_registration,omitempty"`
+	SuframaCode           *string         `json:"suframa_code,omitempty"`
+	SuframaExpiry         *time.Time      `json:"suframa_expiry,omitempty"`
+	RegionID              *int64          `json:"region_id,omitempty"`
+	MarketSegmentID       *int64          `json:"market_segment_id,omitempty"`
+	CustomerTypeID        *int64          `json:"customer_type_id,omitempty"`
+	PaymentConditionID    *int64          `json:"payment_condition_id,omitempty"`
+	SalesTableID          *int64          `json:"sales_table_id,omitempty"`
+	CarrierID             *int64          `json:"carrier_id,omitempty"`
+	CarrierGroupID        *int64          `json:"carrier_group_id,omitempty"`
+	InvoiceTypeID         *int64          `json:"invoice_type_id,omitempty"`
+	TaxTypeID             *int64          `json:"tax_type_id,omitempty"`
+	PaymentCondVisibility string          `json:"payment_cond_visibility"`
+	CreditLimit           decimal.Decimal `json:"credit_limit"`
+	Website               *string         `json:"website,omitempty"`
+	IsActive              *bool           `json:"is_active,omitempty"`
 }
 
 type BlockCustomerDTO struct {

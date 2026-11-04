@@ -178,7 +178,7 @@ func divergenciasDoPedido(ctx context.Context, orders salesrepo.SalesOrderReposi
 	porCodigo := make(map[int64]decimal.Decimal, len(linhas))
 	icms := make(map[int64]decimal.Decimal, len(linhas))
 	for _, l := range linhas {
-		porCodigo[l.Code], icms[l.Code] = decimal.NewFromFloat(l.IPIPct), decimal.NewFromFloat(l.ICMSPct)
+		porCodigo[l.Code], icms[l.Code] = l.IPIPct, l.ICMSPct
 	}
 	tolerancia := decimal.New(5, -3)
 	var out []response.PreviaPendenciaNFe

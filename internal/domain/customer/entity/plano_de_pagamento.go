@@ -2,9 +2,10 @@ package entity
 
 import (
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/shopspring/decimal"
 )
@@ -133,7 +134,7 @@ func CalcularPlano(cond *PaymentCondition, total decimal.Decimal, datas DatasBas
 		pct := decimal.Zero
 		if usaPercentual {
 			if p.Percentage != nil {
-				pct = decimal.NewFromFloat(*p.Percentage)
+				pct = *p.Percentage
 			}
 		} else {
 			pct = cem.Div(decimal.NewFromInt(int64(len(ativas))))
@@ -190,7 +191,7 @@ func ValidarPercentuais(parcelas []*PaymentInstallment) error {
 			continue
 		}
 		informadas++
-		soma = soma.Add(decimal.NewFromFloat(*p.Percentage))
+		soma = soma.Add(*p.Percentage)
 	}
 	if informadas == 0 {
 		return nil

@@ -66,11 +66,11 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	if tableCode == nil {
 		return nil, errorsuc.NewValidationError("o orçamento não possui tabela de preço")
 	}
-	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, itemCode, dto.RequestedQty.InexactFloat64())
+	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, itemCode, dto.RequestedQty)
 	if err != nil {
 		return nil, err
 	}
-	item.UnitPrice = decimal.NewFromFloat(pricing.AppliedPrice)
+	item.UnitPrice = pricing.AppliedPrice
 	item.PriceTableCode = tableCode
 	if err := uc.preencherTributos(ctx, quotation, itemCode, item, dto.TributosManuais); err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 	if tableCode == nil {
 		return nil, errorsuc.NewValidationError("o orçamento não possui tabela de preço")
 	}
-	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, current.ItemCode, dto.RequestedQty.InexactFloat64())
+	pricing, err := salespricing.Resolve(ctx, uc.Customers, *tableCode, current.ItemCode, dto.RequestedQty)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 	item := &entity.SalesQuotationItem{
 		Code:             dto.Code,
 		RequestedQty:     dto.RequestedQty,
-		UnitPrice:        decimal.NewFromFloat(pricing.AppliedPrice),
+		UnitPrice:        pricing.AppliedPrice,
 		AttendedQty:      dto.AttendedQty,
 		CancelledQty:     dto.CancelledQty,
 		DeliveryDate:     datetime.ParseDatePtr(dto.DeliveryDate),

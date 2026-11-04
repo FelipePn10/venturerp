@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
@@ -42,14 +44,14 @@ func TestCommercialPricingIsIsolatedByTenant(t *testing.T) {
 	repo := customerpg.New(sqlc.New(pool), pool)
 	ctxA := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseA, EnterpriseCode: codeA})
 	ctxB := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseB, EnterpriseCode: codeB})
-	created, err := repo.CreateSalesTablePrice(ctxA, &entity.SalesTablePrice{SalesTableID: tableA, ItemCode: "10001", Price: 125, Situation: entity.PriceSituationAtivo})
+	created, err := repo.CreateSalesTablePrice(ctxA, &entity.SalesTablePrice{SalesTableID: tableA, ItemCode: "10001", Price: decimal.NewFromFloat(125), Situation: entity.PriceSituationAtivo})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = repo.GetSalesTablePriceByID(ctxB, created.ID); err == nil {
 		t.Fatal("tenant B leu preço do tenant A")
 	}
-	if _, err = repo.CreateSalesTablePrice(ctxB, &entity.SalesTablePrice{SalesTableID: tableA, ItemCode: "10002", Price: 130, Situation: entity.PriceSituationAtivo}); err == nil {
+	if _, err = repo.CreateSalesTablePrice(ctxB, &entity.SalesTablePrice{SalesTableID: tableA, ItemCode: "10002", Price: decimal.NewFromFloat(130), Situation: entity.PriceSituationAtivo}); err == nil {
 		t.Fatal("tenant B incluiu preço na tabela do tenant A")
 	}
 	if err = repo.DeleteSalesTablePrice(ctxB, created.ID); err != nil {

@@ -109,7 +109,7 @@ func TestAlcadaDeDescontoDoPedido(t *testing.T) {
 	}
 
 	// Sem alçada: tudo passa.
-	if err := politica.ConferirDesconto(a.Ctx, 15); err != nil {
+	if err := politica.ConferirDesconto(a.Ctx, decimal.NewFromFloat(15)); err != nil {
 		t.Fatal(err)
 	}
 	if err := politica.Aplicar(a.Ctx, pedido); err != nil || bloqueado() {
@@ -126,10 +126,10 @@ func TestAlcadaDeDescontoDoPedido(t *testing.T) {
 	}
 
 	// Acima da alçada sem política de aprovação: recusa a linha.
-	if err := politica.ConferirDesconto(a.Ctx, 15); err == nil {
+	if err := politica.ConferirDesconto(a.Ctx, decimal.NewFromFloat(15)); err == nil {
 		t.Fatal("15% acima de 10% sem quem aprove deveria ser recusado")
 	}
-	if err := politica.ConferirDesconto(a.Ctx, 10); err != nil {
+	if err := politica.ConferirDesconto(a.Ctx, decimal.NewFromFloat(10)); err != nil {
 		t.Fatalf("10%% está na alçada: %v", err)
 	}
 
@@ -140,7 +140,7 @@ func TestAlcadaDeDescontoDoPedido(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := politica.ConferirDesconto(a.Ctx, 15); err != nil {
+	if err := politica.ConferirDesconto(a.Ctx, decimal.NewFromFloat(15)); err != nil {
 		t.Fatal(err)
 	}
 	if err := politica.Aplicar(a.Ctx, pedido); err != nil {
@@ -209,7 +209,7 @@ func TestAlcadaDeDescontoDoPedido(t *testing.T) {
 	if p, err := parametrosUC.Obter(b.Ctx); err != nil || p.DescontoMaxPct != nil {
 		t.Fatalf("a empresa B não herda a alçada: %+v %v", p, err)
 	}
-	if err := politica.ConferirDesconto(b.Ctx, 50); err != nil {
+	if err := politica.ConferirDesconto(b.Ctx, decimal.NewFromFloat(50)); err != nil {
 		t.Fatalf("sem alçada na B: %v", err)
 	}
 }

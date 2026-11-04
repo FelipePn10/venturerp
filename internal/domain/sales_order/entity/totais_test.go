@@ -22,7 +22,7 @@ func TestRecalcularTotaisDaLinha(t *testing.T) {
 		{"4", "125", 0, 0, 18, "500", "0", "500", "90"},
 	}
 	for _, c := range casos {
-		it := &SalesOrderItem{RequestedQty: d(c.qtd), UnitPrice: d(c.preco), DiscountPct: c.desconto, IPIPct: c.ipi, STPct: c.st}
+		it := &SalesOrderItem{RequestedQty: d(c.qtd), UnitPrice: d(c.preco), DiscountPct: decimal.NewFromFloat(c.desconto), IPIPct: decimal.NewFromFloat(c.ipi), STPct: decimal.NewFromFloat(c.st)}
 		it.RecalcularTotais()
 		if !it.TotalGross.Equal(d(c.bruto)) || !it.TotalIPI.Equal(d(c.ipiValor)) || !it.TotalNetWithIPI.Equal(d(c.comIPI)) || !it.TotalST.Equal(d(c.st2)) {
 			t.Fatalf("%+v: bruto %s ipi %s c/IPI %s st %s", c, it.TotalGross, it.TotalIPI, it.TotalNetWithIPI, it.TotalST)

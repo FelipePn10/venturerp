@@ -484,7 +484,7 @@ func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddIn
 		// restrição do banco recusaria a linha com uma mensagem técnica.
 		dias = 0
 	}
-	if dto.Percentage != nil && (*dto.Percentage <= 0 || *dto.Percentage > 100) {
+	if dto.Percentage != nil && (!dto.Percentage.IsPositive() || dto.Percentage.GreaterThan(decimal.NewFromInt(100))) {
 		return nil, errorsuc.NewValidationError("o percentual da parcela precisa ficar entre 0 e 100")
 	}
 	inst := &entity.PaymentInstallment{
@@ -531,7 +531,7 @@ func (uc *CustomerUseCase) AddInstallment(ctx context.Context, dto request.AddIn
 		DocumentType:      created.DocumentType,
 		MovementType:      created.MovementType,
 		CarrierID:         created.CarrierID,
-		Percentage:        created.Percentage,
+		Percentage:        fptrD(created.Percentage),
 		BaseEvent:         created.BaseEvent,
 	}, nil
 }
@@ -556,7 +556,7 @@ func toPaymentCondResponse(pc *entity.PaymentCondition) *response.PaymentConditi
 		CarrierID:    pc.CarrierID,
 		AnalysisType: string(pc.AnalysisType),
 		ParcelStart:  string(pc.ParcelStart),
-		Expenses:     pc.Expenses,
+		Expenses:     pc.Expenses.InexactFloat64(),
 		AverageTerm:  pc.AverageTerm,
 		IsSpecial:    pc.IsSpecial,
 		IsRevenue:    pc.IsRevenue,
@@ -675,8 +675,8 @@ func toSalesTableResponse(st *entity.SalesTable) *response.SalesTableResponse {
 		Description:                st.Description,
 		ValidityStart:              st.ValidityStart,
 		ValidityEnd:                st.ValidityEnd,
-		ToleranceMinPct:            st.ToleranceMinPct,
-		ToleranceMaxPct:            st.ToleranceMaxPct,
+		ToleranceMinPct:            st.ToleranceMinPct.InexactFloat64(),
+		ToleranceMaxPct:            st.ToleranceMaxPct.InexactFloat64(),
 		PriceFormation:             string(st.PriceFormation),
 		DecimalPlaces:              st.DecimalPlaces,
 		IsActive:                   st.IsActive,
@@ -821,14 +821,14 @@ func (uc *CustomerUseCase) applySalesPricePolicyDTO(ctx context.Context, p *enti
 	p.DiscountPct = dto.DiscountPct
 	p.MinMarginPct = dto.MinMarginPct
 	p.MaxDiscountPct = dto.MaxDiscountPct
-	if p.MaxMarginPct > 0 && p.MinMarginPct > p.MaxMarginPct {
+	if p.MaxMarginPct.IsPositive() && p.MinMarginPct.GreaterThan(p.MaxMarginPct) {
 		return errorsuc.NewValidationError("a margem mínima não pode ser maior que a máxima")
 	}
-	if p.IdealMarginPct > 0 {
-		if p.IdealMarginPct < p.MinMarginPct {
+	if p.IdealMarginPct.IsPositive() {
+		if p.IdealMarginPct.LessThan(p.MinMarginPct) {
 			return errorsuc.NewValidationError("a margem ideal não pode ser menor que a margem mínima")
 		}
-		if p.MaxMarginPct > 0 && p.IdealMarginPct > p.MaxMarginPct {
+		if p.MaxMarginPct.IsPositive() && p.IdealMarginPct.GreaterThan(p.MaxMarginPct) {
 			return errorsuc.NewValidationError("a margem ideal não pode ser maior que a margem máxima")
 		}
 	}
@@ -863,18 +863,18 @@ func toSalesPricePolicyResponse(p *entity.SalesPricePolicy) *response.SalesPrice
 		Sequence:       p.Sequence,
 		PolicyScope:    p.PolicyScope,
 		PolicyTypes:    p.PolicyTypes,
-		MarkupPct:      p.MarkupPct,
-		MarginPct:      p.MarginPct,
-		MaxMarginPct:   p.MaxMarginPct,
-		IdealMarginPct: p.IdealMarginPct,
-		MarginStepPct:  p.MarginStepPct,
-		ExpensesPct:    p.ExpensesPct,
-		TaxesPct:       p.TaxesPct,
-		FreightPct:     p.FreightPct,
-		CommissionPct:  p.CommissionPct,
-		DiscountPct:    p.DiscountPct,
-		MinMarginPct:   p.MinMarginPct,
-		MaxDiscountPct: p.MaxDiscountPct,
+		MarkupPct:      p.MarkupPct.InexactFloat64(),
+		MarginPct:      p.MarginPct.InexactFloat64(),
+		MaxMarginPct:   p.MaxMarginPct.InexactFloat64(),
+		IdealMarginPct: p.IdealMarginPct.InexactFloat64(),
+		MarginStepPct:  p.MarginStepPct.InexactFloat64(),
+		ExpensesPct:    p.ExpensesPct.InexactFloat64(),
+		TaxesPct:       p.TaxesPct.InexactFloat64(),
+		FreightPct:     p.FreightPct.InexactFloat64(),
+		CommissionPct:  p.CommissionPct.InexactFloat64(),
+		DiscountPct:    p.DiscountPct.InexactFloat64(),
+		MinMarginPct:   p.MinMarginPct.InexactFloat64(),
+		MaxDiscountPct: p.MaxDiscountPct.InexactFloat64(),
 		IncidencesJSON: json.RawMessage(p.IncidencesJSON),
 		SalesTableID:   p.SalesTableID,
 		ValidityStart:  p.ValidityStart,
@@ -1092,7 +1092,7 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 	if !entity.ValidCommercialPolicyCalcType(calcType) {
 		return errorsuc.NewValidationError("tipo de cálculo inválido")
 	}
-	for name, value := range map[string]float64{
+	for name, value := range map[string]decimal.Decimal{
 		"percent_value":   dto.PercentValue,
 		"fixed_value":     dto.FixedValue,
 		"max_percent":     dto.MaxPercent,
@@ -1102,14 +1102,14 @@ func applyCommercialPolicyDTO(p *entity.CommercialPolicy, dto request.UpdateComm
 		"min_quantity":    dto.MinQuantity,
 		"max_quantity":    dto.MaxQuantity,
 	} {
-		if value < 0 {
+		if value.IsNegative() {
 			return errorsuc.NewValidationError(fmt.Sprintf("%s deve ser maior ou igual a zero", name))
 		}
 	}
-	if dto.MaxGrossValue > 0 && dto.MinGrossValue > dto.MaxGrossValue {
+	if dto.MaxGrossValue.IsPositive() && dto.MinGrossValue.GreaterThan(dto.MaxGrossValue) {
 		return errorsuc.NewValidationError("o valor bruto mínimo não pode ser maior que o máximo")
 	}
-	if dto.MaxQuantity > 0 && dto.MinQuantity > dto.MaxQuantity {
+	if dto.MaxQuantity.IsPositive() && dto.MinQuantity.GreaterThan(dto.MaxQuantity) {
 		return errorsuc.NewValidationError("a quantidade mínima não pode ser maior que a máxima")
 	}
 	p.Description = dto.Description
@@ -1203,10 +1203,10 @@ func (uc *CustomerUseCase) AddCommercialPolicyLine(ctx context.Context, dto requ
 	if !entity.ValidCommercialPolicyCalcType(calcType) {
 		return nil, errorsuc.NewValidationError("tipo de cálculo inválido")
 	}
-	if dto.PercentValue < 0 || dto.FixedValue < 0 || dto.MinValue < 0 || dto.MaxValue < 0 {
+	if dto.PercentValue.IsNegative() || dto.FixedValue.IsNegative() || dto.MinValue.IsNegative() || dto.MaxValue.IsNegative() {
 		return nil, errorsuc.NewValidationError("os valores da linha devem ser maiores ou iguais a zero")
 	}
-	if dto.MaxValue > 0 && dto.MinValue > dto.MaxValue {
+	if dto.MaxValue.IsPositive() && dto.MinValue.GreaterThan(dto.MaxValue) {
 		return nil, errorsuc.NewValidationError("o valor mínimo não pode ser maior que o máximo")
 	}
 	variables := string(dto.VariablesJSON)
@@ -1260,14 +1260,14 @@ func toCommercialPolicyResponse(p *entity.CommercialPolicy) *response.Commercial
 		Kind:                   string(p.Kind),
 		ChoiceType:             string(p.ChoiceType),
 		CalcType:               string(p.CalcType),
-		PercentValue:           p.PercentValue,
-		FixedValue:             p.FixedValue,
-		MaxPercent:             p.MaxPercent,
-		MaxValue:               p.MaxValue,
-		MinGrossValue:          p.MinGrossValue,
-		MaxGrossValue:          p.MaxGrossValue,
-		MinQuantity:            p.MinQuantity,
-		MaxQuantity:            p.MaxQuantity,
+		PercentValue:           p.PercentValue.InexactFloat64(),
+		FixedValue:             p.FixedValue.InexactFloat64(),
+		MaxPercent:             p.MaxPercent.InexactFloat64(),
+		MaxValue:               p.MaxValue.InexactFloat64(),
+		MinGrossValue:          p.MinGrossValue.InexactFloat64(),
+		MaxGrossValue:          p.MaxGrossValue.InexactFloat64(),
+		MinQuantity:            p.MinQuantity.InexactFloat64(),
+		MaxQuantity:            p.MaxQuantity.InexactFloat64(),
 		Priority:               p.Priority,
 		Sequence:               p.Sequence,
 		Stackable:              p.Stackable,
@@ -1313,10 +1313,10 @@ func toCommercialPolicyLineResponse(line *entity.CommercialPolicyLine) *response
 		SequenceNumber: line.SequenceNumber,
 		Description:    line.Description,
 		CalcType:       string(line.CalcType),
-		PercentValue:   line.PercentValue,
-		FixedValue:     line.FixedValue,
-		MinValue:       line.MinValue,
-		MaxValue:       line.MaxValue,
+		PercentValue:   line.PercentValue.InexactFloat64(),
+		FixedValue:     line.FixedValue.InexactFloat64(),
+		MinValue:       line.MinValue.InexactFloat64(),
+		MaxValue:       line.MaxValue.InexactFloat64(),
 		VariablesJSON:  json.RawMessage(line.VariablesJSON),
 		ValidityStart:  line.ValidityStart,
 		ValidityEnd:    line.ValidityEnd,
@@ -1511,15 +1511,15 @@ func toInvoiceTypeResponse(it *entity.InvoiceType) *response.InvoiceTypeResponse
 		Type:                     string(it.Type),
 		StockMovement:            string(it.StockMovement),
 		ICMSType:                 string(it.ICMSType),
-		ICMSPct:                  it.ICMSPct,
-		ICMSReductionPct:         it.ICMSReductionPct,
-		IPIPct:                   it.IPIPct,
-		PISPct:                   it.PISPct,
-		COFINSPct:                it.COFINSPct,
-		ISSQNPct:                 it.ISSQNPct,
-		IRPct:                    it.IRPct,
-		CSLLPct:                  it.CSLLPct,
-		INSSPct:                  it.INSSPct,
+		ICMSPct:                  it.ICMSPct.InexactFloat64(),
+		ICMSReductionPct:         it.ICMSReductionPct.InexactFloat64(),
+		IPIPct:                   it.IPIPct.InexactFloat64(),
+		PISPct:                   it.PISPct.InexactFloat64(),
+		COFINSPct:                it.COFINSPct.InexactFloat64(),
+		ISSQNPct:                 it.ISSQNPct.InexactFloat64(),
+		IRPct:                    it.IRPct.InexactFloat64(),
+		CSLLPct:                  it.CSLLPct.InexactFloat64(),
+		INSSPct:                  it.INSSPct.InexactFloat64(),
 		GeneratesRevenue:         it.GeneratesRevenue,
 		UpdatesInventory:         it.UpdatesInventory,
 		GeneratesFinancialTitle:  it.GeneratesFinancialTitle,
@@ -1540,8 +1540,8 @@ func toInvoiceTypeResponse(it *entity.InvoiceType) *response.InvoiceTypeResponse
 		BaixaPedido:              it.BaixaPedido,
 		GeraTituloDev:            it.GeraTituloDev,
 		ExigeSuframa:             it.ExigeSuframa,
-		IRPctPresumption:         it.IRPctPresumption,
-		CSLLPctPresumption:       it.CSLLPctPresumption,
+		IRPctPresumption:         it.IRPctPresumption.InexactFloat64(),
+		CSLLPctPresumption:       it.CSLLPctPresumption.InexactFloat64(),
 		DescriptionNF:            it.DescriptionNF,
 		ImpostosNFe:              impostosNFe,
 		CFOPId:                   it.CFOPId,
@@ -1682,7 +1682,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 	if dto.ItemCode == "" {
 		return nil, errorsuc.NewValidationError("o código do item é obrigatório")
 	}
-	if dto.Price <= 0 {
+	if !dto.Price.IsPositive() {
 		return nil, errorsuc.NewValidationError("o preço deve ser maior que zero")
 	}
 	if err := validateManualSalesTablePrice(st, dto.Price); err != nil {
@@ -1717,7 +1717,7 @@ func (uc *CustomerUseCase) CreateSalesTablePrice(ctx context.Context, dto reques
 
 var validPriceSituations = map[string]bool{"ATIVO": true, "INATIVO": true, "PROMOCIONAL": true}
 
-func validateManualSalesTablePrice(st *entity.SalesTable, price float64) error {
+func validateManualSalesTablePrice(st *entity.SalesTable, price decimal.Decimal) error {
 	if st == nil {
 		return nil
 	}
@@ -1725,7 +1725,7 @@ func validateManualSalesTablePrice(st *entity.SalesTable, price float64) error {
 	case entity.PriceCustoMedio, entity.PriceCustoStandardTotal, entity.PriceCustoStandardMaterial:
 		return errorsuc.NewValidationError(fmt.Sprintf("o preço não pode ser informado manualmente quando a formação da tabela é %s", st.PriceFormation))
 	}
-	if price < 0.01 && !st.AllowItemsBelowCent {
+	if price.LessThan(decimal.New(1, -2)) && !st.AllowItemsBelowCent {
 		return errorsuc.NewValidationError("a tabela não permite preços de item abaixo de 0,01")
 	}
 	return nil
@@ -1735,7 +1735,7 @@ func (uc *CustomerUseCase) UpdateSalesTablePrice(ctx context.Context, dto reques
 	if dto.ID == 0 {
 		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
-	if dto.Price < 0 {
+	if dto.Price.IsNegative() {
 		return nil, errorsuc.NewValidationError("o preço deve ser maior ou igual a zero")
 	}
 	current, err := uc.repo.GetSalesTablePriceByID(ctx, dto.ID)
@@ -1818,8 +1818,8 @@ func (uc *CustomerUseCase) PriceSalesItem(ctx context.Context, dto request.Price
 	if dto.ItemCode == "" {
 		return nil, errorsuc.NewValidationError("o código do item é obrigatório")
 	}
-	if dto.Quantity <= 0 {
-		dto.Quantity = 1
+	if !dto.Quantity.IsPositive() {
+		dto.Quantity = decimal.NewFromFloat(1)
 	}
 	st, err := uc.repo.GetSalesTableByCode(ctx, dto.SalesTableCode)
 	if err != nil {
@@ -1842,9 +1842,9 @@ func (uc *CustomerUseCase) PriceSalesItem(ctx context.Context, dto request.Price
 		SalesTableCode: st.Code,
 		SalesTableID:   st.ID,
 		ItemCode:       p.ItemCode,
-		UnitPrice:      p.Price,
-		Quantity:       dto.Quantity,
-		TotalGross:     p.Price * dto.Quantity,
+		UnitPrice:      p.Price.InexactFloat64(),
+		Quantity:       dto.Quantity.InexactFloat64(),
+		TotalGross:     p.Price.Mul(dto.Quantity).InexactFloat64(),
 		Source:         "SALES_TABLE",
 		Situation:      string(p.Situation),
 		Blocked:        p.Blocked,
@@ -1858,7 +1858,7 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 	if strings.TrimSpace(dto.ItemCode) == "" {
 		return nil, errorsuc.NewValidationError("informe o código do item")
 	}
-	if dto.Quantity <= 0 {
+	if !dto.Quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 	if dto.Currency == "" {
@@ -1892,7 +1892,7 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 			continue
 		}
 		price, priceErr := uc.repo.GetSalesTablePrice(ctx, table.ID, dto.ItemCode)
-		if priceErr != nil || price.Blocked || price.Situation == entity.PriceSituationInativo || price.Price <= 0 {
+		if priceErr != nil || price.Blocked || price.Situation == entity.PriceSituationInativo || !price.Price.IsPositive() {
 			continue
 		}
 		unit := ""
@@ -1912,8 +1912,8 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 			source = "CUSTOMER_SALES_TABLE"
 		}
 		applied := price.Price
-		qtd := decimal.NewFromFloat(dto.Quantity)
-		context := entity.CommercialPolicyContext{GrossValue: decimal.NewFromFloat(price.Price).Mul(qtd), Quantity: qtd, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
+		qtd := dto.Quantity
+		context := entity.CommercialPolicyContext{GrossValue: price.Price.Mul(qtd), Quantity: qtd, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
 		if customer != nil {
 			context.CustomerCode = &customer.Code
 			context.CustomerTypeID = customer.CustomerTypeID
@@ -1925,14 +1925,14 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 		if evaluation, evaluationErr := entity.EvaluateCommercialPolicies(policies, context); evaluationErr == nil && len(evaluation.Effects) > 0 {
 			if qtd.IsPositive() {
 				// Calculado em decimal; o preço da tabela ainda é float na resposta.
-				applied = evaluation.NetValue.Div(qtd).Round(6).InexactFloat64()
+				applied = evaluation.NetValue.Div(qtd).Round(6)
 			}
 			if priority > 20 {
 				priority = 20
 			}
 			source = "COMMERCIAL_POLICY"
 		}
-		candidates = append(candidates, response.SalesTableCandidateResponse{SalesTableCode: table.Code, Description: table.Description, BasePrice: price.Price, AppliedPrice: applied, Unit: unit, Currency: "BRL", Source: source, Priority: priority})
+		candidates = append(candidates, response.SalesTableCandidateResponse{SalesTableCode: table.Code, Description: table.Description, BasePrice: price.Price.InexactFloat64(), AppliedPrice: applied.InexactFloat64(), Unit: unit, Currency: "BRL", Source: source, Priority: priority})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].Priority == candidates[j].Priority {
@@ -1960,7 +1960,7 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 		}
 		dto.MarkupPct = p.MarkupPct
 		dto.MarginPct = p.MarginPct
-		if p.IdealMarginPct > 0 {
+		if p.IdealMarginPct.IsPositive() {
 			dto.MarginPct = p.IdealMarginPct
 		}
 		dto.ExpensesPct = p.ExpensesPct
@@ -1968,7 +1968,7 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 		dto.FreightPct = p.FreightPct
 		dto.CommissionPct = p.CommissionPct
 		dto.DiscountPct = p.DiscountPct
-		if dto.BaseCost == 0 && p.CostSource != entity.SalesCostInformed && dto.ItemCode != "" {
+		if dto.BaseCost.IsZero() && p.CostSource != entity.SalesCostInformed && dto.ItemCode != "" {
 			itemCode, err := strconv.ParseInt(dto.ItemCode.String(), 10, 64)
 			if err != nil {
 				return nil, errorsuc.NewValidationError("não foi possível resolver internamente o código do item para calcular o custo")
@@ -2007,17 +2007,17 @@ func (uc *CustomerUseCase) FormSalesPrice(ctx context.Context, dto request.FormS
 	return &response.SalesPriceFormationResponse{
 		SalesTableCode:          dto.SalesTableCode,
 		ItemCode:                dto.ItemCode.String(),
-		BaseCost:                formed.BaseCost,
-		SuggestedPrice:          formed.SuggestedPrice,
-		MarkupPct:               formed.MarkupPct,
-		MarginPct:               formed.MarginPct,
-		ExpensesPct:             formed.ExpensesPct,
-		TaxesPct:                formed.TaxesPct,
-		FreightPct:              formed.FreightPct,
-		CommissionPct:           formed.CommissionPct,
-		DiscountPct:             formed.DiscountPct,
-		ContributionMarginPct:   formed.ContributionMarginPct,
-		ContributionMarginValue: formed.ContributionMarginValue,
+		BaseCost:                formed.BaseCost.InexactFloat64(),
+		SuggestedPrice:          formed.SuggestedPrice.InexactFloat64(),
+		MarkupPct:               formed.MarkupPct.InexactFloat64(),
+		MarginPct:               formed.MarginPct.InexactFloat64(),
+		ExpensesPct:             formed.ExpensesPct.InexactFloat64(),
+		TaxesPct:                formed.TaxesPct.InexactFloat64(),
+		FreightPct:              formed.FreightPct.InexactFloat64(),
+		CommissionPct:           formed.CommissionPct.InexactFloat64(),
+		DiscountPct:             formed.DiscountPct.InexactFloat64(),
+		ContributionMarginPct:   formed.ContributionMarginPct.InexactFloat64(),
+		ContributionMarginValue: formed.ContributionMarginValue.InexactFloat64(),
 		DecimalPlaces:           decimalPlaces,
 	}, nil
 }
@@ -2115,10 +2115,10 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 		}
 		out.Generated = append(out.Generated, response.GeneratedSalesTablePriceResponse{
 			ItemCode:   rawItemCode.String(),
-			BaseCost:   baseCost,
+			BaseCost:   baseCost.InexactFloat64(),
 			CostSource: costSource,
-			OldPrice:   oldPrice,
-			Price:      saved.Price,
+			OldPrice:   fptrD(oldPrice),
+			Price:      saved.Price.InexactFloat64(),
 			HistoryID:  historyID,
 			PriceRow:   toSalesTablePriceResponse(saved),
 		})
@@ -2126,8 +2126,8 @@ func (uc *CustomerUseCase) GenerateSalesTablePrices(ctx context.Context, dto req
 	return out, nil
 }
 
-func effectivePolicyMargin(policy *entity.SalesPricePolicy) float64 {
-	if policy.IdealMarginPct > 0 {
+func effectivePolicyMargin(policy *entity.SalesPricePolicy) decimal.Decimal {
+	if policy.IdealMarginPct.IsPositive() {
 		return policy.IdealMarginPct
 	}
 	return policy.MarginPct
@@ -2152,9 +2152,9 @@ func toSalesTablePriceHistoryResponse(h *entity.SalesTablePriceHistory) *respons
 		SalesTableID:      h.SalesTableID,
 		SalesTableCode:    h.SalesTableCode,
 		ItemCode:          h.ItemCode,
-		OldPrice:          h.OldPrice,
-		NewPrice:          h.NewPrice,
-		BaseCost:          h.BaseCost,
+		OldPrice:          fptrD(h.OldPrice),
+		NewPrice:          h.NewPrice.InexactFloat64(),
+		BaseCost:          fptrD(h.BaseCost),
 		Source:            h.Source,
 		PolicyCode:        h.PolicyCode,
 		Reason:            h.Reason,
@@ -2186,10 +2186,10 @@ func validateSalesPricePolicyForPricing(p *entity.SalesPricePolicy, now time.Tim
 		return errorsuc.NewValidationError("a vigência da política de preço expirou")
 	}
 	margin := effectivePolicyMargin(p)
-	if margin < p.MinMarginPct {
+	if margin.LessThan(p.MinMarginPct) {
 		return errorsuc.NewValidationError("a margem da política de preço é menor que a margem mínima")
 	}
-	if p.MaxMarginPct > 0 && margin > p.MaxMarginPct {
+	if p.MaxMarginPct.IsPositive() && margin.GreaterThan(p.MaxMarginPct) {
 		return errorsuc.NewValidationError("a margem da política de preço é maior que a margem máxima")
 	}
 	return nil
@@ -2204,10 +2204,10 @@ func toSalesTablePriceResponse(p *entity.SalesTablePrice) *response.SalesTablePr
 		ID:            p.ID,
 		SalesTableID:  p.SalesTableID,
 		ItemCode:      p.ItemCode,
-		Price:         p.Price,
+		Price:         p.Price.InexactFloat64(),
 		UME:           p.UME,
 		UMC:           p.UMC,
-		PriceConv:     p.PriceConv,
+		PriceConv:     p.PriceConv.InexactFloat64(),
 		Formula:       p.Formula,
 		Situation:     string(p.Situation),
 		Blocked:       p.Blocked,
@@ -2602,7 +2602,7 @@ func toCustomerResponse(c *entity.Customer) *response.CustomerResponse {
 		TaxTypeID:             c.TaxTypeID,
 		FinalidadeCompra:      c.FinalidadeCompra,
 		PaymentCondVisibility: string(c.PaymentCondVisibility),
-		CreditLimit:           c.CreditLimit,
+		CreditLimit:           c.CreditLimit.InexactFloat64(),
 		Website:               c.Website,
 		IsActive:              c.IsActive,
 		Blocked:               c.Blocked,
@@ -2652,4 +2652,13 @@ func finalidadeDoCliente(v string) (*string, error) {
 		return &f, nil
 	}
 	return nil, errorsuc.NewValidationError("finalidade da compra inválida: use REVENDA, INDUSTRIALIZACAO ou USO_CONSUMO")
+}
+
+// fptrD: o percentual ou valor opcional em decimal, como número na resposta.
+func fptrD(d *decimal.Decimal) *float64 {
+	if d == nil {
+		return nil
+	}
+	f := d.InexactFloat64()
+	return &f
 }

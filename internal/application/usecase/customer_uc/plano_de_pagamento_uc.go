@@ -28,7 +28,7 @@ func (uc *CustomerUseCase) ListInstallments(ctx context.Context, conditionCode i
 			DocumentType:      i.DocumentType,
 			MovementType:      i.MovementType,
 			CarrierID:         i.CarrierID,
-			Percentage:        i.Percentage,
+			Percentage:        fptrD(i.Percentage),
 			BaseEvent:         i.BaseEvent,
 		})
 	}

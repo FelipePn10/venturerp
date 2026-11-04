@@ -29,8 +29,8 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 		Code:         so.Code,
 		CarrierCode:  so.CarrierCode,
 		CustomerCode: so.CustomerCode,
-		TotalVolumes: int(so.VolumeQuantity),
-		TotalWeight:  so.TotalWeightGross,
+		TotalVolumes: int(so.VolumeQuantity.IntPart()),
+		TotalWeight:  so.TotalWeightGross.InexactFloat64(),
 		TotalGross:   so.TotalGross.InexactFloat64(),
 		TotalNet:     so.TotalNet.InexactFloat64(),
 	}
@@ -41,13 +41,13 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 			UnitPrice:       it.UnitPrice.InexactFloat64(),
 			TotalGross:      it.TotalGross.InexactFloat64(),
 			TotalNet:        it.TotalNet.InexactFloat64(),
-			IPIPct:          it.IPIPct,
-			ICMSPct:         it.ICMSPct,
-			PISPct:          it.PISPct,
-			COFINSPct:       it.COFINSPct,
-			STPct:           it.STPct,
-			UnitWeightNet:   it.UnitWeightNet,
-			UnitWeightGross: it.UnitWeightGross,
+			IPIPct:          it.IPIPct.InexactFloat64(),
+			ICMSPct:         it.ICMSPct.InexactFloat64(),
+			PISPct:          it.PISPct.InexactFloat64(),
+			COFINSPct:       it.COFINSPct.InexactFloat64(),
+			STPct:           it.STPct.InexactFloat64(),
+			UnitWeightNet:   it.UnitWeightNet.InexactFloat64(),
+			UnitWeightGross: it.UnitWeightGross.InexactFloat64(),
 		})
 	}
 	return h, nil

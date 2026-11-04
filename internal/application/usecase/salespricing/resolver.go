@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 )
@@ -16,15 +18,15 @@ type Repository interface {
 }
 
 type Result struct {
-	BasePrice, AppliedPrice float64
+	BasePrice, AppliedPrice decimal.Decimal
 	Source                  string
 }
 
-func Resolve(ctx context.Context, repo Repository, tableCode, itemCode int64, quantity float64) (*Result, error) {
+func Resolve(ctx context.Context, repo Repository, tableCode, itemCode int64, quantity decimal.Decimal) (*Result, error) {
 	if repo == nil || tableCode <= 0 {
 		return nil, errorsuc.NewValidationError("informe uma tabela de preço válida")
 	}
-	if quantity <= 0 {
+	if !quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 	table, err := repo.GetSalesTableByCode(ctx, tableCode)
@@ -51,7 +53,7 @@ func Resolve(ctx context.Context, repo Repository, tableCode, itemCode int64, qu
 	if price.Situation == customerentity.PriceSituationInativo {
 		return nil, errorsuc.NewValidationError("o preço do item está inativo na tabela")
 	}
-	if price.Price <= 0 {
+	if !price.Price.IsPositive() {
 		return nil, errorsuc.NewValidationError("o item não possui preço positivo válido")
 	}
 	return &Result{BasePrice: price.Price, AppliedPrice: price.Price, Source: "SALES_TABLE"}, nil

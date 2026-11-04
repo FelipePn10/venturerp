@@ -1056,9 +1056,9 @@ func (h *CustomerHandler) PriceSalesItem(w http.ResponseWriter, r *http.Request)
 
 func (h *CustomerHandler) ResolveSalesTablesForItem(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
-	dto := request.ResolveSalesTablesForItemDTO{ItemCode: query.Get("item_code"), Unit: query.Get("unit"), Currency: query.Get("currency"), Quantity: 1}
+	dto := request.ResolveSalesTablesForItemDTO{ItemCode: query.Get("item_code"), Unit: query.Get("unit"), Currency: query.Get("currency"), Quantity: decimal.NewFromInt(1)}
 	if raw := query.Get("quantity"); raw != "" {
-		value, err := strconv.ParseFloat(raw, 64)
+		value, err := decimal.NewFromString(raw)
 		if err != nil {
 			jsonError(w, http.StatusBadRequest, "quantidade inválida")
 			return

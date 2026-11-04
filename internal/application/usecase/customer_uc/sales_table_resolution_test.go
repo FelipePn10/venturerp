@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -36,9 +38,9 @@ func TestResolveSalesTablesForItemAutoSelectsOnlyValidCandidate(t *testing.T) {
 	activeUnit := "UN"
 	uc := NewCustomerUseCase(salesTableResolutionRepo{
 		tables: []*entity.SalesTable{{ID: 1, Code: 10, Description: "Varejo", IsActive: true}, {ID: 2, Code: 20, Description: "Bloqueada", IsActive: true}},
-		prices: map[int64]*entity.SalesTablePrice{1: {Price: 12.5, UME: &activeUnit, Situation: entity.PriceSituationAtivo}, 2: {Price: 9, Blocked: true, Situation: entity.PriceSituationAtivo}},
+		prices: map[int64]*entity.SalesTablePrice{1: {Price: decimal.NewFromFloat(12.5), UME: &activeUnit, Situation: entity.PriceSituationAtivo}, 2: {Price: decimal.NewFromFloat(9), Blocked: true, Situation: entity.PriceSituationAtivo}},
 	})
-	result, err := uc.ResolveSalesTablesForItem(context.Background(), request.ResolveSalesTablesForItemDTO{ItemCode: "100", Quantity: 2, Unit: "UN", Currency: "BRL"})
+	result, err := uc.ResolveSalesTablesForItem(context.Background(), request.ResolveSalesTablesForItemDTO{ItemCode: "100", Quantity: decimal.NewFromFloat(2), Unit: "UN", Currency: "BRL"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,9 +52,9 @@ func TestResolveSalesTablesForItemAutoSelectsOnlyValidCandidate(t *testing.T) {
 func TestResolveSalesTablesForItemReturnsTieForExplicitDecision(t *testing.T) {
 	uc := NewCustomerUseCase(salesTableResolutionRepo{
 		tables: []*entity.SalesTable{{ID: 1, Code: 10, IsActive: true}, {ID: 2, Code: 20, IsActive: true}},
-		prices: map[int64]*entity.SalesTablePrice{1: {Price: 12, Situation: entity.PriceSituationAtivo}, 2: {Price: 13, Situation: entity.PriceSituationAtivo}},
+		prices: map[int64]*entity.SalesTablePrice{1: {Price: decimal.NewFromFloat(12), Situation: entity.PriceSituationAtivo}, 2: {Price: decimal.NewFromFloat(13), Situation: entity.PriceSituationAtivo}},
 	})
-	result, err := uc.ResolveSalesTablesForItem(context.Background(), request.ResolveSalesTablesForItemDTO{ItemCode: "100", Quantity: 1})
+	result, err := uc.ResolveSalesTablesForItem(context.Background(), request.ResolveSalesTablesForItemDTO{ItemCode: "100", Quantity: decimal.NewFromFloat(1)})
 	if err != nil {
 		t.Fatal(err)
 	}
