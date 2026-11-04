@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.5] — 2026-11-04
+
+- refactor(fiscal): parâmetros, tabelas, CT-e, NFS-e e apurações em decimal (etapa 2b) (`2cc6ef8e`)
+
 ## [v1.10.4] — 2026-11-04
 
 - refactor(fiscal): motor de tributos e NF-e de saída em decimal; base do PIS/COFINS no payload (`18b2a687`)
