@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -25,7 +27,7 @@ type AllocationTarget struct {
 	Code           int64
 	OverheadCode   int64
 	CostCenterCode int64
-	Percentage     float64
-	Amount         float64
+	Percentage     decimal.Decimal
+	Amount         decimal.Decimal
 	CreatedAt      time.Time
 }

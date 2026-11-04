@@ -5,6 +5,8 @@ package item_conversion_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/entity"
@@ -23,7 +25,7 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	defer testutil.Exec(t, pool, "DELETE FROM item_unit_conversions WHERE item_code = $1", itemCode)
 
-	c, err := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", 12, 0, 0, "VALUE", uuid.New())
+	c, err := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", decimal.NewFromFloat(12), decimal.NewFromFloat(0), decimal.NewFromFloat(0), "VALUE", uuid.New())
 	if err != nil {
 		t.Fatalf("NewItemUnitConversion: %v", err)
 	}
@@ -32,7 +34,7 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	}
 
 	got, err := repo.Get(ctx, itemCode, "CX", "UN")
-	if err != nil || got.Factor != 12 {
+	if err != nil || !got.Factor.Equal(decimal.NewFromFloat(12)) {
 		t.Fatalf("Get = %+v err=%v, want factor 12", got, err)
 	}
 	if list, err := repo.ListByItem(ctx, itemCode); err != nil || len(list) != 1 {
@@ -40,12 +42,12 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 	}
 
 	// Upsert: same (item, from, to) updates the factor in place.
-	c2, _ := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", 6, 0, 0, "VALUE", uuid.New())
+	c2, _ := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", decimal.NewFromFloat(6), decimal.NewFromFloat(0), decimal.NewFromFloat(0), "VALUE", uuid.New())
 	if _, err := repo.Create(ctx, c2); err != nil {
 		t.Fatalf("Create upsert: %v", err)
 	}
 	got, _ = repo.Get(ctx, itemCode, "CX", "UN")
-	if got.Factor != 6 {
+	if !got.Factor.Equal(decimal.NewFromFloat(6)) {
 		t.Errorf("upserted factor = %v, want 6", got.Factor)
 	}
 

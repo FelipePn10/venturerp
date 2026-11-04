@@ -43,8 +43,8 @@ func toAllocationTargetValues(targets []*entity.AllocationTarget) []response.All
 			Code:           t.Code,
 			OverheadCode:   t.OverheadCode,
 			CostCenterCode: t.CostCenterCode,
-			Percentage:     t.Percentage,
-			Amount:         t.Amount,
+			Percentage:     t.Percentage.InexactFloat64(),
+			Amount:         t.Amount.InexactFloat64(),
 			CreatedAt:      t.CreatedAt,
 		})
 	}

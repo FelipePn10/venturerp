@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 )
 
 type StandardCostRepositorySQLC struct {
@@ -41,9 +42,9 @@ func (r *StandardCostRepositorySQLC) UpsertWorkCenterCost(ctx context.Context, w
 	row, err := r.q.UpsertWorkCenterCost(ctx, sqlc.UpsertWorkCenterCostParams{
 		EnterpriseID:       empresa,
 		WorkCenterID:       wcc.WorkCenterID,
-		CostPerHour:        pgutil.ToPgNumericFromFloat64(wcc.CostPerHour),
-		MachineCostPerHour: pgutil.ToPgNumericFromFloat64(wcc.MachineCostPerHour),
-		LaborCostPerHour:   pgutil.ToPgNumericFromFloat64(wcc.LaborCostPerHour),
+		CostPerHour:        pgutil.ToPgNumericFromDecimal(wcc.CostPerHour),
+		MachineCostPerHour: pgutil.ToPgNumericFromDecimal(wcc.MachineCostPerHour),
+		LaborCostPerHour:   pgutil.ToPgNumericFromDecimal(wcc.LaborCostPerHour),
 		Currency:           orDefault(wcc.Currency, "BRL"),
 		UpdatedBy:          pgutil.ToPgUUID(wcc.UpdatedBy),
 	})
@@ -89,7 +90,7 @@ func (r *StandardCostRepositorySQLC) UpsertItemPurchaseCost(ctx context.Context,
 	}
 	row, err := r.q.UpsertItemPurchaseCost(ctx, sqlc.UpsertItemPurchaseCostParams{
 		ItemCode:  ipc.ItemCode,
-		UnitCost:  pgutil.ToPgNumericFromFloat64(ipc.UnitCost),
+		UnitCost:  pgutil.ToPgNumericFromDecimal(ipc.UnitCost),
 		Currency:  orDefault(ipc.Currency, "BRL"),
 		UpdatedBy: pgutil.ToPgUUID(ipc.UpdatedBy),
 	})
@@ -117,9 +118,9 @@ func (r *StandardCostRepositorySQLC) InsertRollupLog(ctx context.Context, entry 
 		ItemCode:     entry.ItemCode,
 		Mask:         entry.Mask,
 		BOMLevel:     int32(entry.BOMLevel),
-		MaterialCost: pgutil.ToPgNumericFromFloat64(entry.MaterialCost),
-		LaborCost:    pgutil.ToPgNumericFromFloat64(entry.LaborCost),
-		OverheadCost: pgutil.ToPgNumericFromFloat64(entry.OverheadCost),
+		MaterialCost: pgutil.ToPgNumericFromDecimal(entry.MaterialCost),
+		LaborCost:    pgutil.ToPgNumericFromDecimal(entry.LaborCost),
+		OverheadCost: pgutil.ToPgNumericFromDecimal(entry.OverheadCost),
 	})
 	return err
 }
@@ -145,9 +146,11 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 			continue
 		}
 		out = append(out, domainrepo.BOMChild{
-			ChildCode:          row.ChildCode,
-			Quantity:           row.Quantity,
-			ConversionFactor:   pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+			ChildCode: row.ChildCode,
+			// A quantidade da estrutura ainda chega float do sqlc (override em
+			// sqlc.yaml); vira decimal aqui até a estrutura ser convertida.
+			Quantity:           decimal.NewFromFloat(row.Quantity),
+			ConversionFactor:   pgutil.FromPgNumericToDecimal(row.ConversionFactor),
 			LossPercentage:     row.LossPercentage,
 			IsCoproduct:        row.IsCoproduct,
 			IsFixedQty:         row.IsFixedQty,
@@ -170,10 +173,10 @@ func isCostRowToEntity(row sqlc.DBItemStandardCost) *entity.ItemStandardCost {
 		ID:           row.ID,
 		ItemCode:     row.ItemCode,
 		Mask:         row.Mask,
-		MaterialCost: pgutil.FromPgNumericToFloat64(row.MaterialCost),
-		LaborCost:    pgutil.FromPgNumericToFloat64(row.LaborCost),
-		OverheadCost: pgutil.FromPgNumericToFloat64(row.OverheadCost),
-		TotalCost:    pgutil.FromPgNumericToFloat64(row.TotalCost),
+		MaterialCost: pgutil.FromPgNumericToDecimal(row.MaterialCost),
+		LaborCost:    pgutil.FromPgNumericToDecimal(row.LaborCost),
+		OverheadCost: pgutil.FromPgNumericToDecimal(row.OverheadCost),
+		TotalCost:    pgutil.FromPgNumericToDecimal(row.TotalCost),
 		Currency:     row.Currency,
 		CalculatedAt: pgutil.FromPgTimestamptz(row.CalculatedAt),
 		CalculatedBy: pgutil.FromPgUUID(row.CalculatedBy),
@@ -184,9 +187,9 @@ func wccRowToEntity(row sqlc.DBWorkCenterCost) *entity.WorkCenterCost {
 	return &entity.WorkCenterCost{
 		ID:                 row.ID,
 		WorkCenterID:       row.WorkCenterID,
-		CostPerHour:        pgutil.FromPgNumericToFloat64(row.CostPerHour),
-		MachineCostPerHour: pgutil.FromPgNumericToFloat64(row.MachineCostPerHour),
-		LaborCostPerHour:   pgutil.FromPgNumericToFloat64(row.LaborCostPerHour),
+		CostPerHour:        pgutil.FromPgNumericToDecimal(row.CostPerHour),
+		MachineCostPerHour: pgutil.FromPgNumericToDecimal(row.MachineCostPerHour),
+		LaborCostPerHour:   pgutil.FromPgNumericToDecimal(row.LaborCostPerHour),
 		Currency:           row.Currency,
 		UpdatedAt:          pgutil.FromPgTimestamptz(row.UpdatedAt),
 		UpdatedBy:          pgutil.FromPgUUID(row.UpdatedBy),
@@ -197,7 +200,7 @@ func ipcRowToEntity(row sqlc.DBItemPurchaseCost) *entity.ItemPurchaseCost {
 	return &entity.ItemPurchaseCost{
 		ID:        row.ID,
 		ItemCode:  row.ItemCode,
-		UnitCost:  pgutil.FromPgNumericToFloat64(row.UnitCost),
+		UnitCost:  pgutil.FromPgNumericToDecimal(row.UnitCost),
 		Currency:  row.Currency,
 		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
 		UpdatedBy: pgutil.FromPgUUID(row.UpdatedBy),

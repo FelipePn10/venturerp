@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/repository"
@@ -45,7 +47,7 @@ func (r *lifecycleRepo) ResetToolLife(_ context.Context, id int64) (*entity.Tool
 		return nil, errors.New("no rows in result set")
 	}
 	if !r.silent {
-		t.LifeUsed, t.IsActive = 0, true
+		t.LifeUsed, t.IsActive = decimal.NewFromFloat(0), true
 	}
 	copied := *t
 	return &copied, nil
@@ -72,7 +74,7 @@ func (r *lifecycleRepo) DeactivateToolSerial(_ context.Context, id int64) error 
 
 func newLifecycleUC() (*ToolUseCase, *lifecycleRepo) {
 	repo := &lifecycleRepo{
-		tools:   map[int64]*entity.Tool{1: {ID: 1, Code: 10, Name: "Estampo", LifeLimit: 1000, LifeUsed: 940, IsActive: true}},
+		tools:   map[int64]*entity.Tool{1: {ID: 1, Code: 10, Name: "Estampo", LifeLimit: decimal.NewFromFloat(1000), LifeUsed: decimal.NewFromFloat(940), IsActive: true}},
 		serials: map[int64]*entity.ToolSerial{5: {ID: 5, ToolID: 1, SerialNumber: "S-01", IsActive: true}},
 	}
 	return New(repo), repo
@@ -122,7 +124,7 @@ func TestResetToolLife_ZeroesUsage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("zeragem recusada: %v", err)
 	}
-	if got.LifeUsed != 0 || repo.tools[1].LifeUsed != 0 {
+	if got.LifeUsed != 0 || !repo.tools[1].LifeUsed.IsZero() {
 		t.Fatalf("vida útil não zerada: resposta=%v banco=%v", got.LifeUsed, repo.tools[1].LifeUsed)
 	}
 	if got.RemainingLife != 1000 || got.NeedsReplacement {

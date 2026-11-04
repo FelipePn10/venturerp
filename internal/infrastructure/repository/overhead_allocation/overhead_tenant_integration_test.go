@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
@@ -48,13 +50,13 @@ func TestOverheadAllocationIsIsolatedByTenant(t *testing.T) {
 	if l, err := repo.List(b.Ctx); err != nil || len(l) != 0 {
 		t.Fatalf("empresa B listou %d rateio(s) da A (%v)", len(l), err)
 	}
-	if _, err := repo.AddTarget(b.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc + 1), Percentage: 50}); err == nil {
+	if _, err := repo.AddTarget(b.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc + 1), Percentage: decimal.NewFromFloat(50)}); err == nil {
 		t.Fatal("empresa B incluiu destino no rateio da A")
 	}
-	if _, err := repo.AddTarget(a.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc + 1), Percentage: 50}); err == nil {
+	if _, err := repo.AddTarget(a.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc + 1), Percentage: decimal.NewFromFloat(50)}); err == nil {
 		t.Fatal("empresa A mandou rateio para o centro de custo da B")
 	}
-	if _, err := repo.AddTarget(a.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc), Percentage: 50}); err != nil {
+	if _, err := repo.AddTarget(a.Ctx, &entity.AllocationTarget{OverheadCode: rat.Code, CostCenterCode: int64(cc), Percentage: decimal.NewFromFloat(50)}); err != nil {
 		t.Fatalf("empresa A não incluiu destino no próprio rateio: %v", err)
 	}
 	if l, err := repo.GetTargets(b.Ctx, rat.Code); err != nil || len(l) != 0 {

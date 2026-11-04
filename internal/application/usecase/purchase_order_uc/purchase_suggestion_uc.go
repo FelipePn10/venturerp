@@ -3,8 +3,9 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -109,9 +110,9 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	}
 
 	// A ordem planejada ainda é float (etapa 4): converte na fronteira.
-	qty := decimal.NewFromFloat(planned.QuantityCorrected)
+	qty := planned.QuantityCorrected
 	if !qty.IsPositive() {
-		qty = decimal.NewFromFloat(planned.Quantity)
+		qty = planned.Quantity
 	}
 
 	po := &poentity.PurchaseOrder{
@@ -233,10 +234,10 @@ func ParaSugestoes(lista []*plannedentity.PlannedOrder) []SugestaoResponse {
 	out := make([]SugestaoResponse, 0, len(lista))
 	for _, o := range lista {
 		q := o.QuantityCorrected
-		if q <= 0 {
+		if !q.IsPositive() {
 			q = o.Quantity
 		}
-		out = append(out, SugestaoResponse{Code: o.Code, ItemCode: o.ItemCode, Mask: o.Mask, Quantity: q, NeedDate: o.NeedDate,
+		out = append(out, SugestaoResponse{Code: o.Code, ItemCode: o.ItemCode, Mask: o.Mask, Quantity: q.InexactFloat64(), NeedDate: o.NeedDate,
 			Status: string(o.Status), OrderType: string(o.OrderType), WarehouseCode: o.WarehouseCode})
 	}
 	return out
@@ -245,4 +246,22 @@ func ParaSugestoes(lista []*plannedentity.PlannedOrder) []SugestaoResponse {
 // ParaPedidoResponse expõe o mapeamento do pedido para o handler da sugestão.
 func ParaPedidoResponse(o *poentity.PurchaseOrder) *response.PurchaseOrderResponse {
 	return toPurchaseOrderResponse(o)
+}
+
+// OrdemPlanejadaJSON é a ordem planejada como a rejeição sempre respondeu (a
+// entidade inteira, chaves com o nome dos campos), com as quantidades em
+// número: o campo de fora sombreia o da entidade, que é decimal e sairia texto.
+type OrdemPlanejadaJSON struct {
+	*plannedentity.PlannedOrder
+	Quantity          float64
+	QuantityLoss      float64
+	QuantityCorrected float64
+}
+
+func ParaOrdemPlanejada(o *plannedentity.PlannedOrder) *OrdemPlanejadaJSON {
+	if o == nil {
+		return nil
+	}
+	return &OrdemPlanejadaJSON{PlannedOrder: o, Quantity: o.Quantity.InexactFloat64(),
+		QuantityLoss: o.QuantityLoss.InexactFloat64(), QuantityCorrected: o.QuantityCorrected.InexactFloat64()}
 }

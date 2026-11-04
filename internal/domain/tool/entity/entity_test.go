@@ -3,20 +3,22 @@ package entity
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
 func TestNewTool_ValidationAndDefaults(t *testing.T) {
-	if _, err := NewTool(0, "X", "", "", 0, 0, uuid.New()); err == nil {
+	if _, err := NewTool(0, "X", "", "", decimal.NewFromFloat(0), decimal.NewFromFloat(0), uuid.New()); err == nil {
 		t.Error("expected error for non-positive code")
 	}
-	if _, err := NewTool(1, "", "", "", 0, 0, uuid.New()); err == nil {
+	if _, err := NewTool(1, "", "", "", decimal.NewFromFloat(0), decimal.NewFromFloat(0), uuid.New()); err == nil {
 		t.Error("expected error for empty name")
 	}
-	if _, err := NewTool(1, "Matriz", "", "XPTO", 0, 0, uuid.New()); err == nil {
+	if _, err := NewTool(1, "Matriz", "", "XPTO", decimal.NewFromFloat(0), decimal.NewFromFloat(0), uuid.New()); err == nil {
 		t.Error("expected error for invalid life_type")
 	}
-	tl, err := NewTool(1, "Matriz Corte", "", "", 0, 0, uuid.New())
+	tl, err := NewTool(1, "Matriz Corte", "", "", decimal.NewFromFloat(0), decimal.NewFromFloat(0), uuid.New())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,22 +53,22 @@ func TestNewToolSerial_ValidationAndDefaults(t *testing.T) {
 
 func TestTool_LifeHelpers(t *testing.T) {
 	// Untracked (limit 0) → remaining -1, never needs replacement.
-	untracked := &Tool{LifeLimit: 0, LifeUsed: 999}
-	if untracked.RemainingLife() != -1 || untracked.NeedsReplacement() {
+	untracked := &Tool{LifeLimit: decimal.NewFromFloat(0), LifeUsed: decimal.NewFromFloat(999)}
+	if !untracked.RemainingLife().Equal(decimal.NewFromFloat(-1)) || untracked.NeedsReplacement() {
 		t.Errorf("untracked tool mishandled: rem=%v needs=%v", untracked.RemainingLife(), untracked.NeedsReplacement())
 	}
 	// Tracked, half-used.
-	tl := &Tool{LifeType: LifeStrokes, LifeLimit: 1000, LifeUsed: 400}
-	if tl.RemainingLife() != 600 || tl.NeedsReplacement() {
+	tl := &Tool{LifeType: LifeStrokes, LifeLimit: decimal.NewFromFloat(1000), LifeUsed: decimal.NewFromFloat(400)}
+	if !tl.RemainingLife().Equal(decimal.NewFromFloat(600)) || tl.NeedsReplacement() {
 		t.Errorf("tracked half-used: rem=%v needs=%v", tl.RemainingLife(), tl.NeedsReplacement())
 	}
 	// At/over limit → needs replacement, remaining clamped to 0.
-	tl.LifeUsed = 1000
-	if tl.RemainingLife() != 0 || !tl.NeedsReplacement() {
+	tl.LifeUsed = decimal.NewFromFloat(1000)
+	if !tl.RemainingLife().IsZero() || !tl.NeedsReplacement() {
 		t.Errorf("at limit: rem=%v needs=%v", tl.RemainingLife(), tl.NeedsReplacement())
 	}
-	tl.LifeUsed = 1200
-	if tl.RemainingLife() != 0 || !tl.NeedsReplacement() {
+	tl.LifeUsed = decimal.NewFromFloat(1200)
+	if !tl.RemainingLife().IsZero() || !tl.NeedsReplacement() {
 		t.Errorf("over limit: rem=%v needs=%v", tl.RemainingLife(), tl.NeedsReplacement())
 	}
 }

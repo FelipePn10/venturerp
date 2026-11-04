@@ -22,10 +22,14 @@ sql:
             go_type: "float64"
 
           - column: "allocation_base_items.amount"
-            go_type: "float64"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "Decimal"
 
           - column: "allocation_base_items.percentage"
-            go_type: "float64"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "Decimal"
 
           - column: "cost_centers.parent_code"
             go_type:

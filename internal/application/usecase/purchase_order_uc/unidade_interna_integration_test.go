@@ -4,8 +4,9 @@ package purchase_order_uc_test
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"testing"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
@@ -17,14 +18,16 @@ import (
 // kgParaMetro: o fator do tubo 601 da Tecnofer (1 KG = 0,15530965 M).
 type kgParaMetro struct{}
 
-func (kgParaMetro) Factor(context.Context, int64, string, string) (float64, bool, error) {
-	return 0.15530965, true, nil
+var fatorKgM = decimal.RequireFromString("0.15530965")
+
+func (kgParaMetro) Factor(context.Context, int64, string, string) (decimal.Decimal, bool, error) {
+	return fatorKgM, true, nil
 }
-func (kgParaMetro) ConvertQuantity(_ context.Context, _ int64, q float64, _, _ string) (float64, bool, error) {
-	return q * 0.15530965, true, nil
+func (kgParaMetro) ConvertQuantity(_ context.Context, _ int64, q decimal.Decimal, _, _ string) (decimal.Decimal, bool, error) {
+	return q.Mul(fatorKgM), true, nil
 }
-func (kgParaMetro) ConvertUnitPrice(_ context.Context, _ int64, p float64, _, _ string) (float64, bool, error) {
-	return p / 0.15530965, true, nil
+func (kgParaMetro) ConvertUnitPrice(_ context.Context, _ int64, p decimal.Decimal, _, _ string) (decimal.Decimal, bool, error) {
+	return p.Div(fatorKgM), true, nil
 }
 
 // A quantidade interna gravada é a da conversão (15,530965 M), não 15,5310: o

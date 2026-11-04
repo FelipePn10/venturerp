@@ -104,11 +104,11 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			mask = *po.Mask
 		}
 		qty := po.QuantityCorrected
-		if qty <= 0 {
+		if !qty.IsPositive() {
 			qty = po.Quantity
 		}
 		sources = append(sources, orderSource{
-			ref: fmt.Sprintf("PLAN-%d", po.OrderNumber), item: po.ItemCode, mask: mask, qty: qty,
+			ref: fmt.Sprintf("PLAN-%d", po.OrderNumber), item: po.ItemCode, mask: mask, qty: qty.InexactFloat64(),
 		})
 	}
 

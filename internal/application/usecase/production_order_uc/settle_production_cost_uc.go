@@ -3,7 +3,6 @@ package production_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -54,9 +53,9 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 		}
 		if scErr == nil && sc != nil {
 			std = entity.StandardUnitCost{
-				Material: decimal.NewFromFloat(sc.MaterialCost),
-				Labor:    decimal.NewFromFloat(sc.LaborCost),
-				Overhead: decimal.NewFromFloat(sc.OverheadCost),
+				Material: sc.MaterialCost,
+				Labor:    sc.LaborCost,
+				Overhead: sc.OverheadCost,
 			}
 			if sc.Currency != "" {
 				currency = sc.Currency

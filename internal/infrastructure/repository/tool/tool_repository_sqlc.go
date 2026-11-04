@@ -5,7 +5,9 @@ import (
 
 	"context"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/tool/repository"
@@ -64,8 +66,8 @@ func (r *ToolRepositorySQLC) CreateTool(ctx context.Context, t *entity.Tool) (*e
 		Name:         t.Name,
 		ToolType:     t.ToolType,
 		LifeType:     t.LifeType,
-		LifeLimit:    pgutil.ToPgNumericFromFloat64(t.LifeLimit),
-		Cost:         pgutil.ToPgNumericFromFloat64(t.Cost),
+		LifeLimit:    pgutil.ToPgNumericFromDecimal(t.LifeLimit),
+		Cost:         pgutil.ToPgNumericFromDecimal(t.Cost),
 		Status:       t.Status,
 		CreatedBy:    pgutil.ToPgUUID(t.CreatedBy),
 	})
@@ -84,8 +86,8 @@ func (r *ToolRepositorySQLC) UpdateTool(ctx context.Context, t *entity.Tool) (*e
 		Name:      t.Name,
 		ToolType:  t.ToolType,
 		LifeType:  t.LifeType,
-		LifeLimit: pgutil.ToPgNumericFromFloat64(t.LifeLimit),
-		Cost:      pgutil.ToPgNumericFromFloat64(t.Cost),
+		LifeLimit: pgutil.ToPgNumericFromDecimal(t.LifeLimit),
+		Cost:      pgutil.ToPgNumericFromDecimal(t.Cost),
 		Status:    t.Status,
 	})
 	if err != nil {
@@ -131,13 +133,13 @@ func (r *ToolRepositorySQLC) NextToolCode(ctx context.Context) (int64, error) {
 
 // ─── life ────────────────────────────────────────────────────────────────────
 
-func (r *ToolRepositorySQLC) ConsumeToolLife(ctx context.Context, id int64, amount float64) (*entity.Tool, error) {
+func (r *ToolRepositorySQLC) ConsumeToolLife(ctx context.Context, id int64, amount decimal.Decimal) (*entity.Tool, error) {
 	if err := r.ferramenta(ctx, id); err != nil {
 		return nil, err
 	}
 	row, err := r.q.ConsumeToolLife(ctx, sqlc.ConsumeToolLifeParams{
 		ID:       id,
-		LifeUsed: pgutil.ToPgNumericFromFloat64(amount),
+		LifeUsed: pgutil.ToPgNumericFromDecimal(amount),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("consuming tool life %d: %w", id, err)
@@ -156,12 +158,12 @@ func (r *ToolRepositorySQLC) ResetToolLife(ctx context.Context, id int64) (*enti
 	return toolRowToEntity(row), nil
 }
 
-func (r *ToolRepositorySQLC) ListToolsNeedingReplacement(ctx context.Context, threshold float64) ([]*entity.Tool, error) {
+func (r *ToolRepositorySQLC) ListToolsNeedingReplacement(ctx context.Context, threshold decimal.Decimal) ([]*entity.Tool, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListToolsNeedingReplacement(ctx, sqlc.ListToolsNeedingReplacementParams{Threshold: pgutil.ToPgNumericFromFloat64(threshold), EnterpriseID: empresa})
+	rows, err := r.q.ListToolsNeedingReplacement(ctx, sqlc.ListToolsNeedingReplacementParams{Threshold: pgutil.ToPgNumericFromDecimal(threshold), EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("listing tools needing replacement: %w", err)
 	}
@@ -185,7 +187,7 @@ func (r *ToolRepositorySQLC) AddRouteOpTool(ctx context.Context, rt *entity.Rout
 		EnterpriseID:     empresa,
 		RouteOperationID: rt.RouteOperationID,
 		ToolID:           rt.ToolID,
-		QtyRequired:      pgutil.ToPgNumericFromFloat64(rt.QtyRequired),
+		QtyRequired:      pgutil.ToPgNumericFromDecimal(rt.QtyRequired),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -197,7 +199,7 @@ func (r *ToolRepositorySQLC) AddRouteOpTool(ctx context.Context, rt *entity.Rout
 		ID:               row.ID,
 		RouteOperationID: row.RouteOperationID,
 		ToolID:           row.ToolID,
-		QtyRequired:      pgutil.FromPgNumericToFloat64(row.QtyRequired),
+		QtyRequired:      pgutil.FromPgNumericToDecimal(row.QtyRequired),
 	}, nil
 }
 
@@ -237,12 +239,12 @@ func (r *ToolRepositorySQLC) ListToolsByRouteOp(ctx context.Context, routeOperat
 			ID:               row.ID,
 			RouteOperationID: row.RouteOperationID,
 			ToolID:           row.ToolID,
-			QtyRequired:      pgutil.FromPgNumericToFloat64(row.QtyRequired),
+			QtyRequired:      pgutil.FromPgNumericToDecimal(row.QtyRequired),
 			ToolCode:         row.ToolCode,
 			ToolName:         row.ToolName,
 			LifeType:         row.LifeType,
-			LifeLimit:        pgutil.FromPgNumericToFloat64(row.LifeLimit),
-			LifeUsed:         pgutil.FromPgNumericToFloat64(row.LifeUsed),
+			LifeLimit:        pgutil.FromPgNumericToDecimal(row.LifeLimit),
+			LifeUsed:         pgutil.FromPgNumericToDecimal(row.LifeUsed),
 			Status:           row.Status,
 		})
 	}
@@ -267,12 +269,12 @@ func (r *ToolRepositorySQLC) ListToolsByRoute(ctx context.Context, routeID int64
 			ID:               row.ID,
 			RouteOperationID: row.RouteOperationID,
 			ToolID:           row.ToolID,
-			QtyRequired:      pgutil.FromPgNumericToFloat64(row.QtyRequired),
+			QtyRequired:      pgutil.FromPgNumericToDecimal(row.QtyRequired),
 			ToolCode:         row.ToolCode,
 			ToolName:         row.ToolName,
 			LifeType:         row.LifeType,
-			LifeLimit:        pgutil.FromPgNumericToFloat64(row.LifeLimit),
-			LifeUsed:         pgutil.FromPgNumericToFloat64(row.LifeUsed),
+			LifeLimit:        pgutil.FromPgNumericToDecimal(row.LifeLimit),
+			LifeUsed:         pgutil.FromPgNumericToDecimal(row.LifeUsed),
 			Status:           row.Status,
 		})
 	}
@@ -360,7 +362,7 @@ func toolSerialRowToEntity(row sqlc.DBToolSerial) *entity.ToolSerial {
 		ToolID:       row.ToolID,
 		SerialNumber: row.SerialNumber,
 		Status:       row.Status,
-		LifeUsed:     pgutil.FromPgNumericToFloat64(row.LifeUsed),
+		LifeUsed:     pgutil.FromPgNumericToDecimal(row.LifeUsed),
 		Location:     pgutil.FromPgText(row.Location),
 		Notes:        pgutil.FromPgText(row.Notes),
 		IsActive:     row.IsActive,
@@ -377,9 +379,9 @@ func toolRowToEntity(row sqlc.Tool) *entity.Tool {
 		Name:      row.Name,
 		ToolType:  row.ToolType,
 		LifeType:  row.LifeType,
-		LifeLimit: pgutil.FromPgNumericToFloat64(row.LifeLimit),
-		LifeUsed:  pgutil.FromPgNumericToFloat64(row.LifeUsed),
-		Cost:      pgutil.FromPgNumericToFloat64(row.Cost),
+		LifeLimit: pgutil.FromPgNumericToDecimal(row.LifeLimit),
+		LifeUsed:  pgutil.FromPgNumericToDecimal(row.LifeUsed),
+		Cost:      pgutil.FromPgNumericToDecimal(row.Cost),
 		Status:    row.Status,
 		IsActive:  row.IsActive,
 		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),

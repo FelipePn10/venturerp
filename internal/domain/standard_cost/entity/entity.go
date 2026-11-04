@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -18,16 +20,16 @@ type ItemStandardCost struct {
 	ID              int64
 	ItemCode        int64
 	Mask            string
-	MaterialCost    float64
-	SetupCost       float64
-	MachineCost     float64
-	LaborCost       float64
-	SubcontractCost float64
-	OverheadCost    float64
-	OwnLevelCost    float64
-	LowerLevelCost  float64
-	LotSize         float64
-	TotalCost       float64
+	MaterialCost    decimal.Decimal
+	SetupCost       decimal.Decimal
+	MachineCost     decimal.Decimal
+	LaborCost       decimal.Decimal
+	SubcontractCost decimal.Decimal
+	OverheadCost    decimal.Decimal
+	OwnLevelCost    decimal.Decimal
+	LowerLevelCost  decimal.Decimal
+	LotSize         decimal.Decimal
+	TotalCost       decimal.Decimal
 	Currency        string
 	CalculatedAt    time.Time
 	CalculatedBy    uuid.UUID
@@ -36,30 +38,30 @@ type ItemStandardCost struct {
 type WorkCenterCost struct {
 	ID           int64
 	WorkCenterID int64
-	CostPerHour  float64 // legacy blended rate (kept as machine-rate fallback)
+	CostPerHour  decimal.Decimal // legacy blended rate (kept as machine-rate fallback)
 	// Enterprise+ split: machine occupancy rate vs. direct-labor rate per hour.
-	MachineCostPerHour float64
-	LaborCostPerHour   float64
+	MachineCostPerHour decimal.Decimal
+	LaborCostPerHour   decimal.Decimal
 	Currency           string
 	UpdatedAt          time.Time
 	UpdatedBy          uuid.UUID
 }
 
 // MachineRate returns the effective machine hourly rate (falls back to the blended rate).
-func (w *WorkCenterCost) MachineRate() float64 {
-	if w.MachineCostPerHour > 0 {
+func (w *WorkCenterCost) MachineRate() decimal.Decimal {
+	if w.MachineCostPerHour.IsPositive() {
 		return w.MachineCostPerHour
 	}
 	return w.CostPerHour
 }
 
 // LaborRate returns the effective labor hourly rate.
-func (w *WorkCenterCost) LaborRate() float64 { return w.LaborCostPerHour }
+func (w *WorkCenterCost) LaborRate() decimal.Decimal { return w.LaborCostPerHour }
 
 type ItemPurchaseCost struct {
 	ID        int64
 	ItemCode  int64
-	UnitCost  float64
+	UnitCost  decimal.Decimal
 	Currency  string
 	UpdatedAt time.Time
 	UpdatedBy uuid.UUID
@@ -70,33 +72,33 @@ type CostRollupLogEntry struct {
 	ItemCode     int64
 	Mask         string
 	BOMLevel     int
-	MaterialCost float64
-	LaborCost    float64
-	OverheadCost float64
+	MaterialCost decimal.Decimal
+	LaborCost    decimal.Decimal
+	OverheadCost decimal.Decimal
 	// Componentes acrescentados na migração 000373: é o que permite a tela mostrar
 	// a árvore de custo aberta em vez de dois números por nível.
-	SetupCost       float64
-	MachineCost     float64
-	SubcontractCost float64
-	LowerLevelCost  float64
-	Quantity        float64
+	SetupCost       decimal.Decimal
+	MachineCost     decimal.Decimal
+	SubcontractCost decimal.Decimal
+	LowerLevelCost  decimal.Decimal
+	Quantity        decimal.Decimal
 	ParentCode      *int64
 	RunAt           time.Time
 }
 
 // Total do nó do log: componentes próprios mais o que veio de baixo.
-func (e CostRollupLogEntry) Total() float64 {
-	return e.MaterialCost + e.SetupCost + e.MachineCost + e.LaborCost +
-		e.SubcontractCost + e.OverheadCost + e.LowerLevelCost
+func (e CostRollupLogEntry) Total() decimal.Decimal {
+	return e.MaterialCost.Add(e.SetupCost).Add(e.MachineCost).Add(e.LaborCost).
+		Add(e.SubcontractCost).Add(e.OverheadCost).Add(e.LowerLevelCost)
 }
 
 type RollupResult struct {
 	ItemCode     int64
 	Mask         string
-	MaterialCost float64
-	LaborCost    float64
-	OverheadCost float64
-	TotalCost    float64
+	MaterialCost decimal.Decimal
+	LaborCost    decimal.Decimal
+	OverheadCost decimal.Decimal
+	TotalCost    decimal.Decimal
 	Detail       []CostRollupLogEntry
 }
 
@@ -112,35 +114,35 @@ type RollupResult struct {
 // SAP e das taxas de CIF do TOTVS.
 type ComponentesDeCusto struct {
 	// Material comprado consumido por este item e pelos níveis abaixo.
-	Material float64
+	Material decimal.Decimal
 	// Preparação de máquina, já diluída pelo lote de referência.
-	Setup float64
+	Setup decimal.Decimal
 	// Ocupação de máquina.
-	Maquina float64
+	Maquina decimal.Decimal
 	// Mão de obra direta.
-	MaoDeObra float64
+	MaoDeObra decimal.Decimal
 	// Serviço de terceiro (operação externa do roteiro).
-	Subcontratacao float64
+	Subcontratacao decimal.Decimal
 	// Indiretos aplicados pelo esquema de rateio.
-	Overhead float64
+	Overhead decimal.Decimal
 	// NivelProprio é o que ESTA etapa agrega: conversão + indiretos.
 	// NivelInferior é o custo total dos componentes fabricados abaixo.
 	// A soma dos dois é o total — é o corte que diz se o custo subiu aqui ou lá
 	// embaixo.
-	NivelProprio  float64
-	NivelInferior float64
+	NivelProprio  decimal.Decimal
+	NivelInferior decimal.Decimal
 }
 
 // Total soma os componentes. Nunca somar NivelProprio + NivelInferior aqui: eles
 // são uma LEITURA dos mesmos valores por outro corte, e somar tudo dobraria o
 // custo.
-func (c ComponentesDeCusto) Total() float64 {
-	return c.Material + c.Setup + c.Maquina + c.MaoDeObra + c.Subcontratacao + c.Overhead
+func (c ComponentesDeCusto) Total() decimal.Decimal {
+	return c.Material.Add(c.Setup).Add(c.Maquina).Add(c.MaoDeObra).Add(c.Subcontratacao).Add(c.Overhead)
 }
 
 // Conversao é o que a fábrica agrega em horas e preparação, sem indiretos.
-func (c ComponentesDeCusto) Conversao() float64 {
-	return c.Setup + c.Maquina + c.MaoDeObra
+func (c ComponentesDeCusto) Conversao() decimal.Decimal {
+	return c.Setup.Add(c.Maquina).Add(c.MaoDeObra)
 }
 
 // BaseDeRateio diz sobre qual componente a taxa de indireto incide.
@@ -176,7 +178,7 @@ type RegraDeRateio struct {
 	Description   string
 	Base          BaseDeRateio
 	Method        MetodoDeRateio
-	Rate          float64
+	Rate          decimal.Decimal
 	WorkCenterID  *int64
 	ItemCode      *int64
 	PlanoContasID *int64
@@ -235,7 +237,7 @@ func (r *RegraDeRateio) HorasDaBase(maquina, maoDeObra, setup float64) float64 {
 }
 
 // ValorDaBase é o denominador do método percentual.
-func (r *RegraDeRateio) ValorDaBase(c ComponentesDeCusto) float64 {
+func (r *RegraDeRateio) ValorDaBase(c ComponentesDeCusto) decimal.Decimal {
 	switch r.Base {
 	case BaseMaterial:
 		return c.Material
@@ -253,23 +255,23 @@ func (r *RegraDeRateio) ValorDaBase(c ComponentesDeCusto) float64 {
 		// Sobre tudo que veio ANTES do rateio. Incluir Overhead aqui faria a
 		// segunda regra incidir sobre a primeira, e a ordem das regras passaria a
 		// mudar o custo.
-		return c.Material + c.Conversao() + c.Subcontratacao
+		return c.Material.Add(c.Conversao()).Add(c.Subcontratacao)
 	default:
-		return 0
+		return decimal.Zero
 	}
 }
 
 // RateioAplicado é o rastro de uma regra no custo do item: sem isso o indireto é
 // um número que aparece no total e ninguém sabe de onde veio.
 type RateioAplicado struct {
-	RuleID      int64          `json:"rule_id"`
-	Code        string         `json:"code"`
-	Description string         `json:"description"`
-	Base        BaseDeRateio   `json:"base"`
-	Method      MetodoDeRateio `json:"method"`
-	Rate        float64        `json:"rate"`
-	BaseValue   float64        `json:"base_value"`
-	Applied     float64        `json:"applied"`
+	RuleID      int64
+	Code        string
+	Description string
+	Base        BaseDeRateio
+	Method      MetodoDeRateio
+	Rate        decimal.Decimal
+	BaseValue   decimal.Decimal
+	Applied     decimal.Decimal
 }
 
 // HorasDoRoteiro são as horas por unidade que a apuração mediu, usadas pelas
@@ -288,9 +290,9 @@ type HistoricoDeCusto struct {
 	EnterpriseID int64
 	ItemCode     int64
 	Mask         string
-	LotSize      float64
+	LotSize      decimal.Decimal
 	Componentes  ComponentesDeCusto
-	TotalCost    float64
+	TotalCost    decimal.Decimal
 	Currency     string
 	Rateios      []RateioAplicado
 	CalculatedAt time.Time

@@ -5,6 +5,8 @@ package tool_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
@@ -21,7 +23,7 @@ func TestIntegration_Tool_LifeCycle(t *testing.T) {
 	uid := uuid.New()
 
 	code := testutil.UniqueCode()
-	tl, err := entity.NewTool(code, "Matriz Estampo", "MATRIZ", entity.LifeStrokes, 1000, 5000, uid)
+	tl, err := entity.NewTool(code, "Matriz Estampo", "MATRIZ", entity.LifeStrokes, decimal.NewFromFloat(1000), decimal.NewFromFloat(5000), uid)
 	if err != nil {
 		t.Fatalf("NewTool: %v", err)
 	}
@@ -32,16 +34,16 @@ func TestIntegration_Tool_LifeCycle(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM tools WHERE id = $1", created.ID)
 
 	// Consume 600 strokes → not yet at limit.
-	after, err := repo.ConsumeToolLife(ctx, created.ID, 600)
+	after, err := repo.ConsumeToolLife(ctx, created.ID, decimal.NewFromFloat(600))
 	if err != nil {
 		t.Fatalf("ConsumeToolLife: %v", err)
 	}
-	if after.LifeUsed != 600 || after.NeedsReplacement() {
+	if !after.LifeUsed.Equal(decimal.NewFromFloat(600)) || after.NeedsReplacement() {
 		t.Fatalf("after 600: used=%v needs=%v, want 600 / false", after.LifeUsed, after.NeedsReplacement())
 	}
 
 	// Consume 500 more → 1100 ≥ 1000 → needs replacement.
-	after, err = repo.ConsumeToolLife(ctx, created.ID, 500)
+	after, err = repo.ConsumeToolLife(ctx, created.ID, decimal.NewFromFloat(500))
 	if err != nil {
 		t.Fatalf("ConsumeToolLife 2: %v", err)
 	}
@@ -51,7 +53,7 @@ func TestIntegration_Tool_LifeCycle(t *testing.T) {
 
 	// Appears in the replacement list. O limiar 1 é "só o que já estourou" —
 	// o comportamento que este teste sempre verificou.
-	repl, err := repo.ListToolsNeedingReplacement(ctx, 1)
+	repl, err := repo.ListToolsNeedingReplacement(ctx, decimal.NewFromFloat(1))
 	if err != nil {
 		t.Fatalf("ListToolsNeedingReplacement: %v", err)
 	}
@@ -70,7 +72,7 @@ func TestIntegration_Tool_LifeCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResetToolLife: %v", err)
 	}
-	if reset.LifeUsed != 0 || reset.NeedsReplacement() || reset.Status != entity.StatusActive {
+	if !reset.LifeUsed.IsZero() || reset.NeedsReplacement() || reset.Status != entity.StatusActive {
 		t.Errorf("after reset: %+v", reset)
 	}
 }

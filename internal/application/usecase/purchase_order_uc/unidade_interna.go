@@ -3,7 +3,6 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -71,11 +70,11 @@ func (u *UnidadeInterna) Preencher(ctx context.Context, l *entity.PurchaseOrderI
 	if u.Conversor == nil {
 		return semConversao
 	}
-	qf, achou, err := u.Conversor.ConvertQuantity(ctx, l.ItemCode, l.RequestedQty.InexactFloat64(), compra, estoque)
+	qf, achou, err := u.Conversor.ConvertQuantity(ctx, l.ItemCode, l.RequestedQty, compra, estoque)
 	if err != nil {
 		return err
 	}
-	q := decimal.NewFromFloat(qf)
+	q := qf
 	if !achou || !q.Round(6).IsPositive() {
 		return semConversao
 	}

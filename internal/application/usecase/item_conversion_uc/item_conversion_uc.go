@@ -3,8 +3,6 @@ package item_conversion_uc
 import (
 	"context"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -16,6 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/repository"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
+	"github.com/shopspring/decimal"
 )
 
 // ErrNoConversion is returned when no direct/inverse factor is registered.
@@ -109,22 +108,28 @@ func (uc *ItemConversionUseCase) Delete(ctx context.Context, id int64) error {
 
 // Factor returns f where 1 fromUOM = f × toUOM. Tries the direct conversion,
 // then the inverse (1/factor). Same unit returns 1.
-func (uc *ItemConversionUseCase) Factor(ctx context.Context, itemCode int64, fromUOM, toUOM string) (float64, bool, error) {
+func (uc *ItemConversionUseCase) Factor(ctx context.Context, itemCode int64, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	from := strings.ToUpper(strings.TrimSpace(fromUOM))
 	to := strings.ToUpper(strings.TrimSpace(toUOM))
 	if from == to {
-		return 1, true, nil
+		return um, true, nil
 	}
 	if c, err := uc.repo.Get(ctx, itemCode, from, to); err == nil && c != nil {
 		return c.Factor, true, nil
 	}
-	if c, err := uc.repo.Get(ctx, itemCode, to, from); err == nil && c != nil && c.Factor != 0 {
-		return 1 / c.Factor, true, nil
+	if c, err := uc.repo.Get(ctx, itemCode, to, from); err == nil && c != nil && !c.Factor.IsZero() {
+		return inverso(c.Factor), true, nil
 	}
-	return 0, false, nil
+	return decimal.Zero, false, nil
 }
 
-func (uc *ItemConversionUseCase) ConvertQuantity(ctx context.Context, itemCode int64, qty float64, fromUOM, toUOM string) (float64, bool, error) {
+var um = decimal.NewFromInt(1)
+
+// inverso é 1/f com a precisão da divisão do decimal (16 casas). O fator
+// inverso é usado em multiplicação, então o arredondamento fica na conta final.
+func inverso(f decimal.Decimal) decimal.Decimal { return um.Div(f) }
+
+func (uc *ItemConversionUseCase) ConvertQuantity(ctx context.Context, itemCode int64, qty decimal.Decimal, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	return uc.ConvertQuantityConfigured(ctx, itemCode, "", qty, fromUOM, toUOM)
 }
 
@@ -133,10 +138,10 @@ type configuredConversionRepository interface {
 	AcceptsFractional(context.Context, int64) (bool, error)
 }
 
-func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode int64, mask, fromUOM, toUOM string) (float64, bool, error) {
+func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode int64, mask, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	from, to := strings.ToUpper(strings.TrimSpace(fromUOM)), strings.ToUpper(strings.TrimSpace(toUOM))
 	if from == to {
-		return 1, true, nil
+		return um, true, nil
 	}
 	repo, supportsPolicy := uc.repo.(configuredConversionRepository)
 	if !supportsPolicy {
@@ -144,13 +149,13 @@ func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode 
 	}
 	conversion, inverse, err := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
 	if err != nil {
-		return 0, false, err
+		return decimal.Zero, false, err
 	}
 	if conversion == nil {
-		return 0, false, nil
+		return decimal.Zero, false, nil
 	}
 	if inverse {
-		return 1 / conversion.Factor, true, nil
+		return inverso(conversion.Factor), true, nil
 	}
 	return conversion.Factor, true, nil
 }
@@ -194,7 +199,7 @@ func resolveConfiguredConversion(ctx context.Context, repo configuredConversionR
 	return conversion, inverse, nil
 }
 
-func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, itemCode int64, mask string, qty float64, fromUOM, toUOM string) (float64, bool, error) {
+func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, itemCode int64, mask string, qty decimal.Decimal, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	from, to := strings.ToUpper(strings.TrimSpace(fromUOM)), strings.ToUpper(strings.TrimSpace(toUOM))
 	if from == to {
 		return qty, true, nil
@@ -203,49 +208,51 @@ func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, 
 	if !supportsPolicy {
 		f, found, err := uc.Factor(ctx, itemCode, from, to)
 		if err != nil || !found {
-			return 0, found, err
+			return decimal.Zero, found, err
 		}
-		return qty * f, true, nil
+		return qty.Mul(f), true, nil
 	}
 	conversion, inverse, err := resolveConfiguredConversion(ctx, repo, itemCode, mask, from, to)
 	if err != nil {
-		return 0, false, err
+		return decimal.Zero, false, err
 	}
 	if conversion == nil {
-		return 0, false, nil
+		return decimal.Zero, false, nil
 	}
-	factor := conversion.Factor
+	// Inversa divide em vez de multiplicar por 1/f: 10 ÷ 3 sai 3,333… direto,
+	// sem passar pelo fator truncado.
+	converted := qty.Mul(conversion.Factor)
 	if inverse {
-		factor = 1 / factor
+		converted = qty.Div(conversion.Factor)
 	}
-	converted := qty * factor
 	fractional, err := repo.AcceptsFractional(ctx, itemCode)
 	if err != nil {
-		return 0, false, err
+		return decimal.Zero, false, err
 	}
 	if fractional {
 		return converted, true, nil
 	}
-	rounded := math.Round(converted)
-	allowed := math.Abs(converted) * conversion.RoundingPercent / 100
+	cem := decimal.NewFromInt(100)
+	rounded := converted.Round(0)
+	allowed := converted.Abs().Mul(conversion.RoundingPercent).Div(cem)
 	if conversion.ToleranceType == "PERCENT" {
-		allowed += math.Abs(converted) * conversion.ToleranceValue / 100
+		allowed = allowed.Add(converted.Abs().Mul(conversion.ToleranceValue).Div(cem))
 	} else {
-		allowed += conversion.ToleranceValue
+		allowed = allowed.Add(conversion.ToleranceValue)
 	}
-	if math.Abs(converted-rounded) > allowed {
-		return 0, false, errorsuc.NewValidationError(fmt.Sprintf(
+	if converted.Sub(rounded).Abs().GreaterThan(allowed) {
+		return decimal.Zero, false, errorsuc.NewValidationError(fmt.Sprintf(
 			"o item não aceita fração e a conversão daria %s: ajuste o arredondamento ou a tolerância da conversão",
-			strconv.FormatFloat(converted, 'f', -1, 64)))
+			converted.String()))
 	}
 	return rounded, true, nil
 }
 
 // ConvertUnitPrice: if 1 fromUOM = f toUOM, then price per toUOM = price / f.
-func (uc *ItemConversionUseCase) ConvertUnitPrice(ctx context.Context, itemCode int64, price float64, fromUOM, toUOM string) (float64, bool, error) {
+func (uc *ItemConversionUseCase) ConvertUnitPrice(ctx context.Context, itemCode int64, price decimal.Decimal, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	f, found, err := uc.Factor(ctx, itemCode, fromUOM, toUOM)
-	if err != nil || !found || f == 0 {
-		return 0, found, err
+	if err != nil || !found || f.IsZero() {
+		return decimal.Zero, found, err
 	}
-	return price / f, true, nil
+	return price.Div(f), true, nil
 }

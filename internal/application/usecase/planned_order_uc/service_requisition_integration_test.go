@@ -5,8 +5,9 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"testing"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 
@@ -83,7 +84,7 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 
 	uc := &FirmPlannedOrderUseCase{ReqRepo: reqRepo, ExternalOps: rRepo, Auth: &serviceReqAuth{enterprise: enterpriseID, actor: uid},
 		AprovacoesDoCentro: costcenterRepo.NewGestaoPG(pool)}
-	order := &plannedentity.PlannedOrder{ItemCode: itemCode, Quantity: 10, CreatedBy: uid, CostCenterCode: &ccCode}
+	order := &plannedentity.PlannedOrder{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), CreatedBy: uid, CostCenterCode: &ccCode}
 
 	reqCode, err := uc.generateServiceRequisition(ctx, order)
 	if err != nil {

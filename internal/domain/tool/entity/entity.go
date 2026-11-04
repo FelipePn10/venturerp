@@ -1,8 +1,10 @@
 package entity
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -27,10 +29,10 @@ type Tool struct {
 	Code      int64
 	Name      string
 	ToolType  string
-	LifeType  string  // GOLPES | HORAS | PECAS
-	LifeLimit float64 // 0 = no life tracking
-	LifeUsed  float64
-	Cost      float64
+	LifeType  string          // GOLPES | HORAS | PECAS
+	LifeLimit decimal.Decimal // 0 = no life tracking
+	LifeUsed  decimal.Decimal
+	Cost      decimal.Decimal
 	Status    string // ATIVA | MANUTENCAO | INATIVA
 	IsActive  bool
 	CreatedAt time.Time
@@ -39,20 +41,20 @@ type Tool struct {
 }
 
 // RemainingLife returns the life left before replacement; -1 when untracked.
-func (t *Tool) RemainingLife() float64 {
-	if t.LifeLimit <= 0 {
-		return -1
+func (t *Tool) RemainingLife() decimal.Decimal {
+	if !t.LifeLimit.IsPositive() {
+		return decimal.NewFromInt(-1)
 	}
-	r := t.LifeLimit - t.LifeUsed
-	if r < 0 {
-		r = 0
+	r := t.LifeLimit.Sub(t.LifeUsed)
+	if r.IsNegative() {
+		r = decimal.Zero
 	}
 	return r
 }
 
 // NeedsReplacement reports whether the tool has reached its life limit.
 func (t *Tool) NeedsReplacement() bool {
-	return t.LifeLimit > 0 && t.LifeUsed >= t.LifeLimit
+	return t.LifeLimit.IsPositive() && t.LifeUsed.GreaterThanOrEqual(t.LifeLimit)
 }
 
 func validLifeType(lt string) bool {
@@ -64,7 +66,7 @@ func validLifeType(lt string) bool {
 	}
 }
 
-func NewTool(code int64, name, toolType, lifeType string, lifeLimit, cost float64, createdBy uuid.UUID) (*Tool, error) {
+func NewTool(code int64, name, toolType, lifeType string, lifeLimit, cost decimal.Decimal, createdBy uuid.UUID) (*Tool, error) {
 	if code <= 0 {
 		return nil, domainerr.NewValidation("o código da ferramenta deve ser maior que zero")
 	}
@@ -77,7 +79,7 @@ func NewTool(code int64, name, toolType, lifeType string, lifeLimit, cost float6
 	if !validLifeType(lifeType) {
 		return nil, domainerr.NewValidation("o tipo de vida útil deve ser golpes, horas ou peças")
 	}
-	if lifeLimit < 0 {
+	if lifeLimit.IsNegative() {
 		return nil, domainerr.NewValidation("o limite de vida útil não pode ser negativo")
 	}
 	if toolType == "" {
@@ -112,7 +114,7 @@ type ToolSerial struct {
 	ToolID       int64
 	SerialNumber string
 	Status       string // ATIVA | MANUTENCAO | INATIVA | BAIXADA
-	LifeUsed     float64
+	LifeUsed     decimal.Decimal
 	Location     string
 	Notes        string
 	IsActive     bool
@@ -169,13 +171,13 @@ type RouteOpTool struct {
 	ID               int64
 	RouteOperationID int64
 	ToolID           int64
-	QtyRequired      float64
+	QtyRequired      decimal.Decimal
 
 	// denormalized for reads
 	ToolCode  int64
 	ToolName  string
 	LifeType  string
-	LifeLimit float64
-	LifeUsed  float64
+	LifeLimit decimal.Decimal
+	LifeUsed  decimal.Decimal
 	Status    string
 }

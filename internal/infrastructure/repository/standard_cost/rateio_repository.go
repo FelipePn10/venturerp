@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
@@ -186,7 +188,7 @@ func (r *StandardCostRepositorySQLC) GravarHistoricoDeCusto(ctx context.Context,
 	}
 	var rateios []byte
 	if len(h.Rateios) > 0 {
-		if rateios, err = json.Marshal(h.Rateios); err != nil {
+		if rateios, err = json.Marshal(rateiosParaJSON(h.Rateios)); err != nil {
 			return fmt.Errorf("serializando o rastro dos rateios: %w", err)
 		}
 	}
@@ -244,7 +246,9 @@ LIMIT $4`, empresa, itemCode, mask, limite)
 		}
 		h.EnterpriseID = empresa
 		if len(rateios) > 0 {
-			_ = json.Unmarshal(rateios, &h.Rateios)
+			var gravados []rateioJSON
+			_ = json.Unmarshal(rateios, &gravados)
+			h.Rateios = rateiosDoJSON(gravados)
 		}
 		out = append(out, &h)
 	}
@@ -343,8 +347,8 @@ func (r *StandardCostRepositorySQLC) UpsertItemStandardCost(ctx context.Context,
 		return nil, err
 	}
 	lote := cost.LotSize
-	if lote <= 0 {
-		lote = 1
+	if !lote.IsPositive() {
+		lote = decimal.NewFromFloat(1)
 	}
 	moeda := cost.Currency
 	if moeda == "" {
@@ -416,4 +420,44 @@ SELECT %s FROM public.item_standard_costs WHERE item_code = $1 ORDER BY mask`, c
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// rateioJSON é o formato do rastro gravado em item_standard_cost_history.rateios:
+// as chaves e os números de sempre. A entidade é decimal; o decimal serializaria
+// como texto e mudaria o que já está gravado.
+type rateioJSON struct {
+	RuleID      int64                 `json:"rule_id"`
+	Code        string                `json:"code"`
+	Description string                `json:"description"`
+	Base        entity.BaseDeRateio   `json:"base"`
+	Method      entity.MetodoDeRateio `json:"method"`
+	Rate        decimal.Decimal       `json:"rate"`
+	BaseValue   decimal.Decimal       `json:"base_value"`
+	Applied     decimal.Decimal       `json:"applied"`
+}
+
+func rateiosParaJSON(in []entity.RateioAplicado) []json.RawMessage {
+	out := make([]json.RawMessage, 0, len(in))
+	for _, r := range in {
+		// Números sem aspas, como o float gravava.
+		b := fmt.Sprintf(`{"rule_id":%d,"code":%s,"description":%s,"base":%s,"method":%s,"rate":%s,"base_value":%s,"applied":%s}`,
+			r.RuleID, jsonTexto(r.Code), jsonTexto(r.Description), jsonTexto(string(r.Base)), jsonTexto(string(r.Method)),
+			r.Rate.String(), r.BaseValue.String(), r.Applied.String())
+		out = append(out, json.RawMessage(b))
+	}
+	return out
+}
+
+func jsonTexto(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func rateiosDoJSON(in []rateioJSON) []entity.RateioAplicado {
+	out := make([]entity.RateioAplicado, 0, len(in))
+	for _, r := range in {
+		out = append(out, entity.RateioAplicado{RuleID: r.RuleID, Code: r.Code, Description: r.Description,
+			Base: r.Base, Method: r.Method, Rate: r.Rate, BaseValue: r.BaseValue, Applied: r.Applied})
+	}
+	return out
 }

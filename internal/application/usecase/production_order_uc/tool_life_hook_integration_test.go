@@ -4,9 +4,11 @@ package production_order_uc_test
 
 import (
 	"context"
+	"testing"
+
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
-	"testing"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/security"
@@ -76,13 +78,13 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	}
 
 	// Tool with a 5-stroke life, linked to the route operation.
-	tl, _ := toolentity.NewTool(testutil.UniqueCode(), "Matriz", "MATRIZ", toolentity.LifeStrokes, 5, 0, uid)
+	tl, _ := toolentity.NewTool(testutil.UniqueCode(), "Matriz", "MATRIZ", toolentity.LifeStrokes, decimal.NewFromFloat(5), decimal.NewFromFloat(0), uid)
 	createdTool, err := tRepo.CreateTool(ctx, tl)
 	if err != nil {
 		t.Fatalf("CreateTool: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM tools WHERE id = $1", createdTool.ID)
-	if _, err := tRepo.AddRouteOpTool(ctx, &toolentity.RouteOpTool{RouteOperationID: routeOp.ID, ToolID: createdTool.ID, QtyRequired: 1}); err != nil {
+	if _, err := tRepo.AddRouteOpTool(ctx, &toolentity.RouteOpTool{RouteOperationID: routeOp.ID, ToolID: createdTool.ID, QtyRequired: decimal.NewFromFloat(1)}); err != nil {
 		t.Fatalf("AddRouteOpTool: %v", err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM route_operation_tools WHERE route_operation_id = $1 AND tool_id = $2", routeOp.ID, createdTool.ID)
@@ -139,7 +141,7 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTool: %v", err)
 	}
-	if got.LifeUsed != 6 || !got.NeedsReplacement() {
+	if !got.LifeUsed.Equal(decimal.NewFromFloat(6)) || !got.NeedsReplacement() {
 		t.Errorf("tool life = %v needs=%v, want 6 / true", got.LifeUsed, got.NeedsReplacement())
 	}
 
@@ -151,7 +153,7 @@ func TestIntegration_ToolLifeConsumedOnOperationDone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTool 2: %v", err)
 	}
-	if got2.LifeUsed != 6 {
+	if !got2.LifeUsed.Equal(decimal.NewFromFloat(6)) {
 		t.Errorf("repeated DONE double-consumed life: %v, want 6", got2.LifeUsed)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
@@ -43,7 +44,7 @@ func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 
 	// Purchase costs for the leaves.
 	for code, cost := range map[int64]float64{a: 10, b: 8, c: 5} {
-		if _, err := scRepo.UpsertItemPurchaseCost(ctx, &scentity.ItemPurchaseCost{ItemCode: code, UnitCost: cost, Currency: "BRL", UpdatedBy: uid}); err != nil {
+		if _, err := scRepo.UpsertItemPurchaseCost(ctx, &scentity.ItemPurchaseCost{ItemCode: code, UnitCost: decimal.NewFromFloat(cost), Currency: "BRL", UpdatedBy: uid}); err != nil {
 			t.Fatalf("UpsertItemPurchaseCost(%d): %v", code, err)
 		}
 	}
@@ -51,7 +52,7 @@ func TestIntegration_CostRollup_CoproductAndFixedQty(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM item_standard_costs WHERE item_code = $1", p)
 	defer testutil.Exec(t, pool, "DELETE FROM cost_rollup_log WHERE item_code = $1", p)
 
-	res, err := uc.RollUp(ctx, request.CostRollupDTO{ItemCode: p, LotSize: 10, CalculatedBy: uid.String()})
+	res, err := uc.RollUp(ctx, request.CostRollupDTO{ItemCode: p, LotSize: decimal.NewFromFloat(10), CalculatedBy: uid.String()})
 	if err != nil {
 		t.Fatalf("RollUp: %v", err)
 	}

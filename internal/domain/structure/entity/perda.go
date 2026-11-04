@@ -1,5 +1,7 @@
 package entity
 
+import "github.com/shopspring/decimal"
+
 // Fórmulas de perda da estrutura. O parâmetro de planejamento
 // FormulaPerdasEstrutura escolhe qual vale; o padrão do sistema é a 2.
 const (
@@ -32,6 +34,29 @@ func QuantidadeComPerda(base, perda float64, formula int) float64 {
 	default: // FormulaPerdaDivide
 		if denominador := 1 - perda/100; denominador > 0 {
 			return base / denominador
+		}
+		return base
+	}
+}
+
+// QuantidadeComPerdaDecimal é QuantidadeComPerda em decimal, para quem soma
+// dinheiro sobre a quantidade (o custo-padrão). A perda vem em float porque a
+// coluna é double precision; a conta não arredonda — quem grava arredonda na
+// escala da coluna.
+func QuantidadeComPerdaDecimal(base decimal.Decimal, perda float64, formula int) decimal.Decimal {
+	if perda <= 0 {
+		return base
+	}
+	p := decimal.NewFromFloat(perda).Div(decimal.NewFromInt(100))
+	um := decimal.NewFromInt(1)
+	switch formula {
+	case FormulaPerdaMultiplica:
+		return base.Mul(um.Add(p))
+	case FormulaPerdaIgnora:
+		return base
+	default: // FormulaPerdaDivide
+		if d := um.Sub(p); d.IsPositive() {
+			return base.Div(d)
 		}
 		return base
 	}

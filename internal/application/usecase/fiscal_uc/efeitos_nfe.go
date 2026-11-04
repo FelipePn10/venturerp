@@ -408,14 +408,14 @@ func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.F
 		if e.Conversor == nil {
 			return nil, semConversao
 		}
-		qf, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity.InexactFloat64(), daNota, doEstoque)
+		qf, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity, daNota, doEstoque)
 		if err != nil {
 			return nil, err
 		}
 		if !achou {
 			return nil, semConversao
 		}
-		out[it.ID] = decimal.NewFromFloat(qf)
+		out[it.ID] = qf
 	}
 	return out, nil
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
@@ -62,9 +63,9 @@ func (r *PlannedOrderRepositorySQLC) Create(
 			OrderNumber:          o.OrderNumber,
 			ItemCode:             o.ItemCode,
 			Mask:                 mask,
-			Quantity:             pgutil.ToPgNumericFromFloat64(o.Quantity),
-			QuantityLoss:         pgutil.ToPgNumericFromFloat64(o.QuantityLoss),
-			QuantityCorrected:    pgutil.ToPgNumericFromFloat64(o.QuantityCorrected),
+			Quantity:             pgutil.ToPgNumericFromDecimal(o.Quantity),
+			QuantityLoss:         pgutil.ToPgNumericFromDecimal(o.QuantityLoss),
+			QuantityCorrected:    pgutil.ToPgNumericFromDecimal(o.QuantityCorrected),
 			OrderType:            sqlc.OrderTypeEnum(o.OrderType),
 			Status:               sqlc.OrderStatusEnum(o.Status),
 			PlanCode:             planCode,
@@ -391,9 +392,9 @@ func rowToEntity(
 		Code:                 row.Code,
 		OrderNumber:          row.OrderNumber,
 		ItemCode:             row.ItemCode,
-		Quantity:             pgutil.FromPgNumericToFloat64(row.Quantity),
-		QuantityLoss:         pgutil.FromPgNumericToFloat64(row.QuantityLoss),
-		QuantityCorrected:    pgutil.FromPgNumericToFloat64(row.QuantityCorrected),
+		Quantity:             pgutil.FromPgNumericToDecimal(row.Quantity),
+		QuantityLoss:         pgutil.FromPgNumericToDecimal(row.QuantityLoss),
+		QuantityCorrected:    pgutil.FromPgNumericToDecimal(row.QuantityCorrected),
 		OrderType:            types.OrderType(row.OrderType),
 		Status:               types.OrderStatus(row.Status),
 		DemandType:           types.DemandType(row.DemandType),

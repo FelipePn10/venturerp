@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreateOverheadAllocationDTO struct {
 	CostCenterCode  int64                       `json:"cost_center_code"`
@@ -15,7 +18,7 @@ type CreateOverheadAllocationDTO struct {
 }
 
 type CreateAllocationTargetDTO struct {
-	CostCenterCoed int64   `json:"cost_center_code"`
-	Percentage     float64 `json:"percentage"`
-	Amount         float64 `json:"amount"`
+	CostCenterCoed int64           `json:"cost_center_code"`
+	Percentage     decimal.Decimal `json:"percentage"`
+	Amount         decimal.Decimal `json:"amount"`
 }

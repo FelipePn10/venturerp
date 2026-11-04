@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/item_conversion/entity"
@@ -24,7 +26,7 @@ func TestItemConversionIsIsolatedByTenant(t *testing.T) {
 	})
 	testutil.SeedItem(t, pool, a.Ctx, item, testutil.Actor(t, pool))
 	repo := icrepo.New(q, pool)
-	c, err := entity.NewItemUnitConversion(item, "", "CX", "UN", 12, 0, 0, "VALUE", uuid.New())
+	c, err := entity.NewItemUnitConversion(item, "", "CX", "UN", decimal.NewFromFloat(12), decimal.NewFromFloat(0), decimal.NewFromFloat(0), "VALUE", uuid.New())
 	if err != nil {
 		t.Fatal(err)
 	}

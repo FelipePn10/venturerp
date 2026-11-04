@@ -66,5 +66,5 @@ func (h *PurchaseSuggestionHandler) Reject(w http.ResponseWriter, r *http.Reques
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, purchase_order_uc.ParaOrdemPlanejada(result))
 }
