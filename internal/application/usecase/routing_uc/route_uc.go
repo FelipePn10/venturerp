@@ -621,7 +621,7 @@ func toRouteOpResponse(op *entity.RouteOperation) response.RouteOperationRespons
 		},
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          op.CostPerUnit,
+		CostPerUnit:          decimalParaNumero(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: op.ThirdPartyRemittance,
 		ScrapPct:             op.ScrapPct,

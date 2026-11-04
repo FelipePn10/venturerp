@@ -3,8 +3,9 @@ package cutting_plan_uc
 import (
 	"context"
 	"errors"
-	"github.com/shopspring/decimal"
 	"testing"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
@@ -86,8 +87,8 @@ func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 	// Product 1000 → 4× component 2000 (a 720mm leg) → raw material 5000 (a bar).
 	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("2")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
-		1000: {{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Perna 720", Quantity: 4}},
-		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: 1}}, // component's raw material
+		1000: {{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Perna 720", Quantity: decimal.NewFromFloat(4)}},
+		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: decimal.NewFromFloat(1)}}, // component's raw material
 	}}
 	items := &fakeItems{items: map[int64]*itementity.Item{
 		1000: itemWithDims(1000, 0, 0, 0, 1, types.UN),   // finished product (no cut dims)
@@ -133,12 +134,12 @@ func TestGenerateFromOrders_SelectsPrimarySubstituteForCutDemand(t *testing.T) {
 	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("1")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
 		1000: {
-			{ParentCode: 1000, ChildCode: 2100, ChildDescription: "Alternativa B", Quantity: 99, SubstituteGroup: 1, SubstitutePriority: 2},
-			{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Alternativa A", Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 1},
-			{ParentCode: 1000, ChildCode: 3000, ChildDescription: "Sucata", Quantity: 1, IsCoproduct: true},
+			{ParentCode: 1000, ChildCode: 2100, ChildDescription: "Alternativa B", Quantity: decimal.NewFromFloat(99), SubstituteGroup: 1, SubstitutePriority: 2},
+			{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Alternativa A", Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 1},
+			{ParentCode: 1000, ChildCode: 3000, ChildDescription: "Sucata", Quantity: decimal.NewFromFloat(1), IsCoproduct: true},
 		},
-		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: 1}},
-		2100: {{ParentCode: 2100, ChildCode: 6000, Quantity: 1}},
+		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: decimal.NewFromFloat(1)}},
+		2100: {{ParentCode: 2100, ChildCode: 6000, Quantity: decimal.NewFromFloat(1)}},
 	}}
 	items := &fakeItems{items: map[int64]*itementity.Item{
 		1000: itemWithDims(1000, 0, 0, 0, 1, types.UN),

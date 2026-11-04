@@ -3,10 +3,11 @@ package service
 import (
 	"context"
 	"errors"
-	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
@@ -19,12 +20,12 @@ func TestExplodeWithVars_UsesQuantityFormula(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {
 			// Perfil: perímetro do quadro em metros.
-			{ChildCode: 2, Quantity: 1, QuantityFormula: formulaPtr("2*(COMPRIMENTO/1000)+2*(PROFUNDIDADE/1000)")},
+			{ChildCode: 2, Quantity: decimal.NewFromFloat(1), QuantityFormula: formulaPtr("2*(COMPRIMENTO/1000)+2*(PROFUNDIDADE/1000)")},
 			// Parafuso: quantidade fixa, sem fórmula.
-			{ChildCode: 3, Quantity: 8},
+			{ChildCode: 3, Quantity: decimal.NewFromFloat(8)},
 		},
 	}
-	vars := map[string]float64{"COMPRIMENTO": 1200, "PROFUNDIDADE": 600}
+	vars := map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1200), "PROFUNDIDADE": decimal.NewFromFloat(600)}
 
 	inputs := explodeFromBOMWithVars(bomMap, 1, "1200#600", decimal.NewFromFloat(10), 1, 1, vars, time.Time{})
 
@@ -44,7 +45,7 @@ func TestExplodeWithVars_UsesQuantityFormula(t *testing.T) {
 // fixa cadastrada como reserva.
 func TestExplodeWithVars_FallsBackToFixedQuantity(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
-		1: {{ChildCode: 2, Quantity: 4, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
+		1: {{ChildCode: 2, Quantity: decimal.NewFromFloat(4), QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
 	inputs := explodeFromBOMWithVars(bomMap, 1, "", decimal.NewFromFloat(10), 1, 1, nil, time.Time{})
 	if len(inputs) != 1 || !inputs[0].Quantity.Equal(decimal.NewFromFloat(40)) {
@@ -55,9 +56,9 @@ func TestExplodeWithVars_FallsBackToFixedQuantity(t *testing.T) {
 // A perda incide sobre o resultado da fórmula, não sobre a quantidade nominal.
 func TestExplodeWithVars_LossAppliesOverFormulaResult(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
-		1: {{ChildCode: 2, Quantity: 1, LossPercentage: 10, QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
+		1: {{ChildCode: 2, Quantity: decimal.NewFromFloat(1), LossPercentage: decimal.NewFromFloat(10), QuantityFormula: formulaPtr("COMPRIMENTO/1000")}},
 	}
-	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", decimal.NewFromFloat(5), 1, 1, map[string]float64{"COMPRIMENTO": 2000}, time.Time{})
+	inputs := explodeFromBOMWithVars(bomMap, 1, "2000", decimal.NewFromFloat(5), 1, 1, map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(2000)}, time.Time{})
 	if len(inputs) != 1 {
 		t.Fatalf("explosão = %+v", inputs)
 	}
@@ -68,23 +69,23 @@ func TestExplodeWithVars_LossAppliesOverFormulaResult(t *testing.T) {
 }
 
 type stubMaskVars struct {
-	vars map[string]float64
+	vars map[string]decimal.Decimal
 	err  error
 	hits int
 }
 
-func (s *stubMaskVars) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]float64, error) {
+func (s *stubMaskVars) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]decimal.Decimal, error) {
 	s.hits++
 	return s.vars, s.err
 }
 
 // O cache evita reconsultar as respostas do mesmo par item/máscara.
 func TestMaskVarCache_ReadsOncePerItemAndMask(t *testing.T) {
-	stub := &stubMaskVars{vars: map[string]float64{"COMPRIMENTO": 1000}}
+	stub := &stubMaskVars{vars: map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1000)}}
 	cache := newMaskVarCache(stub)
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		if got := cache.vars(ctx, 1, "1000"); got["COMPRIMENTO"] != 1000 {
+		if got := cache.vars(ctx, 1, "1000"); !got["COMPRIMENTO"].Equal(decimal.NewFromFloat(1000)) {
 			t.Fatalf("variáveis = %v", got)
 		}
 	}

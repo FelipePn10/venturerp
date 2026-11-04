@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
 
@@ -14,7 +16,7 @@ func TestToItemStructureDTOUsesPublicJSONContract(t *testing.T) {
 		ID:            42,
 		ParentCode:    100,
 		ChildCode:     200,
-		Quantity:      1.5,
+		Quantity:      decimal.NewFromFloat(1.5),
 		Sequence:      3,
 		WarehouseCode: &warehouse,
 		CostLossType:  "PERCENTUAL",

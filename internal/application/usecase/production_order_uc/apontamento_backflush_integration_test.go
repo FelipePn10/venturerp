@@ -100,8 +100,8 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		Repo: productionpg.NewProductionOrderRepositoryPGX(pool),
 		Auth: &auth.AuthService{},
 		StructureRepo: estruturaDeDois{filhos: []*structentity.ItemStructure{
-			{ChildCode: filhoA, Quantity: 2},
-			{ChildCode: filhoB, Quantity: 1},
+			{ChildCode: filhoA, Quantity: decimal.NewFromFloat(2)},
+			{ChildCode: filhoB, Quantity: decimal.NewFromFloat(1)},
 		}},
 		StockRepo: stockpg.NewStockRepositorySQLC(pool),
 		Transacao: func(ctx context.Context, fn func(production_order_uc.ApontamentoRepos) error) error {

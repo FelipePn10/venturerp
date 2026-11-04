@@ -1,6 +1,10 @@
 package formula
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 func TestValidate_AcceptsConfiguratorExpressions(t *testing.T) {
 	valid := []string{
@@ -52,7 +56,7 @@ func TestVariables_MalformedReturnsNil(t *testing.T) {
 }
 
 func TestEvaluate_DivisionByZeroIsAnError(t *testing.T) {
-	if _, err := Evaluate("ALTURA/0", map[string]float64{"ALTURA": 2}); err == nil {
+	if _, err := Evaluate("ALTURA/0", map[string]decimal.Decimal{"ALTURA": decimal.NewFromFloat(2)}); err == nil {
 		t.Fatal("divisão por zero aceita")
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
@@ -70,10 +72,10 @@ func TestCreateStructureAcceptsAlphanumericBusinessCodes(t *testing.T) {
 	component, err := uc.Execute(context.Background(), request.CreateStructureComponentDTO{
 		ParentCode:        "RN-01001",
 		ChildCode:         "TP-01001-A",
-		Quantity:          2,
+		Quantity:          decimal.NewFromFloat(2),
 		UnitOfMeasurement: "UN",
 		Health:            "ATIVO",
-		LossPercentage:    21,
+		LossPercentage:    decimal.NewFromFloat(21),
 		QuantityRounding:  "NONE",
 		QuantityScale:     4,
 		Sequence:          1,

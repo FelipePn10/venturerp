@@ -13,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/shopspring/decimal"
 )
 
 // typeLabels traduz o tipo da pergunta para o rótulo que a tela exibe.
@@ -214,7 +215,7 @@ func (uc *ConfiguratorUseCase) ValidateCombination(ctx context.Context, itemCode
 
 // FormulaVariables devolve variável → valor numérico das respostas, no formato
 // que as fórmulas de quantidade da estrutura consomem.
-func (uc *ConfiguratorUseCase) FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]float64, error) {
+func (uc *ConfiguratorUseCase) FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]decimal.Decimal, error) {
 	return uc.formulaVars(ctx, answers)
 }
 

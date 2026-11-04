@@ -10,7 +10,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/shopspring/decimal"
 )
 
 type StandardCostRepositorySQLC struct {
@@ -146,10 +145,8 @@ func (r *StandardCostRepositorySQLC) GetDirectChildren(ctx context.Context, pare
 			continue
 		}
 		out = append(out, domainrepo.BOMChild{
-			ChildCode: row.ChildCode,
-			// A quantidade da estrutura ainda chega float do sqlc (override em
-			// sqlc.yaml); vira decimal aqui até a estrutura ser convertida.
-			Quantity:           decimal.NewFromFloat(row.Quantity),
+			ChildCode:          row.ChildCode,
+			Quantity:           row.Quantity,
 			ConversionFactor:   pgutil.FromPgNumericToDecimal(row.ConversionFactor),
 			LossPercentage:     row.LossPercentage,
 			IsCoproduct:        row.IsCoproduct,

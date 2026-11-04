@@ -1,10 +1,10 @@
 package entity
 
 import (
-	"math"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
+	"github.com/shopspring/decimal"
 )
 
 // Modos de arredondamento do resultado da fórmula de quantidade.
@@ -41,18 +41,18 @@ func (s *ItemStructure) HasQuantityFormula() bool {
 
 // applyRounding aplica o modo de arredondamento configurado na casa decimal
 // pedida. Sem modo definido o valor sai como calculado.
-func applyRounding(value float64, mode string, scale int16) float64 {
+func applyRounding(value decimal.Decimal, mode string, scale int16) decimal.Decimal {
 	if scale < 0 {
 		scale = 0
 	}
-	factor := math.Pow(10, float64(scale))
+	casas := int32(scale)
 	switch NormalizeRounding(mode) {
 	case RoundUp:
-		return math.Ceil(value*factor) / factor
+		return value.RoundCeil(casas)
 	case RoundDown:
-		return math.Floor(value*factor) / factor
+		return value.RoundFloor(casas)
 	case RoundNearest:
-		return math.Round(value*factor) / factor
+		return value.Round(casas)
 	default:
 		return value
 	}
@@ -69,7 +69,7 @@ func applyRounding(value float64, mode string, scale int16) float64 {
 // evita que cada rotina aplique — ou esqueça de aplicar — o fator por conta
 // própria; foi ter duas contas de perda espalhadas que já produziu uma
 // divergência silenciosa entre o que o MRP comprava e o que a ordem consumia.
-func (s *ItemStructure) ResolvedQuantity(vars map[string]float64) (float64, bool) {
+func (s *ItemStructure) ResolvedQuantity(vars map[string]decimal.Decimal) (decimal.Decimal, bool) {
 	valor, usouFormula := s.quantidadeNaUnidadeDaEstrutura(vars)
 	if !usouFormula {
 		// Sem fórmula, a conversão já foi feita na gravação com a precisão
@@ -79,17 +79,17 @@ func (s *ItemStructure) ResolvedQuantity(vars map[string]float64) (float64, bool
 	}
 	// Com fórmula o resultado muda a cada configuração, então a coluna gravada
 	// (que vale para a quantidade fixa) não serve: aqui o fator é aplicado.
-	return valor * s.FatorParaEstoque(), true
+	return valor.Mul(s.FatorParaEstoque()), true
 }
 
 // quantidadeNaUnidadeDaEstrutura devolve o número como a engenharia escreveu,
 // antes da conversão. É o que a tela mostra e o que a fórmula calcula.
-func (s *ItemStructure) quantidadeNaUnidadeDaEstrutura(vars map[string]float64) (float64, bool) {
+func (s *ItemStructure) quantidadeNaUnidadeDaEstrutura(vars map[string]decimal.Decimal) (decimal.Decimal, bool) {
 	if !s.HasQuantityFormula() {
 		return s.Quantity, false
 	}
 	value, ok := formula.EvaluateSafe(*s.QuantityFormula, vars)
-	if !ok || value < 0 {
+	if !ok || value.IsNegative() {
 		return s.Quantity, false
 	}
 	return applyRounding(value, s.QuantityRounding, s.QuantityScale), true
@@ -97,9 +97,9 @@ func (s *ItemStructure) quantidadeNaUnidadeDaEstrutura(vars map[string]float64) 
 
 // EffectiveQuantityWith aplica a fórmula (quando houver) e, em cima do
 // resultado, o percentual de perda — a quantidade que a OF precisa consumir.
-func (s *ItemStructure) EffectiveQuantityWith(vars map[string]float64) float64 {
+func (s *ItemStructure) EffectiveQuantityWith(vars map[string]decimal.Decimal) decimal.Decimal {
 	quantity, _ := s.ResolvedQuantity(vars)
-	return quantity * (1 + s.LossPercentage/100.0)
+	return quantity.Mul(decimal.NewFromInt(1).Add(s.LossPercentage.Div(decimal.NewFromInt(100))))
 }
 
 // FormulaVariables lista, em ordem de aparição, as variáveis usadas pela fórmula
@@ -134,12 +134,14 @@ func NormalizeCostLossType(mode string) string {
 // engenharia dimensiona a necessidade de compra e produção, a de custo entra
 // no valor do produto. Somar as duas é o que o FoccoERP faz na resposta 3 do
 // parâmetro 20; aqui as duas ficam explícitas.
-func (s *ItemStructure) CostQuantity(baseQuantity float64) float64 {
+func (s *ItemStructure) CostQuantity(baseQuantity decimal.Decimal) decimal.Decimal {
 	if s.CostLoss <= 0 {
 		return baseQuantity
 	}
+	// A perda de custo é coluna double precision; entra em decimal aqui.
+	perda := decimal.NewFromFloat(s.CostLoss)
 	if NormalizeCostLossType(s.CostLossType) == CostLossQuantity {
-		return baseQuantity + s.CostLoss
+		return baseQuantity.Add(perda)
 	}
-	return baseQuantity * (1 + s.CostLoss/100)
+	return baseQuantity.Mul(decimal.NewFromInt(1).Add(perda.Div(decimal.NewFromInt(100))))
 }

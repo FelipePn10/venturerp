@@ -187,18 +187,16 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				if child.IsCoproduct && beneficiamento {
 					continue // sucata do material do cliente é do cliente
 				}
-				if !child.IsCoproduct || child.Quantity <= 0 {
+				if !child.IsCoproduct || !child.Quantity.IsPositive() {
 					automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
 					if infoErr != nil || !automatic || child.IsCoproduct {
 						continue
 					}
-					componentQty := decimal.NewFromFloat(child.Quantity)
+					componentQty := child.Quantity
 					if !child.IsFixedQty {
 						componentQty = componentQty.Mul(qty)
 					}
-					componentQtyBruta, _ := componentQty.Float64()
-					componentQty = decimal.NewFromFloat(structentity.QuantidadeComPerda(
-						componentQtyBruta, child.LossPercentage, structentity.FormulaPerdaPadrao))
+					componentQty = structentity.QuantidadeComPerdaDecimal(componentQty, child.LossPercentage, structentity.FormulaPerdaPadrao)
 					rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
 						MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
 						ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: order.CreatedBy}
@@ -209,7 +207,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 					ItemCode:      child.ChildCode,
 					WarehouseID:   *warehouseID,
 					MovementType:  stockentity.MovementTypeIn,
-					Quantity:      decimal.NewFromFloat(child.Quantity).Mul(qty),
+					Quantity:      child.Quantity.Mul(qty),
 					ReferenceType: &refType,
 					ReferenceCode: &refCode,
 					CreatedBy:     order.CreatedBy,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 )
 
 // resolverUnidadeDeEstoque converte a quantidade escrita pela engenharia para a
@@ -29,24 +30,24 @@ func resolverUnidadeDeEstoque(
 	conv ports.UOMConverter,
 	itemCode int64,
 	itemLabel string,
-	quantidade float64,
+	quantidade decimal.Decimal,
 	unidadeDaEstrutura string,
 	unidadeDeEstoque string,
-) (qtdeEmEstoque float64, fator float64, err error) {
+) (qtdeEmEstoque decimal.Decimal, fator decimal.Decimal, err error) {
 	daEstrutura := strings.ToUpper(strings.TrimSpace(unidadeDaEstrutura))
 	doEstoque := strings.ToUpper(strings.TrimSpace(unidadeDeEstoque))
 
 	// Sem unidade declarada, ou unidades iguais: a quantidade já está na
 	// unidade de estoque.
 	if daEstrutura == "" || doEstoque == "" || daEstrutura == doEstoque {
-		return quantidade, 1, nil
+		return quantidade, decimal.NewFromInt(1), nil
 	}
 
 	if conv == nil {
 		// Defensivo: sem conversor injetado não dá para garantir o número, e
 		// gravar uma quantidade cuja unidade ninguém sabe converter é o bug
 		// que esta função existe para impedir.
-		return 0, 0, errorsuc.NewValidationError(fmt.Sprintf(
+		return decimal.Zero, decimal.Zero, errorsuc.NewValidationError(fmt.Sprintf(
 			"o componente %s é estocado em %s e a estrutura está em %s; "+
 				"o cadastro de conversões não está disponível nesta operação",
 			itemLabel, doEstoque, daEstrutura))
@@ -54,22 +55,21 @@ func resolverUnidadeDeEstoque(
 
 	f, achou, errConv := conv.Factor(ctx, itemCode, daEstrutura, doEstoque)
 	if errConv != nil {
-		return 0, 0, fmt.Errorf("consultando a conversão de unidade do item %d: %w", itemCode, errConv)
+		return decimal.Zero, decimal.Zero, fmt.Errorf("consultando a conversão de unidade do item %d: %w", itemCode, errConv)
 	}
 	if !achou || !f.IsPositive() {
 		// A conversão pode ser cadastrada em qualquer direção — o sistema usa a
 		// inversa quando só uma existe. Dizer as duas importa: "quantas UN tem
 		// 1 MM" dá 0,000167, um número que ninguém tira de um desenho; "1 UN
 		// tem 6000 MM" é o que está escrito na nota do fornecedor.
-		return 0, 0, errorsuc.NewValidationError(fmt.Sprintf(
+		return decimal.Zero, decimal.Zero, errorsuc.NewValidationError(fmt.Sprintf(
 			"o componente %s é estocado em %s e a estrutura está em %s, mas não existe conversão entre as duas. "+
 				"Cadastre a conversão do item no sentido que você souber — quantos %s tem 1 %s, ou quantos %s tem 1 %s "+
 				"(o sistema usa a inversa automaticamente) — ou escreva a quantidade em %s. "+
 				"Sem a conversão o planejamento leria %.4g %s como se fossem %s.",
 			itemLabel, doEstoque, daEstrutura,
 			daEstrutura, doEstoque, doEstoque, daEstrutura,
-			doEstoque, quantidade, daEstrutura, doEstoque))
+			doEstoque, quantidade.InexactFloat64(), daEstrutura, doEstoque))
 	}
-	// A estrutura ainda é float (etapa 4b); o fator chega decimal do conversor.
-	return quantidade * f.InexactFloat64(), f.InexactFloat64(), nil
+	return quantidade.Mul(f), f, nil
 }

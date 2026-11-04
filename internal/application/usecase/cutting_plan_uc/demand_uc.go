@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -19,6 +18,7 @@ import (
 	prodrepo "github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	structqueryrepo "github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
+	"github.com/shopspring/decimal"
 )
 
 // rawMaterialLLC is the level (per the item Planning convention) that marks an
@@ -135,9 +135,9 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 		// Peça paramétrica (móvel sob medida) tem a quantidade numa fórmula
 		// sobre as respostas da configuração; sem as variáveis, o corte usava a
 		// quantidade fixa cadastrada.
-		var vars map[string]float64
+		var vars map[string]decimal.Decimal
 		if leitor, ok := uc.structures.(interface {
-			GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+			GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]decimal.Decimal, error)
 		}); ok && s.mask != "" {
 			vars, _ = leitor.GetMaskAnswersWithNames(ctx, s.item, s.mask)
 		}
@@ -165,7 +165,9 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 				warnings = append(warnings, fmt.Sprintf("%s: matéria-prima %d não encontrada", s.ref, material))
 				continue
 			}
-			qty := int(math.Ceil(s.qty * st.EffectiveQuantityWith(vars)))
+			// Peças inteiras para o encaixe, contadas em decimal: em float,
+			// 10 × 0,3 dava 3,0000000000000004 e o teto virava 4 peças.
+			qty := int(decimal.NewFromFloat(s.qty).Mul(st.EffectiveQuantityWith(vars)).Ceil().IntPart())
 			if qty <= 0 {
 				continue
 			}

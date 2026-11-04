@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -36,7 +37,7 @@ type fakeConfigurator struct {
 	violations []response.StructureConfiguratorViolation
 	mask       *response.CfgGeneratedMaskResponse
 	maskErr    error
-	vars       map[string]float64
+	vars       map[string]decimal.Decimal
 	lastDTO    request.CfgGenerateMaskDTO
 }
 
@@ -57,7 +58,7 @@ func (f *fakeConfigurator) GenerateMask(_ context.Context, dto request.CfgGenera
 	out.Persisted = dto.Persist
 	return &out, nil
 }
-func (f *fakeConfigurator) FormulaVariables(context.Context, []request.CfgMaskAnswerInput) (map[string]float64, error) {
+func (f *fakeConfigurator) FormulaVariables(context.Context, []request.CfgMaskAnswerInput) (map[string]decimal.Decimal, error) {
 	return f.vars, nil
 }
 
@@ -89,7 +90,7 @@ func newPanelUC(t *testing.T) (*StructureConfiguratorUseCase, *fakeConfigurator,
 			},
 		},
 		mask: &response.CfgGeneratedMaskResponse{Mask: "1200#600", MaskHash: "abcd1234"},
-		vars: map[string]float64{"COMPRIMENTO": 1200},
+		vars: map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1200)},
 	}
 	res := &fakeResolver{tree: &response.StructureTreeResponse{TotalNodes: 2}}
 	items := &panelItems{item: &itementity.Item{Code: 900, BusinessCode: "QD-01", Name: "Quadro 01"}}

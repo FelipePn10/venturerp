@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
@@ -244,13 +246,13 @@ func (r *StructureQueryRepositorySQLC) GetMaskAnswersWithNames(
 	ctx context.Context,
 	itemCode int64,
 	mask string,
-) (map[string]float64, error) {
+) (map[string]decimal.Decimal, error) {
 
 	rows, err := r.q.CfgStructMaskAnswersWithNames(ctx, itemCode, mask)
 	if err != nil {
 		return nil, fmt.Errorf("fetching cfg mask answers with names for item %d: %w", itemCode, err)
 	}
-	vars := make(map[string]float64, len(rows))
+	vars := make(map[string]decimal.Decimal, len(rows))
 	for _, row := range rows {
 		if v, ok := formula.ParseOptionValue(row.AnswerValue); ok {
 			vars[row.Code] = v
@@ -304,8 +306,8 @@ func (r *StructureQueryRepositorySQLC) GetWhereUsed(
 			ParentCode:        row.ParentCode,
 			ChildCode:         row.ChildCode,
 			ParentDescription: row.ParentDescription,
-			Quantity:          pgutil.FromPgNumericToFloat64(row.Quantity),
-			LossPercentage:    pgutil.FromPgNumericToFloat64(row.LossPercentage),
+			Quantity:          pgutil.FromPgNumericToDecimal(row.Quantity),
+			LossPercentage:    pgutil.FromPgNumericToDecimal(row.LossPercentage),
 			Sequence:          int(row.Sequence),
 		}
 		if row.ParentMask.Valid {

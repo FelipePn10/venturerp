@@ -6890,10 +6890,10 @@ type ItemStandardCostHistory struct {
 type ItemStructure struct {
 	ID         int64
 	ParentMask pgtype.Text
-	Quantity   float64
+	Quantity   decimal.Decimal
 	// Unidade em que a engenharia escreveu a quantidade. Pode diferir da unidade de estoque do item — nesse caso é obrigatória uma conversão cadastrada.
 	UnitOfMeasurement  UnitOfMeasurementEnum
-	LossPercentage     float64
+	LossPercentage     decimal.Decimal
 	Sequence           int32
 	Notes              pgtype.Text
 	IsActive           bool

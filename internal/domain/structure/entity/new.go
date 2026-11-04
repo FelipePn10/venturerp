@@ -2,9 +2,11 @@ package entity
 
 import (
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 
@@ -15,10 +17,10 @@ import (
 func NewItemStructure(
 	parentCode, childCode int64,
 	parentMask *string,
-	quantity float64,
+	quantity decimal.Decimal,
 	uom types.TypeUnitOfMeasurementItem,
 	health types.Health,
-	lossPercentage float64,
+	lossPercentage decimal.Decimal,
 	sequence int,
 	notes *string,
 	isActive bool,
@@ -40,10 +42,10 @@ func NewItemStructure(
 	quantityFormula = normalizeFormula(quantityFormula)
 	// Com fórmula, a quantidade fixa vira apenas o valor nominal de fallback e
 	// pode vir zerada da tela; sem fórmula, ela é obrigatória.
-	if quantity <= 0 && quantityFormula == nil {
+	if !quantity.IsPositive() && quantityFormula == nil {
 		return nil, domainerr.NewValidation("informe a quantidade do componente ou uma fórmula de quantidade")
 	}
-	if quantity < 0 {
+	if quantity.IsNegative() {
 		return nil, domainerr.NewValidation("a quantidade do componente não pode ser negativa")
 	}
 	if quantityFormula != nil {
@@ -57,7 +59,7 @@ func NewItemStructure(
 	if quantityScale < 0 || quantityScale > 6 {
 		return nil, domainerr.NewValidation("as casas decimais do arredondamento devem estar entre 0 e 6")
 	}
-	if lossPercentage < 0 || lossPercentage > 100 {
+	if lossPercentage.IsNegative() || lossPercentage.GreaterThan(decimal.NewFromInt(100)) {
 		return nil, domainerr.NewValidation("loss_percentage deve estar entre 0 e 100")
 	}
 	if sequence < 1 {
@@ -112,8 +114,8 @@ func (s *ItemStructure) IsGeneric() bool {
 
 // EffectiveQuantity retorna a quantidade considerando o percentual de perda.
 // Para avaliação de fórmula, use o pacote formula junto com os valores de máscara.
-func (s *ItemStructure) EffectiveQuantity() float64 {
-	return s.Quantity * (1 + s.LossPercentage/100.0)
+func (s *ItemStructure) EffectiveQuantity() decimal.Decimal {
+	return s.Quantity.Mul(decimal.NewFromInt(1).Add(s.LossPercentage.Div(decimal.NewFromInt(100))))
 }
 
 // Deactivate realiza o soft-delete do componente.
@@ -123,10 +125,10 @@ func (s *ItemStructure) Deactivate() {
 }
 
 func (s *ItemStructure) Update(
-	quantity float64,
+	quantity decimal.Decimal,
 	uom types.TypeUnitOfMeasurementItem,
 	health types.Health,
-	lossPercentage float64,
+	lossPercentage decimal.Decimal,
 	sequence int,
 	notes *string,
 	startDate *time.Time,
@@ -137,10 +139,10 @@ func (s *ItemStructure) Update(
 	quantityScale int16,
 ) error {
 	quantityFormula = normalizeFormula(quantityFormula)
-	if quantity <= 0 && quantityFormula == nil {
+	if !quantity.IsPositive() && quantityFormula == nil {
 		return domainerr.NewValidation("informe a quantidade do componente ou uma fórmula de quantidade")
 	}
-	if quantity < 0 {
+	if quantity.IsNegative() {
 		return domainerr.NewValidation("a quantidade do componente não pode ser negativa")
 	}
 	if quantityFormula != nil {
@@ -154,7 +156,7 @@ func (s *ItemStructure) Update(
 	if quantityScale < 0 || quantityScale > 6 {
 		return domainerr.NewValidation("as casas decimais do arredondamento devem estar entre 0 e 6")
 	}
-	if lossPercentage < 0 || lossPercentage > 100 {
+	if lossPercentage.IsNegative() || lossPercentage.GreaterThan(decimal.NewFromInt(100)) {
 		return domainerr.NewValidation("loss_percentage deve estar entre 0 e 100")
 	}
 	if sequence < 1 {

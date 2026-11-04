@@ -41,12 +41,12 @@ func instantaneo(s *entity.ItemStructure) []byte {
 		return nil
 	}
 	dados := map[string]any{
-		"quantidade":             s.Quantity,
+		"quantidade":             s.Quantity.InexactFloat64(),
 		"formula_quantidade":     s.QuantityFormula,
 		"arredondamento":         s.QuantityRounding,
 		"casas_decimais":         s.QuantityScale,
 		"unidade":                string(s.UnitOfMeasurement),
-		"perda_percentual":       s.LossPercentage,
+		"perda_percentual":       s.LossPercentage.InexactFloat64(),
 		"formula_perda":          s.LossFormula,
 		"perda_setup":            s.SetupLoss,
 		"tipo_perda_custo":       s.CostLossType,

@@ -22,8 +22,8 @@ import (
 func TestCriarOFNaoGeraDemandaDoMaterialDoCliente(t *testing.T) {
 	repo := &fakePORepo{automatic: map[int64]int64{20: 2}}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: 1},                         // parafuso da empresa
-		{ChildCode: 30, Quantity: 2, CustomerSupplied: true}, // tubo do cliente
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(1)},                         // parafuso da empresa
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(2), CustomerSupplied: true}, // tubo do cliente
 	}}
 	uc := CreateProductionOrderUseCase{
 		Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: structure,
@@ -39,8 +39,8 @@ func TestCriarOFNaoGeraDemandaDoMaterialDoCliente(t *testing.T) {
 
 func TestBaixaAutomaticaNaoConsomeMaterialDoCliente(t *testing.T) {
 	children := structureChildrenForBackflush([]*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: 1},
-		{ChildCode: 30, Quantity: 2, CustomerSupplied: true},
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(1)},
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(2), CustomerSupplied: true},
 	})
 	if len(children) != 1 || children[0].code != 20 {
 		t.Fatalf("o apontamento só pode baixar o material próprio, veio %+v", children)
@@ -55,9 +55,9 @@ func TestConcluirOFDeBeneficiamentoNaoDaEntradaNoEstoqueProprio(t *testing.T) {
 	}
 	stock := &fakeStockRepo{}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{
-		{ChildCode: 200, Quantity: 2},                         // material próprio, baixa automática
-		{ChildCode: 300, Quantity: 1, CustomerSupplied: true}, // material do cliente
-		{ChildCode: 400, Quantity: 1, IsCoproduct: true},      // cavaco do material do cliente
+		{ChildCode: 200, Quantity: decimal.NewFromFloat(2)},                         // material próprio, baixa automática
+		{ChildCode: 300, Quantity: decimal.NewFromFloat(1), CustomerSupplied: true}, // material do cliente
+		{ChildCode: 400, Quantity: decimal.NewFromFloat(1), IsCoproduct: true},      // cavaco do material do cliente
 	}}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock, Structure: structure}
 	if _, err := uc.Execute(context.Background(), request.CompleteProductionOrderDTO{ID: 9, Quantity: &quantity, WarehouseID: i64p(4), IdempotencyKey: "ben-9"}); err != nil {

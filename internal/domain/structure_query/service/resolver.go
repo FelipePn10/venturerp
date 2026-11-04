@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	cfgentity "github.com/FelipePn10/panossoerp/internal/domain/configurator/entity"
+	"github.com/shopspring/decimal"
 
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
@@ -24,7 +25,7 @@ type Node struct {
 	// Quantity é a quantidade por unidade do pai já com a fórmula avaliada
 	// (quando houver) com as variáveis da configuração do pai; FormulaApplied
 	// diz se a fórmula foi de fato usada ou se valeu a quantidade fixa.
-	Quantity       float64
+	Quantity       decimal.Decimal
 	FormulaApplied bool
 
 	// ConfiguracaoIncompleta marca o nó cujo filho tem característica sem
@@ -79,7 +80,7 @@ func (r *Resolver) Resolve(
 
 // formulaVars carrega as respostas nomeadas da configuração do pai apenas
 // quando algum componente do nível realmente usa fórmula de quantidade.
-func (r *Resolver) formulaVars(ctx context.Context, children []*str.ItemStructure, itemCode int64, mask string) map[string]float64 {
+func (r *Resolver) formulaVars(ctx context.Context, children []*str.ItemStructure, itemCode int64, mask string) map[string]decimal.Decimal {
 	if mask == "" {
 		return nil
 	}

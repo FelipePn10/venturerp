@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure_query/repository"
+	"github.com/shopspring/decimal"
 )
 
 // ConsultStructureUseCase implementa VENG0401 — Consulta de Estrutura de Produto.
@@ -108,7 +109,7 @@ func (uc *ConsultStructureUseCase) buildRow(
 
 	// As variáveis da configuração (as "perguntas" respondidas) alimentam tanto a
 	// fórmula de quantidade quanto a de perda.
-	vars := map[string]float64{}
+	vars := map[string]decimal.Decimal{}
 	if (s.HasQuantityFormula() || (s.LossFormula != nil && *s.LossFormula != "")) && childMask != "" {
 		var errMascara error
 		vars, errMascara = uc.Repo.GetMaskAnswersWithNames(ctx, s.ChildCode, childMask)
@@ -127,7 +128,7 @@ func (uc *ConsultStructureUseCase) buildRow(
 	}
 
 	quantity, formulaApplied := s.ResolvedQuantity(vars)
-	corrected := quantity * (1 + s.LossPercentage/100.0)
+	corrected := quantity.Mul(decimal.NewFromInt(1).Add(s.LossPercentage.Div(decimal.NewFromInt(100))))
 
 	if s.LossFormula != nil && *s.LossFormula != "" {
 		if result, ok := formula.EvaluateSafe(*s.LossFormula, vars); ok {
@@ -149,14 +150,14 @@ func (uc *ConsultStructureUseCase) buildRow(
 		Sequence:          s.Sequence,
 		StartDate:         s.StartDate,
 		EndDate:           s.EndDate,
-		Quantity:          quantity,
-		NominalQuantity:   s.Quantity,
+		Quantity:          quantity.InexactFloat64(),
+		NominalQuantity:   s.Quantity.InexactFloat64(),
 		QuantityFormula:   s.QuantityFormula,
 		FormulaApplied:    formulaApplied,
 		WarehouseCode:     warehouseCode,
 		LossFormula:       s.LossFormula,
-		LossPercentage:    s.LossPercentage,
-		CorrectedQuantity: corrected,
+		LossPercentage:    s.LossPercentage.InexactFloat64(),
+		CorrectedQuantity: corrected.InexactFloat64(),
 		StructureType:     structureType,
 		Mask:              maskPtr,
 	}

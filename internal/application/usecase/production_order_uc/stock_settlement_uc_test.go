@@ -192,10 +192,10 @@ func (f *fakeDeliveryStructure) GetAllDirectChildren(context.Context, int64) ([]
 func TestCreateProductionOrder_GeneratesOnlyDirectPrimaryDemands(t *testing.T) {
 	repo := &fakePORepo{automatic: map[int64]int64{20: 2, 30: 3}}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 1},
-		{ChildCode: 21, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
-		{ChildCode: 30, Quantity: 1, IsFixedQty: true},
-		{ChildCode: 40, Quantity: 1, IsCoproduct: true},
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 1},
+		{ChildCode: 21, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 2},
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(1), IsFixedQty: true},
+		{ChildCode: 40, Quantity: decimal.NewFromFloat(1), IsCoproduct: true},
 	}}
 	uc := CreateProductionOrderUseCase{
 		Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: structure,
@@ -283,10 +283,10 @@ func i64p(v int64) *int64 { return &v }
 
 func TestStructureChildrenForBackflush_SelectsPrimaryAndSkipsOutputs(t *testing.T) {
 	raw := []*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
-		{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
-		{ChildCode: 30, Quantity: 1, IsCoproduct: true},
-		{ChildCode: 40, Quantity: 5, IsFixedQty: true},
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 2},
+		{ChildCode: 10, Quantity: decimal.NewFromFloat(3), SubstituteGroup: 1, SubstitutePriority: 1},
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(1), IsCoproduct: true},
+		{ChildCode: 40, Quantity: decimal.NewFromFloat(5), IsFixedQty: true},
 	}
 
 	children := structureChildrenForBackflush(raw)
@@ -301,7 +301,7 @@ func TestStructureChildrenForBackflush_SelectsPrimaryAndSkipsOutputs(t *testing.
 	if _, ok := got[30]; ok {
 		t.Error("co-produto não deve ser consumido no backflush")
 	}
-	if got[10].qty != 3 {
+	if !got[10].qty.Equal(decimal.NewFromFloat(3)) {
 		t.Errorf("primário qty = %v, want 3", got[10].qty)
 	}
 	if !got[40].fixed {
@@ -465,7 +465,7 @@ func TestCompleteProductionOrder_GeneratesREPForAutomaticChildren(t *testing.T) 
 	quantity := decimal.NewFromInt(4)
 	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 8, ItemCode: 100, PlannedQty: decimal.RequireFromString("4"), CreatedBy: uuid.New()}, automatic: map[int64]int64{200: 9}}
 	stock := &fakeStockRepo{}
-	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{{ChildCode: 200, Quantity: 2}}}
+	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{{ChildCode: 200, Quantity: decimal.NewFromFloat(2)}}}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock, Structure: structure}
 	_, err := uc.Execute(context.Background(), request.CompleteProductionOrderDTO{ID: 8, Quantity: &quantity, WarehouseID: i64p(4), IdempotencyKey: "delivery-8"})
 	if err != nil {

@@ -3,6 +3,7 @@ package structure_query
 import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure_query/service"
+	"github.com/shopspring/decimal"
 )
 
 func MapNodes(nodes []*service.Node) []*response.StructureTreeNodeResponse {
@@ -22,7 +23,7 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 	// Quantity já vem resolvida pelo resolver (fórmula avaliada quando possível);
 	// a quantidade fixa cadastrada continua visível em NominalQuantity.
 	quantity := n.Quantity
-	if quantity == 0 && !n.FormulaApplied {
+	if quantity.IsZero() && !n.FormulaApplied {
 		quantity = n.Component.Quantity
 	}
 	return &response.StructureTreeNodeResponse{
@@ -34,17 +35,17 @@ func mapNode(n *service.Node) *response.StructureTreeNodeResponse {
 			ChildCode:           n.Component.ChildCode,
 			ChildDescription:    n.Component.ChildDescription,
 			ParentMask:          n.Component.ParentMask,
-			Quantity:            quantity,
-			NominalQuantity:     n.Component.Quantity,
+			Quantity:            quantity.InexactFloat64(),
+			NominalQuantity:     n.Component.Quantity.InexactFloat64(),
 			QuantityFormula:     n.Component.QuantityFormula,
 			QuantityRounding:    n.Component.QuantityRounding,
 			QuantityScale:       n.Component.QuantityScale,
 			FormulaApplied:      n.FormulaApplied,
 			FormulaVariables:    n.Component.FormulaVariables(),
-			EffectiveQuantity:   quantity * (1 + n.Component.LossPercentage/100),
+			EffectiveQuantity:   quantity.Mul(decimal.NewFromInt(1).Add(n.Component.LossPercentage.Div(decimal.NewFromInt(100)))).InexactFloat64(),
 			UnitOfMeasurement:   n.Component.UnitOfMeasurement,
 			Health:              n.Component.Health,
-			LossPercentage:      n.Component.LossPercentage,
+			LossPercentage:      n.Component.LossPercentage.InexactFloat64(),
 			LossFormula:         n.Component.LossFormula,
 			Sequence:            n.Component.Sequence,
 			Notes:               n.Component.Notes,

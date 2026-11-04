@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
@@ -37,7 +38,7 @@ func (r *publicMethodMRPRepo) LoadTypedPlanningParams(context.Context) (*entity.
 
 func TestPublicStructureAndLLCMethods(t *testing.T) {
 	mask := "A"
-	structure := &publicMethodStructRepo{children: []*structentity.ItemStructure{{ChildCode: 2, Quantity: 2, LossPercentage: 10, IsActive: true}, {ChildCode: 3, Quantity: 1, IsActive: false}, {ChildCode: 4, Quantity: 1, IsActive: true, ParentMask: &mask}}, bom: map[int64][]*structentity.ItemStructure{1: {{ChildCode: 2, IsActive: true}}, 2: {{ChildCode: 5, IsActive: true}}}}
+	structure := &publicMethodStructRepo{children: []*structentity.ItemStructure{{ChildCode: 2, Quantity: decimal.NewFromFloat(2), LossPercentage: decimal.NewFromFloat(10), IsActive: true}, {ChildCode: 3, Quantity: decimal.NewFromFloat(1), IsActive: false}, {ChildCode: 4, Quantity: decimal.NewFromFloat(1), IsActive: true, ParentMask: &mask}}, bom: map[int64][]*structentity.ItemStructure{1: {{ChildCode: 2, IsActive: true}}, 2: {{ChildCode: 5, IsActive: true}}}}
 	service := &MRPServiceImpl{StructRepo: structure, MRPRepo: &publicMethodMRPRepo{params: &entity.TypedPlanningParams{FormulaPerdasEstrutura: 1}}}
 	inputs, err := service.ExplodeStructure(context.Background(), 1, "", decimal.NewFromFloat(3), 1)
 	if err != nil || len(inputs) != 1 || abs(inputs[0].Quantity.InexactFloat64()-6.6) > 1e-6 {
@@ -168,8 +169,8 @@ func TestExplodeFromBOM_DefaultFormulaAppliesLoss(t *testing.T) {
 	// Default formula (1): qty = parentQty * childQtyPer * (1 + loss/100).
 	bom := map[int64][]*structentity.ItemStructure{
 		100: {
-			{ChildCode: 200, Quantity: 2, LossPercentage: 10}, // 5*2*1.1 = 11
-			{ChildCode: 300, Quantity: 1, LossPercentage: 0},  // 5*1     = 5
+			{ChildCode: 200, Quantity: decimal.NewFromFloat(2), LossPercentage: decimal.NewFromFloat(10)}, // 5*2*1.1 = 11
+			{ChildCode: 300, Quantity: decimal.NewFromFloat(1), LossPercentage: decimal.NewFromFloat(0)},  // 5*1     = 5
 		},
 	}
 	out := explodeFromBOM(bom, 100, "", decimal.NewFromFloat(5), 0)

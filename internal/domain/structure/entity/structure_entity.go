@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/google/uuid"
 )
@@ -21,20 +23,20 @@ type ItemStructure struct {
 	ChildDescription  string
 	Inherit           bool
 	ParentMask        *string // nil = genérico
-	Quantity          float64
-	LossPercentage    float64 // 0–100 (%)
-	LossFormula       *string // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
-	QuantityFormula   *string // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
-	QuantityRounding  string  // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
-	QuantityScale     int16   // casas decimais do arredondamento (0–6)
+	Quantity          decimal.Decimal
+	LossPercentage    decimal.Decimal // 0–100 (%)
+	LossFormula       *string         // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
+	QuantityFormula   *string         // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
+	QuantityRounding  string          // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
+	QuantityScale     int16           // casas decimais do arredondamento (0–6)
 	UnitOfMeasurement types.TypeUnitOfMeasurementItem
 
 	// QuantityStockUOM é a mesma quantidade na unidade de ESTOQUE do filho, e
 	// é o número que MRP, ordem, custo e apontamento leem. ConversionFactor é o
 	// fator aplicado, congelado na gravação: corrigir a conversão amanhã não
 	// pode reescrever o consumo de uma ordem já aberta.
-	QuantityStockUOM float64
-	ConversionFactor float64
+	QuantityStockUOM decimal.Decimal
+	ConversionFactor decimal.Decimal
 	// StockUnitOfMeasurement é a unidade em que o FILHO é estocado. Vem do
 	// cadastro do item, não da linha — a tela precisa dela para escrever
 	// "2 m² = 31,4 kg" em vez de mostrar um número sem unidade.
@@ -88,8 +90,8 @@ type WhereUsedRow struct {
 	ParentCode        int64
 	ChildCode         int64
 	ParentDescription string
-	Quantity          float64
-	LossPercentage    float64
+	Quantity          decimal.Decimal
+	LossPercentage    decimal.Decimal
 	ParentMask        *string
 	Sequence          int
 }

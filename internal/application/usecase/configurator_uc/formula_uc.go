@@ -3,10 +3,11 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
-	"strconv"
-	"strings"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
@@ -31,13 +32,13 @@ func normalizeCode(code string) string {
 }
 
 // formatNum renders a formula result without trailing zeros (66, 1.5, …).
-func formatNum(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
+func formatNum(v decimal.Decimal) string { return v.String() }
 
 // formulaVars builds the variable map (normalized characteristic code → numeric
 // value) from a set of answers, used to evaluate rule formulas. The numeric value
 // is parsed from the chosen variable's mask composition (or the raw value).
-func (uc *ConfiguratorUseCase) formulaVars(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]float64, error) {
-	vars := map[string]float64{}
+func (uc *ConfiguratorUseCase) formulaVars(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]decimal.Decimal, error) {
+	vars := map[string]decimal.Decimal{}
 	for _, a := range answers {
 		// Pergunta ou variável apagada só fica de fora; falha de leitura é erro —
 		// antes a fórmula era avaliada sem a variável e a quantidade saía errada.

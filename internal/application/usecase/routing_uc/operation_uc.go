@@ -3,8 +3,10 @@ package routing_uc
 import (
 	"context"
 	"fmt"
-	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"strings"
+
+	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -260,11 +262,20 @@ func toOperationResponse(op *entity.Operation) *response.OperationResponse {
 		TimeUnit:             op.TimeUnit,
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          op.CostPerUnit,
+		CostPerUnit:          decimalParaNumero(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: op.ThirdPartyRemittance,
 		ScrapPct:             op.ScrapPct,
 		IsActive:             op.IsActive,
 		CreatedAt:            op.CreatedAt,
 	}
+}
+
+// decimalParaNumero leva o custo opcional à resposta, que continua numérica.
+func decimalParaNumero(d *decimal.Decimal) *float64 {
+	if d == nil {
+		return nil
+	}
+	f := d.InexactFloat64()
+	return &f
 }

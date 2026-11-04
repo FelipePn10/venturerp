@@ -3,9 +3,12 @@ package entity
 import (
 	"math"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
-func quase(t *testing.T, nome string, got, want float64) {
+func quase(t *testing.T, nome string, gotD decimal.Decimal, want float64) {
+	got := gotD.InexactFloat64()
 	t.Helper()
 	if math.Abs(got-want) > 1e-9 {
 		t.Errorf("%s: %.9f, esperado %.9f", nome, got, want)
@@ -16,7 +19,7 @@ func quase(t *testing.T, nome string, got, want float64) {
 // 2 m² de uma chapa que pesa 15,7 kg/m² são 31,4 kg — e é isso que o MRP tem
 // de reservar, não 2.
 func TestQuantidadeSaiNaUnidadeDeEstoque(t *testing.T) {
-	linha := &ItemStructure{Quantity: 2, ConversionFactor: 15.7}
+	linha := &ItemStructure{Quantity: decimal.NewFromFloat(2), ConversionFactor: decimal.NewFromFloat(15.7)}
 	quase(t, "quantidade em estoque", linha.QuantidadeNaUnidadeDeEstoque(), 31.4)
 
 	resolvida, usouFormula := linha.ResolvedQuantity(nil)
@@ -30,7 +33,7 @@ func TestQuantidadeSaiNaUnidadeDeEstoque(t *testing.T) {
 // sempre a de estoque, então o número já está certo. Devolver zero aqui faria a
 // ordem nascer sem componente — o pior desfecho possível.
 func TestLinhaAntigaSemFatorNaoZeraAQuantidade(t *testing.T) {
-	linha := &ItemStructure{Quantity: 7}
+	linha := &ItemStructure{Quantity: decimal.NewFromFloat(7)}
 	quase(t, "fator", linha.FatorParaEstoque(), 1)
 	quase(t, "quantidade", linha.QuantidadeNaUnidadeDeEstoque(), 7)
 }
@@ -39,7 +42,7 @@ func TestLinhaAntigaSemFatorNaoZeraAQuantidade(t *testing.T) {
 // anterior à conversão em vez de multiplicar tudo por zero.
 func TestFatorInvalidoCaiEmUm(t *testing.T) {
 	for _, f := range []float64{0, -3} {
-		linha := &ItemStructure{Quantity: 5, ConversionFactor: f}
+		linha := &ItemStructure{Quantity: decimal.NewFromFloat(5), ConversionFactor: decimal.NewFromFloat(f)}
 		quase(t, "quantidade", linha.QuantidadeNaUnidadeDeEstoque(), 5)
 	}
 }
@@ -49,10 +52,10 @@ func TestFatorInvalidoCaiEmUm(t *testing.T) {
 func TestFormulaTambemPassaPelaConversao(t *testing.T) {
 	f := "COMPRIMENTO * LARGURA"
 	linha := &ItemStructure{
-		Quantity: 1, ConversionFactor: 15.7,
+		Quantity: decimal.NewFromFloat(1), ConversionFactor: decimal.NewFromFloat(15.7),
 		QuantityFormula: &f, QuantityRounding: "NONE", QuantityScale: 4,
 	}
-	resolvida, usouFormula := linha.ResolvedQuantity(map[string]float64{"COMPRIMENTO": 2, "LARGURA": 1.5})
+	resolvida, usouFormula := linha.ResolvedQuantity(map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(2), "LARGURA": decimal.NewFromFloat(1.5)})
 	if !usouFormula {
 		t.Fatal("a fórmula deveria ter sido aplicada")
 	}
@@ -62,7 +65,7 @@ func TestFormulaTambemPassaPelaConversao(t *testing.T) {
 // Unidades iguais: fator 1, nada muda. É o caso de praticamente toda estrutura
 // já cadastrada, e a garantia de que a migração não mexeu em número nenhum.
 func TestUnidadesIguaisNaoMudamNada(t *testing.T) {
-	linha := &ItemStructure{Quantity: 12.5, ConversionFactor: 1}
+	linha := &ItemStructure{Quantity: decimal.NewFromFloat(12.5), ConversionFactor: decimal.NewFromFloat(1)}
 	quase(t, "quantidade", linha.QuantidadeNaUnidadeDeEstoque(), 12.5)
 }
 
@@ -72,9 +75,9 @@ func TestUnidadesIguaisNaoMudamNada(t *testing.T) {
 // — meio por cento a mais, sempre para o mesmo lado.
 func TestQuantidadeGravadaVenceOFatorArredondado(t *testing.T) {
 	linha := &ItemStructure{
-		Quantity:         104,
-		QuantityStockUOM: 0.0173333, // calculado na gravação, precisão inteira
-		ConversionFactor: 0.000167,  // o mesmo fator depois do arredondamento
+		Quantity:         decimal.NewFromFloat(104),
+		QuantityStockUOM: decimal.NewFromFloat(0.0173333), // calculado na gravação, precisão inteira
+		ConversionFactor: decimal.NewFromFloat(0.000167),  // o mesmo fator depois do arredondamento
 	}
 	quase(t, "quantidade em estoque", linha.QuantidadeNaUnidadeDeEstoque(), 0.0173333)
 
@@ -90,10 +93,10 @@ func TestQuantidadeGravadaVenceOFatorArredondado(t *testing.T) {
 func TestComFormulaOFatorEhAplicadoSobreOResultado(t *testing.T) {
 	f := "COMPRIMENTO"
 	linha := &ItemStructure{
-		Quantity: 1, QuantityStockUOM: 15.7, ConversionFactor: 15.7,
+		Quantity: decimal.NewFromFloat(1), QuantityStockUOM: decimal.NewFromFloat(15.7), ConversionFactor: decimal.NewFromFloat(15.7),
 		QuantityFormula: &f, QuantityRounding: "NONE", QuantityScale: 4,
 	}
-	resolvida, usouFormula := linha.ResolvedQuantity(map[string]float64{"COMPRIMENTO": 3})
+	resolvida, usouFormula := linha.ResolvedQuantity(map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(3)})
 	if !usouFormula {
 		t.Fatal("a fórmula deveria ter sido aplicada")
 	}

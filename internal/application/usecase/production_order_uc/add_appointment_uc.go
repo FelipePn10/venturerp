@@ -166,20 +166,19 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 	for _, c := range children {
 		// A fórmula de perdas é a mesma do MRP (structentity.QuantidadeComPerda);
 		// aqui usávamos (1 + perda/100) e o consumo divergia do planejado.
-		// A estrutura ainda calcula em float (perda e quantidade por pai).
-		base := dto.ProducedQty.InexactFloat64()
+		base := dto.ProducedQty
 		if c.fixed {
-			base = 1
+			base = decimal.NewFromInt(1)
 		}
-		consumed := structentity.QuantidadeComPerda(base*c.qty, c.loss, structentity.FormulaPerdaPadrao)
-		if consumed <= 0 {
+		consumed := structentity.QuantidadeComPerdaDecimal(base.Mul(c.qty), c.loss, structentity.FormulaPerdaPadrao)
+		if !consumed.IsPositive() {
 			continue
 		}
 		mov := &stockentity.StockMovement{
 			ItemCode:      c.code,
 			WarehouseID:   *dto.BackflushWarehouseID,
 			MovementType:  stockentity.MovementTypeOut,
-			Quantity:      decimal.NewFromFloat(consumed),
+			Quantity:      consumed,
 			ReferenceType: &refType,
 			ReferenceCode: &refCode,
 			CreatedBy:     dto.CreatedBy,
@@ -212,7 +211,7 @@ func structureChildrenForBackflush(raw []*structentity.ItemStructure) []*structu
 
 type structureChild struct {
 	code  int64
-	qty   float64
-	loss  float64
+	qty   decimal.Decimal
+	loss  decimal.Decimal
 	fixed bool
 }

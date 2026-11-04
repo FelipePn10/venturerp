@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -319,7 +317,7 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 			ItemCode:        *op.ServiceItemCode,
 			Quantity:        order.Quantity,
 			UOM:             &serv,
-			SuggestedPrice:  decimal.NewFromFloat(op.CostPerUnit),
+			SuggestedPrice:  op.CostPerUnit,
 			Application:     &app,
 			// O serviço é gasto do centro de custo da ordem.
 			CostCenterCode: order.CostCenterCode,

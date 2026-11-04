@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 const getChildrenForConsult = `-- name: GetChildrenForConsult :many
@@ -64,8 +65,8 @@ type GetChildrenForConsultRow struct {
 	ChildCode             int64
 	ChildDescription      string
 	ParentMask            pgtype.Text
-	Quantity              float64
-	LossPercentage        float64
+	Quantity              decimal.Decimal
+	LossPercentage        decimal.Decimal
 	LossFormula           pgtype.Text
 	UnitOfMeasurement     UnitOfMeasurementEnum
 	Health                HealthEnum

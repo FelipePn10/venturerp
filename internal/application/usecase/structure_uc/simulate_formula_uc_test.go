@@ -3,6 +3,8 @@ package structure_uc
 import (
 	"context"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
 // A simulação existe para o usuário conferir o número antes de gravar: uma
@@ -13,9 +15,9 @@ func TestSimulacaoCalculaComArredondamentoEPerda(t *testing.T) {
 		Formula:        "2*(COMPRIMENTO/1000)+2*(PROFUNDIDADE/1000)",
 		Rounding:       "UP",
 		Scale:          2,
-		LossPercentage: 10,
+		LossPercentage: decimal.NewFromFloat(10),
 		SetupLoss:      0.5,
-		Variables:      map[string]float64{"COMPRIMENTO": 1500, "PROFUNDIDADE": 600},
+		Variables:      map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1500), "PROFUNDIDADE": decimal.NewFromFloat(600)},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +42,7 @@ func TestSimulacaoApontaVariavelSemResposta(t *testing.T) {
 	uc := &SimulateQuantityFormulaUseCase{}
 	out, err := uc.Execute(context.Background(), SimulateFormulaInput{
 		Formula:   "LARGURA*ALTURA",
-		Variables: map[string]float64{"LARGURA": 2},
+		Variables: map[string]decimal.Decimal{"LARGURA": decimal.NewFromFloat(2)},
 	})
 	if err != nil {
 		t.Fatal(err)
