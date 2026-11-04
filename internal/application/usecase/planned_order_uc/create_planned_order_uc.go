@@ -3,6 +3,7 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
+
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -29,7 +30,7 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 	if dto.ItemCode == 0 {
 		return nil, errorsuc.NewValidationError("informe o item")
 	}
-	if dto.Quantity <= 0 {
+	if !dto.Quantity.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade deve ser maior que zero")
 	}
 

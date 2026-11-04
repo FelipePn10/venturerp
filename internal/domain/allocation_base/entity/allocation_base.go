@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -20,7 +22,7 @@ type AllocationBase struct {
 type AllocationBaseItem struct {
 	AllocationBaseCode int32
 	CostCenterCode     int32
-	Amount             float64
-	Percentage         float64
+	Amount             decimal.Decimal
+	Percentage         decimal.Decimal
 	CreatedAt          time.Time
 }

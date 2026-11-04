@@ -56,7 +56,7 @@ func resolverUnidadeDeEstoque(
 	if errConv != nil {
 		return 0, 0, fmt.Errorf("consultando a conversão de unidade do item %d: %w", itemCode, errConv)
 	}
-	if !achou || f <= 0 {
+	if !achou || !f.IsPositive() {
 		// A conversão pode ser cadastrada em qualquer direção — o sistema usa a
 		// inversa quando só uma existe. Dizer as duas importa: "quantas UN tem
 		// 1 MM" dá 0,000167, um número que ninguém tira de um desenho; "1 UN
@@ -70,5 +70,6 @@ func resolverUnidadeDeEstoque(
 			daEstrutura, doEstoque, doEstoque, daEstrutura,
 			doEstoque, quantidade, daEstrutura, doEstoque))
 	}
-	return quantidade * f, f, nil
+	// A estrutura ainda é float (etapa 4b); o fator chega decimal do conversor.
+	return quantidade * f.InexactFloat64(), f.InexactFloat64(), nil
 }

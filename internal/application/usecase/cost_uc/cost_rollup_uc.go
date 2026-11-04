@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"sort"
 	"time"
+
+	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -90,7 +91,7 @@ func (uc *StandardCostUseCase) UpsertWorkCenterCost(ctx context.Context, dto req
 	// When the machine × labor split is not provided, the machine rate defaults to the
 	// blended cost_per_hour so the stored/displayed value matches the effective rate.
 	machineRate := dto.MachineCostPerHour
-	if machineRate <= 0 {
+	if !machineRate.IsPositive() {
 		machineRate = dto.CostPerHour
 	}
 	wcc := &entity.WorkCenterCost{
@@ -169,8 +170,8 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 	}
 
 	lotSize := dto.LotSize
-	if lotSize <= 0 {
-		lotSize = 1
+	if !lotSize.IsPositive() {
+		lotSize = decimal.NewFromFloat(1)
 	}
 
 	// As regras de rateio são lidas UMA vez para a apuração inteira: elas valem
@@ -184,7 +185,7 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 		return nil, fmt.Errorf("lendo o esquema de indiretos: %w", err)
 	}
 
-	unitCache := make(map[int64]float64)
+	unitCache := make(map[int64]decimal.Decimal)
 	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache, regras, quando)
 	if err != nil {
 		return nil, err
@@ -197,7 +198,7 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 		// MaterialCost guarda o material CHEIO (o que veio de baixo mais o material
 		// próprio da folha): é o número que o resto do sistema já lia como
 		// "material", e mudar o sentido dele quebraria precificação e relatórios.
-		MaterialCost: c.Material + c.NivelInferior,
+		MaterialCost: c.Material.Add(c.NivelInferior),
 		// ⚠️ Preparação, máquina e terceiro PRECISAM ser gravados. `total_cost` é
 		// coluna gerada somando os seis componentes (migração 000374); gravar só
 		// material, mão de obra e overhead — como fazia a consulta do sqlc — deixava
@@ -231,7 +232,7 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 
 	// Histórico da apuração, para comparar componente a componente ao longo do
 	// tempo. Só grava se o repositório suportar (migração 000373).
-	total := c.Total() + c.NivelInferior
+	total := c.Total().Add(c.NivelInferior)
 	if h, ok := uc.repo.(interface {
 		GravarHistoricoDeCusto(context.Context, *entity.HistoricoDeCusto) error
 	}); ok {
@@ -248,16 +249,16 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 	return &response.CostRollupResponse{
 		ItemCode:        saved.ItemCode,
 		Mask:            saved.Mask,
-		MaterialCost:    saved.MaterialCost,
-		LaborCost:       c.MaoDeObra,
-		OverheadCost:    c.Overhead,
-		SetupCost:       c.Setup,
-		MachineCost:     c.Maquina,
-		SubcontractCost: c.Subcontratacao,
-		OwnLevelCost:    c.NivelProprio,
-		LowerLevelCost:  c.NivelInferior,
-		LotSize:         lotSize,
-		TotalCost:       total,
+		MaterialCost:    saved.MaterialCost.InexactFloat64(),
+		LaborCost:       c.MaoDeObra.InexactFloat64(),
+		OverheadCost:    c.Overhead.InexactFloat64(),
+		SetupCost:       c.Setup.InexactFloat64(),
+		MachineCost:     c.Maquina.InexactFloat64(),
+		SubcontractCost: c.Subcontratacao.InexactFloat64(),
+		OwnLevelCost:    c.NivelProprio.InexactFloat64(),
+		LowerLevelCost:  c.NivelInferior.InexactFloat64(),
+		LotSize:         lotSize.InexactFloat64(),
+		TotalCost:       total.InexactFloat64(),
 		Currency:        "BRL",
 		CalculatedAt:    saved.CalculatedAt,
 		Overheads:       paraRateiosResponse(result.Rateios),
@@ -293,8 +294,8 @@ func paraRateiosResponse(rateios []entity.RateioAplicado) []response.CostOverhea
 	for _, r := range rateios {
 		out = append(out, response.CostOverheadAppliedResponse{
 			RuleID: r.RuleID, Code: r.Code, Description: r.Description,
-			Base: string(r.Base), Method: string(r.Method), Rate: r.Rate,
-			BaseValue: r.BaseValue, Applied: r.Applied,
+			Base: string(r.Base), Method: string(r.Method), Rate: r.Rate.InexactFloat64(),
+			BaseValue: r.BaseValue.InexactFloat64(), Applied: r.Applied.InexactFloat64(),
 		})
 	}
 	return out
@@ -309,14 +310,14 @@ func montarArvoreDeCusto(detalhe []entity.CostRollupLogEntry) []response.CostRol
 			ItemCode:        d.ItemCode,
 			Mask:            d.Mask,
 			Level:           d.BOMLevel,
-			MaterialCost:    d.MaterialCost,
-			SetupCost:       d.SetupCost,
-			MachineCost:     d.MachineCost,
-			LaborCost:       d.LaborCost,
-			SubcontractCost: d.SubcontractCost,
-			OverheadCost:    d.OverheadCost,
-			LowerLevelCost:  d.LowerLevelCost,
-			TotalCost:       d.Total(),
+			MaterialCost:    d.MaterialCost.InexactFloat64(),
+			SetupCost:       d.SetupCost.InexactFloat64(),
+			MachineCost:     d.MachineCost.InexactFloat64(),
+			LaborCost:       d.LaborCost.InexactFloat64(),
+			SubcontractCost: d.SubcontractCost.InexactFloat64(),
+			OverheadCost:    d.OverheadCost.InexactFloat64(),
+			LowerLevelCost:  d.LowerLevelCost.InexactFloat64(),
+			TotalCost:       d.Total().InexactFloat64(),
 		})
 	}
 	return out
@@ -330,10 +331,10 @@ func (uc *StandardCostUseCase) GetStandardCost(ctx context.Context, itemCode int
 	return &response.CostRollupResponse{
 		ItemCode:     cost.ItemCode,
 		Mask:         cost.Mask,
-		MaterialCost: cost.MaterialCost,
-		LaborCost:    cost.LaborCost,
-		OverheadCost: cost.OverheadCost,
-		TotalCost:    cost.TotalCost,
+		MaterialCost: cost.MaterialCost.InexactFloat64(),
+		LaborCost:    cost.LaborCost.InexactFloat64(),
+		OverheadCost: cost.OverheadCost.InexactFloat64(),
+		TotalCost:    cost.TotalCost.InexactFloat64(),
 		Currency:     cost.Currency,
 		CalculatedAt: cost.CalculatedAt,
 	}, nil
@@ -355,7 +356,9 @@ type costNode struct {
 // total é o custo unitário do item: o que esta etapa agrega MAIS o que veio dos
 // níveis abaixo. `ComponentesDeCusto.Total()` soma apenas os componentes próprios,
 // de propósito — quem quer o custo cheio soma o nível inferior aqui.
-func (n *costNode) total() float64 { return n.Componentes.Total() + n.Componentes.NivelInferior }
+func (n *costNode) total() decimal.Decimal {
+	return n.Componentes.Total().Add(n.Componentes.NivelInferior)
+}
 
 // rollupItem desce a estrutura e devolve o custo unitário do item, aberto por
 // componente.
@@ -367,8 +370,8 @@ func (n *costNode) total() float64 { return n.Componentes.Total() + n.Componente
 // `NivelInferior` e não espalhado pelos próprios componentes: o corte "o que esta
 // etapa agrega × o que veio de baixo" é o que diz onde o custo subiu.
 func (uc *StandardCostUseCase) rollupItem(
-	ctx context.Context, itemCode int64, mask string, level int, lotSize float64,
-	unitCache map[int64]float64, regras []*entity.RegraDeRateio, quando time.Time,
+	ctx context.Context, itemCode int64, mask string, level int, lotSize decimal.Decimal,
+	unitCache map[int64]decimal.Decimal, regras []*entity.RegraDeRateio, quando time.Time,
 ) (*costNode, error) {
 	children, err := uc.repo.GetDirectChildren(ctx, itemCode, mask)
 	if err != nil {
@@ -405,18 +408,18 @@ func (uc *StandardCostUseCase) rollupItem(
 			if child.IsCoproduct {
 				// Co-produto / sucata retornável: CREDITA o pai pelo valor do
 				// co-produto.
-				comp.NivelInferior -= childNode.total() * child.QuantidadeNaUnidadeDeEstoque()
+				comp.NivelInferior = comp.NivelInferior.Sub(childNode.total().Mul(child.QuantidadeNaUnidadeDeEstoque()))
 				continue
 			}
-			netQty := structentity.QuantidadeComPerda(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, structentity.FormulaPerdaPadrao)
-			if child.IsFixedQty && lotSize > 0 {
-				netQty /= lotSize // componente por lote, amortizado pelo lote de referência
+			netQty := structentity.QuantidadeComPerdaDecimal(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, structentity.FormulaPerdaPadrao)
+			if child.IsFixedQty && lotSize.IsPositive() {
+				netQty = netQty.Div(lotSize) // componente por lote, amortizado pelo lote de referência
 			}
-			comp.NivelInferior += childNode.total() * netQty
+			comp.NivelInferior = comp.NivelInferior.Add(childNode.total().Mul(netQty))
 			childNodes = append(childNodes, childNode)
 		}
-		if comp.NivelInferior < 0 {
-			comp.NivelInferior = 0 // crédito de co-produto nunca deixa o custo negativo
+		if comp.NivelInferior.IsNegative() {
+			comp.NivelInferior = decimal.Zero // crédito de co-produto nunca deixa o custo negativo
 		}
 	}
 
@@ -445,7 +448,7 @@ func (uc *StandardCostUseCase) rollupItem(
 		comp.Overhead, rateios = entity.AplicarRateios(baseDoRateio, horas, aplicaveis)
 	}
 
-	comp.NivelProprio = comp.Material + comp.Conversao() + comp.Subcontratacao + comp.Overhead
+	comp.NivelProprio = comp.Material.Add(comp.Conversao()).Add(comp.Subcontratacao).Add(comp.Overhead)
 
 	node := &costNode{
 		Componentes: comp,
@@ -544,18 +547,21 @@ func costSubstitutePrecedes(a, b domainrepo.BOMChild) bool {
 // O setup sai separado porque é a informação que muda a decisão: setup alto pede
 // lote maior, hora-máquina alta pede outro recurso. Lançar os dois no mesmo número
 // esconde qual é o problema.
-func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode int64, mask string, lot float64) (entity.ComponentesDeCusto, entity.HorasDoRoteiro, error) {
+func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode int64, mask string, lotD decimal.Decimal) (entity.ComponentesDeCusto, entity.HorasDoRoteiro, error) {
 	var comp entity.ComponentesDeCusto
 	var horas entity.HorasDoRoteiro
-	if lot <= 0 {
-		lot = 1
+	if !lotD.IsPositive() {
+		lotD = decimal.NewFromInt(1)
 	}
+	// As horas do roteiro são tempo e seguem em float (fora do escopo do
+	// decimal); o dinheiro (hora × tarifa) é decimal.
+	lot := lotD.InexactFloat64()
 	if uc.routing == nil {
 		routeHours, errHoras := uc.repo.GetRouteHoursByItem(ctx, itemCode, mask)
 		if errHoras != nil {
 			return comp, horas, fmt.Errorf("lendo as horas do roteiro do item %d: %w", itemCode, errHoras)
 		}
-		comp.Maquina = routeHours * uc.averageRate(ctx)
+		comp.Maquina = decimal.NewFromFloat(routeHours).Mul(uc.averageRate(ctx))
 		horas.Maquina = routeHours
 		return comp, horas, nil
 	}
@@ -600,10 +606,10 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 			}
 			// O preço do terceiro já é por unidade; multiplicar pelo lote e dividir
 			// depois mantém a mesma unidade do resto da soma.
-			comp.Subcontratacao += serviceCost.InexactFloat64() * lot
+			comp.Subcontratacao = comp.Subcontratacao.Add(serviceCost.Mul(lotD))
 			continue
 		}
-		machineRate, laborRate := 0.0, 0.0
+		machineRate, laborRate := decimal.Zero, decimal.Zero
 		if op.EffectiveWorkCenterID != nil {
 			if wc, ok := rates[*op.EffectiveWorkCenterID]; ok {
 				machineRate = wc.MachineRate()
@@ -624,19 +630,20 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 			homemSemSetup = 0
 		}
 
-		comp.Setup += setupMaquina*machineRate + setupHomem*laborRate
-		comp.Maquina += maquinaSemSetup * machineRate
-		comp.MaoDeObra += homemSemSetup * laborRate
+		h := decimal.NewFromFloat
+		comp.Setup = comp.Setup.Add(h(setupMaquina).Mul(machineRate)).Add(h(setupHomem).Mul(laborRate))
+		comp.Maquina = comp.Maquina.Add(h(maquinaSemSetup).Mul(machineRate))
+		comp.MaoDeObra = comp.MaoDeObra.Add(h(homemSemSetup).Mul(laborRate))
 		horas.Setup += setupMaquina + setupHomem
 		horas.Maquina += maquinaSemSetup
 		horas.MaoDeObra += homemSemSetup
 	}
 
 	// Tudo acumulado para o LOTE; o custo-padrão é unitário.
-	comp.Setup /= lot
-	comp.Maquina /= lot
-	comp.MaoDeObra /= lot
-	comp.Subcontratacao /= lot
+	comp.Setup = comp.Setup.Div(lotD)
+	comp.Maquina = comp.Maquina.Div(lotD)
+	comp.MaoDeObra = comp.MaoDeObra.Div(lotD)
+	comp.Subcontratacao = comp.Subcontratacao.Div(lotD)
 	horas.Setup /= lot
 	horas.Maquina /= lot
 	horas.MaoDeObra /= lot
@@ -657,16 +664,16 @@ func (uc *StandardCostUseCase) workCenterRates(ctx context.Context) map[int64]*e
 }
 
 // averageRate is the legacy fallback used only when the routing repo is not wired.
-func (uc *StandardCostUseCase) averageRate(ctx context.Context) float64 {
+func (uc *StandardCostUseCase) averageRate(ctx context.Context) decimal.Decimal {
 	wccs, err := uc.repo.ListWorkCenterCosts(ctx)
 	if err != nil || len(wccs) == 0 {
-		return 0
+		return decimal.Zero
 	}
-	var total float64
+	total := decimal.Zero
 	for _, w := range wccs {
-		total += w.CostPerHour
+		total = total.Add(w.CostPerHour)
 	}
-	return total / float64(len(wccs))
+	return total.Div(decimal.NewFromInt(int64(len(wccs))))
 }
 
 // ─── mappers ──────────────────────────────────────────────────────────────────
@@ -675,9 +682,9 @@ func toWCCResponse(w *entity.WorkCenterCost) *response.WorkCenterCostResponse {
 	return &response.WorkCenterCostResponse{
 		ID:                 w.ID,
 		WorkCenterID:       w.WorkCenterID,
-		CostPerHour:        w.CostPerHour,
-		MachineCostPerHour: w.MachineCostPerHour,
-		LaborCostPerHour:   w.LaborCostPerHour,
+		CostPerHour:        w.CostPerHour.InexactFloat64(),
+		MachineCostPerHour: w.MachineCostPerHour.InexactFloat64(),
+		LaborCostPerHour:   w.LaborCostPerHour.InexactFloat64(),
 		Currency:           w.Currency,
 		UpdatedAt:          w.UpdatedAt,
 	}
@@ -687,7 +694,7 @@ func toIPCResponse(i *entity.ItemPurchaseCost) *response.ItemPurchaseCostRespons
 	return &response.ItemPurchaseCostResponse{
 		ID:        i.ID,
 		ItemCode:  i.ItemCode,
-		UnitCost:  i.UnitCost,
+		UnitCost:  i.UnitCost.InexactFloat64(),
 		Currency:  i.Currency,
 		UpdatedAt: i.UpdatedAt,
 	}

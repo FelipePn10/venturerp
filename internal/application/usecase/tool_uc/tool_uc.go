@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -110,7 +112,7 @@ func (uc *ToolUseCase) ResetLife(ctx context.Context, id int64) (*response.ToolR
 	if t == nil {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ferramenta %d não encontrada", id))
 	}
-	if t.LifeUsed != 0 {
+	if !t.LifeUsed.IsZero() {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("não foi possível zerar a vida útil da ferramenta %d", id))
 	}
 	return toToolResponse(t), nil
@@ -124,7 +126,7 @@ func (uc *ToolUseCase) ListNeedingReplacement(ctx context.Context, threshold flo
 	if threshold <= 0 || threshold > 1 {
 		threshold = 0.8
 	}
-	tools, err := uc.repo.ListToolsNeedingReplacement(ctx, threshold)
+	tools, err := uc.repo.ListToolsNeedingReplacement(ctx, decimal.NewFromFloat(threshold))
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +144,8 @@ func (uc *ToolUseCase) AddToOperation(ctx context.Context, dto request.AddRouteO
 		return nil, errorsuc.NewValidationError("informe a operação do roteiro e a ferramenta")
 	}
 	qty := dto.QtyRequired
-	if qty <= 0 {
-		qty = 1
+	if !qty.IsPositive() {
+		qty = decimal.NewFromFloat(1)
 	}
 	added, err := uc.repo.AddRouteOpTool(ctx, &entity.RouteOpTool{
 		RouteOperationID: dto.RouteOperationID,
@@ -257,7 +259,7 @@ func toToolSerialResponse(s *entity.ToolSerial) *response.ToolSerialResponse {
 		ToolID:       s.ToolID,
 		SerialNumber: s.SerialNumber,
 		Status:       s.Status,
-		LifeUsed:     s.LifeUsed,
+		LifeUsed:     s.LifeUsed.InexactFloat64(),
 		Location:     s.Location,
 		Notes:        s.Notes,
 		IsActive:     s.IsActive,
@@ -275,11 +277,11 @@ func toToolResponse(t *entity.Tool) *response.ToolResponse {
 		Name:             t.Name,
 		ToolType:         t.ToolType,
 		LifeType:         t.LifeType,
-		LifeLimit:        t.LifeLimit,
-		LifeUsed:         t.LifeUsed,
-		RemainingLife:    t.RemainingLife(),
+		LifeLimit:        t.LifeLimit.InexactFloat64(),
+		LifeUsed:         t.LifeUsed.InexactFloat64(),
+		RemainingLife:    t.RemainingLife().InexactFloat64(),
 		NeedsReplacement: t.NeedsReplacement(),
-		Cost:             t.Cost,
+		Cost:             t.Cost.InexactFloat64(),
 		Status:           t.Status,
 		IsActive:         t.IsActive,
 		CreatedAt:        t.CreatedAt,
@@ -287,17 +289,17 @@ func toToolResponse(t *entity.Tool) *response.ToolResponse {
 }
 
 func toRouteOpToolResponse(t *entity.RouteOpTool) response.RouteOpToolResponse {
-	needs := t.LifeLimit > 0 && t.LifeUsed >= t.LifeLimit
+	needs := t.LifeLimit.IsPositive() && t.LifeUsed.GreaterThanOrEqual(t.LifeLimit)
 	return response.RouteOpToolResponse{
 		ID:               t.ID,
 		RouteOperationID: t.RouteOperationID,
 		ToolID:           t.ToolID,
 		ToolCode:         t.ToolCode,
 		ToolName:         t.ToolName,
-		QtyRequired:      t.QtyRequired,
+		QtyRequired:      t.QtyRequired.InexactFloat64(),
 		LifeType:         t.LifeType,
-		LifeLimit:        t.LifeLimit,
-		LifeUsed:         t.LifeUsed,
+		LifeLimit:        t.LifeLimit.InexactFloat64(),
+		LifeUsed:         t.LifeUsed.InexactFloat64(),
 		NeedsReplacement: needs,
 		Status:           t.Status,
 	}

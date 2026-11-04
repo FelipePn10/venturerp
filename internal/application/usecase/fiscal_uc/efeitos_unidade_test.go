@@ -31,9 +31,9 @@ type conversorSaida struct {
 	fatores map[string]float64
 }
 
-func (c conversorSaida) ConvertQuantity(_ context.Context, item int64, q float64, de, para string) (float64, bool, error) {
+func (c conversorSaida) ConvertQuantity(_ context.Context, item int64, q decimal.Decimal, de, para string) (decimal.Decimal, bool, error) {
 	f, ok := c.fatores[fmt.Sprintf("%d:%s>%s", item, de, para)]
-	return q * f, ok, nil
+	return q.Mul(decimal.NewFromFloat(f)), ok, nil
 }
 
 func linhaSaida(id, item int64, uom string, qtd float64) *entity.FiscalExitItem {

@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/google/uuid"
 )
@@ -13,9 +15,9 @@ type PlannedOrder struct {
 	OrderNumber          int64
 	ItemCode             int64
 	Mask                 *string
-	Quantity             float64
-	QuantityLoss         float64
-	QuantityCorrected    float64
+	Quantity             decimal.Decimal
+	QuantityLoss         decimal.Decimal
+	QuantityCorrected    decimal.Decimal
 	OrderType            types.OrderType
 	Status               types.OrderStatus
 	PlanCode             *int64

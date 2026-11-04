@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_conversion_uc"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 )
 
 type ItemConversionHandler struct {
@@ -86,7 +87,7 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 	q := r.URL.Query()
 	from := strings.TrimSpace(q.Get("from"))
 	to := strings.TrimSpace(q.Get("to"))
-	qty, _ := strconv.ParseFloat(q.Get("qty"), 64)
+	qty, _ := decimal.NewFromString(q.Get("qty")) // queryValida já recusou o inválido
 	mask := q.Get("mask")
 	rawItem := strings.TrimSpace(q.Get("item"))
 	if rawItem == "" || from == "" || to == "" {
@@ -121,8 +122,8 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 		LegacyItemCode: itemCode,
 		FromUOM:        from,
 		ToUOM:          to,
-		Factor:         factor,
-		Quantity:       qty,
-		ConvertedQty:   converted,
+		Factor:         factor.InexactFloat64(),
+		Quantity:       qty.InexactFloat64(),
+		ConvertedQty:   converted.InexactFloat64(),
 	})
 }

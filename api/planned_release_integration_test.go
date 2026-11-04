@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	productionuc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
@@ -43,7 +45,7 @@ func TestAtomicPlannedReleaseRollbackAndConcurrentRetry(t *testing.T) {
 	}
 	testutil.Exec(t, pool, `INSERT INTO route_operations(route_id,sequence,operation_id,inspection_required) VALUES($1,10,$2,true)`, route, operation)
 	planned := plannedrepo.NewPlannedOrderRepositorySQLC(q)
-	order, err := planned.Create(ctx, &plannedentity.PlannedOrder{OrderNumber: testutil.UniqueCode(), ItemCode: item, Quantity: 2, QuantityCorrected: 2, OrderType: types.OrderProduction, Status: types.StatusPlanned, DemandType: types.DemandType("INDEPENDENT"), NeedDate: time.Now(), WarehouseCode: &warehouse, IsActive: true, CreatedBy: actor})
+	order, err := planned.Create(ctx, &plannedentity.PlannedOrder{OrderNumber: testutil.UniqueCode(), ItemCode: item, Quantity: decimal.NewFromFloat(2), QuantityCorrected: decimal.NewFromFloat(2), OrderType: types.OrderProduction, Status: types.StatusPlanned, DemandType: types.DemandType("INDEPENDENT"), NeedDate: time.Now(), WarehouseCode: &warehouse, IsActive: true, CreatedBy: actor})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 const addAllocationBaseItem = `-- name: AddAllocationBaseItem :one
@@ -22,8 +23,8 @@ WHERE b.code = $1 AND b.enterprise_id = $5
 type AddAllocationBaseItemParams struct {
 	AllocationBaseCode int32
 	CostCenterCode     int32
-	Amount             float64
-	Percentage         float64
+	Amount             decimal.Decimal
+	Percentage         decimal.Decimal
 	EnterpriseID       *int64
 }
 

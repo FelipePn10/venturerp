@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
@@ -35,8 +36,8 @@ func (r *ItemConversionRepositorySQLC) Create(ctx context.Context, c *entity.Ite
 		Mask:            c.Mask,
 		FromUom:         c.FromUOM,
 		ToUom:           c.ToUOM,
-		Factor:          pgutil.ToPgNumericFromFloat64(c.Factor),
-		RoundingPercent: pgutil.ToPgNumericFromFloat64(c.RoundingPercent), ToleranceValue: pgutil.ToPgNumericFromFloat64(c.ToleranceValue), ToleranceType: c.ToleranceType,
+		Factor:          pgutil.ToPgNumericFromDecimal(c.Factor),
+		RoundingPercent: pgutil.ToPgNumericFromDecimal(c.RoundingPercent), ToleranceValue: pgutil.ToPgNumericFromDecimal(c.ToleranceValue), ToleranceType: c.ToleranceType,
 		CreatedBy: pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -121,8 +122,8 @@ func conversionToEntity(row sqlc.ItemUnitConversion) *entity.ItemUnitConversion 
 		Mask:            row.Mask,
 		FromUOM:         row.FromUom,
 		ToUOM:           row.ToUom,
-		Factor:          pgutil.FromPgNumericToFloat64(row.Factor),
-		RoundingPercent: pgutil.FromPgNumericToFloat64(row.RoundingPercent), ToleranceValue: pgutil.FromPgNumericToFloat64(row.ToleranceValue), ToleranceType: row.ToleranceType,
+		Factor:          pgutil.FromPgNumericToDecimal(row.Factor),
+		RoundingPercent: pgutil.FromPgNumericToDecimal(row.RoundingPercent), ToleranceValue: pgutil.FromPgNumericToDecimal(row.ToleranceValue), ToleranceType: row.ToleranceType,
 		IsActive:  row.IsActive,
 		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
 		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),

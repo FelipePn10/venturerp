@@ -4,20 +4,22 @@ import (
 	"math"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
-func quase(a, b float64) bool { return math.Abs(a-b) < 0.000001 }
+func quase(a decimal.Decimal, b float64) bool { return math.Abs(a.InexactFloat64()-b) < 0.000001 }
 
 func regra(code string, base BaseDeRateio, metodo MetodoDeRateio, taxa float64) *RegraDeRateio {
 	return &RegraDeRateio{
 		ID: int64(len(code)), Code: code, Description: code, Base: base,
-		Method: metodo, Rate: taxa, IsActive: true,
+		Method: metodo, Rate: decimal.NewFromFloat(taxa), IsActive: true,
 		ValidFrom: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
 }
 
 var base = ComponentesDeCusto{
-	Material: 100, Setup: 10, Maquina: 40, MaoDeObra: 20, Subcontratacao: 30,
+	Material: decimal.NewFromFloat(100), Setup: decimal.NewFromFloat(10), Maquina: decimal.NewFromFloat(40), MaoDeObra: decimal.NewFromFloat(20), Subcontratacao: decimal.NewFromFloat(30),
 }
 
 func TestRateioPercentualIncideSobreABaseCerta(t *testing.T) {
@@ -37,14 +39,14 @@ func TestRateioPercentualIncideSobreABaseCerta(t *testing.T) {
 		t.Run(string(c.b), func(t *testing.T) {
 			total, rastro := AplicarRateios(base, HorasDoRoteiro{}, []*RegraDeRateio{regra("R1", c.b, MetodoPercentual, 0.10)})
 			if !quase(total, c.esperado) {
-				t.Fatalf("base %s aplicou %.6f, esperado %.6f", c.b, total, c.esperado)
+				t.Fatalf("base %s aplicou %v, esperado %v", c.b, total, c.esperado)
 			}
 			if len(rastro) != 1 || rastro[0].Code != "R1" {
 				t.Fatalf("rastro do rateio ausente ou errado: %+v", rastro)
 			}
 			// O rastro precisa dizer sobre QUANTO incidiu, senão o indireto é um
 			// número no total que ninguém consegue explicar.
-			if rastro[0].BaseValue <= 0 {
+			if !rastro[0].BaseValue.IsPositive() {
 				t.Fatalf("rastro sem o valor da base: %+v", rastro[0])
 			}
 		})
@@ -55,21 +57,21 @@ func TestRateioPorHoraUsaAsHorasDoRoteiro(t *testing.T) {
 	horas := HorasDoRoteiro{Maquina: 2, MaoDeObra: 1.5, Setup: 0.5}
 	total, _ := AplicarRateios(base, horas, []*RegraDeRateio{regra("E1", BaseMaquina, MetodoValorPorHora, 18)})
 	if !quase(total, 36) {
-		t.Fatalf("energia por hora-máquina = %.4f, esperado 36 (2h × 18)", total)
+		t.Fatalf("energia por hora-máquina = %v, esperado 36 (2h × 18)", total)
 	}
 	total, _ = AplicarRateios(base, horas, []*RegraDeRateio{regra("S1", BaseConversao, MetodoValorPorHora, 10)})
 	if !quase(total, 40) {
-		t.Fatalf("supervisão sobre conversão = %.4f, esperado 40 (4h × 10)", total)
+		t.Fatalf("supervisão sobre conversão = %v, esperado 40 (4h × 10)", total)
 	}
 }
 
 func TestRateioPorUnidadeNaoDependeDeBase(t *testing.T) {
 	total, rastro := AplicarRateios(base, HorasDoRoteiro{}, []*RegraDeRateio{regra("U1", BaseTotal, MetodoValorPorUnidade, 2.5)})
 	if !quase(total, 2.5) {
-		t.Fatalf("valor por unidade = %.4f, esperado 2,50", total)
+		t.Fatalf("valor por unidade = %v, esperado 2,50", total)
 	}
-	if rastro[0].BaseValue != 1 {
-		t.Fatalf("base do valor por unidade = %.4f, esperado 1", rastro[0].BaseValue)
+	if !rastro[0].BaseValue.Equal(decimal.NewFromFloat(1)) {
+		t.Fatalf("base do valor por unidade = %v, esperado 1", rastro[0].BaseValue)
 	}
 }
 
@@ -84,12 +86,12 @@ func TestOrdemDasRegrasNaoMudaOResultado(t *testing.T) {
 	totalA, _ := AplicarRateios(base, HorasDoRoteiro{}, []*RegraDeRateio{r1, r2, r3})
 	totalB, _ := AplicarRateios(base, HorasDoRoteiro{}, []*RegraDeRateio{r3, r1, r2})
 	totalC, _ := AplicarRateios(base, HorasDoRoteiro{}, []*RegraDeRateio{r2, r3, r1})
-	if !quase(totalA, totalB) || !quase(totalA, totalC) {
-		t.Fatalf("a ordem de cadastro mudou o custo: %.6f, %.6f, %.6f", totalA, totalB, totalC)
+	if !totalA.Equal(totalB) || !totalA.Equal(totalC) {
+		t.Fatalf("a ordem de cadastro mudou o custo: %s, %s, %s", totalA, totalB, totalC)
 	}
 	// 8% de 100 + 15% de 70 + 5% de 200 = 8 + 10,5 + 10 = 28,5
 	if !quase(totalA, 28.5) {
-		t.Fatalf("total dos indiretos = %.4f, esperado 28,50", totalA)
+		t.Fatalf("total dos indiretos = %v, esperado 28,50", totalA)
 	}
 }
 
@@ -97,21 +99,21 @@ func TestOrdemDasRegrasNaoMudaOResultado(t *testing.T) {
 // aplicado, a ordem voltaria a importar e o custo cresceria a cada regra nova.
 func TestIndiretoNaoIncideSobreIndireto(t *testing.T) {
 	comOverhead := base
-	comOverhead.Overhead = 1000 // valor absurdo de propósito
+	comOverhead.Overhead = decimal.NewFromFloat(1000) // valor absurdo de propósito
 	total, _ := AplicarRateios(comOverhead, HorasDoRoteiro{}, []*RegraDeRateio{regra("T1", BaseTotal, MetodoPercentual, 0.10)})
 	if !quase(total, 20) {
-		t.Fatalf("total = %.4f: a base de TOTAL está incluindo o overhead já aplicado", total)
+		t.Fatalf("total = %v: a base de TOTAL está incluindo o overhead já aplicado", total)
 	}
 }
 
 func TestBaseZeradaNaoGeraLinhaDeRastro(t *testing.T) {
-	semTerceiro := ComponentesDeCusto{Material: 100}
+	semTerceiro := ComponentesDeCusto{Material: decimal.NewFromFloat(100)}
 	total, rastro := AplicarRateios(semTerceiro, HorasDoRoteiro{}, []*RegraDeRateio{
 		regra("M1", BaseMaterial, MetodoPercentual, 0.10),
 		regra("X1", BaseSubcontratacao, MetodoPercentual, 0.50),
 	})
 	if !quase(total, 10) {
-		t.Fatalf("total = %.4f, esperado 10", total)
+		t.Fatalf("total = %v, esperado 10", total)
 	}
 	if len(rastro) != 1 || rastro[0].Code != "M1" {
 		t.Fatalf("rastro deveria ter só a regra que aplicou algo: %+v", rastro)
@@ -207,15 +209,15 @@ func TestRegrasVigentesCombinaVigenciaEEscopo(t *testing.T) {
 
 func TestComponentesTotalENaoDobraOsCortes(t *testing.T) {
 	c := ComponentesDeCusto{
-		Material: 100, Setup: 10, Maquina: 40, MaoDeObra: 20,
-		Subcontratacao: 30, Overhead: 15,
+		Material: decimal.NewFromFloat(100), Setup: decimal.NewFromFloat(10), Maquina: decimal.NewFromFloat(40), MaoDeObra: decimal.NewFromFloat(20),
+		Subcontratacao: decimal.NewFromFloat(30), Overhead: decimal.NewFromFloat(15),
 		// Os cortes por nível descrevem os MESMOS valores por outro ângulo.
-		NivelProprio: 85, NivelInferior: 130,
+		NivelProprio: decimal.NewFromFloat(85), NivelInferior: decimal.NewFromFloat(130),
 	}
 	if !quase(c.Total(), 215) {
-		t.Fatalf("total = %.4f, esperado 215 — os cortes por nível não entram na soma", c.Total())
+		t.Fatalf("total = %v, esperado 215 — os cortes por nível não entram na soma", c.Total())
 	}
 	if !quase(c.Conversao(), 70) {
-		t.Fatalf("conversão = %.4f, esperado 70", c.Conversao())
+		t.Fatalf("conversão = %v, esperado 70", c.Conversao())
 	}
 }

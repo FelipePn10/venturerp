@@ -21,24 +21,24 @@ import (
 
 func TestSelectPrimaryCostSubstitutes(t *testing.T) {
 	children := []domainrepo.BOMChild{
-		{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
-		{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
-		{ChildCode: 30, Quantity: 5},
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 2},
+		{ChildCode: 10, Quantity: decimal.NewFromFloat(3), SubstituteGroup: 1, SubstitutePriority: 1},
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(5)},
 	}
 
 	selected := selectPrimaryCostSubstitutes(children)
 
-	got := map[int64]float64{}
+	got := map[int64]decimal.Decimal{}
 	for _, child := range selected {
 		got[child.ChildCode] = child.Quantity
 	}
 	if _, ok := got[20]; ok {
 		t.Error("substituto secundário não deve entrar no custo padrão")
 	}
-	if got[10] != 3 {
+	if !got[10].Equal(decimal.NewFromInt(3)) {
 		t.Errorf("substituto primário = %v, want 3", got[10])
 	}
-	if got[30] != 5 {
+	if !got[30].Equal(decimal.NewFromFloat(5)) {
 		t.Errorf("componente standalone = %v, want 5", got[30])
 	}
 	if len(selected) != 2 {
@@ -63,7 +63,7 @@ func (failingThirdPartyCost) StandardCostPerUnit(context.Context, int64, string,
 
 func TestRollUpRejectsExternalOperationWithoutResolvedContractPrice(t *testing.T) {
 	repo := &fakeCostRepo{childrenByMask: map[string][]domainrepo.BOMChild{"1|": {}}, purchaseCosts: map[int64]float64{1: 10}}
-	_, err := New(repo).WithRouting(costRoutingStub{}).WithThirdPartyPrices(failingThirdPartyCost{}).RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: 1, CalculatedBy: uuid.NewString()})
+	_, err := New(repo).WithRouting(costRoutingStub{}).WithThirdPartyPrices(failingThirdPartyCost{}).RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: decimal.NewFromFloat(1), CalculatedBy: uuid.NewString()})
 	if err == nil {
 		t.Fatal("standard cost must not silently ignore a missing external-service price")
 	}
@@ -72,8 +72,8 @@ func TestRollUpRejectsExternalOperationWithoutResolvedContractPrice(t *testing.T
 func TestRollUp_UsesMaskResolvedBOM(t *testing.T) {
 	repo := &fakeCostRepo{
 		childrenByMask: map[string][]domainrepo.BOMChild{
-			"1|":  {{ChildCode: 20, Quantity: 99}},
-			"1|A": {{ChildCode: 10, Quantity: 2}},
+			"1|":  {{ChildCode: 20, Quantity: decimal.NewFromFloat(99)}},
+			"1|A": {{ChildCode: 10, Quantity: decimal.NewFromFloat(2)}},
 		},
 		purchaseCosts: map[int64]float64{
 			10: 7,
@@ -85,7 +85,7 @@ func TestRollUp_UsesMaskResolvedBOM(t *testing.T) {
 	res, err := uc.RollUp(context.Background(), request.CostRollupDTO{
 		ItemCode:     1,
 		Mask:         "A",
-		LotSize:      1,
+		LotSize:      decimal.NewFromFloat(1),
 		CalculatedBy: uuid.NewString(),
 	})
 	if err != nil {
@@ -112,7 +112,7 @@ func (f *fakeCostRepo) GetDirectChildren(_ context.Context, parentCode int64, ma
 }
 
 func (f *fakeCostRepo) GetItemPurchaseCost(_ context.Context, itemCode int64) (*scentity.ItemPurchaseCost, error) {
-	return &scentity.ItemPurchaseCost{ItemCode: itemCode, UnitCost: f.purchaseCosts[itemCode], Currency: "BRL"}, nil
+	return &scentity.ItemPurchaseCost{ItemCode: itemCode, UnitCost: decimal.NewFromFloat(f.purchaseCosts[itemCode]), Currency: "BRL"}, nil
 }
 
 func (f *fakeCostRepo) GetRouteHoursByItem(context.Context, int64, string) (float64, error) {
@@ -124,7 +124,7 @@ func (f *fakeCostRepo) ListWorkCenterCosts(context.Context) ([]*scentity.WorkCen
 }
 
 func (f *fakeCostRepo) UpsertItemStandardCost(_ context.Context, cost *scentity.ItemStandardCost) (*scentity.ItemStandardCost, error) {
-	cost.TotalCost = cost.MaterialCost + cost.LaborCost + cost.OverheadCost
+	cost.TotalCost = cost.MaterialCost.Add(cost.LaborCost).Add(cost.OverheadCost)
 	return cost, nil
 }
 
@@ -163,7 +163,7 @@ func TestPrecoDeTerceiroAusenteEhPendenciaDeCadastroENaoFalhaDoSistema(t *testin
 	_, err := New(repo).
 		WithRouting(costRoutingComNomeDaOperacao{}).
 		WithThirdPartyPrices(thirdPartyPrecoAusente{}).
-		RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: 1, CalculatedBy: uuid.NewString()})
+		RollUp(context.Background(), request.CostRollupDTO{ItemCode: 1, LotSize: decimal.NewFromFloat(1), CalculatedBy: uuid.NewString()})
 	if err == nil {
 		t.Fatal("preço de terceiro ausente não pode passar em silêncio")
 	}

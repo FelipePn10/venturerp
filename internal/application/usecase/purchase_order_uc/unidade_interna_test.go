@@ -3,9 +3,10 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -22,9 +23,9 @@ type conversorFixo struct {
 	fator map[string]float64 // "ITEM:DE>PARA"
 }
 
-func (c conversorFixo) ConvertQuantity(_ context.Context, item int64, q float64, de, para string) (float64, bool, error) {
+func (c conversorFixo) ConvertQuantity(_ context.Context, item int64, q decimal.Decimal, de, para string) (decimal.Decimal, bool, error) {
 	f, ok := c.fator[fmt.Sprint(item)+":"+de+">"+para]
-	return q * f, ok, nil
+	return q.Mul(decimal.NewFromFloat(f)), ok, nil
 }
 
 func ptrS(s string) *string { return &s }

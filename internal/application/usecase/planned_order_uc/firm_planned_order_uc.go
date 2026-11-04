@@ -3,10 +3,11 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -316,7 +317,7 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 			RequisitionCode: created.Code,
 			Sequence:        int32(i + 1),
 			ItemCode:        *op.ServiceItemCode,
-			Quantity:        decimal.NewFromFloat(order.Quantity),
+			Quantity:        order.Quantity,
 			UOM:             &serv,
 			SuggestedPrice:  decimal.NewFromFloat(op.CostPerUnit),
 			Application:     &app,
@@ -395,7 +396,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		// A marca no contexto diz à resolução que o valor JÁ é a chave interna.
 		ctx = context.WithValue(ctx, contextkey.ItemCodeTranslatedKey, true)
 		return manual.Execute(ctx, request.CreateProductionOrderDTO{
-			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: decimal.NewFromFloat(order.Quantity),
+			PlannedOrderID: &plannedID, ItemCode: request.TextCode(strconv.FormatInt(order.ItemCode, 10)), Mask: mask, PlannedQty: order.Quantity,
 			StartDate: startDate, EndDate: endDate, CostCenterID: centroID,
 			EmployeeID: order.EmployeeCode, WarehouseID: order.WarehouseCode, MachineID: machineID,
 			Priority: order.Priority, Notes: order.Notes,
@@ -411,7 +412,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		PlannedOrderID: &plannedID,
 		ItemCode:       order.ItemCode,
 		Mask:           mask,
-		PlannedQty:     decimal.NewFromFloat(order.Quantity),
+		PlannedQty:     order.Quantity,
 		Status:         productionentity.StatusOpen,
 		CostCenterID:   centroID,
 		EmployeeID:     order.EmployeeCode,

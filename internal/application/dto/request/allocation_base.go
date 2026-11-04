@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type CreateAllocationBaseDTO struct {
 	Code        int32                         `json:"code"`
@@ -12,7 +15,7 @@ type CreateAllocationBaseDTO struct {
 }
 
 type CreateAllocationBaseItemDTO struct {
-	CostCenterCode int32   `json:"cost_center_code"`
-	Amount         float64 `json:"amount"`
-	Percentage     float64 `json:"percentage"`
+	CostCenterCode int32           `json:"cost_center_code"`
+	Amount         decimal.Decimal `json:"amount"`
+	Percentage     decimal.Decimal `json:"percentage"`
 }

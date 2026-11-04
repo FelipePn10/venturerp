@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/overhead_allocation/entity"
@@ -82,8 +83,8 @@ func (r *OverheadAllocationRepositorySQLC) AddTarget(
 		sqlc.AddAllocationTargetParams{
 			OverheadCode:   overheadCode,
 			CostCenterCode: costCenterCode,
-			Percentage:     pgutil.ToPgNumericFromFloat64(target.Percentage),
-			Amount:         pgutil.ToPgNumericFromFloat64(target.Amount),
+			Percentage:     pgutil.ToPgNumericFromDecimal(target.Percentage),
+			Amount:         pgutil.ToPgNumericFromDecimal(target.Amount),
 			EnterpriseID:   emp,
 		},
 	)
@@ -262,8 +263,8 @@ func targetRowToEntity(
 
 	e := &entity.AllocationTarget{
 		Code:       row.Code,
-		Percentage: pgutil.FromPgNumericToFloat64(row.Percentage),
-		Amount:     pgutil.FromPgNumericToFloat64(row.Amount),
+		Percentage: pgutil.FromPgNumericToDecimal(row.Percentage),
+		Amount:     pgutil.FromPgNumericToDecimal(row.Amount),
 		CreatedAt:  pgutil.FromPgTimestamptz(row.CreatedAt),
 	}
 

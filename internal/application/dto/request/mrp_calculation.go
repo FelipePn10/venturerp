@@ -1,6 +1,9 @@
 package request
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+)
 
 type RunMRPCalculationDTO struct {
 	PlanCode           int64 `json:"plan_code"`
@@ -9,10 +12,10 @@ type RunMRPCalculationDTO struct {
 }
 
 type CreatePlannedOrderDTO struct {
-	ItemCode  int64   `json:"item_code"`
-	Mask      *string `json:"mask,omitempty"`
-	Quantity  float64 `json:"quantity"`
-	OrderType string  `json:"order_type"`
+	ItemCode  int64           `json:"item_code"`
+	Mask      *string         `json:"mask,omitempty"`
+	Quantity  decimal.Decimal `json:"quantity"`
+	OrderType string          `json:"order_type"`
 	// DemandType is the demand_type_enum value: SALES_ORDER | FORECAST |
 	// INDEPENDENT | SAFETY_STOCK | REPLENISHMENT. Defaults to INDEPENDENT when
 	// omitted (manual planned orders are independent demand by nature).

@@ -11,6 +11,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 type ApuracaoLineTypeEnum string
@@ -3531,8 +3532,8 @@ type AdiantamentoAplicaco struct {
 
 type AllocationBaseItem struct {
 	ID                 int64
-	Amount             float64
-	Percentage         float64
+	Amount             decimal.Decimal
+	Percentage         decimal.Decimal
 	CreatedAt          pgtype.Timestamptz
 	AllocationBaseCode int32
 	CostCenterCode     int32
@@ -8367,6 +8368,8 @@ type PoliticasPlanejamento struct {
 	CreatedBy          pgtype.UUID
 	UpdatedAt          pgtype.Timestamptz
 	UpdatedBy          pgtype.UUID
+	LotePeriodo        pgtype.Text
+	LoteMaximo         pgtype.Numeric
 }
 
 type PreventiveService struct {

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -105,7 +107,7 @@ func TestFirmOrder_Success(t *testing.T) {
 	order := &entity.PlannedOrder{
 		Code:      88,
 		ItemCode:  5000,
-		Quantity:  10,
+		Quantity:  decimal.NewFromFloat(10),
 		OrderType: types.OrderPurchase,
 		IsFirm:    false,
 		IsActive:  true,
@@ -151,7 +153,7 @@ func TestFirmOrder_ProductionOrderCreatedOnFirstFirm(t *testing.T) {
 		ID:            77,
 		Code:          99,
 		ItemCode:      3001,
-		Quantity:      5,
+		Quantity:      decimal.NewFromFloat(5),
 		OrderType:     types.OrderProduction,
 		Status:        types.StatusPlanned,
 		IsFirm:        false,
@@ -269,7 +271,7 @@ func (c centrosFixos) IDDoCentro(_ context.Context, code int64) (*int64, error) 
 // ia direto para o id: outro centro, ou a chave estrangeira recusava.
 func TestFirmOrder_OFRecebeOIdDoCentro(t *testing.T) {
 	centro := int64(310)
-	order := &entity.PlannedOrder{ID: 77, Code: 99, ItemCode: 3001, Quantity: 5, OrderType: types.OrderProduction,
+	order := &entity.PlannedOrder{ID: 77, Code: 99, ItemCode: 3001, Quantity: decimal.NewFromFloat(5), OrderType: types.OrderProduction,
 		Status: types.StatusPlanned, CreatedBy: uuid.New(), CostCenterCode: &centro}
 	prodRepo := &fakeProdOrderRepo{nextNum: 201}
 	uc := &FirmPlannedOrderUseCase{Repo: &fakePORepo{order: order}, Auth: &firmAuth{canRelease: true}, ProdOrderRepo: prodRepo,

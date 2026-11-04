@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -108,12 +110,12 @@ func (uc *StandardCostUseCase) HistoricoDeCusto(ctx context.Context, itemCode in
 	out := make([]response.CostHistoryResponse, 0, len(linhas))
 	for _, h := range linhas {
 		out = append(out, response.CostHistoryResponse{
-			ID: h.ID, ItemCode: h.ItemCode, Mask: h.Mask, LotSize: h.LotSize,
-			MaterialCost: h.Componentes.Material, SetupCost: h.Componentes.Setup,
-			MachineCost: h.Componentes.Maquina, LaborCost: h.Componentes.MaoDeObra,
-			SubcontractCost: h.Componentes.Subcontratacao, OverheadCost: h.Componentes.Overhead,
-			OwnLevelCost: h.Componentes.NivelProprio, LowerLevelCost: h.Componentes.NivelInferior,
-			TotalCost: h.TotalCost, Currency: h.Currency,
+			ID: h.ID, ItemCode: h.ItemCode, Mask: h.Mask, LotSize: h.LotSize.InexactFloat64(),
+			MaterialCost: h.Componentes.Material.InexactFloat64(), SetupCost: h.Componentes.Setup.InexactFloat64(),
+			MachineCost: h.Componentes.Maquina.InexactFloat64(), LaborCost: h.Componentes.MaoDeObra.InexactFloat64(),
+			SubcontractCost: h.Componentes.Subcontratacao.InexactFloat64(), OverheadCost: h.Componentes.Overhead.InexactFloat64(),
+			OwnLevelCost: h.Componentes.NivelProprio.InexactFloat64(), LowerLevelCost: h.Componentes.NivelInferior.InexactFloat64(),
+			TotalCost: h.TotalCost.InexactFloat64(), Currency: h.Currency,
 			Overheads: paraRateiosResponse(h.Rateios), CalculatedAt: h.CalculatedAt,
 		})
 	}
@@ -154,15 +156,15 @@ func montarRegra(dto request.CostOverheadRuleDTO) (*entity.RegraDeRateio, error)
 	if !metodosValidos[metodo] {
 		return nil, errorsuc.NewValidationError("método do rateio inválido: use PERCENTUAL, VALOR_POR_HORA ou VALOR_POR_UNIDADE")
 	}
-	if dto.Rate <= 0 {
+	if !dto.Rate.IsPositive() {
 		return nil, errorsuc.NewValidationError("a taxa do rateio tem de ser maior que zero")
 	}
 	// O erro mais comum: digitar 12 querendo 12%. Avisar aqui, com o número que a
 	// pessoa escreveu, é muito mais útil que a violação de CHECK do banco.
-	if metodo == entity.MetodoPercentual && dto.Rate > 1 {
+	if metodo == entity.MetodoPercentual && dto.Rate.GreaterThan(decimal.NewFromFloat(1)) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf(
-			"a taxa percentual entra como fração: para %g%% informe %g, não %g",
-			dto.Rate, dto.Rate/100, dto.Rate))
+			"a taxa percentual entra como fração: para %s%% informe %s, não %s",
+			dto.Rate, dto.Rate.Div(decimal.NewFromInt(100)), dto.Rate))
 	}
 	if metodo == entity.MetodoValorPorHora &&
 		base != entity.BaseMaquina && base != entity.BaseMaoDeObra &&
@@ -227,7 +229,7 @@ func valorOuVazioStr(p *string) string {
 func paraRegraResponse(r *entity.RegraDeRateio) response.CostOverheadRuleResponse {
 	out := response.CostOverheadRuleResponse{
 		ID: r.ID, Code: r.Code, Description: r.Description,
-		Base: string(r.Base), Method: string(r.Method), Rate: r.Rate,
+		Base: string(r.Base), Method: string(r.Method), Rate: r.Rate.InexactFloat64(),
 		WorkCenterID: r.WorkCenterID, ItemCode: r.ItemCode,
 		PlanoContasID: r.PlanoContasID, CentroCustoID: r.CentroCustoID,
 		ValidFrom: r.ValidFrom.Format("2006-01-02"), IsActive: r.IsActive, Notes: r.Notes,

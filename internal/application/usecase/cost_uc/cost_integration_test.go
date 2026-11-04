@@ -6,6 +6,8 @@ import (
 	"math"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -38,7 +40,7 @@ func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM machine_types WHERE id = $1", wcID)
 
 	if _, err := scRepo.UpsertWorkCenterCost(ctx, &scentity.WorkCenterCost{
-		WorkCenterID: wcID, CostPerHour: 100, MachineCostPerHour: 100, LaborCostPerHour: 50,
+		WorkCenterID: wcID, CostPerHour: decimal.NewFromFloat(100), MachineCostPerHour: decimal.NewFromFloat(100), LaborCostPerHour: decimal.NewFromFloat(50),
 		Currency: "BRL", UpdatedBy: uid,
 	}); err != nil {
 		t.Fatalf("UpsertWorkCenterCost: %v", err)
@@ -122,7 +124,7 @@ func TestIntegration_CostRollup_PerWorkCenterRichTime(t *testing.T) {
 
 	// Diluição do setup: lote de referência 10 espalha a preparação por 10 unidades.
 	// run_base_qty=10 ⇒ um ciclo cobre o lote, então o custo do lote ÷ 10.
-	resLot, err := uc.RollUp(ctx, request.CostRollupDTO{ItemCode: itemCode, Mask: "", LotSize: 10, CalculatedBy: uid.String()})
+	resLot, err := uc.RollUp(ctx, request.CostRollupDTO{ItemCode: itemCode, Mask: "", LotSize: decimal.NewFromFloat(10), CalculatedBy: uid.String()})
 	if err != nil {
 		t.Fatalf("RollUp (lote): %v", err)
 	}

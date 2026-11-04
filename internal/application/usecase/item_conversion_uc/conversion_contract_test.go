@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -50,7 +52,7 @@ func TestCreateAndList_ByBusinessCode(t *testing.T) {
 	uc, _ := newContractUC(t)
 	ctx := context.Background()
 	created, err := uc.Create(ctx, request.CreateItemConversionDTO{
-		ItemCode: "TB-40X40", FromUOM: "kg", ToUOM: "m", Factor: 0.4,
+		ItemCode: "TB-40X40", FromUOM: "kg", ToUOM: "m", Factor: decimal.NewFromFloat(0.4),
 	})
 	if err != nil {
 		t.Fatalf("cadastro rejeitado: %v", err)
@@ -78,7 +80,7 @@ func TestCreateAndList_ByBusinessCode(t *testing.T) {
 func TestCreate_DuplicatePairIsConflict(t *testing.T) {
 	uc, _ := newContractUC(t)
 	ctx := context.Background()
-	dto := request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "M", Factor: 0.4}
+	dto := request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "M", Factor: decimal.NewFromFloat(0.4)}
 	if _, err := uc.Create(ctx, dto); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +93,7 @@ func TestCreate_DuplicatePairIsConflict(t *testing.T) {
 func TestCreate_UnknownItemIsRejected(t *testing.T) {
 	uc, _ := newContractUC(t)
 	_, err := uc.Create(context.Background(), request.CreateItemConversionDTO{
-		ItemCode: "NAO-EXISTE", FromUOM: "KG", ToUOM: "M", Factor: 1,
+		ItemCode: "NAO-EXISTE", FromUOM: "KG", ToUOM: "M", Factor: decimal.NewFromFloat(1),
 	})
 	if _, ok := errorsuc.AsValidation(err); !ok {
 		t.Fatalf("esperado ValidationError, veio %T (%v)", err, err)
@@ -105,9 +107,9 @@ func TestCreate_ValidationMessagesArePortuguese(t *testing.T) {
 		name string
 		dto  request.CreateItemConversionDTO
 	}{
-		{"sem unidades", request.CreateItemConversionDTO{ItemCode: "TB-40X40", Factor: 1}},
-		{"unidades iguais", request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "kg", Factor: 1}},
-		{"fator zerado", request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "M", Factor: 0}},
+		{"sem unidades", request.CreateItemConversionDTO{ItemCode: "TB-40X40", Factor: decimal.NewFromFloat(1)}},
+		{"unidades iguais", request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "kg", Factor: decimal.NewFromFloat(1)}},
+		{"fator zerado", request.CreateItemConversionDTO{ItemCode: "TB-40X40", FromUOM: "KG", ToUOM: "M", Factor: decimal.NewFromFloat(0)}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -3,7 +3,6 @@ package purchase_quotation_uc
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -87,9 +86,9 @@ func (uc *PurchaseQuotationUseCase) Create(ctx context.Context, dto request.Crea
 			return nil, fmt.Errorf("planned order %d: %w", poCode, gerr)
 		}
 		// A ordem planejada ainda é float (etapa 4): converte na fronteira.
-		qty := decimal.NewFromFloat(po.QuantityCorrected)
+		qty := po.QuantityCorrected
 		if !qty.IsPositive() {
-			qty = decimal.NewFromFloat(po.Quantity)
+			qty = po.Quantity
 		}
 		seq++
 		src := po.Code

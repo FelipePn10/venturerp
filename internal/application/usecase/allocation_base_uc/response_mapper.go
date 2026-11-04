@@ -38,8 +38,8 @@ func toAllocationBaseItemValues(items []*entity.AllocationBaseItem) []response.A
 		out = append(out, response.AllocationBaseItemResponse{
 			AllocationBaseCode: it.AllocationBaseCode,
 			CostCenterCode:     it.CostCenterCode,
-			Amount:             it.Amount,
-			Percentage:         it.Percentage,
+			Amount:             it.Amount.InexactFloat64(),
+			Percentage:         it.Percentage.InexactFloat64(),
 			CreatedAt:          it.CreatedAt,
 		})
 	}

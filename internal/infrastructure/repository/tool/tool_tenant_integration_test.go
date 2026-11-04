@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/tool/entity"
@@ -21,7 +23,7 @@ func TestToolsAreIsolatedByTenant(t *testing.T) {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM tools WHERE enterprise_id = ANY($1)`, []int64{a.ID, b.ID})
 	})
 	repo := toolrepo.New(sqlc.New(pool))
-	tl, err := entity.NewTool(testutil.UniqueCode(), "MATRIZ DA A", "MATRIZ", entity.LifeStrokes, 1000, 10, uuid.New())
+	tl, err := entity.NewTool(testutil.UniqueCode(), "MATRIZ DA A", "MATRIZ", entity.LifeStrokes, decimal.NewFromFloat(1000), decimal.NewFromFloat(10), uuid.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestToolsAreIsolatedByTenant(t *testing.T) {
 	if _, err := repo.ListToolSerials(b.Ctx, ferr.ID, false); err == nil {
 		t.Fatal("empresa B listou as séries da ferramenta da A")
 	}
-	if l, err := repo.ListToolsNeedingReplacement(b.Ctx, 0); err != nil || len(l) != 0 {
+	if l, err := repo.ListToolsNeedingReplacement(b.Ctx, decimal.NewFromFloat(0)); err != nil || len(l) != 0 {
 		t.Fatalf("empresa B viu %d ferramenta(s) da A para troca (%v)", len(l), err)
 	}
 	if got, err := repo.GetTool(a.Ctx, ferr.ID); err != nil || !got.IsActive {

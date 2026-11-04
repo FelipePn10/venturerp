@@ -4,6 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/google/uuid"
@@ -16,16 +18,16 @@ type ItemUnitConversion struct {
 	Mask            string
 	FromUOM         string
 	ToUOM           string
-	Factor          float64
-	RoundingPercent float64
-	ToleranceValue  float64
+	Factor          decimal.Decimal
+	RoundingPercent decimal.Decimal
+	ToleranceValue  decimal.Decimal
 	ToleranceType   string
 	IsActive        bool
 	CreatedAt       time.Time
 	CreatedBy       uuid.UUID
 }
 
-func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, roundingPercent, toleranceValue float64, toleranceType string, createdBy uuid.UUID) (*ItemUnitConversion, error) {
+func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, roundingPercent, toleranceValue decimal.Decimal, toleranceType string, createdBy uuid.UUID) (*ItemUnitConversion, error) {
 	fromUOM = strings.ToUpper(strings.TrimSpace(fromUOM))
 	toUOM = strings.ToUpper(strings.TrimSpace(toUOM))
 	if itemCode == 0 {
@@ -37,7 +39,7 @@ func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, 
 	if fromUOM == toUOM {
 		return nil, errorsuc.NewValidationError("a unidade de origem e a de destino devem ser diferentes")
 	}
-	if factor <= 0 {
+	if !factor.IsPositive() {
 		return nil, errorsuc.NewValidationError("o fator de conversão deve ser maior que zero")
 	}
 	mask = strings.TrimSpace(mask)
@@ -45,7 +47,7 @@ func NewItemUnitConversion(itemCode int64, mask, fromUOM, toUOM string, factor, 
 	if toleranceType == "" {
 		toleranceType = "VALUE"
 	}
-	if roundingPercent < 0 || roundingPercent > 100 || toleranceValue < 0 || (toleranceType != "VALUE" && toleranceType != "PERCENT") {
+	if roundingPercent.IsNegative() || roundingPercent.GreaterThan(decimal.NewFromInt(100)) || toleranceValue.IsNegative() || (toleranceType != "VALUE" && toleranceType != "PERCENT") {
 		return nil, errorsuc.NewValidationError("política de arredondamento/tolerância inválida: o arredondamento vai de 0 a 100%, a tolerância não pode ser negativa e o tipo deve ser VALUE (valor) ou PERCENT (percentual)")
 	}
 	return &ItemUnitConversion{

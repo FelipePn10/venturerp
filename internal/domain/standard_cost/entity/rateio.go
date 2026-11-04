@@ -3,6 +3,8 @@ package entity
 import (
 	"sort"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // AplicarRateios aplica o esquema de indiretos aos componentes de custo e devolve
@@ -22,7 +24,7 @@ func AplicarRateios(
 	componentes ComponentesDeCusto,
 	horas HorasDoRoteiro,
 	regras []*RegraDeRateio,
-) (float64, []RateioAplicado) {
+) (decimal.Decimal, []RateioAplicado) {
 	ordenadas := make([]*RegraDeRateio, len(regras))
 	copy(ordenadas, regras)
 	sort.SliceStable(ordenadas, func(i, j int) bool {
@@ -35,30 +37,31 @@ func AplicarRateios(
 		return ordenadas[i].Code < ordenadas[j].Code
 	})
 
-	var total float64
+	total := decimal.Zero
 	rastro := make([]RateioAplicado, 0, len(ordenadas))
 	for _, regra := range ordenadas {
-		var baseValor, aplicado float64
+		var baseValor, aplicado decimal.Decimal
 		switch regra.Method {
 		case MetodoPercentual:
 			baseValor = regra.ValorDaBase(componentes)
-			aplicado = baseValor * regra.Rate
+			aplicado = baseValor.Mul(regra.Rate)
 		case MetodoValorPorHora:
-			baseValor = regra.HorasDaBase(horas.Maquina, horas.MaoDeObra, horas.Setup)
-			aplicado = baseValor * regra.Rate
+			// As horas do roteiro são tempo (float); entram em decimal aqui.
+			baseValor = decimal.NewFromFloat(regra.HorasDaBase(horas.Maquina, horas.MaoDeObra, horas.Setup))
+			aplicado = baseValor.Mul(regra.Rate)
 		case MetodoValorPorUnidade:
 			// Já é por unidade: o custo aqui é sempre unitário.
-			baseValor = 1
+			baseValor = decimal.NewFromInt(1)
 			aplicado = regra.Rate
 		default:
 			continue
 		}
-		if aplicado == 0 {
+		if aplicado.IsZero() {
 			// Base zerada não gera linha de rastro: item sem roteiro apareceria com
 			// cinco indiretos de R$ 0,00 e esconderia os que valem.
 			continue
 		}
-		total += aplicado
+		total = total.Add(aplicado)
 		rastro = append(rastro, RateioAplicado{
 			RuleID: regra.ID, Code: regra.Code, Description: regra.Description,
 			Base: regra.Base, Method: regra.Method, Rate: regra.Rate,

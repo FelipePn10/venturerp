@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/standard_cost/entity"
+	"github.com/shopspring/decimal"
 )
 
 type StandardCostRepository interface {
@@ -36,11 +37,12 @@ type BOMChild struct {
 	// ConversionFactor leva para a unidade de ESTOQUE, que é a única em que o
 	// custo do componente faz sentido — o preço é por quilo, não por metro
 	// quadrado, quando a chapa é estocada em quilo.
-	Quantity         float64
-	ConversionFactor float64
-	LossPercentage   float64
-	IsCoproduct      bool // OUTPUT (co-produto/sucata) → credita o custo do pai
-	IsFixedQty       bool // quantidade por lote → amortizada pelo lote de referência
+	Quantity         decimal.Decimal
+	ConversionFactor decimal.Decimal
+	// LossPercentage vem de coluna double precision (perda da estrutura).
+	LossPercentage float64
+	IsCoproduct    bool // OUTPUT (co-produto/sucata) → credita o custo do pai
+	IsFixedQty     bool // quantidade por lote → amortizada pelo lote de referência
 	// CustomerSupplied: material do cliente (beneficiamento) — não é custo da
 	// empresa, que cobra só a industrialização.
 	CustomerSupplied   bool
@@ -52,9 +54,9 @@ type BOMChild struct {
 // Linhas anteriores à migração 354 não têm fator; nelas a unidade da estrutura
 // era sempre a de estoque, então 1 é a resposta certa — zero zeraria o custo do
 // componente em silêncio.
-func (c BOMChild) QuantidadeNaUnidadeDeEstoque() float64 {
-	if c.ConversionFactor > 0 {
-		return c.Quantity * c.ConversionFactor
+func (c BOMChild) QuantidadeNaUnidadeDeEstoque() decimal.Decimal {
+	if c.ConversionFactor.IsPositive() {
+		return c.Quantity.Mul(c.ConversionFactor)
 	}
 	return c.Quantity
 }

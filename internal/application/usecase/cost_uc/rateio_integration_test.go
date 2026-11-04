@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -73,7 +75,7 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 		testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	})
 	if _, err := uc.UpsertItemPurchaseCost(ctx, request.UpsertItemPurchaseCostDTO{
-		ItemCode: itemCode, UnitCost: 200, Currency: "BRL", UpdatedBy: uid.String(),
+		ItemCode: itemCode, UnitCost: decimal.NewFromFloat(200), Currency: "BRL", UpdatedBy: uid.String(),
 	}); err != nil {
 		t.Fatalf("gravando custo de compra: %v", err)
 	}
@@ -93,7 +95,7 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 
 	regra, err := uc.CriarRegraDeRateio(ctx, request.CostOverheadRuleDTO{
 		Code: "CIF-MAT", Description: "Indiretos de armazenagem sobre material",
-		Base: "MATERIAL", Method: "PERCENTUAL", Rate: 0.12,
+		Base: "MATERIAL", Method: "PERCENTUAL", Rate: decimal.NewFromFloat(0.12),
 		// Folga de dias, não "ontem": o processo e o banco podem estar em
 		// fusos com datas diferentes (AGENTS.md, verificação contínua).
 		ValidFrom: time.Now().AddDate(0, 0, -5).Format("2006-01-02"),
@@ -129,7 +131,7 @@ func TestRateioEntraNoCustoDoProduto(t *testing.T) {
 	fim := time.Now().AddDate(0, 0, -5).Format("2006-01-02")
 	if _, err := uc.AtualizarRegraDeRateio(ctx, regra.ID, request.CostOverheadRuleDTO{
 		Code: "CIF-MAT", Description: "Indiretos de armazenagem sobre material",
-		Base: "MATERIAL", Method: "PERCENTUAL", Rate: 0.12,
+		Base: "MATERIAL", Method: "PERCENTUAL", Rate: decimal.NewFromFloat(0.12),
 		ValidFrom: time.Now().AddDate(0, 0, -30).Format("2006-01-02"), ValidTo: &fim,
 		CreatedBy: uid.String(),
 	}); err != nil {
@@ -185,7 +187,7 @@ func TestRateioGravaHistoricoPorApuracao(t *testing.T) {
 	})
 
 	if _, err := uc.UpsertItemPurchaseCost(ctx, request.UpsertItemPurchaseCostDTO{
-		ItemCode: itemCode, UnitCost: 100, UpdatedBy: uid.String(),
+		ItemCode: itemCode, UnitCost: decimal.NewFromFloat(100), UpdatedBy: uid.String(),
 	}); err != nil {
 		t.Fatalf("custo de compra: %v", err)
 	}
@@ -194,7 +196,7 @@ func TestRateioGravaHistoricoPorApuracao(t *testing.T) {
 	}
 	// Material sobe 50%: é a variação que o histórico tem de mostrar.
 	if _, err := uc.UpsertItemPurchaseCost(ctx, request.UpsertItemPurchaseCostDTO{
-		ItemCode: itemCode, UnitCost: 150, UpdatedBy: uid.String(),
+		ItemCode: itemCode, UnitCost: decimal.NewFromFloat(150), UpdatedBy: uid.String(),
 	}); err != nil {
 		t.Fatalf("custo de compra novo: %v", err)
 	}
@@ -243,7 +245,7 @@ func TestCustoIsolaEntreEmpresas(t *testing.T) {
 		testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", itemCode)
 	})
 	if _, err := uc.UpsertItemPurchaseCost(dona, request.UpsertItemPurchaseCostDTO{
-		ItemCode: itemCode, UnitCost: 777, UpdatedBy: uid.String(),
+		ItemCode: itemCode, UnitCost: decimal.NewFromFloat(777), UpdatedBy: uid.String(),
 	}); err != nil {
 		t.Fatalf("a dona não conseguiu gravar o custo do próprio item: %v", err)
 	}
@@ -265,7 +267,7 @@ func TestCustoIsolaEntreEmpresas(t *testing.T) {
 	}
 	// Sobrescrita direta pela vizinha: recusada.
 	if _, err := uc.UpsertItemPurchaseCost(vizinha, request.UpsertItemPurchaseCostDTO{
-		ItemCode: itemCode, UnitCost: 1, UpdatedBy: uid.String(),
+		ItemCode: itemCode, UnitCost: decimal.NewFromFloat(1), UpdatedBy: uid.String(),
 	}); err == nil {
 		t.Fatal("a empresa vizinha sobrescreveu o custo de compra de um item alheio")
 	}
@@ -291,7 +293,7 @@ func TestRegraDeRateioIsolaEntreEmpresas(t *testing.T) {
 
 	criada, err := uc.CriarRegraDeRateio(dona, request.CostOverheadRuleDTO{
 		Code: "ISOLA-1", Description: "Energia da usinagem", Base: "MAQUINA",
-		Method: "VALOR_POR_HORA", Rate: 18,
+		Method: "VALOR_POR_HORA", Rate: decimal.NewFromFloat(18),
 		ValidFrom: time.Now().Format("2006-01-02"), CreatedBy: uid.String(),
 	})
 	if err != nil {
@@ -337,7 +339,7 @@ func TestRateioRecusaTaxaEmPercentualInteiro(t *testing.T) {
 
 	_, err := uc.CriarRegraDeRateio(ctx, request.CostOverheadRuleDTO{
 		Code: "RUIM", Description: "Percentual inteiro", Base: "MATERIAL",
-		Method: "PERCENTUAL", Rate: 12,
+		Method: "PERCENTUAL", Rate: decimal.NewFromFloat(12),
 		ValidFrom: time.Now().Format("2006-01-02"), CreatedBy: uid.String(),
 	})
 	if err == nil {
@@ -351,7 +353,7 @@ func TestRateioRecusaTaxaEmPercentualInteiro(t *testing.T) {
 	// Valor por hora sobre base que não é medida em horas: não faz sentido.
 	if _, err := uc.CriarRegraDeRateio(ctx, request.CostOverheadRuleDTO{
 		Code: "RUIM2", Description: "Hora sobre material", Base: "MATERIAL",
-		Method: "VALOR_POR_HORA", Rate: 10,
+		Method: "VALOR_POR_HORA", Rate: decimal.NewFromFloat(10),
 		ValidFrom: time.Now().Format("2006-01-02"), CreatedBy: uid.String(),
 	}); err == nil {
 		t.Fatal("valor por hora sobre base MATERIAL foi aceito")

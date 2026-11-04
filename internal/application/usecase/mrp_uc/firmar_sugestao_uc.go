@@ -3,9 +3,10 @@ package mrp_uc
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -168,7 +169,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		Mask:        stringPtrIfNotEmpty(sugg.Mask),
 		// A ordem planejada ainda guarda a quantidade em float (cadastro legado);
 		// a sugestão vem do MRP em decimal NUMERIC(18,6).
-		Quantity:             sugg.Quantity.InexactFloat64(),
+		Quantity:             sugg.Quantity,
 		OrderType:            mapMRPOrderType(sugg.OrderType),
 		Status:               types.StatusPlanned,
 		DemandType:           mapMRPDemandType(sugg.DemandType),
@@ -283,7 +284,7 @@ func suggestionResponse(suggestionCode int64, created *plannedentity.PlannedOrde
 		PlannedCode:    created.Code,
 		OrderNumber:    created.OrderNumber,
 		ItemCode:       created.ItemCode,
-		Quantity:       created.Quantity,
+		Quantity:       created.Quantity.InexactFloat64(),
 		OrderType:      string(created.OrderType),
 		NeedDate:       created.NeedDate,
 		Status:         string(created.Status),
