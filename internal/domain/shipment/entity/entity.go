@@ -2,8 +2,10 @@ package entity
 
 import (
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -102,14 +104,14 @@ type Shipment struct {
 	TotalVolumes        int
 
 	// Pesos e cubagem totais (líquido e bruto são distintos).
-	TotalNetWeight   float64
-	TotalGrossWeight float64
-	TotalCubageM3    float64
+	TotalNetWeight   decimal.Decimal
+	TotalGrossWeight decimal.Decimal
+	TotalCubageM3    decimal.Decimal
 
 	// Dados da viagem / transporte.
 	FreightModality   *string
-	FreightValue      float64
-	InsuranceValue    float64
+	FreightValue      decimal.Decimal
+	InsuranceValue    decimal.Decimal
 	VehiclePlate      *string
 	DriverName        *string
 	DriverDocument    *string
@@ -143,11 +145,11 @@ type ShipmentItem struct {
 	ItemCode           int64
 	SalesOrderItemCode *int64
 	WarehouseID        *int64
-	Quantity           float64 // quantidade planejada a expedir
-	ConferredQty       float64 // quantidade conferida (real)
+	Quantity           decimal.Decimal // quantidade planejada a expedir
+	ConferredQty       decimal.Decimal // quantidade conferida (real)
 	IsConferred        bool
-	UnitNetWeight      float64
-	UnitGrossWeight    float64
+	UnitNetWeight      decimal.Decimal
+	UnitGrossWeight    decimal.Decimal
 	Notes              *string
 	CreatedAt          time.Time
 }
@@ -155,7 +157,7 @@ type ShipmentItem struct {
 // HasDivergence reports whether a conferred line's checked quantity differs from
 // the planned quantity (sobra ou falta na separação).
 func (it *ShipmentItem) HasDivergence() bool {
-	return it.IsConferred && it.ConferredQty != it.Quantity
+	return it.IsConferred && !it.ConferredQty.Equal(it.Quantity)
 }
 
 // ShipmentVolume is one physical handling unit (volume) of the load, with its
@@ -165,12 +167,12 @@ type ShipmentVolume struct {
 	ShipmentID   int64
 	VolumeNumber int
 	PackageType  string
-	NetWeight    float64
-	GrossWeight  float64
-	LengthCm     float64
-	WidthCm      float64
-	HeightCm     float64
-	CubageM3     float64
+	NetWeight    decimal.Decimal
+	GrossWeight  decimal.Decimal
+	LengthCm     decimal.Decimal
+	WidthCm      decimal.Decimal
+	HeightCm     decimal.Decimal
+	CubageM3     decimal.Decimal
 	Marking      *string
 	Contents     *string
 	CreatedAt    time.Time
@@ -178,8 +180,9 @@ type ShipmentVolume struct {
 
 // Cubage computes the volume's cubage in m³ from its dimensions (cm), used when
 // the caller does not supply one explicitly.
-func (v *ShipmentVolume) Cubage() float64 {
-	return (v.LengthCm / 100.0) * (v.WidthCm / 100.0) * (v.HeightCm / 100.0)
+func (v *ShipmentVolume) Cubage() decimal.Decimal {
+	cem := decimal.NewFromInt(100)
+	return v.LengthCm.Div(cem).Mul(v.WidthCm.Div(cem)).Mul(v.HeightCm.Div(cem))
 }
 
 // ShipmentEvent is one audit entry in the romaneio's lifecycle.
@@ -217,9 +220,9 @@ type ShipmentLoad struct {
 	TotalShipments    int
 	TotalFiscalNotes  int
 	TotalVolumes      int
-	TotalNetWeight    float64
-	TotalGrossWeight  float64
-	TotalCubageM3     float64
+	TotalNetWeight    decimal.Decimal
+	TotalGrossWeight  decimal.Decimal
+	TotalCubageM3     decimal.Decimal
 	Notes             *string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
@@ -290,7 +293,7 @@ func (s *Shipment) ValidateForShipping(acceptDivergences bool) error {
 			return domainerr.NewValidation(fmt.Sprintf("item %d (seq %d) ainda não conferido", it.ItemCode, it.Sequence))
 		}
 		if it.HasDivergence() && !acceptDivergences {
-			return domainerr.NewValidation(fmt.Sprintf("item %d (seq %d) com divergência: planejado %.4f, conferido %.4f", it.ItemCode, it.Sequence, it.Quantity, it.ConferredQty))
+			return domainerr.NewValidation(fmt.Sprintf("item %d (seq %d) com divergência: planejado %s, conferido %s", it.ItemCode, it.Sequence, it.Quantity.StringFixed(4), it.ConferredQty.StringFixed(4)))
 		}
 	}
 	return nil

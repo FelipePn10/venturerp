@@ -1,8 +1,10 @@
 package entity
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -22,7 +24,7 @@ func NewSalesForecast(
 	mask *string,
 	week int,
 	year int,
-	quantity float64,
+	quantity decimal.Decimal,
 	createdBy uuid.UUID,
 ) (*SalesForecast, error) {
 	if itemCode <= 0 {
@@ -34,7 +36,7 @@ func NewSalesForecast(
 	if year <= 2000 {
 		return nil, ErrInvalidYear
 	}
-	if quantity <= 0 {
+	if !quantity.IsPositive() {
 		return nil, ErrInvalidQuantity
 	}
 
@@ -72,13 +74,13 @@ func NewSalesForecastBlock(
 
 func NewAppropriationTable(
 	description string,
-	mondayPct float64,
-	tuesdayPct float64,
-	wednesdayPct float64,
-	thursdayPct float64,
-	fridayPct float64,
-	saturdayPct float64,
-	sundayPct float64,
+	mondayPct decimal.Decimal,
+	tuesdayPct decimal.Decimal,
+	wednesdayPct decimal.Decimal,
+	thursdayPct decimal.Decimal,
+	fridayPct decimal.Decimal,
+	saturdayPct decimal.Decimal,
+	sundayPct decimal.Decimal,
 	isDefault bool,
 	createdBy uuid.UUID,
 ) (*AppropriationTable, error) {
@@ -86,8 +88,8 @@ func NewAppropriationTable(
 		return nil, ErrInvalidDescription
 	}
 
-	total := mondayPct + tuesdayPct + wednesdayPct + thursdayPct + fridayPct + saturdayPct + sundayPct
-	if total > 100.0 {
+	total := mondayPct.Add(tuesdayPct).Add(wednesdayPct).Add(thursdayPct).Add(fridayPct).Add(saturdayPct).Add(sundayPct)
+	if total.GreaterThan(decimal.NewFromInt(100)) {
 		return nil, ErrPercentageSumTooHigh
 	}
 

@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
-	"github.com/shopspring/decimal"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	inddemandentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 	inddemandrepo "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/repository"
@@ -2098,7 +2099,7 @@ func (s *MRPServiceImpl) loadForecastDemands(ctx context.Context, planCode int64
 			PlanCode:   planCode,
 			ItemCode:   f.ItemCode,
 			Mask:       mask,
-			Quantity:   dq(f.Quantity),
+			Quantity:   f.Quantity.Round(6),
 			NeedDate:   needDate,
 			DemandType: "FORECAST",
 		})

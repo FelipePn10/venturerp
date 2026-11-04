@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type RepresentativeType struct {
 	Code                 int64
@@ -60,7 +64,7 @@ type RepresentativeEnterprise struct {
 	EnterpriseCode        int64
 	EnterpriseName        *string
 	CommissionPatternCode *int64
-	CommissionPct         float64
+	CommissionPct         decimal.Decimal
 	IsDefault             bool
 	IsActive              bool
 	CreatedAt             time.Time

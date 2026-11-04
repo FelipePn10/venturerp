@@ -12,6 +12,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 )
 
 type DeliveryPromiseHandler struct {
@@ -29,7 +30,7 @@ func (h *DeliveryPromiseHandler) Occupation(w http.ResponseWriter, r *http.Reque
 	dto := request.DeliveryPromiseOccupationDTO{
 		FromDate:      r.URL.Query().Get("from_date"),
 		ToDate:        r.URL.Query().Get("to_date"),
-		DailyCapacity: parseFloatQuery(r, "daily_capacity"),
+		DailyCapacity: parseDecimalQuery(r, "daily_capacity"),
 		TankCodes:     parseInt64List(r.URL.Query()["tank_code"]),
 	}
 	result, err := h.uc.Occupation(r.Context(), dto)
@@ -114,12 +115,14 @@ func (h *DeliveryPromiseHandler) handleError(w http.ResponseWriter, err error) {
 	}
 }
 
-func parseFloatQuery(r *http.Request, name string) float64 {
+// parseDecimalQuery lê um número da query; queryValida já recusou o texto
+// inválido, então vazio vira zero.
+func parseDecimalQuery(r *http.Request, name string) decimal.Decimal {
 	value := r.URL.Query().Get(name)
 	if value == "" {
-		return 0
+		return decimal.Zero
 	}
-	parsed, _ := strconv.ParseFloat(value, 64)
+	parsed, _ := decimal.NewFromString(value)
 	return parsed
 }
 

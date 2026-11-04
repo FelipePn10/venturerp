@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
@@ -81,7 +83,7 @@ func TestRomaneioTudoOuNada(t *testing.T) {
 		t.Fatal(err)
 	}
 	deposito := int64(4)
-	if _, err := uc.AddItem(ctx, shipment_uc.AddShipmentItemInput{ShipmentCode: criado.Code, Sequence: 1, ItemCode: u, WarehouseID: &deposito, Quantity: 6}); err != nil {
+	if _, err := uc.AddItem(ctx, shipment_uc.AddShipmentItemInput{ShipmentCode: criado.Code, Sequence: 1, ItemCode: u, WarehouseID: &deposito, Quantity: decimal.NewFromFloat(6)}); err != nil {
 		t.Fatal(err)
 	}
 	estado := func() (status string, reservas int) {

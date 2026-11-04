@@ -117,7 +117,7 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 			5001: {
 				ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, SalesOrderCode: i64p(7001),
 				Items: []*shipentity.ShipmentItem{
-					{ItemCode: 1001, Quantity: 2, IsConferred: true, ConferredQty: 2},
+					{ItemCode: 1001, Quantity: decimal.NewFromFloat(2), IsConferred: true, ConferredQty: decimal.NewFromFloat(2)},
 				},
 			},
 		},
@@ -169,7 +169,7 @@ func TestCreateFiscalExitFromLoad_MissingPriceRequiresOverride(t *testing.T) {
 			Shipments: []*shipentity.ShipmentLoadShipment{{ShipmentCode: 5001}},
 		},
 		shipments: map[int64]*shipentity.Shipment{
-			5001: {ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, Items: []*shipentity.ShipmentItem{{ItemCode: 1001, Quantity: 2}}},
+			5001: {ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, Items: []*shipentity.ShipmentItem{{ItemCode: 1001, Quantity: decimal.NewFromFloat(2)}}},
 		},
 	}
 	uc := &CreateFiscalExitFromLoadUseCase{

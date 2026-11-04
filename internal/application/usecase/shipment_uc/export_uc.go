@@ -3,8 +3,9 @@ package shipment_uc
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
@@ -57,7 +58,7 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 		Status:       string(s.Status),
 		Notes:        strOrEmpty(s.Notes),
 		TotalVolumes: s.TotalVolumes,
-		TotalWeight:  s.TotalGrossWeight,
+		TotalWeight:  s.TotalGrossWeight.InexactFloat64(),
 		GeneratedAt:  time.Now(),
 		Seals:        strOrEmpty(s.Seals),
 		Volumes:      mapRomaneioVolumes(s.Volumes),
@@ -111,8 +112,8 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 		}
 
 		d.TransportInfo.VolumeQuantity = float64(s.TotalVolumes)
-		d.TransportInfo.NetWeight = s.TotalNetWeight
-		d.TransportInfo.GrossWeight = s.TotalGrossWeight
+		d.TransportInfo.NetWeight = s.TotalNetWeight.InexactFloat64()
+		d.TransportInfo.GrossWeight = s.TotalGrossWeight.InexactFloat64()
 		d.TransportInfo.VolumeType = "UN"
 
 		for _, it := range s.Items {
@@ -122,12 +123,12 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 					Sequence:    it.Sequence,
 					ItemCode:    it.ItemCode,
 					Description: fmt.Sprintf("Item %d", it.ItemCode),
-					Quantity:    it.Quantity,
+					Quantity:    it.Quantity.InexactFloat64(),
 					Unit:        "UN",
 				}
 			} else {
 				rit.Sequence = it.Sequence
-				rit.Quantity = it.Quantity
+				rit.Quantity = it.Quantity.InexactFloat64()
 			}
 			d.Items = append(d.Items, rit)
 		}
@@ -148,20 +149,20 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 								d.Destinatario = cust
 							}
 						}
-						d.TotalGross = so.TotalGross
-						d.TotalNet = so.TotalNet
+						d.TotalGross = so.TotalGross.InexactFloat64()
+						d.TotalNet = so.TotalNet.InexactFloat64()
 						for i := range d.Items {
 							if i < len(so.Items) {
 								si := so.Items[i]
-								d.Items[i].UnitPrice = si.UnitPrice
-								d.Items[i].TotalPrice = si.TotalGross
-								d.Items[i].ICMSPct = si.ICMSPct
-								d.Items[i].IPIPct = si.IPIPct
-								d.Items[i].PISPct = si.PISPct
-								d.Items[i].COFINSPct = si.COFINSPct
-								d.Items[i].STPct = si.STPct
-								d.Items[i].WeightNet = si.UnitWeightNet * si.RequestedQty
-								d.Items[i].WeightGross = si.UnitWeightGross * si.RequestedQty
+								d.Items[i].UnitPrice = si.UnitPrice.InexactFloat64()
+								d.Items[i].TotalPrice = si.TotalGross.InexactFloat64()
+								d.Items[i].ICMSPct = si.ICMSPct.InexactFloat64()
+								d.Items[i].IPIPct = si.IPIPct.InexactFloat64()
+								d.Items[i].PISPct = si.PISPct.InexactFloat64()
+								d.Items[i].COFINSPct = si.COFINSPct.InexactFloat64()
+								d.Items[i].STPct = si.STPct.InexactFloat64()
+								d.Items[i].WeightNet = si.UnitWeightNet.Mul(si.RequestedQty).InexactFloat64()
+								d.Items[i].WeightGross = si.UnitWeightGross.Mul(si.RequestedQty).InexactFloat64()
 							}
 						}
 					}
@@ -183,11 +184,11 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 						for i := range d.Items {
 							if i < len(po.Items) {
 								pi := po.Items[i]
-								d.Items[i].UnitPrice = pi.UnitPrice
-								d.Items[i].TotalPrice = pi.TotalPrice
-								d.Items[i].ICMSPct = pi.ICMSPct
-								d.Items[i].IPIPct = pi.IPIPct
-								d.Items[i].STPct = pi.ICMSSTPct
+								d.Items[i].UnitPrice = pi.UnitPrice.InexactFloat64()
+								d.Items[i].TotalPrice = pi.TotalPrice.InexactFloat64()
+								d.Items[i].ICMSPct = pi.ICMSPct.InexactFloat64()
+								d.Items[i].IPIPct = pi.IPIPct.InexactFloat64()
+								d.Items[i].STPct = pi.ICMSSTPct.InexactFloat64()
 							}
 						}
 					}
@@ -237,11 +238,11 @@ func applyShipmentTransport(d *romaneioExport.RomaneioData, s *entity.Shipment) 
 		d.Carrier.FreightType = *s.FreightModality
 		d.TransportInfo.FreightType = *s.FreightModality
 	}
-	if s.FreightValue > 0 {
-		d.TransportInfo.FreightValue = s.FreightValue
+	if s.FreightValue.IsPositive() {
+		d.TransportInfo.FreightValue = s.FreightValue.InexactFloat64()
 	}
-	if s.InsuranceValue > 0 {
-		d.TransportInfo.InsuranceValue = s.InsuranceValue
+	if s.InsuranceValue.IsPositive() {
+		d.TransportInfo.InsuranceValue = s.InsuranceValue.InexactFloat64()
 	}
 	if s.EstimatedDelivery != nil {
 		d.TransportInfo.EstimatedDelivery = s.EstimatedDelivery.Format("02/01/2006")
@@ -254,12 +255,12 @@ func mapRomaneioVolumes(vols []*entity.ShipmentVolume) []romaneioExport.Romaneio
 		out = append(out, romaneioExport.RomaneioVolume{
 			Number:      v.VolumeNumber,
 			PackageType: v.PackageType,
-			NetWeight:   v.NetWeight,
-			GrossWeight: v.GrossWeight,
-			LengthCm:    v.LengthCm,
-			WidthCm:     v.WidthCm,
-			HeightCm:    v.HeightCm,
-			CubageM3:    v.CubageM3,
+			NetWeight:   v.NetWeight.InexactFloat64(),
+			GrossWeight: v.GrossWeight.InexactFloat64(),
+			LengthCm:    v.LengthCm.InexactFloat64(),
+			WidthCm:     v.WidthCm.InexactFloat64(),
+			HeightCm:    v.HeightCm.InexactFloat64(),
+			CubageM3:    v.CubageM3.InexactFloat64(),
 			Marking:     strOrEmpty(v.Marking),
 			Contents:    strOrEmpty(v.Contents),
 		})

@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/margin/entity"
 	repo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
+	"github.com/shopspring/decimal"
 )
 
 type UseCase struct{ Repo *repo.Repository }
@@ -24,16 +25,17 @@ func (uc *UseCase) SalvarParametros(ctx context.Context, p entity.Parametros) er
 	if p.Ano < 2000 || p.Ano > 2199 {
 		return errorsuc.NewValidationError("informe um ano válido")
 	}
-	for nome, valor := range map[string]float64{
+	cem := decimal.NewFromInt(100)
+	for nome, valor := range map[string]decimal.Decimal{
 		"o percentual de IR":          p.IRPct,
 		"a incidência administrativa": p.AdminPct,
 		"o percentual de frete":       p.FreightPct,
 		"a taxa financeira":           p.FinancialRateMonthly,
 	} {
-		if valor < 0 {
+		if valor.IsNegative() {
 			return errorsuc.NewValidationError(fmt.Sprintf("%s não pode ser negativo", nome))
 		}
-		if valor > 100 {
+		if valor.GreaterThan(cem) {
 			return errorsuc.NewValidationError(fmt.Sprintf("%s não pode passar de 100%%", nome))
 		}
 	}
@@ -100,6 +102,7 @@ func (uc *UseCase) Gerar(ctx context.Context, de, ate time.Time, base string) (*
 	}
 
 	resumo := &ResumoGeracao{CostBasis: base}
+	faturamento, margem := decimal.Zero, decimal.Zero
 	for _, v := range vendas {
 		p, err := parametrosDe(v.IssueDate)
 		if err != nil {
@@ -115,22 +118,43 @@ func (uc *UseCase) Gerar(ctx context.Context, de, ate time.Time, base string) (*
 			return nil, err
 		}
 		resumo.LinhasCalculadas++
-		resumo.FaturamentoTotal += res.FaturamentoMercadoria
-		resumo.MargemTotal += res.Margem
-		if res.Margem < 0 {
+		faturamento = faturamento.Add(res.FaturamentoMercadoria)
+		margem = margem.Add(res.Margem)
+		if res.Margem.IsNegative() {
 			resumo.ComPrejuizo++
 		}
 	}
-	if resumo.FaturamentoTotal != 0 {
-		resumo.MargemPct = resumo.MargemTotal / resumo.FaturamentoTotal * 100
+	resumo.FaturamentoTotal, resumo.MargemTotal = faturamento.InexactFloat64(), margem.InexactFloat64()
+	if !faturamento.IsZero() {
+		resumo.MargemPct = margem.Div(faturamento).Mul(decimal.NewFromInt(100)).InexactFloat64()
 	}
 	return resumo, nil
 }
 
+// LinhaApuradaJSON é a linha da apuração na resposta: números, como sempre foram.
+type LinhaApuradaJSON struct {
+	SourceID   int64   `json:"source_id"`
+	SourceItem int     `json:"source_item"`
+	IssueDate  string  `json:"issue_date"`
+	ItemCode   *int64  `json:"item_code,omitempty"`
+	Quantity   float64 `json:"quantity"`
+	CostBasis  string  `json:"cost_basis"`
+	ResultadoJSON
+}
+
 // Apuracao devolve as linhas já calculadas para análise.
-func (uc *UseCase) Apuracao(ctx context.Context, de, ate time.Time, ordem string, itemCode, customerCode *int64) ([]repo.LinhaApurada, error) {
+func (uc *UseCase) Apuracao(ctx context.Context, de, ate time.Time, ordem string, itemCode, customerCode *int64) ([]LinhaApuradaJSON, error) {
 	if ate.Before(de) {
 		return nil, errorsuc.NewValidationError("a data final não pode ser anterior à inicial")
 	}
-	return uc.Repo.ListarApuracao(ctx, de.Format("2006-01-02"), ate.Format("2006-01-02"), ordem, itemCode, customerCode)
+	linhas, err := uc.Repo.ListarApuracao(ctx, de.Format("2006-01-02"), ate.Format("2006-01-02"), ordem, itemCode, customerCode)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]LinhaApuradaJSON, 0, len(linhas))
+	for _, l := range linhas {
+		out = append(out, LinhaApuradaJSON{SourceID: l.SourceID, SourceItem: l.SourceItem, IssueDate: l.IssueDate, ItemCode: l.ItemCode,
+			Quantity: l.Quantity.InexactFloat64(), CostBasis: l.CostBasis, ResultadoJSON: resultadoJSON(l.Resultado)})
+	}
+	return out, nil
 }

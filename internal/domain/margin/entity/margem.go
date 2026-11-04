@@ -24,7 +24,9 @@
 // boa pode dar prejuízo no caixa.
 package entity
 
-import "math"
+import (
+	"github.com/shopspring/decimal"
+)
 
 // Parametros são os percentuais e prazos do mês, cadastrados uma vez e usados
 // por todas as vendas do período (FoccoERP FCST0108).
@@ -33,10 +35,10 @@ type Parametros struct {
 	Mes int
 
 	// Percentuais aplicados sobre o faturamento da mercadoria.
-	IRPct                float64 // provisão de IR/CSLL
-	AdminPct             float64 // incidência administrativa rateada entre os itens
-	FreightPct           float64 // frete médio
-	FinancialRateMonthly float64 // taxa financeira ao mês, em %
+	IRPct                decimal.Decimal // provisão de IR/CSLL
+	AdminPct             decimal.Decimal // incidência administrativa rateada entre os itens
+	FreightPct           decimal.Decimal // frete médio
+	FinancialRateMonthly decimal.Decimal // taxa financeira ao mês, em %
 
 	// Ciclo de caixa: quanto tempo o dinheiro fica fora do bolso.
 	AvgSalesTermDays    int // prazo médio de venda
@@ -72,63 +74,85 @@ func (p Parametros) CicloDeCaixaDias() int {
 //
 // O help do FoccoERP traz o exemplo que confirma a fórmula: ciclo de 25 dias e
 // taxa de 3% ao mês resultam em 2,49% — que é (1,03)^(25/30) − 1.
-func (p Parametros) TaxaFinanceiraRealPct() float64 {
-	if p.FinancialRateMonthly <= 0 {
-		return 0
+func (p Parametros) TaxaFinanceiraRealPct() decimal.Decimal {
+	if !p.FinancialRateMonthly.IsPositive() {
+		return decimal.Zero
 	}
-	ciclo := float64(p.CicloDeCaixaDias())
+	ciclo := p.CicloDeCaixaDias()
 	if ciclo <= 0 {
-		return 0
+		return decimal.Zero
 	}
-	taxa := p.FinancialRateMonthly / 100.0
-	return (math.Pow(1+taxa, ciclo/30.0) - 1) * 100.0
+	fator := fatorDoPrazo(p.FinancialRateMonthly, ciclo)
+	return fator.Sub(um).Mul(cem)
+}
+
+var (
+	um  = decimal.NewFromInt(1)
+	cem = decimal.NewFromInt(100)
+	// precisaoPotencia: casas da potência de expoente fracionário — muito além
+	// das 4 casas que a margem grava.
+	precisaoPotencia int32 = 16
+)
+
+// fatorDoPrazo é (1 + taxa/100)^(dias/30), a capitalização da taxa mensal no prazo.
+func fatorDoPrazo(taxaMensalPct decimal.Decimal, dias int) decimal.Decimal {
+	base := um.Add(taxaMensalPct.Div(cem))
+	exp := decimal.NewFromInt(int64(dias)).Div(decimal.NewFromInt(30))
+	f, err := base.PowWithPrecision(exp, precisaoPotencia)
+	if err != nil {
+		// Base sempre > 1 aqui (taxa positiva): o erro não acontece; sem fator,
+		// o valor fica como está, que é o comportamento sem taxa.
+		return um
+	}
+	return f
 }
 
 // Venda são os valores de uma linha de nota fiscal (ou de pedido) já apurados.
 type Venda struct {
-	Quantidade   float64
-	ValorLiquido float64 // preço unitário líquido
-	IPI          float64
-	ICMS         float64
-	PIS          float64
-	COFINS       float64
+	Quantidade   decimal.Decimal
+	ValorLiquido decimal.Decimal // preço unitário líquido
+	IPI          decimal.Decimal
+	ICMS         decimal.Decimal
+	PIS          decimal.Decimal
+	COFINS       decimal.Decimal
 
 	// Custos vindos da valorização: matéria-prima e transformação
 	// (mão de obra + gastos gerais de fabricação), já para a quantidade vendida.
-	CustoMateriaPrima  float64
-	CustoTransformacao float64
+	CustoMateriaPrima  decimal.Decimal
+	CustoTransformacao decimal.Decimal
 
-	ComissaoValor float64
-	OutrosValor   float64
+	ComissaoValor decimal.Decimal
+	OutrosValor   decimal.Decimal
 }
 
-// Resultado é a cascata completa, pronta para a tela e para o relatório.
+// Resultado é a cascata completa, em decimal. A resposta HTTP é montada no
+// caso de uso (margin_uc.ResultadoJSON), com números.
 type Resultado struct {
-	FaturamentoBruto      float64 `json:"faturamento_bruto"`
-	IPI                   float64 `json:"ipi"`
-	FaturamentoMercadoria float64 `json:"faturamento_mercadoria"`
-	ICMS                  float64 `json:"icms"`
-	PISCOFINS             float64 `json:"pis_cofins"`
-	CustoMateriaPrima     float64 `json:"custo_materia_prima"`
-	CustoTransformacao    float64 `json:"custo_transformacao"`
-	LucroBruto            float64 `json:"lucro_bruto"`
-	DespesaAdministrativa float64 `json:"despesa_administrativa"`
-	Comissao              float64 `json:"comissao"`
-	Frete                 float64 `json:"frete"`
-	Outros                float64 `json:"outros"`
-	DespesaFinanceira     float64 `json:"despesa_financeira"`
-	ProvisaoIR            float64 `json:"provisao_ir"`
-	Margem                float64 `json:"margem"`
-	MargemPct             float64 `json:"margem_pct"`
+	FaturamentoBruto      decimal.Decimal
+	IPI                   decimal.Decimal
+	FaturamentoMercadoria decimal.Decimal
+	ICMS                  decimal.Decimal
+	PISCOFINS             decimal.Decimal
+	CustoMateriaPrima     decimal.Decimal
+	CustoTransformacao    decimal.Decimal
+	LucroBruto            decimal.Decimal
+	DespesaAdministrativa decimal.Decimal
+	Comissao              decimal.Decimal
+	Frete                 decimal.Decimal
+	Outros                decimal.Decimal
+	DespesaFinanceira     decimal.Decimal
+	ProvisaoIR            decimal.Decimal
+	Margem                decimal.Decimal
+	MargemPct             decimal.Decimal
 }
 
 // valorPresente traz um valor a receber/pagar em `dias` para hoje, à taxa
 // mensal informada. Sem taxa ou sem prazo, o valor é o próprio.
-func valorPresente(valor float64, dias int, taxaMensalPct float64) float64 {
-	if valor == 0 || dias <= 0 || taxaMensalPct <= 0 {
+func valorPresente(valor decimal.Decimal, dias int, taxaMensalPct decimal.Decimal) decimal.Decimal {
+	if valor.IsZero() || dias <= 0 || !taxaMensalPct.IsPositive() {
 		return valor
 	}
-	return valor / math.Pow(1+taxaMensalPct/100.0, float64(dias)/30.0)
+	return valor.Div(fatorDoPrazo(taxaMensalPct, dias))
 }
 
 // Calcular monta a cascata da margem para uma linha de venda.
@@ -141,30 +165,30 @@ func Calcular(v Venda, p Parametros) Resultado {
 	r := Resultado{
 		IPI:                v.IPI,
 		ICMS:               v.ICMS,
-		PISCOFINS:          v.PIS + v.COFINS,
+		PISCOFINS:          v.PIS.Add(v.COFINS),
 		CustoMateriaPrima:  v.CustoMateriaPrima,
 		CustoTransformacao: v.CustoTransformacao,
 		Comissao:           v.ComissaoValor,
 		Outros:             v.OutrosValor,
 	}
 
-	r.FaturamentoBruto = v.ValorLiquido*v.Quantidade + v.IPI
-	r.FaturamentoMercadoria = r.FaturamentoBruto - v.IPI
+	r.FaturamentoBruto = v.ValorLiquido.Mul(v.Quantidade).Add(v.IPI)
+	r.FaturamentoMercadoria = r.FaturamentoBruto.Sub(v.IPI)
 
-	r.LucroBruto = r.FaturamentoMercadoria - r.ICMS - r.PISCOFINS -
-		r.CustoMateriaPrima - r.CustoTransformacao
+	r.LucroBruto = r.FaturamentoMercadoria.Sub(r.ICMS).Sub(r.PISCOFINS).
+		Sub(r.CustoMateriaPrima).Sub(r.CustoTransformacao)
 
 	base := r.FaturamentoMercadoria
-	r.DespesaAdministrativa = base * p.AdminPct / 100.0
-	r.Frete = base * p.FreightPct / 100.0
+	r.DespesaAdministrativa = base.Mul(p.AdminPct).Div(cem)
+	r.Frete = base.Mul(p.FreightPct).Div(cem)
 
 	// Descasamento de caixa: receita recebida depois, custos e impostos pagos
 	// nos seus prazos.
 	taxa := p.FinancialRateMonthly
-	perdaNaReceita := r.FaturamentoBruto - valorPresente(r.FaturamentoBruto, p.AvgSalesTermDays, taxa)
-	ganhoNosPagamentos := 0.0
+	perdaNaReceita := r.FaturamentoBruto.Sub(valorPresente(r.FaturamentoBruto, p.AvgSalesTermDays, taxa))
+	ganhoNosPagamentos := decimal.Zero
 	for _, parcela := range []struct {
-		valor float64
+		valor decimal.Decimal
 		dias  int
 	}{
 		{r.CustoMateriaPrima, p.MaterialPaymentDays},
@@ -174,25 +198,25 @@ func Calcular(v Venda, p Parametros) Resultado {
 		{v.PIS, p.PISPaymentDays},
 		{v.COFINS, p.COFINSPaymentDays},
 	} {
-		ganhoNosPagamentos += parcela.valor - valorPresente(parcela.valor, parcela.dias, taxa)
+		ganhoNosPagamentos = ganhoNosPagamentos.Add(parcela.valor.Sub(valorPresente(parcela.valor, parcela.dias, taxa)))
 	}
-	r.DespesaFinanceira = perdaNaReceita - ganhoNosPagamentos
-	if r.DespesaFinanceira < 0 {
+	r.DespesaFinanceira = perdaNaReceita.Sub(ganhoNosPagamentos)
+	if r.DespesaFinanceira.IsNegative() {
 		// Recebe antes de pagar: não vira receita financeira na margem.
-		r.DespesaFinanceira = 0
+		r.DespesaFinanceira = decimal.Zero
 	}
 
-	antesDoIR := r.LucroBruto - r.DespesaAdministrativa - r.Comissao -
-		r.Frete - r.Outros - r.DespesaFinanceira
+	antesDoIR := r.LucroBruto.Sub(r.DespesaAdministrativa).Sub(r.Comissao).
+		Sub(r.Frete).Sub(r.Outros).Sub(r.DespesaFinanceira)
 
 	// IR incide sobre lucro; prejuízo não gera provisão.
-	if antesDoIR > 0 {
-		r.ProvisaoIR = antesDoIR * p.IRPct / 100.0
+	if antesDoIR.IsPositive() {
+		r.ProvisaoIR = antesDoIR.Mul(p.IRPct).Div(cem)
 	}
-	r.Margem = antesDoIR - r.ProvisaoIR
+	r.Margem = antesDoIR.Sub(r.ProvisaoIR)
 
-	if r.FaturamentoMercadoria != 0 {
-		r.MargemPct = r.Margem / r.FaturamentoMercadoria * 100.0
+	if !r.FaturamentoMercadoria.IsZero() {
+		r.MargemPct = r.Margem.Div(r.FaturamentoMercadoria).Mul(cem)
 	}
 	return r
 }

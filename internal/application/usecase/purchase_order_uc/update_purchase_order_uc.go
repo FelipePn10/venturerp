@@ -119,7 +119,7 @@ func regravarComTotais(ctx context.Context, repo repository.PurchaseOrderReposit
 	}
 	antes := o.TotalNet
 	o.AplicarTotais(entity.CalcularTotais(o, items))
-	if o.Status == entity.PurchaseOrderStatusREQUESTED || o.TotalNet != antes {
+	if o.Status == entity.PurchaseOrderStatusREQUESTED || !o.TotalNet.Equal(antes) {
 		o.VoltarParaRascunho()
 	}
 	updated, err := repo.Update(ctx, o)

@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_forecast/repository"
@@ -22,7 +24,7 @@ type actualsRepo struct {
 
 func (r *actualsRepo) ListHistoricalDemand(_ context.Context, source string, _, _ time.Time, items []int64) ([]*entity.HistoricalDemand, error) {
 	r.source, r.items = source, items
-	return []*entity.HistoricalDemand{{ItemCode: 10, PeriodMonth: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Quantity: 42}}, nil
+	return []*entity.HistoricalDemand{{ItemCode: 10, PeriodMonth: time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), Quantity: decimal.NewFromFloat(42)}}, nil
 }
 
 func TestListActualDemandReturnsMonthlyActuals(t *testing.T) {

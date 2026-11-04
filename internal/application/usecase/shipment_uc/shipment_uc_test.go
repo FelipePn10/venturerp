@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type fakeShipmentRepo struct {
@@ -39,7 +40,7 @@ type fakeShipmentRepo struct {
 	listItemsErr  error
 
 	conferredItemID int64
-	conferredQty    float64
+	conferredQty    decimal.Decimal
 	conferItemErr   error
 }
 
@@ -111,7 +112,7 @@ func (f *fakeShipmentRepo) ListItems(ctx context.Context, shipmentID int64) ([]*
 	return f.listItemsResp, f.listItemsErr
 }
 
-func (f *fakeShipmentRepo) ConferItem(ctx context.Context, itemID int64, conferredQty float64) error {
+func (f *fakeShipmentRepo) ConferItem(ctx context.Context, itemID int64, conferredQty decimal.Decimal) error {
 	if f.conferItemErr != nil {
 		return f.conferItemErr
 	}
@@ -131,7 +132,7 @@ func TestCreateShipment(t *testing.T) {
 		SalesOrderCode:   &soCode,
 		CarrierCode:      ptrInt64(10),
 		TotalVolumes:     5,
-		TotalGrossWeight: 150.5,
+		TotalGrossWeight: decimal.NewFromFloat(150.5),
 		Notes:            strPtr("urgente"),
 		CreatedBy:        uuid.New(),
 	})
@@ -172,7 +173,7 @@ func TestAddItem_ToOpenShipment(t *testing.T) {
 		ShipmentCode: 1001,
 		Sequence:     1,
 		ItemCode:     500,
-		Quantity:     10,
+		Quantity:     decimal.NewFromFloat(10),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -189,7 +190,7 @@ func TestAddItem_ToShippedFails(t *testing.T) {
 	uc := &ShipmentUseCase{Repo: repo}
 
 	_, err := uc.AddItem(context.Background(), AddShipmentItemInput{
-		ShipmentCode: 1001, Sequence: 1, ItemCode: 500, Quantity: 10,
+		ShipmentCode: 1001, Sequence: 1, ItemCode: 500, Quantity: decimal.NewFromFloat(10),
 	})
 	if err == nil {
 		t.Fatal("expected error when adding item to shipped shipment")
@@ -242,10 +243,10 @@ func TestConferItem(t *testing.T) {
 	}
 	uc := &ShipmentUseCase{Repo: repo}
 
-	if err := uc.ConferItem(context.Background(), 1001, 10, 5); err != nil {
+	if err := uc.ConferItem(context.Background(), 1001, 10, decimal.NewFromFloat(5)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.conferredItemID != 10 || repo.conferredQty != 5 {
+	if repo.conferredItemID != 10 || !repo.conferredQty.Equal(decimal.NewFromInt(5)) {
 		t.Errorf("conferred item %d qty %v, want 10 / 5", repo.conferredItemID, repo.conferredQty)
 	}
 }
@@ -254,7 +255,7 @@ func TestSeparate_ReservesAndTransitions(t *testing.T) {
 	repo := &fakeShipmentRepo{
 		getByCodeResp: &entity.Shipment{
 			ID: 1, Code: 1001, Status: entity.ShipmentStatusOpen,
-			Items: []*entity.ShipmentItem{{ItemCode: 1, Quantity: 5}},
+			Items: []*entity.ShipmentItem{{ItemCode: 1, Quantity: decimal.NewFromFloat(5)}},
 		},
 	}
 	uc := &ShipmentUseCase{Repo: repo}
@@ -300,8 +301,8 @@ func TestShip_AllConferredNoDivergence(t *testing.T) {
 			Code:   1001,
 			Status: entity.ShipmentStatusConferred,
 			Items: []*entity.ShipmentItem{
-				{ItemCode: 1, Quantity: 3, ConferredQty: 3, IsConferred: true},
-				{ItemCode: 2, Quantity: 5, ConferredQty: 5, IsConferred: true},
+				{ItemCode: 1, Quantity: decimal.NewFromFloat(3), ConferredQty: decimal.NewFromFloat(3), IsConferred: true},
+				{ItemCode: 2, Quantity: decimal.NewFromFloat(5), ConferredQty: decimal.NewFromFloat(5), IsConferred: true},
 			},
 		},
 	}
@@ -340,7 +341,7 @@ func TestShip_DivergenceBlockedUnlessAccepted(t *testing.T) {
 				Code:   1001,
 				Status: entity.ShipmentStatusConferred,
 				Items: []*entity.ShipmentItem{
-					{ItemCode: 1, Quantity: 10, ConferredQty: 8, IsConferred: true}, // falta
+					{ItemCode: 1, Quantity: decimal.NewFromFloat(10), ConferredQty: decimal.NewFromFloat(8), IsConferred: true}, // falta
 				},
 			},
 		}

@@ -49,7 +49,7 @@ func (uc *ListActualDemandUseCase) Execute(ctx context.Context, year int, itemCo
 	}
 	out := make([]ActualDemandResponse, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, ActualDemandResponse{ItemCode: row.ItemCode, Mask: row.Mask, Year: row.PeriodMonth.Year(), Month: int(row.PeriodMonth.Month()), Quantity: row.Quantity})
+		out = append(out, ActualDemandResponse{ItemCode: row.ItemCode, Mask: row.Mask, Year: row.PeriodMonth.Year(), Month: int(row.PeriodMonth.Month()), Quantity: row.Quantity.InexactFloat64()})
 	}
 	return out, nil
 }

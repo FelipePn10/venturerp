@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -12,7 +14,7 @@ type SalesForecast struct {
 	Mask      *string
 	Week      int
 	Year      int
-	Quantity  float64
+	Quantity  decimal.Decimal
 	CreatedBy uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -30,13 +32,13 @@ type SalesForecastBlock struct {
 type AppropriationTable struct {
 	ID           int64
 	Description  string
-	MondayPct    float64
-	TuesdayPct   float64
-	WednesdayPct float64
-	ThursdayPct  float64
-	FridayPct    float64
-	SaturdayPct  float64
-	SundayPct    float64
+	MondayPct    decimal.Decimal
+	TuesdayPct   decimal.Decimal
+	WednesdayPct decimal.Decimal
+	ThursdayPct  decimal.Decimal
+	FridayPct    decimal.Decimal
+	SaturdayPct  decimal.Decimal
+	SundayPct    decimal.Decimal
 	IsDefault    bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -47,5 +49,5 @@ type HistoricalDemand struct {
 	ItemCode    int64
 	Mask        *string
 	PeriodMonth time.Time
-	Quantity    float64
+	Quantity    decimal.Decimal
 }

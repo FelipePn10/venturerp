@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/margin/entity"
@@ -20,21 +22,21 @@ type MarginHandler struct{ uc *margin_uc.UseCase }
 func NewMarginHandler(uc *margin_uc.UseCase) *MarginHandler { return &MarginHandler{uc: uc} }
 
 type parametrosDTO struct {
-	Ano                  int     `json:"ano"`
-	Mes                  int     `json:"mes"`
-	IRPct                float64 `json:"ir_pct"`
-	AdminPct             float64 `json:"admin_pct"`
-	FreightPct           float64 `json:"freight_pct"`
-	FinancialRateMonthly float64 `json:"financial_rate_monthly"`
-	AvgSalesTermDays     int     `json:"avg_sales_term_days"`
-	AvgPurchaseTermDays  int     `json:"avg_purchase_term_days"`
-	ProductionCycleDays  int     `json:"production_cycle_days"`
-	MaterialPaymentDays  int     `json:"material_payment_days"`
-	LaborPaymentDays     int     `json:"labor_payment_days"`
-	IPIPaymentDays       int     `json:"ipi_payment_days"`
-	ICMSPaymentDays      int     `json:"icms_payment_days"`
-	PISPaymentDays       int     `json:"pis_payment_days"`
-	COFINSPaymentDays    int     `json:"cofins_payment_days"`
+	Ano                  int             `json:"ano"`
+	Mes                  int             `json:"mes"`
+	IRPct                decimal.Decimal `json:"ir_pct"`
+	AdminPct             decimal.Decimal `json:"admin_pct"`
+	FreightPct           decimal.Decimal `json:"freight_pct"`
+	FinancialRateMonthly decimal.Decimal `json:"financial_rate_monthly"`
+	AvgSalesTermDays     int             `json:"avg_sales_term_days"`
+	AvgPurchaseTermDays  int             `json:"avg_purchase_term_days"`
+	ProductionCycleDays  int             `json:"production_cycle_days"`
+	MaterialPaymentDays  int             `json:"material_payment_days"`
+	LaborPaymentDays     int             `json:"labor_payment_days"`
+	IPIPaymentDays       int             `json:"ipi_payment_days"`
+	ICMSPaymentDays      int             `json:"icms_payment_days"`
+	PISPaymentDays       int             `json:"pis_payment_days"`
+	COFINSPaymentDays    int             `json:"cofins_payment_days"`
 }
 
 func (d parametrosDTO) paraEntidade() entity.Parametros {
@@ -59,8 +61,8 @@ func (d parametrosDTO) paraEntidade() entity.Parametros {
 func comCalculados(p entity.Parametros) map[string]any {
 	return map[string]any{
 		"ano": p.Ano, "mes": p.Mes,
-		"ir_pct": p.IRPct, "admin_pct": p.AdminPct, "freight_pct": p.FreightPct,
-		"financial_rate_monthly":  p.FinancialRateMonthly,
+		"ir_pct": p.IRPct.InexactFloat64(), "admin_pct": p.AdminPct.InexactFloat64(), "freight_pct": p.FreightPct.InexactFloat64(),
+		"financial_rate_monthly":  p.FinancialRateMonthly.InexactFloat64(),
 		"avg_sales_term_days":     p.AvgSalesTermDays,
 		"avg_purchase_term_days":  p.AvgPurchaseTermDays,
 		"production_cycle_days":   p.ProductionCycleDays,
@@ -71,7 +73,7 @@ func comCalculados(p entity.Parametros) map[string]any {
 		"pis_payment_days":        p.PISPaymentDays,
 		"cofins_payment_days":     p.COFINSPaymentDays,
 		"cash_cycle_days":         p.CicloDeCaixaDias(),
-		"real_financial_rate_pct": p.TaxaFinanceiraRealPct(),
+		"real_financial_rate_pct": p.TaxaFinanceiraRealPct().InexactFloat64(),
 	}
 }
 

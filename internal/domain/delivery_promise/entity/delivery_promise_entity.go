@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -19,8 +21,8 @@ type TankAllocation struct {
 	ItemCode       int64
 	Mask           string
 	AllocationDate time.Time
-	Quantity       float64
-	UnitPrice      float64
+	Quantity       decimal.Decimal
+	UnitPrice      decimal.Decimal
 	Source         string
 	ReferenceCode  *int64
 }
@@ -28,12 +30,12 @@ type TankAllocation struct {
 type TankOccupationDay struct {
 	TankCode        int64
 	Date            time.Time
-	Capacity        float64
-	Allocated       float64
-	Free            float64
-	OccupationPct   float64
-	Quantity        float64
-	ForecastRevenue float64
+	Capacity        decimal.Decimal
+	Allocated       decimal.Decimal
+	Free            decimal.Decimal
+	OccupationPct   decimal.Decimal
+	Quantity        decimal.Decimal
+	ForecastRevenue decimal.Decimal
 	Allocations     []TankAllocation
 	Warnings        []string
 }
@@ -45,8 +47,8 @@ type TankReservation struct {
 	ItemCode       int64
 	Mask           string
 	TankCode       int64
-	RequestedQty   float64
-	ReservedQty    float64
+	RequestedQty   decimal.Decimal
+	ReservedQty    decimal.Decimal
 	AllocationDate time.Time
 	ExpiresAt      time.Time
 	Status         TankReservationStatus

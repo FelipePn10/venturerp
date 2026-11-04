@@ -13,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_goal/repository"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
+	"github.com/shopspring/decimal"
 )
 
 type UseCase struct {
@@ -220,7 +221,7 @@ func goalFromCreate(dto request.CreateSalesGoalDTO) (*entity.Goal, error) {
 	if dto.RepresentativeCode == 0 || dto.PeriodCode == 0 {
 		return nil, errorsuc.NewValidationError("informe o representante e o período")
 	}
-	if dto.AwardPct < 0 {
+	if dto.AwardPct.IsNegative() {
 		return nil, errorsuc.NewValidationError("o percentual de premiação não pode ser negativo")
 	}
 	base := normalizeAnalysisBase(dto.AnalysisBase)
@@ -247,7 +248,7 @@ func goalItemFromDTO(dto request.SalesGoalItemDTO) (*entity.GoalItem, error) {
 	if dto.GoalCode == 0 {
 		return nil, errorsuc.NewValidationError("informe a meta")
 	}
-	if dto.TargetQuantity < 0 || dto.TargetValue < 0 || dto.BonusPct < 0 {
+	if dto.TargetQuantity.IsNegative() || dto.TargetValue.IsNegative() || dto.BonusPct.IsNegative() {
 		return nil, errorsuc.NewValidationError("as metas e os percentuais de bônus não podem ser negativos")
 	}
 	targetType := strings.ToUpper(strings.TrimSpace(dto.TargetType))
@@ -342,9 +343,9 @@ func parseDate(value string) (time.Time, error) {
 	return time.Parse("2006-01-02", strings.TrimSpace(value))
 }
 
-func hasNegative(values ...float64) bool {
+func hasNegative(values ...decimal.Decimal) bool {
 	for _, value := range values {
-		if value < 0 {
+		if value.IsNegative() {
 			return true
 		}
 	}

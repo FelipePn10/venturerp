@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/google/uuid"
 )
@@ -64,10 +66,10 @@ func TestAutoFillFromSalesOrder_Success(t *testing.T) {
 			Code:         100,
 			CarrierCode:  ptrInt64(5),
 			TotalVolumes: 3,
-			TotalWeight:  75.0,
+			TotalWeight:  decimal.NewFromFloat(75.0),
 			Items: []SalesOrderItemHeader{
-				{ItemCode: 1, RequestedQty: 10, UnitPrice: 25},
-				{ItemCode: 2, RequestedQty: 5, UnitPrice: 50},
+				{ItemCode: 1, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(25)},
+				{ItemCode: 2, RequestedQty: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(50)},
 			},
 		},
 	}
@@ -158,10 +160,10 @@ func TestAutoFillFromPurchaseOrder_Success(t *testing.T) {
 		resp: &PurchaseOrderHeader{
 			Code:        200,
 			CarrierCode: ptrInt64(8),
-			TotalWeight: 120.0,
+			TotalWeight: decimal.NewFromFloat(120.0),
 			Items: []PurchaseOrderItemHeader{
-				{ItemCode: 10, RequestedQty: 20, UnitPrice: 15},
-				{ItemCode: 11, RequestedQty: 5, UnitPrice: 30},
+				{ItemCode: 10, RequestedQty: decimal.NewFromFloat(20), UnitPrice: decimal.NewFromFloat(15)},
+				{ItemCode: 11, RequestedQty: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(30)},
 			},
 		},
 	}
@@ -193,11 +195,11 @@ func TestAutoFillFromProductionOrder_Success(t *testing.T) {
 		resp: &ProductionOrderHeader{
 			Code:        300,
 			ItemCode:    50,
-			PlannedQty:  0,
-			ProducedQty: 100,
+			PlannedQty:  decimal.NewFromFloat(0),
+			ProducedQty: decimal.NewFromFloat(100),
 			Items: []ProductionOrderItemHeader{
-				{ItemCode: 20, ConsumedQty: 50},
-				{ItemCode: 21, ConsumedQty: 25},
+				{ItemCode: 20, ConsumedQty: decimal.NewFromFloat(50)},
+				{ItemCode: 21, ConsumedQty: decimal.NewFromFloat(25)},
 			},
 		},
 	}
@@ -229,8 +231,8 @@ func TestAutoFillFromProductionOrder_FallsBackToPlannedQty(t *testing.T) {
 		resp: &ProductionOrderHeader{
 			Code:        301,
 			ItemCode:    51,
-			PlannedQty:  50,
-			ProducedQty: 0,
+			PlannedQty:  decimal.NewFromFloat(50),
+			ProducedQty: decimal.NewFromFloat(0),
 			Items:       []ProductionOrderItemHeader{},
 		},
 	}
@@ -240,7 +242,7 @@ func TestAutoFillFromProductionOrder_FallsBackToPlannedQty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if shipRepo.addedItem.Quantity != 50 {
+	if !shipRepo.addedItem.Quantity.Equal(decimal.NewFromFloat(50)) {
 		t.Errorf("quantity = %v, want 50 (planned)", shipRepo.addedItem.Quantity)
 	}
 }
@@ -257,9 +259,9 @@ func TestAutoFill_ReturnsFullShipment(t *testing.T) {
 			CarrierCode:      ptrInt64(7),
 			Status:           entity.ShipmentStatusOpen,
 			TotalVolumes:     2,
-			TotalGrossWeight: 80,
+			TotalGrossWeight: decimal.NewFromFloat(80),
 			Items: []*entity.ShipmentItem{
-				{ID: 1, ItemCode: 100, Quantity: 5},
+				{ID: 1, ItemCode: 100, Quantity: decimal.NewFromFloat(5)},
 			},
 		},
 	}
@@ -268,9 +270,9 @@ func TestAutoFill_ReturnsFullShipment(t *testing.T) {
 			Code:         102,
 			CarrierCode:  ptrInt64(7),
 			TotalVolumes: 2,
-			TotalWeight:  80,
+			TotalWeight:  decimal.NewFromFloat(80),
 			Items: []SalesOrderItemHeader{
-				{ItemCode: 100, RequestedQty: 5},
+				{ItemCode: 100, RequestedQty: decimal.NewFromFloat(5)},
 			},
 		},
 	}

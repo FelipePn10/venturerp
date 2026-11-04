@@ -3,16 +3,26 @@ package entity
 import (
 	"math"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
-func perto(a, b, tol float64) bool { return math.Abs(a-b) <= tol }
+func perto[T float64 | decimal.Decimal](a T, b, tol float64) bool {
+	switch v := any(a).(type) {
+	case decimal.Decimal:
+		return math.Abs(v.InexactFloat64()-b) <= tol
+	case float64:
+		return math.Abs(v-b) <= tol
+	}
+	return false
+}
 
 // TestTaxaFinanceiraRealConfereComOExemploDoFocco valida a fórmula contra o
 // exemplo publicado no help do FoccoERP (FCST0108): ciclo de caixa de 25 dias
 // com taxa de 3% ao mês resulta em 2,49%.
 func TestTaxaFinanceiraRealConfereComOExemploDoFocco(t *testing.T) {
 	p := Parametros{
-		FinancialRateMonthly: 3,
+		FinancialRateMonthly: decimal.NewFromFloat(3),
 		AvgSalesTermDays:     25, // ciclo de caixa = 25 - 0 + 0
 	}
 	if got := p.CicloDeCaixaDias(); got != 25 {
@@ -20,7 +30,7 @@ func TestTaxaFinanceiraRealConfereComOExemploDoFocco(t *testing.T) {
 	}
 	got := p.TaxaFinanceiraRealPct()
 	if !perto(got, 2.49, 0.01) {
-		t.Fatalf("taxa financeira real = %.4f%%, o help do FoccoERP documenta 2,49%%", got)
+		t.Fatalf("taxa financeira real = %v%%, o help do FoccoERP documenta 2,49%%", got)
 	}
 }
 
@@ -41,72 +51,72 @@ func TestCicloDeCaixaSomaProducaoESubtraiCompra(t *testing.T) {
 // TestCascataDaMargem confere a estrutura inteira com números redondos.
 func TestCascataDaMargem(t *testing.T) {
 	v := Venda{
-		Quantidade: 10, ValorLiquido: 100, // faturamento mercadoria = 1000
-		IPI: 50, ICMS: 180, PIS: 16.5, COFINS: 76,
-		CustoMateriaPrima: 400, CustoTransformacao: 150,
-		ComissaoValor: 30,
+		Quantidade: decimal.NewFromFloat(10), ValorLiquido: decimal.NewFromFloat(100), // faturamento mercadoria = 1000
+		IPI: decimal.NewFromFloat(50), ICMS: decimal.NewFromFloat(180), PIS: decimal.NewFromFloat(16.5), COFINS: decimal.NewFromFloat(76),
+		CustoMateriaPrima: decimal.NewFromFloat(400), CustoTransformacao: decimal.NewFromFloat(150),
+		ComissaoValor: decimal.NewFromFloat(30),
 	}
-	p := Parametros{IRPct: 34, AdminPct: 5, FreightPct: 2}
+	p := Parametros{IRPct: decimal.NewFromFloat(34), AdminPct: decimal.NewFromFloat(5), FreightPct: decimal.NewFromFloat(2)}
 
 	r := Calcular(v, p)
 
 	if !perto(r.FaturamentoBruto, 1050, 0.01) {
-		t.Fatalf("faturamento bruto = %.2f, esperado 1050 (10×100 + 50 de IPI)", r.FaturamentoBruto)
+		t.Fatalf("faturamento bruto = %v, esperado 1050 (10×100 + 50 de IPI)", r.FaturamentoBruto)
 	}
 	if !perto(r.FaturamentoMercadoria, 1000, 0.01) {
-		t.Fatalf("faturamento da mercadoria = %.2f, esperado 1000", r.FaturamentoMercadoria)
+		t.Fatalf("faturamento da mercadoria = %v, esperado 1000", r.FaturamentoMercadoria)
 	}
 	// 1000 − 180 − 92,50 − 400 − 150 = 177,50
 	if !perto(r.LucroBruto, 177.50, 0.01) {
-		t.Fatalf("lucro bruto = %.2f, esperado 177,50", r.LucroBruto)
+		t.Fatalf("lucro bruto = %v, esperado 177,50", r.LucroBruto)
 	}
 	if !perto(r.DespesaAdministrativa, 50, 0.01) || !perto(r.Frete, 20, 0.01) {
-		t.Fatalf("adm = %.2f (esperado 50), frete = %.2f (esperado 20)", r.DespesaAdministrativa, r.Frete)
+		t.Fatalf("adm = %v (esperado 50), frete = %v (esperado 20)", r.DespesaAdministrativa, r.Frete)
 	}
 	// 177,50 − 50 − 30 − 20 = 77,50 antes do IR
 	if !perto(r.ProvisaoIR, 26.35, 0.01) {
-		t.Fatalf("provisão de IR = %.2f, esperado 26,35 (34%% de 77,50)", r.ProvisaoIR)
+		t.Fatalf("provisão de IR = %v, esperado 26,35 (34%% de 77,50)", r.ProvisaoIR)
 	}
 	if !perto(r.Margem, 51.15, 0.01) {
-		t.Fatalf("margem = %.2f, esperado 51,15", r.Margem)
+		t.Fatalf("margem = %v, esperado 51,15", r.Margem)
 	}
 	if !perto(r.MargemPct, 5.115, 0.01) {
-		t.Fatalf("margem %% = %.3f, esperado 5,115%% sobre o faturamento da mercadoria", r.MargemPct)
+		t.Fatalf("margem %% = %v, esperado 5,115%% sobre o faturamento da mercadoria", r.MargemPct)
 	}
 }
 
 // TestPrejuizoNaoGeraProvisaoDeIR: não se provisiona imposto sobre prejuízo.
 func TestPrejuizoNaoGeraProvisaoDeIR(t *testing.T) {
-	v := Venda{Quantidade: 1, ValorLiquido: 100, CustoMateriaPrima: 300}
-	r := Calcular(v, Parametros{IRPct: 34})
-	if r.ProvisaoIR != 0 {
-		t.Fatalf("provisão de IR = %.2f sobre prejuízo, esperado 0", r.ProvisaoIR)
+	v := Venda{Quantidade: decimal.NewFromFloat(1), ValorLiquido: decimal.NewFromFloat(100), CustoMateriaPrima: decimal.NewFromFloat(300)}
+	r := Calcular(v, Parametros{IRPct: decimal.NewFromFloat(34)})
+	if !r.ProvisaoIR.IsZero() {
+		t.Fatalf("provisão de IR = %v sobre prejuízo, esperado 0", r.ProvisaoIR)
 	}
-	if r.Margem >= 0 {
-		t.Fatalf("margem = %.2f, esperada negativa", r.Margem)
+	if !r.Margem.IsNegative() {
+		t.Fatalf("margem = %v, esperada negativa", r.Margem)
 	}
 }
 
 // TestDespesaFinanceiraVemDoDescasamento: receber depois de pagar custa; o
 // contrário não vira receita na margem.
 func TestDespesaFinanceiraVemDoDescasamento(t *testing.T) {
-	v := Venda{Quantidade: 1, ValorLiquido: 1000, CustoMateriaPrima: 500}
+	v := Venda{Quantidade: decimal.NewFromFloat(1), ValorLiquido: decimal.NewFromFloat(1000), CustoMateriaPrima: decimal.NewFromFloat(500)}
 
 	// Recebe em 60 dias, paga a matéria-prima à vista: há custo financeiro.
-	comDescasamento := Calcular(v, Parametros{FinancialRateMonthly: 2, AvgSalesTermDays: 60})
-	if comDescasamento.DespesaFinanceira <= 0 {
-		t.Fatalf("despesa financeira = %.2f, esperada positiva", comDescasamento.DespesaFinanceira)
+	comDescasamento := Calcular(v, Parametros{FinancialRateMonthly: decimal.NewFromFloat(2), AvgSalesTermDays: 60})
+	if !comDescasamento.DespesaFinanceira.IsPositive() {
+		t.Fatalf("despesa financeira = %v, esperada positiva", comDescasamento.DespesaFinanceira)
 	}
 
 	// Recebe à vista e paga em 60: favorável, mas não vira receita.
-	favoravel := Calcular(v, Parametros{FinancialRateMonthly: 2, MaterialPaymentDays: 60})
-	if favoravel.DespesaFinanceira != 0 {
-		t.Fatalf("despesa financeira = %.2f, esperado 0 quando o caixa é favorável", favoravel.DespesaFinanceira)
+	favoravel := Calcular(v, Parametros{FinancialRateMonthly: decimal.NewFromFloat(2), MaterialPaymentDays: 60})
+	if !favoravel.DespesaFinanceira.IsZero() {
+		t.Fatalf("despesa financeira = %v, esperado 0 quando o caixa é favorável", favoravel.DespesaFinanceira)
 	}
 
 	// Sem taxa não há despesa financeira, qualquer que seja o prazo.
 	semTaxa := Calcular(v, Parametros{AvgSalesTermDays: 90})
-	if semTaxa.DespesaFinanceira != 0 {
-		t.Fatalf("sem taxa a despesa financeira deve ser 0, veio %.2f", semTaxa.DespesaFinanceira)
+	if !semTaxa.DespesaFinanceira.IsZero() {
+		t.Fatalf("sem taxa a despesa financeira deve ser 0, veio %v", semTaxa.DespesaFinanceira)
 	}
 }

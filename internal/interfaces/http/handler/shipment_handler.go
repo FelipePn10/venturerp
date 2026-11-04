@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
@@ -53,16 +55,16 @@ func actingUser(r *http.Request) uuid.UUID {
 }
 
 type createShipmentRequest struct {
-	ReferenceType       *string `json:"reference_type,omitempty"`
-	SalesOrderCode      *int64  `json:"sales_order_code,omitempty"`
-	PurchaseOrderCode   *int64  `json:"purchase_order_code,omitempty"`
-	ProductionOrderCode *int64  `json:"production_order_code,omitempty"`
-	CarrierCode         *int64  `json:"carrier_code,omitempty"`
-	TotalVolumes        int     `json:"total_volumes"`
-	TotalNetWeight      float64 `json:"total_net_weight"`
-	TotalGrossWeight    float64 `json:"total_gross_weight"`
-	TotalCubageM3       float64 `json:"total_cubage_m3"`
-	Notes               *string `json:"notes,omitempty"`
+	ReferenceType       *string         `json:"reference_type,omitempty"`
+	SalesOrderCode      *int64          `json:"sales_order_code,omitempty"`
+	PurchaseOrderCode   *int64          `json:"purchase_order_code,omitempty"`
+	ProductionOrderCode *int64          `json:"production_order_code,omitempty"`
+	CarrierCode         *int64          `json:"carrier_code,omitempty"`
+	TotalVolumes        int             `json:"total_volumes"`
+	TotalNetWeight      decimal.Decimal `json:"total_net_weight"`
+	TotalGrossWeight    decimal.Decimal `json:"total_gross_weight"`
+	TotalCubageM3       decimal.Decimal `json:"total_cubage_m3"`
+	Notes               *string         `json:"notes,omitempty"`
 }
 
 func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -95,14 +97,14 @@ func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 type addShipmentItemRequest struct {
-	Sequence           int     `json:"sequence"`
-	ItemCode           int64   `json:"item_code"`
-	SalesOrderItemCode *int64  `json:"sales_order_item_code,omitempty"`
-	WarehouseID        *int64  `json:"warehouse_id,omitempty"`
-	Quantity           float64 `json:"quantity"`
-	UnitNetWeight      float64 `json:"unit_net_weight"`
-	UnitGrossWeight    float64 `json:"unit_gross_weight"`
-	Notes              *string `json:"notes,omitempty"`
+	Sequence           int             `json:"sequence"`
+	ItemCode           int64           `json:"item_code"`
+	SalesOrderItemCode *int64          `json:"sales_order_item_code,omitempty"`
+	WarehouseID        *int64          `json:"warehouse_id,omitempty"`
+	Quantity           decimal.Decimal `json:"quantity"`
+	UnitNetWeight      decimal.Decimal `json:"unit_net_weight"`
+	UnitGrossWeight    decimal.Decimal `json:"unit_gross_weight"`
+	Notes              *string         `json:"notes,omitempty"`
 }
 
 func (h *ShipmentHandler) AddItem(w http.ResponseWriter, r *http.Request) {
@@ -512,8 +514,8 @@ func (h *ShipmentHandler) listByOrder(w http.ResponseWriter, r *http.Request, fn
 }
 
 type conferItemRequest struct {
-	ItemID       int64   `json:"item_id"`
-	ConferredQty float64 `json:"conferred_qty"`
+	ItemID       int64           `json:"item_id"`
+	ConferredQty decimal.Decimal `json:"conferred_qty"`
 }
 
 func (h *ShipmentHandler) ConferItem(w http.ResponseWriter, r *http.Request) {
@@ -574,16 +576,16 @@ func (h *ShipmentHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateTransportRequest struct {
-	CarrierCode       *int64  `json:"carrier_code,omitempty"`
-	FreightModality   *string `json:"freight_modality,omitempty"`
-	FreightValue      float64 `json:"freight_value"`
-	InsuranceValue    float64 `json:"insurance_value"`
-	VehiclePlate      *string `json:"vehicle_plate,omitempty"`
-	DriverName        *string `json:"driver_name,omitempty"`
-	DriverDocument    *string `json:"driver_document,omitempty"`
-	ANTTCode          *string `json:"antt_code,omitempty"`
-	Seals             *string `json:"seals,omitempty"`
-	EstimatedDelivery *string `json:"estimated_delivery,omitempty"` // YYYY-MM-DD
+	CarrierCode       *int64          `json:"carrier_code,omitempty"`
+	FreightModality   *string         `json:"freight_modality,omitempty"`
+	FreightValue      decimal.Decimal `json:"freight_value"`
+	InsuranceValue    decimal.Decimal `json:"insurance_value"`
+	VehiclePlate      *string         `json:"vehicle_plate,omitempty"`
+	DriverName        *string         `json:"driver_name,omitempty"`
+	DriverDocument    *string         `json:"driver_document,omitempty"`
+	ANTTCode          *string         `json:"antt_code,omitempty"`
+	Seals             *string         `json:"seals,omitempty"`
+	EstimatedDelivery *string         `json:"estimated_delivery,omitempty"` // YYYY-MM-DD
 }
 
 func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request) {
@@ -622,15 +624,15 @@ func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request
 }
 
 type addVolumeRequest struct {
-	VolumeNumber int     `json:"volume_number"`
-	PackageType  string  `json:"package_type"`
-	NetWeight    float64 `json:"net_weight"`
-	GrossWeight  float64 `json:"gross_weight"`
-	LengthCm     float64 `json:"length_cm"`
-	WidthCm      float64 `json:"width_cm"`
-	HeightCm     float64 `json:"height_cm"`
-	Marking      *string `json:"marking,omitempty"`
-	Contents     *string `json:"contents,omitempty"`
+	VolumeNumber int             `json:"volume_number"`
+	PackageType  string          `json:"package_type"`
+	NetWeight    decimal.Decimal `json:"net_weight"`
+	GrossWeight  decimal.Decimal `json:"gross_weight"`
+	LengthCm     decimal.Decimal `json:"length_cm"`
+	WidthCm      decimal.Decimal `json:"width_cm"`
+	HeightCm     decimal.Decimal `json:"height_cm"`
+	Marking      *string         `json:"marking,omitempty"`
+	Contents     *string         `json:"contents,omitempty"`
 }
 
 func (h *ShipmentHandler) AddVolume(w http.ResponseWriter, r *http.Request) {

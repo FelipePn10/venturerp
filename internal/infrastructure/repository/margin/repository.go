@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/shopspring/decimal"
 )
 
 type Repository struct{ pool *pgxpool.Pool }
@@ -213,13 +214,15 @@ func (r *Repository) GravarResultado(ctx context.Context, v VendaApurada, res en
 // As tags são o contrato da API: esta struct é devolvida direto pelo handler e,
 // sem elas, nota, item e data chegavam em PascalCase — a tela mostrava "0/0" e
 // data vazia porque procurava snake_case.
+// LinhaApurada é uma linha gravada da margem, em decimal. A resposta HTTP é
+// montada no caso de uso (margin_uc.LinhaApuradaJSON), com números.
 type LinhaApurada struct {
-	SourceID   int64   `json:"source_id"`
-	SourceItem int     `json:"source_item"`
-	IssueDate  string  `json:"issue_date"`
-	ItemCode   *int64  `json:"item_code,omitempty"`
-	Quantity   float64 `json:"quantity"`
-	CostBasis  string  `json:"cost_basis"`
+	SourceID   int64
+	SourceItem int
+	IssueDate  string
+	ItemCode   *int64
+	Quantity   decimal.Decimal
+	CostBasis  string
 	entity.Resultado
 }
 

@@ -94,16 +94,16 @@ func TestSalesOrderAdapter(t *testing.T) {
 	if h.Code != 42 {
 		t.Errorf("code = %d, want 42", h.Code)
 	}
-	if h.TotalGross != 1000.0 {
+	if !h.TotalGross.Equal(decimal.NewFromFloat(1000.0)) {
 		t.Errorf("total_gross = %v, want 1000", h.TotalGross)
 	}
-	if h.TotalNet != 850.0 {
+	if !h.TotalNet.Equal(decimal.NewFromFloat(850.0)) {
 		t.Errorf("total_net = %v, want 850", h.TotalNet)
 	}
 	if h.TotalVolumes != 3 {
 		t.Errorf("total_volumes = %d, want 3", h.TotalVolumes)
 	}
-	if h.TotalWeight != 120.0 {
+	if !h.TotalWeight.Equal(decimal.NewFromFloat(120.0)) {
 		t.Errorf("total_weight = %v, want 120", h.TotalWeight)
 	}
 	if len(h.Items) != 1 {
@@ -113,25 +113,25 @@ func TestSalesOrderAdapter(t *testing.T) {
 	if it.ItemCode != 100 {
 		t.Errorf("item_code = %d, want 100", it.ItemCode)
 	}
-	if it.RequestedQty != 10 {
+	if !it.RequestedQty.Equal(decimal.NewFromFloat(10)) {
 		t.Errorf("requested_qty = %v, want 10", it.RequestedQty)
 	}
-	if it.UnitPrice != 50 {
+	if !it.UnitPrice.Equal(decimal.NewFromFloat(50)) {
 		t.Errorf("unit_price = %v, want 50", it.UnitPrice)
 	}
-	if it.IPIPct != 5 {
+	if !it.IPIPct.Equal(decimal.NewFromFloat(5)) {
 		t.Errorf("ipi_pct = %v, want 5", it.IPIPct)
 	}
-	if it.ICMSPct != 18 {
+	if !it.ICMSPct.Equal(decimal.NewFromFloat(18)) {
 		t.Errorf("icms_pct = %v, want 18", it.ICMSPct)
 	}
-	if it.PISPct != 1.65 {
+	if !it.PISPct.Equal(decimal.NewFromFloat(1.65)) {
 		t.Errorf("pis_pct = %v, want 1.65", it.PISPct)
 	}
-	if it.UnitWeightNet != 2.5 {
+	if !it.UnitWeightNet.Equal(decimal.NewFromFloat(2.5)) {
 		t.Errorf("weight_net = %v, want 2.5", it.UnitWeightNet)
 	}
-	if it.UnitWeightGross != 3.0 {
+	if !it.UnitWeightGross.Equal(decimal.NewFromFloat(3.0)) {
 		t.Errorf("weight_gross = %v, want 3.0", it.UnitWeightGross)
 	}
 }
@@ -167,7 +167,7 @@ func TestPurchaseOrderAdapter(t *testing.T) {
 	if h.Code != 55 {
 		t.Errorf("code = %d, want 55", h.Code)
 	}
-	if h.TotalWeight != 0 {
+	if !h.TotalWeight.Equal(decimal.NewFromFloat(0)) {
 		t.Errorf("total_weight = %v, want 0 (o frete de R$ 200 não é peso)", h.TotalWeight)
 	}
 	if len(h.Items) != 1 {
@@ -177,19 +177,19 @@ func TestPurchaseOrderAdapter(t *testing.T) {
 	if it.ItemCode != 500 {
 		t.Errorf("item_code = %d, want 500", it.ItemCode)
 	}
-	if it.RequestedQty != 100 {
+	if !it.RequestedQty.Equal(decimal.NewFromFloat(100)) {
 		t.Errorf("requested_qty = %v, want 100", it.RequestedQty)
 	}
-	if it.UnitPrice != 15.50 {
+	if !it.UnitPrice.Equal(decimal.NewFromFloat(15.50)) {
 		t.Errorf("unit_price = %v, want 15.50", it.UnitPrice)
 	}
-	if it.TotalPrice != 1550.00 {
+	if !it.TotalPrice.Equal(decimal.NewFromFloat(1550.00)) {
 		t.Errorf("total_price = %v, want 1550", it.TotalPrice)
 	}
-	if it.IPIPct != 4 {
+	if !it.IPIPct.Equal(decimal.NewFromFloat(4)) {
 		t.Errorf("ipi_pct = %v, want 4", it.IPIPct)
 	}
-	if it.ICMSPct != 12 {
+	if !it.ICMSPct.Equal(decimal.NewFromFloat(12)) {
 		t.Errorf("icms_pct = %v, want 12", it.ICMSPct)
 	}
 }
@@ -219,10 +219,10 @@ func TestProductionOrderAdapter(t *testing.T) {
 	if h.ItemCode != 700 {
 		t.Errorf("item_code = %d, want 700", h.ItemCode)
 	}
-	if h.PlannedQty != 50 {
+	if !h.PlannedQty.Equal(decimal.NewFromFloat(50)) {
 		t.Errorf("planned_qty = %v, want 50", h.PlannedQty)
 	}
-	if h.ProducedQty != 48 {
+	if !h.ProducedQty.Equal(decimal.NewFromFloat(48)) {
 		t.Errorf("produced_qty = %v, want 48", h.ProducedQty)
 	}
 }

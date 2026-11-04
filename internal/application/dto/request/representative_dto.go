@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 type CreateRepresentativeTypeDTO struct {
 	Description          string `json:"description"`
 	IsFree               bool   `json:"is_free"`
@@ -67,13 +69,13 @@ type BlockRepresentativeDTO struct {
 }
 
 type RepresentativeEnterpriseDTO struct {
-	RepresentativeCode    int64   `json:"representative_code"`
-	EnterpriseCode        int64   `json:"enterprise_code"`
-	EnterpriseName        *string `json:"enterprise_name,omitempty"`
-	CommissionPatternCode *int64  `json:"commission_pattern_code,omitempty"`
-	CommissionPct         float64 `json:"commission_pct"`
-	IsDefault             bool    `json:"is_default"`
-	IsActive              bool    `json:"is_active"`
+	RepresentativeCode    int64           `json:"representative_code"`
+	EnterpriseCode        int64           `json:"enterprise_code"`
+	EnterpriseName        *string         `json:"enterprise_name,omitempty"`
+	CommissionPatternCode *int64          `json:"commission_pattern_code,omitempty"`
+	CommissionPct         decimal.Decimal `json:"commission_pct"`
+	IsDefault             bool            `json:"is_default"`
+	IsActive              bool            `json:"is_active"`
 }
 
 type RepresentativeAccountingDTO struct {
