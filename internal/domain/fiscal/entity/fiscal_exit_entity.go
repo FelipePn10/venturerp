@@ -180,7 +180,7 @@ type FiscalExitItem struct {
 // ReformaEnviada é o retrato do grupo IBS/CBS que a linha levou à SEFAZ.
 type ReformaEnviada struct {
 	CST, ClassTrib, Origem string
-	Base, IBSUF, IBSMun    *float64
-	CBS                    *float64
-	AliqEfetivaCBS         *float64
+	Base, IBSUF, IBSMun    *decimal.Decimal
+	CBS                    *decimal.Decimal
+	AliqEfetivaCBS         *decimal.Decimal
 }

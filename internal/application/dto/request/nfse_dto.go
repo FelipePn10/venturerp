@@ -1,5 +1,7 @@
 package request
 
+import "github.com/shopspring/decimal"
+
 // CreateNFSeDTO registers a service invoice (NFS-e) in draft, ready to be
 // authorized at the city hall via Focus.
 type CreateNFSeDTO struct {
@@ -24,14 +26,14 @@ type CreateNFSeDTO struct {
 	TomadorCEP             *string `json:"tomador_cep,omitempty"`
 
 	// Serviço
-	ItemListaServico          string  `json:"item_lista_servico"`
-	CodigoTributarioMunicipio *string `json:"codigo_tributario_municipio,omitempty"`
-	Discriminacao             string  `json:"discriminacao"`
-	CodigoMunicipio           string  `json:"codigo_municipio"`
-	ValorServicos             float64 `json:"valor_servicos"`
-	ValorDeducoes             float64 `json:"valor_deducoes"`
-	AliquotaISS               float64 `json:"aliquota_iss"`
-	IssRetido                 bool    `json:"iss_retido"`
+	ItemListaServico          string          `json:"item_lista_servico"`
+	CodigoTributarioMunicipio *string         `json:"codigo_tributario_municipio,omitempty"`
+	Discriminacao             string          `json:"discriminacao"`
+	CodigoMunicipio           string          `json:"codigo_municipio"`
+	ValorServicos             decimal.Decimal `json:"valor_servicos"`
+	ValorDeducoes             decimal.Decimal `json:"valor_deducoes"`
+	AliquotaISS               decimal.Decimal `json:"aliquota_iss"`
+	IssRetido                 bool            `json:"iss_retido"`
 
 	SalesOrderCode *int64  `json:"sales_order_code,omitempty"`
 	Notes          *string `json:"notes,omitempty"`

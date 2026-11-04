@@ -1,8 +1,10 @@
 package entity
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
@@ -26,45 +28,45 @@ type FiscalClassification struct {
 	NCM          *string
 	CEST         *string
 	// IPI
-	IPIRate       float64
+	IPIRate       decimal.Decimal
 	IPIIndicator  RateIndicator
 	Apuracao      *string
 	CSTIPIEntrada *string
 	CSTIPISaida   *string
 	// PIS
-	PISRate       float64
+	PISRate       decimal.Decimal
 	PISIndicator  RateIndicator
 	CSTPISEntrada *string
 	CSTPISSaida   *string
 	// COFINS
-	COFINSRate        float64
+	COFINSRate        decimal.Decimal
 	COFINSIndicator   RateIndicator
 	CSTCOFINSEntrada  *string
 	CSTCOFINSSaida    *string
-	COFINSMajoradoPct float64
+	COFINSMajoradoPct decimal.Decimal
 	// Substituição tributária
-	PISSTPct    float64
-	COFINSSTPct float64
+	PISSTPct    decimal.Decimal
+	COFINSSTPct decimal.Decimal
 	// Consumo
-	PISConsumoPct           float64
+	PISConsumoPct           decimal.Decimal
 	CSTPISConsumoEntrada    *string
 	CSTPISConsumoSaida      *string
-	COFINSConsumoPct        float64
+	COFINSConsumoPct        decimal.Decimal
 	CSTCOFINSConsumoEntrada *string
 	CSTCOFINSConsumoSaida   *string
 	// Retenção
-	PISRetencaoPct    float64
+	PISRetencaoPct    decimal.Decimal
 	CSTPISRetencao    *string
-	COFINSRetencaoPct float64
+	COFINSRetencaoPct decimal.Decimal
 	CSTCOFINSRetencao *string
 	// Redução
-	PISReducaoPct    float64
+	PISReducaoPct    decimal.Decimal
 	CSTPISReducao    *string
-	COFINSReducaoPct float64
+	COFINSReducaoPct decimal.Decimal
 	CSTCOFINSReducao *string
 	// Zona Franca
-	DescPISZFPct    float64
-	DescCOFINSZFPct float64
+	DescPISZFPct    decimal.Decimal
+	DescCOFINSZFPct decimal.Decimal
 	// Outros
 	ExTarifario               *string
 	UNIPI                     *string
@@ -77,7 +79,7 @@ type FiscalClassification struct {
 	ValidFrom                 *time.Time
 	ValidUntil                *time.Time
 	DefaultOrigin             *string
-	DefaultICMSRate           float64
+	DefaultICMSRate           decimal.Decimal
 	DefaultCalculatePISCOFINS bool
 	IsActive                  bool
 	CreatedAt                 time.Time

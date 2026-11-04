@@ -26,34 +26,34 @@ func near[T float64 | decimal.Decimal](t *testing.T, label string, want float64,
 func defaultFiscalConfig() FiscalConfig {
 	return FiscalConfig{
 		UFEmpresa:                 "PR",
-		IcmsInternoAliquota:       0.12,
-		IcmsDiferimentoPercentual: 0.3846, // fração, como a configuração guarda
+		IcmsInternoAliquota:       decimal.NewFromFloat(0.12),
+		IcmsDiferimentoPercentual: decimal.NewFromFloat(0.3846), // fração, como a configuração guarda
 	}
 }
 
 func defaultNcmTable() map[string]*NcmTaxConfig {
 	return map[string]*NcmTaxConfig{
 		"84714900": {
-			AliqIPI:    0.05,
-			AliqPis:    0.0165,
-			AliqCofins: 0.076,
+			AliqIPI:    decimal.NewFromFloat(0.05),
+			AliqPis:    decimal.NewFromFloat(0.0165),
+			AliqCofins: decimal.NewFromFloat(0.076),
 			CstPis:     "01",
 			CstCofins:  "01",
 			CstIPI:     "50",
 		},
 		"22021000": {
-			AliqIPI:    0.10,
-			AliqPis:    0.0165,
-			AliqCofins: 0.076,
+			AliqIPI:    decimal.NewFromFloat(0.10),
+			AliqPis:    decimal.NewFromFloat(0.0165),
+			AliqCofins: decimal.NewFromFloat(0.076),
 			CstPis:     "01",
 			CstCofins:  "01",
 			CstIPI:     "50",
 		},
 		// NCM monofásico PIS/COFINS zero
 		"27101259": {
-			AliqIPI:    0,
-			AliqPis:    0,
-			AliqCofins: 0,
+			AliqIPI:    decimal.NewFromFloat(0),
+			AliqPis:    decimal.NewFromFloat(0),
+			AliqCofins: decimal.NewFromFloat(0),
 			CstPis:     "04",
 			CstCofins:  "04",
 			CstIPI:     "53",
@@ -61,27 +61,27 @@ func defaultNcmTable() map[string]*NcmTaxConfig {
 	}
 }
 
-func defaultInterstateTable() map[string]float64 {
-	return map[string]float64{
-		"PRSP": 0.12,
-		"PRSC": 0.12,
-		"PRRS": 0.12,
-		"PRGO": 0.07,
-		"PRBA": 0.07,
-		"PRCE": 0.07,
-		"PRPA": 0.07,
+func defaultInterstateTable() map[string]decimal.Decimal {
+	return map[string]decimal.Decimal{
+		"PRSP": decimal.RequireFromString("0.12"),
+		"PRSC": decimal.RequireFromString("0.12"),
+		"PRRS": decimal.RequireFromString("0.12"),
+		"PRGO": decimal.RequireFromString("0.07"),
+		"PRBA": decimal.RequireFromString("0.07"),
+		"PRCE": decimal.RequireFromString("0.07"),
+		"PRPA": decimal.RequireFromString("0.07"),
 	}
 }
 
 func defaultInternalTable() map[string]ICMSInternalConfig {
 	return map[string]ICMSInternalConfig{
-		"SP": {ICMS: 0.18, FCP: 0},
-		"SC": {ICMS: 0.17, FCP: 0},
-		"GO": {ICMS: 0.17, FCP: 0.02},
-		"BA": {ICMS: 0.19, FCP: 0.02},
-		"PA": {ICMS: 0.17, FCP: 0.02},
-		"CE": {ICMS: 0.18, FCP: 0.02},
-		"PR": {ICMS: 0.12, FCP: 0},
+		"SP": {ICMS: decimal.NewFromFloat(0.18), FCP: decimal.NewFromFloat(0)},
+		"SC": {ICMS: decimal.NewFromFloat(0.17), FCP: decimal.NewFromFloat(0)},
+		"GO": {ICMS: decimal.NewFromFloat(0.17), FCP: decimal.NewFromFloat(0.02)},
+		"BA": {ICMS: decimal.NewFromFloat(0.19), FCP: decimal.NewFromFloat(0.02)},
+		"PA": {ICMS: decimal.NewFromFloat(0.17), FCP: decimal.NewFromFloat(0.02)},
+		"CE": {ICMS: decimal.NewFromFloat(0.18), FCP: decimal.NewFromFloat(0.02)},
+		"PR": {ICMS: decimal.NewFromFloat(0.12), FCP: decimal.NewFromFloat(0)},
 	}
 }
 
@@ -744,7 +744,7 @@ func TestScenario_CenarioString(t *testing.T) {
 // com 0% fazia a SEFAZ do PR exigir o código de benefício (rejeição 930).
 func TestScenario_IntraState_Contributor_SemDiferimento_CST00(t *testing.T) {
 	cfg := defaultFiscalConfig()
-	cfg.IcmsDiferimentoPercentual = 0
+	cfg.IcmsDiferimentoPercentual = decimal.NewFromFloat(0)
 	params := TaxCalculationParams{Itens: []TaxItem{{Ncm: "84714900", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1)}},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101"}
 	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, cfg)
@@ -760,7 +760,7 @@ func TestScenario_IntraState_Contributor_SemDiferimento_CST00(t *testing.T) {
 // diferimento dividido de novo.
 func TestFracaoDiferimento(t *testing.T) {
 	for _, c := range []struct{ in, want float64 }{{0.3846, 0.3846}, {38.46, 0.3846}, {0, 0}, {-1, 0}} {
-		if got, _ := FracaoDiferimento(c.in).Float64(); math.Abs(got-c.want) > 1e-9 {
+		if got, _ := FracaoDiferimento(decimal.NewFromFloat(c.in)).Float64(); math.Abs(got-c.want) > 1e-9 {
 			t.Errorf("FracaoDiferimento(%v) = %v, quer %v", c.in, got, c.want)
 		}
 	}
@@ -774,7 +774,7 @@ func TestAliquotaInternaVemDaTabelaDaUF(t *testing.T) {
 		EmitenteUF: "SP", DestinoUF: "SP", DestinoTipo: "contribuinte", Cfop: "5102",
 	}
 	cfg := defaultFiscalConfig()
-	cfg.UFEmpresa, cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual = "SP", 0.195, 0
+	cfg.UFEmpresa, cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual = "SP", decimal.NewFromFloat(0.195), decimal.NewFromFloat(0)
 	res, err := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, cfg)
 	if err != nil {
 		t.Fatal(err)

@@ -29,7 +29,7 @@ func TestNormalizarNCM(t *testing.T) {
 // O teste cobre as duas direções, porque arrumar só uma deixaria metade do defeito.
 func TestMascaraDoNCMNaoDecideSeOItemETributado(t *testing.T) {
 	tributacao := &NcmTaxConfig{
-		AliqIPI: 0.05, AliqPis: 0.0165, AliqCofins: 0.076,
+		AliqIPI: decimal.NewFromFloat(0.05), AliqPis: decimal.NewFromFloat(0.0165), AliqCofins: decimal.NewFromFloat(0.076),
 		CstPis: "01", CstCofins: "01", CstIPI: "50",
 	}
 
@@ -78,7 +78,7 @@ func TestNCMAusenteContinuaSemTributacaoDaTabela(t *testing.T) {
 		Itens:      []TaxItem{{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(100), Quantidade: decimal.NewFromFloat(10)}},
 		EmitenteUF: "PR", DestinoUF: "PR", DestinoTipo: "contribuinte", Cfop: "5101",
 	}
-	tabela := map[string]*NcmTaxConfig{"8471.49.00": {AliqIPI: 0.05, CstIPI: "50"}}
+	tabela := map[string]*NcmTaxConfig{"8471.49.00": {AliqIPI: decimal.NewFromFloat(0.05), CstIPI: "50"}}
 
 	res, err := CalcularImpostos(params, tabela, defaultInterstateTable(),
 		defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
@@ -92,8 +92,8 @@ func TestNCMAusenteContinuaSemTributacaoDaTabela(t *testing.T) {
 // ordem de iteração do mapa (que em Go é aleatória).
 func TestTabelaComMascaraDuplicadaEDeterministica(t *testing.T) {
 	tabela := map[string]*NcmTaxConfig{
-		"8471.49.00": {AliqIPI: 0.05, CstIPI: "50"},
-		"84714900":   {AliqIPI: 0.10, CstIPI: "50"},
+		"8471.49.00": {AliqIPI: decimal.NewFromFloat(0.05), CstIPI: "50"},
+		"84714900":   {AliqIPI: decimal.NewFromFloat(0.10), CstIPI: "50"},
 	}
 	primeira := NormalizarTabelaNCM(tabela)["84714900"].AliqIPI
 	for i := 0; i < 50; i++ {

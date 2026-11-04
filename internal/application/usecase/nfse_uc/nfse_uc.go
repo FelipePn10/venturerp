@@ -17,7 +17,6 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
-	"github.com/shopspring/decimal"
 )
 
 // ConfigProvider supplies the fiscal config (Focus token + prestador data).
@@ -40,7 +39,7 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 	if err != nil {
 		return nil, err
 	}
-	if dto.ValorServicos <= 0 {
+	if !dto.ValorServicos.IsPositive() {
 		return nil, errorsuc.NewValidationError("valor_servicos deve ser maior que zero")
 	}
 	if dto.ItemListaServico == "" {
@@ -59,10 +58,10 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 	}
 
 	// Base de cálculo do ISS = valor dos serviços − deduções; ISS = base × alíquota.
-	base := decimal.NewFromFloat(dto.ValorServicos).Sub(decimal.NewFromFloat(dto.ValorDeducoes))
-	valorISS := base.Mul(decimal.NewFromFloat(dto.AliquotaISS)).Round(2)
+	base := dto.ValorServicos.Sub(dto.ValorDeducoes)
+	valorISS := base.Mul(dto.AliquotaISS).Round(2)
 	// Valor líquido: se ISS retido, é descontado do valor dos serviços.
-	liquido := decimal.NewFromFloat(dto.ValorServicos)
+	liquido := dto.ValorServicos
 	if dto.IssRetido {
 		liquido = liquido.Sub(valorISS)
 	}
@@ -75,9 +74,6 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 	if natOp == 0 {
 		natOp = 1
 	}
-
-	valorISSf, _ := valorISS.Float64()
-	liquidof, _ := liquido.Float64()
 
 	n := &entity.NFSe{
 		NumeroRPS:                 dto.NumeroRPS,
@@ -106,8 +102,8 @@ func (uc *CreateNFSeUseCase) Execute(ctx context.Context, dto request.CreateNFSe
 		ValorDeducoes:             dto.ValorDeducoes,
 		AliquotaISS:               dto.AliquotaISS,
 		IssRetido:                 dto.IssRetido,
-		ValorISS:                  valorISSf,
-		ValorLiquido:              liquidof,
+		ValorISS:                  valorISS,
+		ValorLiquido:              liquido,
 		SalesOrderCode:            dto.SalesOrderCode,
 		Notes:                     dto.Notes,
 		CreatedBy:                 userID,
@@ -170,11 +166,11 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 		CodigoTributarioMunicipio: deref(n.CodigoTributarioMunicipio),
 		Discriminacao:             n.Discriminacao,
 		CodigoMunicipio:           n.CodigoMunicipio,
-		ValorServicos:             n.ValorServicos,
-		ValorDeducoes:             n.ValorDeducoes,
-		AliquotaISS:               n.AliquotaISS,
+		ValorServicos:             n.ValorServicos.InexactFloat64(),
+		ValorDeducoes:             n.ValorDeducoes.InexactFloat64(),
+		AliquotaISS:               n.AliquotaISS.InexactFloat64(),
 		IssRetido:                 n.IssRetido,
-		ValorIss:                  n.ValorISS,
+		ValorIss:                  n.ValorISS.InexactFloat64(),
 	}
 	// Tomador document: CNPJ (14) or CPF (11).
 	if n.TomadorCnpjCpf != nil {

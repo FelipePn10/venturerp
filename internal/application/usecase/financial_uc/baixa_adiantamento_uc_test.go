@@ -3,10 +3,11 @@ package financial_uc
 import (
 	"context"
 	"errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -178,7 +179,7 @@ func TestBaixarContaPagar_LateAccruesInterestAndFineWithDefaults(t *testing.T) {
 func TestBaixarContaPagar_LateUsesConfiguredRates(t *testing.T) {
 	venc := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	repo := &fakeFinRepo{cp: contaPagar(entity.ContaPagarStatusPendente, 1000, venc)}
-	cfg := &fiscalentity.FiscalConfig{JurosMes: 0.02, MultaAtraso: 0.05}
+	cfg := &fiscalentity.FiscalConfig{JurosMes: decimal.NewFromFloat(0.02), MultaAtraso: decimal.NewFromFloat(0.05)}
 	uc := BaixarContaPagarUseCase{Repo: repo, FiscalRepo: fakeFiscalRepo{cfg: cfg}, Auth: fakeFinAuth{canPagar: true, uid: uuid.New()}}
 
 	// 30 days late → juros = 1000*0.02*1 = 20; multa = 1000*0.05 = 50.

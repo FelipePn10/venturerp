@@ -174,22 +174,22 @@ func (uc *SugestaoItemEntradaUseCase) preencherAliquotas(ctx context.Context, uf
 	if ufEmitente == "" || ufEmitente == "EX" || ufEmpresa == "" {
 		return nil
 	}
-	var aliq *float64
+	var aliq *decimal.Decimal
 	switch {
 	case ufEmitente == ufEmpresa:
 		if aliq, _, err = uc.Fiscal.GetICMSInternal(ctx, ufEmitente); err != nil {
 			return err
 		}
 	case origemImportada(item.Origem):
-		quatro := 0.04
+		quatro := decimal.New(4, -2)
 		aliq = &quatro
 	default:
 		if aliq, err = uc.Fiscal.GetICMSInterstate(ctx, ufEmitente, ufEmpresa); err != nil {
 			return err
 		}
 	}
-	if aliq != nil && *aliq > 0 {
-		v := decimal.NewFromFloat(*aliq).Mul(cem).Round(4).InexactFloat64()
+	if aliq != nil && aliq.IsPositive() {
+		v := aliq.Mul(cem).Round(4).InexactFloat64()
 		out.AliqICMS = &v
 	}
 	return nil

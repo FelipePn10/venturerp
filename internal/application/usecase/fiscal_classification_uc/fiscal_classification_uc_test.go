@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal_classification/entity"
@@ -56,11 +58,11 @@ func TestCreateFiscalClassificationUsesAuthenticatedEnterpriseAndDefaults(t *tes
 	uc := NewFiscalClassificationUseCase(repo, fiscalAuth{})
 	origin := "0"
 	ncm := "73269090"
-	result, err := uc.Create(context.Background(), request.CreateFiscalClassificationDTO{FiscalClassificationFields: request.FiscalClassificationFields{Description: "COMPONENTES METALICOS", NCM: &ncm, DefaultOrigin: &origin, DefaultICMSRate: 18, DefaultCalculatePISCOFINS: true}, CreatedBy: uuid.New()})
+	result, err := uc.Create(context.Background(), request.CreateFiscalClassificationDTO{FiscalClassificationFields: request.FiscalClassificationFields{Description: "COMPONENTES METALICOS", NCM: &ncm, DefaultOrigin: &origin, DefaultICMSRate: decimal.NewFromFloat(18), DefaultCalculatePISCOFINS: true}, CreatedBy: uuid.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Code != 7 || repo.nextTenant != 19 || repo.saved.EnterpriseID != 19 || repo.saved.DefaultICMSRate != 18 || !repo.saved.DefaultCalculatePISCOFINS {
+	if result.Code != 7 || repo.nextTenant != 19 || repo.saved.EnterpriseID != 19 || !repo.saved.DefaultICMSRate.Equal(decimal.NewFromFloat(18)) || !repo.saved.DefaultCalculatePISCOFINS {
 		t.Fatalf("classificacao incorreta: %#v", repo.saved)
 	}
 }

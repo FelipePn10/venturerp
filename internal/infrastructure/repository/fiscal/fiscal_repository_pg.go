@@ -3,10 +3,12 @@ package fiscal
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/jackc/pgx/v5/pgconn"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -401,7 +403,7 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        base_icms_st, aliq_icms_st, valor_icms_st, mva,
 		        unidade_comercial, codigo_produto, created_at, sales_order_item_code, fiscal_entry_item_id,
 		        codigo_beneficio_fiscal, ibscbs_cclass_trib, ibscbs_cst_enviado, ibscbs_cclass_enviado, ibscbs_origem,
-		        ibscbs_base::float8, ibs_uf_valor::float8, ibs_mun_valor::float8, cbs_valor::float8, cbs_aliquota_efetiva::float8,
+		        ibscbs_base, ibs_uf_valor, ibs_mun_valor, cbs_valor, cbs_aliquota_efetiva,
 		        regra_icms_ipi_id,
 		        icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
 		        icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor,
@@ -646,7 +648,7 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        COALESCE(cep,''), telefone,
 		        logo, logo_mime, brand_color,
 		        created_at, updated_at, updated_by,
-		        exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao
+		        exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao
 		 FROM public.fiscal_configs WHERE enterprise_id=$1`, enterpriseID,
 	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
@@ -713,7 +715,7 @@ func (r *FiscalRepositoryPG) UpdateFiscalConfig(ctx context.Context, cfg *entity
 		           COALESCE(bairro,''), COALESCE(municipio,''), COALESCE(codigo_municipio,''),
 		           COALESCE(cep,''), telefone,
 		           created_at, updated_at, updated_by,
-		           exigir_regra_icms_ipi, aliquota_credito_simples::float8, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao`,
+		           exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao`,
 		cfg.EnterpriseID, cfg.CnpjEmpresa, cfg.RazaoSocial, cfg.TradeName, cfg.Email, cfg.IEEmpresa, cfg.RegimeTributario, cfg.UFEmpresa,
 		cfg.IcmsInternoAliquota, cfg.IcmsDiferimentoPercentual,
 		cfg.FocusNfeToken, cfg.FocusNfeAmbiente, cfg.JurosMes, cfg.MultaAtraso,
@@ -848,8 +850,8 @@ func (r *FiscalRepositoryPG) ListTaxScenarios(ctx context.Context) ([]*entity.Ta
 
 // ---------- ICMS Tables ----------
 
-func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, destUF string) (*float64, error) {
-	var aliq float64
+func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, destUF string) (*decimal.Decimal, error) {
+	var aliq decimal.Decimal
 	err := r.db.QueryRow(ctx,
 		`SELECT aliq_icms FROM public.icms_interstate WHERE origin_uf = $1 AND destination_uf = $2 AND is_active = TRUE`,
 		originUF, destUF,
@@ -863,8 +865,8 @@ func (r *FiscalRepositoryPG) GetICMSInterstate(ctx context.Context, originUF, de
 	return &aliq, nil
 }
 
-func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*float64, *float64, error) {
-	var aliqICMS, aliqFCP float64
+func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*decimal.Decimal, *decimal.Decimal, error) {
+	var aliqICMS, aliqFCP decimal.Decimal
 	err := r.db.QueryRow(ctx,
 		`SELECT aliq_icms, aliq_fcp FROM public.icms_internal WHERE uf = $1 AND is_active = TRUE`, uf,
 	).Scan(&aliqICMS, &aliqFCP)
@@ -877,7 +879,7 @@ func (r *FiscalRepositoryPG) GetICMSInternal(ctx context.Context, uf string) (*f
 	return &aliqICMS, &aliqFCP, nil
 }
 
-func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string]float64, error) {
+func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string]decimal.Decimal, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT origin_uf, destination_uf, aliq_icms FROM public.icms_interstate WHERE is_active = TRUE`)
 	if err != nil {
@@ -885,10 +887,10 @@ func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string
 	}
 	defer rows.Close()
 
-	result := make(map[string]float64)
+	result := make(map[string]decimal.Decimal)
 	for rows.Next() {
 		var origin, dest string
-		var aliq float64
+		var aliq decimal.Decimal
 		if err := rows.Scan(&origin, &dest, &aliq); err != nil {
 			return nil, fmt.Errorf("scanning ICMS interstate: %w", err)
 		}
@@ -897,7 +899,7 @@ func (r *FiscalRepositoryPG) ListICMSInterstate(ctx context.Context) (map[string
 	return result, rows.Err()
 }
 
-func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP float64 }, error) {
+func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP decimal.Decimal }, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT uf, aliq_icms, aliq_fcp FROM public.icms_internal WHERE is_active = TRUE`)
 	if err != nil {
@@ -905,14 +907,14 @@ func (r *FiscalRepositoryPG) ListICMSInternal(ctx context.Context) (map[string]s
 	}
 	defer rows.Close()
 
-	result := make(map[string]struct{ ICMS, FCP float64 })
+	result := make(map[string]struct{ ICMS, FCP decimal.Decimal })
 	for rows.Next() {
 		var uf string
-		var icms, fcp float64
+		var icms, fcp decimal.Decimal
 		if err := rows.Scan(&uf, &icms, &fcp); err != nil {
 			return nil, fmt.Errorf("scanning ICMS internal: %w", err)
 		}
-		result[uf] = struct{ ICMS, FCP float64 }{ICMS: icms, FCP: fcp}
+		result[uf] = struct{ ICMS, FCP decimal.Decimal }{ICMS: icms, FCP: fcp}
 	}
 	return result, rows.Err()
 }
@@ -1174,7 +1176,7 @@ func (r *FiscalRepositoryPG) DeleteNcmTax(ctx context.Context, ncm string) error
 
 // ---------- ICMS table write operations ----------
 
-func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq float64) error {
+func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq decimal.Decimal) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO public.icms_interstate (origin_uf, destination_uf, aliq_icms, is_active)
 		 VALUES ($1, $2, $3, true)
@@ -1186,7 +1188,7 @@ func (r *FiscalRepositoryPG) UpsertICMSInterstate(ctx context.Context, originUF,
 	return nil
 }
 
-func (r *FiscalRepositoryPG) UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP float64) error {
+func (r *FiscalRepositoryPG) UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP decimal.Decimal) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO public.icms_internal (uf, aliq_icms, aliq_fcp, is_active)
 		 VALUES ($1, $2, $3, true)

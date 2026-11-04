@@ -120,7 +120,7 @@ func TestBuildFocusItems_DiferimentoCST51(t *testing.T) {
 		CstICMS:           strp("51"),
 		ValorICMSDiferido: decimal.NewFromFloat(12),
 	}}
-	cfg := &fiscalentity.FiscalConfig{IcmsDiferimentoPercentual: 0.33}
+	cfg := &fiscalentity.FiscalConfig{IcmsDiferimentoPercentual: decimal.NewFromFloat(0.33)}
 	out := buildFocusItems(items, cfg)
 	it := out[0]
 	if it.PercentualDiferimento == nil || *it.PercentualDiferimento != 33 {

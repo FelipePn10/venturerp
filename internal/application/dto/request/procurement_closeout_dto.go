@@ -2,6 +2,7 @@ package request
 
 import (
 	"encoding/json"
+
 	"github.com/shopspring/decimal"
 )
 

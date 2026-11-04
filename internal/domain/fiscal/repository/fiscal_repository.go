@@ -5,6 +5,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type FiscalRepository interface {
@@ -54,12 +55,12 @@ type FiscalRepository interface {
 	ListTaxScenarios(ctx context.Context) ([]*entity.TaxScenario, error)
 
 	// ICMS Tables
-	GetICMSInterstate(ctx context.Context, originUF, destUF string) (*float64, error)
-	GetICMSInternal(ctx context.Context, uf string) (*float64, *float64, error)
-	ListICMSInterstate(ctx context.Context) (map[string]float64, error)
-	ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP float64 }, error)
-	UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq float64) error
-	UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP float64) error
+	GetICMSInterstate(ctx context.Context, originUF, destUF string) (*decimal.Decimal, error)
+	GetICMSInternal(ctx context.Context, uf string) (*decimal.Decimal, *decimal.Decimal, error)
+	ListICMSInterstate(ctx context.Context) (map[string]decimal.Decimal, error)
+	ListICMSInternal(ctx context.Context) (map[string]struct{ ICMS, FCP decimal.Decimal }, error)
+	UpsertICMSInterstate(ctx context.Context, originUF, destUF string, aliq decimal.Decimal) error
+	UpsertICMSInternal(ctx context.Context, uf string, aliqICMS, aliqFCP decimal.Decimal) error
 
 	// Focus NF-e Logs
 	SaveFocusLog(ctx context.Context, fiscalExitID int64, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error

@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	"slices"
 	"strings"
+
+	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 
 	"github.com/shopspring/decimal"
 
@@ -508,7 +509,7 @@ func (s *EntradaServico) Divergencias(ctx context.Context, e *entity.FiscalEntry
 		}
 		p.ICMSInterestadual = map[string]decimal.Decimal{}
 		for k, v := range tabela {
-			p.ICMSInterestadual[strings.ToUpper(k)] = decimal.NewFromFloat(v)
+			p.ICMSInterestadual[strings.ToUpper(k)] = v
 		}
 	}
 	cadastro, err := s.Docs.ItemsByCode(ctx, codigos)
@@ -635,15 +636,15 @@ func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.Fi
 	// DIFAL de uso, consumo e ativo (base dupla), pela alíquota interna da UF
 	// da empresa na tabela de ICMS (ou a da configuração).
 	ufEmpresa := strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa))
-	aliqInterna := decimal.NewFromFloat(cfg.IcmsInternoAliquota)
+	aliqInterna := cfg.IcmsInternoAliquota
 	internas, err := s.Fiscal.ListICMSInternal(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if v, ok := internas[ufEmpresa]; ok && v.ICMS > 0 {
-		aliqInterna = decimal.NewFromFloat(v.ICMS)
+	if v, ok := internas[ufEmpresa]; ok && v.ICMS.IsPositive() {
+		aliqInterna = v.ICMS
 	}
-	var inter map[string]float64
+	var inter map[string]decimal.Decimal
 	for _, it := range e.Itens {
 		if it.CfopEntrada == nil || !entrada.CFOPDeUsoConsumoInterestadual(*it.CfopEntrada) {
 			continue
@@ -657,8 +658,8 @@ func (s *EntradaServico) pendenciasTributarias(ctx context.Context, e *entity.Fi
 					return nil, err
 				}
 			}
-			if a, ok := inter[strings.ToUpper(strings.TrimSpace(*e.UFEmitente))+ufEmpresa]; ok && a > 0 {
-				icmsOrigem = it.ValorContabil.Mul(decimal.NewFromFloat(a)).Round(2)
+			if a, ok := inter[strings.ToUpper(strings.TrimSpace(*e.UFEmitente))+ufEmpresa]; ok && a.IsPositive() {
+				icmsOrigem = it.ValorContabil.Mul(a).Round(2)
 			}
 		}
 		base, difal := entrada.DifalUsoConsumo(it.ValorContabil, icmsOrigem, aliqInterna)

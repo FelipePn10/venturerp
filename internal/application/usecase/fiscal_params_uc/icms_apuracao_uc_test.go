@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 )
 
@@ -362,7 +364,7 @@ func TestSummaryEntry_BadPeriod(t *testing.T) {
 func TestSummaryEntry_NegativeICMS(t *testing.T) {
 	uc := &ICMSSummaryEntryUseCase{Repo: stub}
 	_, err := uc.Create(context.Background(), &fiscalEntity.ICMSSummaryEntry{
-		Period: "2024-01", UF: "SP", ICMSValue: -10,
+		Period: "2024-01", UF: "SP", ICMSValue: decimal.NewFromFloat(-10),
 	})
 	if err == nil {
 		t.Fatal("expected error for negative icms_value")
@@ -372,7 +374,7 @@ func TestSummaryEntry_NegativeICMS(t *testing.T) {
 func TestSummaryEntry_OK(t *testing.T) {
 	uc := &ICMSSummaryEntryUseCase{Repo: stub}
 	e, err := uc.Create(context.Background(), &fiscalEntity.ICMSSummaryEntry{
-		Period: "2024-01", UF: "SP", ICMSBase: 10000, ICMSValue: 1200,
+		Period: "2024-01", UF: "SP", ICMSBase: decimal.NewFromFloat(10000), ICMSValue: decimal.NewFromFloat(1200),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -407,7 +409,7 @@ func TestSimples_InvalidAnnex(t *testing.T) {
 func TestSimples_NegativeReceita(t *testing.T) {
 	uc := &SimplesNacionalUseCase{Repo: stub}
 	_, err := uc.Create(context.Background(), &fiscalEntity.SimplesNacionalApuracao{
-		Period: "2024-01", Annex: "I", ReceitaInterna: -1,
+		Period: "2024-01", Annex: "I", ReceitaInterna: decimal.NewFromFloat(-1),
 	})
 	if err == nil {
 		t.Fatal("expected error for negative receita")
@@ -417,7 +419,7 @@ func TestSimples_NegativeReceita(t *testing.T) {
 func TestSimples_OK(t *testing.T) {
 	uc := &SimplesNacionalUseCase{Repo: stub}
 	s, err := uc.Create(context.Background(), &fiscalEntity.SimplesNacionalApuracao{
-		Period: "2024-06", Annex: "III", ReceitaInterna: 50000,
+		Period: "2024-06", Annex: "III", ReceitaInterna: decimal.NewFromFloat(50000),
 	})
 	if err != nil {
 		t.Fatal(err)

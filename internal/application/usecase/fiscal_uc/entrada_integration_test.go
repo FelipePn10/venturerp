@@ -5,10 +5,11 @@ package fiscal_uc_test
 import (
 	"errors"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 
 	"github.com/shopspring/decimal"
 

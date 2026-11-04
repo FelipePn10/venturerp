@@ -167,8 +167,8 @@ func flagsDoTipoNota(tn *entity.TipoNotaFiscal) engine.InvoiceTypeFlags {
 	case "OUTROS":
 		f.CSTICMSOperacao = "41"
 	}
-	if tn.ReducaoICMSPct > 0 {
-		f.CalcReducao, f.ICMSReductionPct = true, tn.ReducaoICMSPct/100
+	if tn.ReducaoICMSPct.IsPositive() {
+		f.CalcReducao, f.ICMSReductionPct = true, tn.ReducaoICMSPct.Div(decimal.NewFromInt(100))
 	}
 	return f
 }
@@ -298,7 +298,7 @@ func semRepetir(xs []string) []string {
 // dos benefícios aplicados (dispositivos das regras de ICMS/IPI) e, no Simples
 // Nacional, a identificação de optante (Resolução CGSN 140/2018, art. 59) e o
 // crédito de ICMS que o comprador pode aproveitar (LC 123/2006, art. 23).
-func informacoesComplementares(usuario *string, simples bool, credito decimal.Decimal, creditoPct float64, legais []string) *string {
+func informacoesComplementares(usuario *string, simples bool, credito decimal.Decimal, creditoPct decimal.Decimal, legais []string) *string {
 	var partes []string
 	if usuario != nil && strings.TrimSpace(*usuario) != "" {
 		partes = append(partes, strings.TrimSpace(*usuario))
@@ -307,7 +307,7 @@ func informacoesComplementares(usuario *string, simples bool, credito decimal.De
 		partes = append(partes, "DOCUMENTO EMITIDO POR ME OU EPP OPTANTE PELO SIMPLES NACIONAL. NAO GERA DIREITO A CREDITO FISCAL DE IPI.")
 		if credito.IsPositive() {
 			partes = append(partes, fmt.Sprintf("PERMITE O APROVEITAMENTO DO CREDITO DE ICMS NO VALOR DE R$ %s, CORRESPONDENTE A ALIQUOTA DE %s%%, NOS TERMOS DO ART. 23 DA LEI COMPLEMENTAR N. 123, DE 2006.",
-				strings.Replace(credito.StringFixed(2), ".", ",", 1), strings.Replace(decimal.NewFromFloat(creditoPct).StringFixed(2), ".", ",", 1)))
+				strings.Replace(credito.StringFixed(2), ".", ",", 1), strings.Replace(creditoPct.StringFixed(2), ".", ",", 1)))
 		}
 	}
 	partes = append(partes, legais...)

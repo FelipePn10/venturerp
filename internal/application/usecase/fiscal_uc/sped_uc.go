@@ -2,8 +2,10 @@ package fiscal_uc
 
 import (
 	"context"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
@@ -78,14 +80,16 @@ func buildApuracaoFromSummaries(summaries []*fiscalEntity.ICMSSummaryEntry) *spe
 	if len(summaries) == 0 {
 		return &sped.EFDApuracaoICMS{}
 	}
-	var totalBase, totalICMS float64
+	// Soma em decimal; o registro do SPED (float, etapa de exportações) recebe
+	// o total já fechado.
+	totalICMS := decimal.Zero
 	for _, s := range summaries {
-		totalBase += s.ICMSBase
-		totalICMS += s.ICMSValue
+		totalICMS = totalICMS.Add(s.ICMSValue)
 	}
+	t := totalICMS.Round(2).InexactFloat64()
 	return &sped.EFDApuracaoICMS{
-		VlTotDebitos:   totalICMS,
-		VlApuracao:     totalICMS,
-		VlIcmsRecolher: totalICMS,
+		VlTotDebitos:   t,
+		VlApuracao:     t,
+		VlIcmsRecolher: t,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 // scanTextPtr is a scan destination that writes a nullable text column into *string.
@@ -86,3 +87,29 @@ func (s scanNumericPtr) Scan(src any) error {
 
 // ScanPgNumericPtr returns a scan destination that writes nullable numeric into *float64.
 func ScanPgNumericPtr(p **float64) interface{ Scan(any) error } { return scanNumericPtr{p} }
+
+type scanNumericDecimalPtr struct{ p **decimal.Decimal }
+
+func (s scanNumericDecimalPtr) Scan(src any) error {
+	if src == nil {
+		*s.p = nil
+		return nil
+	}
+	var n pgtype.Numeric
+	if err := n.Scan(src); err != nil {
+		return err
+	}
+	if !n.Valid {
+		*s.p = nil
+		return nil
+	}
+	d := FromPgNumericToDecimal(n)
+	*s.p = &d
+	return nil
+}
+
+// ScanPgNumericDecimalPtr é o ScanPgNumericPtr para decimal: numeric nulo vira
+// nil e o valor chega sem passar por float.
+func ScanPgNumericDecimalPtr(p **decimal.Decimal) interface{ Scan(any) error } {
+	return scanNumericDecimalPtr{p}
+}

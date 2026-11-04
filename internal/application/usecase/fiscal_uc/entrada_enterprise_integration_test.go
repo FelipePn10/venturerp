@@ -6,12 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"

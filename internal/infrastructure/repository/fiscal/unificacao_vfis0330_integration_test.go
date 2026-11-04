@@ -5,6 +5,8 @@ package fiscal_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
@@ -43,11 +45,11 @@ func TestRegraComFornecedorEPercentualDeQuatroCasas(t *testing.T) {
 
 	// Na própria empresa grava, com o diferimento de 4 casas intacto.
 	comFornecedor, err := repo.CreateTaxParam(a.Ctx, &entity.ICMSIPITaxParam{UF: "PR", OperationType: entity.TaxParamOperationAmbas,
-		NCMCode: &ncm, SupplierCode: &fornecedor, ICMSDeferralPct: 33.3333, IsPreferred: true})
+		NCMCode: &ncm, SupplierCode: &fornecedor, ICMSDeferralPct: decimal.NewFromFloat(33.3333), IsPreferred: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if comFornecedor.SupplierCode == nil || *comFornecedor.SupplierCode != fornecedor || comFornecedor.ICMSDeferralPct != 33.3333 {
+	if comFornecedor.SupplierCode == nil || *comFornecedor.SupplierCode != fornecedor || !comFornecedor.ICMSDeferralPct.Equal(decimal.NewFromFloat(33.3333)) {
 		t.Fatalf("regra gravada: fornecedor %v diferimento %v", comFornecedor.SupplierCode, comFornecedor.ICMSDeferralPct)
 	}
 
@@ -56,12 +58,12 @@ func TestRegraComFornecedorEPercentualDeQuatroCasas(t *testing.T) {
 	if p, err := r.ParametroICMSIPI(a.Ctx, engine.ConsultaParametroICMSIPI{NCM: &ncm, UF: "PR"}); err != nil || p != nil {
 		t.Fatalf("saída casou regra de fornecedor: %+v %v", p, err)
 	}
-	semFornecedor, err := repo.CreateTaxParam(a.Ctx, &entity.ICMSIPITaxParam{UF: "PR", OperationType: entity.TaxParamOperationSaida, NCMCode: &ncm, ICMSDeferralPct: 41.6667})
+	semFornecedor, err := repo.CreateTaxParam(a.Ctx, &entity.ICMSIPITaxParam{UF: "PR", OperationType: entity.TaxParamOperationSaida, NCMCode: &ncm, ICMSDeferralPct: decimal.NewFromFloat(41.6667)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	p, err := r.ParametroICMSIPI(a.Ctx, engine.ConsultaParametroICMSIPI{NCM: &ncm, UF: "PR"})
-	if err != nil || p == nil || p.ID != semFornecedor.ID || p.DiferimentoPct != 41.6667 {
+	if err != nil || p == nil || p.ID != semFornecedor.ID || !p.DiferimentoPct.Equal(decimal.NewFromFloat(41.6667)) {
 		t.Fatalf("saída: %+v %v, quer a regra %d com 41,6667%%", p, err, semFornecedor.ID)
 	}
 }

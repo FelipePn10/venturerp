@@ -166,17 +166,17 @@ func TestTipoDestinatarioProdutorRural(t *testing.T) {
 }
 
 func TestInformacoesComplementares(t *testing.T) {
-	if informacoesComplementares(nil, false, decimal.Zero, 0, nil) != nil {
+	if informacoesComplementares(nil, false, decimal.Zero, decimal.NewFromFloat(0), nil) != nil {
 		t.Fatal("sem texto, sem Simples e sem base legal: nada")
 	}
-	got := *informacoesComplementares(sp(" Pedido 123 "), true, decimal.RequireFromString("25.6"), 2.56, []string{"Isento conforme art. 10"})
+	got := *informacoesComplementares(sp(" Pedido 123 "), true, decimal.RequireFromString("25.6"), decimal.NewFromFloat(2.56), []string{"Isento conforme art. 10"})
 	for _, quer := range []string{"Pedido 123", "OPTANTE PELO SIMPLES NACIONAL", "NAO GERA DIREITO A CREDITO FISCAL DE IPI",
 		"CREDITO DE ICMS NO VALOR DE R$ 25,60, CORRESPONDENTE A ALIQUOTA DE 2,56%", "Isento conforme art. 10"} {
 		if !strings.Contains(got, quer) {
 			t.Errorf("infCpl sem %q: %s", quer, got)
 		}
 	}
-	if s := *informacoesComplementares(nil, true, decimal.Zero, 0, nil); strings.Contains(s, "CREDITO DE ICMS") {
+	if s := *informacoesComplementares(nil, true, decimal.Zero, decimal.NewFromFloat(0), nil); strings.Contains(s, "CREDITO DE ICMS") {
 		t.Fatalf("sem crédito não cita crédito: %s", s)
 	}
 }

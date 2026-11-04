@@ -11,7 +11,7 @@ import (
 type InvoiceTypeFlags struct {
 	// CalcReducao applies ICMSReductionPct to reduce the ICMS calculation base.
 	CalcReducao      bool
-	ICMSReductionPct float64 // e.g. 0.30 means base reduced by 30%
+	ICMSReductionPct decimal.Decimal // e.g. 0.30 means base reduced by 30%
 
 	// SkipPISCOFINS — when true, PIS and COFINS are zeroed out (e.g. isento, não tributado).
 	// Default false means PIS/COFINS are calculated normally.
@@ -20,7 +20,7 @@ type InvoiceTypeFlags struct {
 	// CalcFomentar applies the FOMENTAR/PRODUZIR incentive (e.g. Goiás):
 	// ICMS effectively paid = total ICMS × (1 - FomentarRetentionPct).
 	CalcFomentar         bool
-	FomentarRetentionPct float64 // fraction of ICMS retained by state (e.g. 0.70 = 70%)
+	FomentarRetentionPct decimal.Decimal // fraction of ICMS retained by state (e.g. 0.70 = 70%)
 
 	// IPITransferPrice: when > 0, overrides ValorUnitario as IPI base (used for
 	// transfer invoices where the IPI base comes from a sales table).
@@ -126,16 +126,16 @@ func pisCofinsDoRegime(regime Regime, cfg *NcmTaxConfig, hasNcm bool) (aliqPIS, 
 		aliqCOFINS, cstCOFINS = decimal.NewFromFloat(0.03), "01"
 		if hasNcm {
 			if c := strings.TrimSpace(cfg.CstPis); c != "" && c != "01" {
-				aliqPIS, cstPIS = decimal.NewFromFloat(cfg.AliqPis), c
+				aliqPIS, cstPIS = cfg.AliqPis, c
 			}
 			if c := strings.TrimSpace(cfg.CstCofins); c != "" && c != "01" {
-				aliqCOFINS, cstCOFINS = decimal.NewFromFloat(cfg.AliqCofins), c
+				aliqCOFINS, cstCOFINS = cfg.AliqCofins, c
 			}
 		}
 		return
 	default:
 		if hasNcm {
-			return decimal.NewFromFloat(cfg.AliqPis), decimal.NewFromFloat(cfg.AliqCofins), cfg.CstPis, cfg.CstCofins
+			return cfg.AliqPis, cfg.AliqCofins, cfg.CstPis, cfg.CstCofins
 		}
 		return decimal.NewFromFloat(0.0165), decimal.NewFromFloat(0.076), "01", "01"
 	}
@@ -260,8 +260,8 @@ type TaxTotals struct {
 }
 
 type TaxScenarioConfig struct {
-	AliqICMS   float64
-	DifICMSPct float64
+	AliqICMS   decimal.Decimal
+	DifICMSPct decimal.Decimal
 	CstICMS    string
 	CalcDifal  bool
 }
@@ -269,7 +269,7 @@ type TaxScenarioConfig struct {
 func CalcularImpostos(
 	params TaxCalculationParams,
 	ncmTable map[string]*NcmTaxConfig,
-	interstateTable map[string]float64,
+	interstateTable map[string]decimal.Decimal,
 	internalTable map[string]ICMSInternalConfig,
 	scenario TaxScenarioConfig,
 	fiscalConfig FiscalConfig,
@@ -321,7 +321,7 @@ func calculateItemTax(
 	item TaxItem,
 	params TaxCalculationParams,
 	ncmTable map[string]*NcmTaxConfig,
-	interstateTable map[string]float64,
+	interstateTable map[string]decimal.Decimal,
 	internalTable map[string]ICMSInternalConfig,
 	scenario TaxScenarioConfig,
 	fiscalConfig FiscalConfig,
@@ -357,7 +357,7 @@ func calculateItemTax(
 	aliqIPI := decimal.NewFromFloat(0)
 	cstIPI := "50"
 	if hasNcm {
-		aliqIPI = decimal.NewFromFloat(ncmCfg.AliqIPI)
+		aliqIPI = ncmCfg.AliqIPI
 		cstIPI = ncmCfg.CstIPI
 	}
 	ipiBase, aliqIPI, cstIPI = item.Parametro.ajustarIPI(params.DestinoTipo, ipiBase, aliqIPI, cstIPI)
@@ -427,7 +427,7 @@ func calculateItemTax(
 	if consumidorFinal {
 		baseOperacao = totalComIPI.Add(freteItem).Sub(descontoItem)
 	}
-	redBase := 0.0 // % de redução da base pela regra do cadastro (pRedBC)
+	redBase := decimal.Zero // % de redução da base pela regra do cadastro (pRedBC)
 	var aliqICMS, aliqInterNominal decimal.Decimal
 	baseICMS := baseOperacao
 	if isInterno {
@@ -446,13 +446,13 @@ func calculateItemTax(
 			aliqInterNominal = decimal.NewFromFloat(0.04)
 		} else {
 			aliq, ok := interstateTable[params.EmitenteUF+params.DestinoUF]
-			if !ok || aliq == 0 {
+			if !ok || aliq.IsZero() {
 				aliq = AliquotaInterestadualLegal(params.EmitenteUF, params.DestinoUF)
 			}
-			aliqInterNominal = decimal.NewFromFloat(aliq)
+			aliqInterNominal = aliq
 		}
 		baseICMS, aliqICMS, redBase = item.Parametro.ajustarICMS(params.DestinoTipo, baseICMS, aliqInterNominal, importada)
-		if item.Parametro != nil && importada && item.Parametro.AliqImportadoPct > 0 {
+		if item.Parametro != nil && importada && item.Parametro.AliqImportadoPct.IsPositive() {
 			aliqInterNominal = fracao(item.Parametro.AliqImportadoPct)
 		}
 	}
@@ -469,7 +469,7 @@ func calculateItemTax(
 	// diferido e a SEFAZ do PR rejeitava pedindo o cBenef (rejeição 930).
 	if isInterno && contribuinte && !consumidorFinal && !flags.SemDiferimento {
 		difPct := FracaoDiferimento(fiscalConfig.IcmsDiferimentoPercentual)
-		if item.Parametro != nil && item.Parametro.DiferimentoPct > 0 {
+		if item.Parametro != nil && item.Parametro.DiferimentoPct.IsPositive() {
 			difPct = fracao(item.Parametro.DiferimentoPct)
 		}
 		if difPct.IsPositive() {
@@ -502,14 +502,14 @@ func calculateItemTax(
 			nota("sem DIFAL: o tipo de nota não calcula o diferencial de alíquota")
 		case difalTipo == "NAO_CONSIDERA" || difalTipo == "ISENTO_OUTRAS":
 			nota("sem DIFAL: a regra de ICMS/IPI não considera o diferencial de alíquota")
-		case !hasInternal || internalCfg.ICMS <= 0:
+		case !hasInternal || !internalCfg.ICMS.IsPositive():
 			nota("DIFAL não calculado: falta a alíquota interna de %s na tabela de ICMS", params.DestinoUF)
 		default:
 			baseDest := baseOperacao
-			if item.Parametro != nil && item.Parametro.DifalRedPct > 0 {
+			if item.Parametro != nil && item.Parametro.DifalRedPct.IsPositive() {
 				baseDest = baseDest.Mul(decimal.NewFromInt(1).Sub(fracao(item.Parametro.DifalRedPct)))
 			}
-			aliqInterna := decimal.NewFromFloat(internalCfg.ICMS)
+			aliqInterna := internalCfg.ICMS
 			r.BaseUFDest = baseDest.Round(2)
 			r.AliqInternaUFDestPct = aliqInterna.Mul(cem).Round(4)
 			r.AliqInterestadualPct = aliqInterNominal.Mul(cem).Round(4)
@@ -517,11 +517,11 @@ func calculateItemTax(
 				r.ValorDIFAL = baseDest.Mul(difal).Round(2)
 			}
 			fcpPct := internalCfg.FCP
-			if item.Parametro != nil && item.Parametro.FCPProdutoPct > 0 {
-				fcpPct = fracao(item.Parametro.FCPProdutoPct).InexactFloat64()
+			if item.Parametro != nil && item.Parametro.FCPProdutoPct.IsPositive() {
+				fcpPct = fracao(item.Parametro.FCPProdutoPct)
 			}
-			if fcpPct > 0 {
-				fcp := decimal.NewFromFloat(fcpPct)
+			if fcpPct.IsPositive() {
+				fcp := fcpPct
 				r.FCPUFDestPct = fcp.Mul(cem).Round(4)
 				r.ValorFCP = baseDest.Mul(fcp).Round(2)
 			}
@@ -532,8 +532,8 @@ func calculateItemTax(
 
 	// CalcReducao: apply ICMSReductionPct to reduce the effective ICMS base and recalculate.
 	// Example: ICMSReductionPct=0.30 → only 70% of the computed base is taxed.
-	if flags.CalcReducao && flags.ICMSReductionPct > 0 {
-		reductionFactor := decimal.NewFromFloat(1 - flags.ICMSReductionPct)
+	if flags.CalcReducao && flags.ICMSReductionPct.IsPositive() {
+		reductionFactor := decimal.NewFromInt(1).Sub(flags.ICMSReductionPct)
 		reducedBase := r.BaseICMS.Mul(reductionFactor)
 		r.BaseICMS = reducedBase.Round(2)
 		newValorICMS := reducedBase.Mul(r.AliquotaICMS)
@@ -548,7 +548,7 @@ func calculateItemTax(
 	// isento/outros (a operação manda sobre o produto). Sem CST informado,
 	// redução de base em operação tributada vira CST 20. CST sem imposto próprio
 	// (isenta, não tributada, suspensão, ST anterior) zera o ICMS, o diferido e o DIFAL.
-	r.ReducaoBaseICMSPct = decimal.NewFromFloat(redBase)
+	r.ReducaoBaseICMSPct = redBase
 	cstForcado := item.Parametro.cstICMS(params.DestinoTipo)
 	if c := strings.TrimSpace(flags.CSTICMSOperacao); c != "" {
 		cstForcado = c
@@ -566,7 +566,7 @@ func calculateItemTax(
 		if cstForcado != "51" {
 			r.semDiferimento("sem diferimento: o CST " + cstForcado + " foi imposto pela regra ou pelo tipo de nota")
 		}
-	} else if redBase > 0 && r.CSTICMS == "00" {
+	} else if redBase.IsPositive() && r.CSTICMS == "00" {
 		r.CSTICMS = "20"
 	}
 
@@ -582,7 +582,7 @@ func calculateItemTax(
 	mva := item.MvaPct
 	aliqSTInformada := item.AliqInternaDestinoST
 	redST := item.RedBaseSTPct
-	if !mva.IsPositive() && item.Parametro != nil && item.Parametro.MvaPct > 0 && !flags.SemST {
+	if !mva.IsPositive() && item.Parametro != nil && item.Parametro.MvaPct.IsPositive() && !flags.SemST {
 		if contribuinte && !consumidorFinal {
 			mva = fracao(item.Parametro.MvaPct)
 			aliqSTInformada = fracao(item.Parametro.Lado(params.DestinoTipo).AliqSTPct)
@@ -590,8 +590,8 @@ func calculateItemTax(
 			if !isInterno && item.Parametro.MvaAjustar {
 				intra := aliqSTInformada
 				if !intra.IsPositive() {
-					if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS > 0 {
-						intra = decimal.NewFromFloat(cfg.ICMS)
+					if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS.IsPositive() {
+						intra = cfg.ICMS
 					}
 				}
 				if intra.GreaterThan(aliqInterNominal) {
@@ -608,10 +608,10 @@ func calculateItemTax(
 		if !aliqST.IsPositive() {
 			if isInterno {
 				aliqST, _ = AliquotaInternaDaEmpresa(params.EmitenteUF, fiscalConfig, internalTable)
-			} else if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS > 0 {
-				aliqST = decimal.NewFromFloat(cfg.ICMS)
+			} else if cfg, ok := internalTable[params.DestinoUF]; ok && cfg.ICMS.IsPositive() {
+				aliqST = cfg.ICMS
 			} else {
-				aliqST = decimal.NewFromFloat(fiscalConfig.IcmsInternoAliquota)
+				aliqST = fiscalConfig.IcmsInternoAliquota
 			}
 		}
 
@@ -658,7 +658,7 @@ func calculateItemTax(
 	// crédito que o comprador contribuinte pode aproveitar (pCredSN) quando há.
 	if simples {
 		comST := r.ValorICMSST.IsPositive() || r.BaseICMSST.IsPositive()
-		creditoPermitido := fiscalConfig.CreditoSimplesPct > 0 && contribuinte && !consumidorFinal
+		creditoPermitido := fiscalConfig.CreditoSimplesPct.IsPositive() && contribuinte && !consumidorFinal
 		csosn := ""
 		if item.Parametro != nil {
 			csosn = strings.TrimSpace(item.Parametro.CSOSN)
@@ -671,8 +671,8 @@ func calculateItemTax(
 		r.ValorICMSDiferido, r.DiferimentoICMSPct = decimal.Zero, decimal.Zero
 		r.semDiferimento("sem diferimento: o ICMS do Simples Nacional é recolhido no DAS")
 		r.ValorDIFAL, r.ValorFCP, r.BaseUFDest, r.AliqInternaUFDestPct, r.AliqInterestadualPct, r.FCPUFDestPct = decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
-		if (csosn == "101" || csosn == "201") && fiscalConfig.CreditoSimplesPct > 0 {
-			pct := decimal.NewFromFloat(fiscalConfig.CreditoSimplesPct)
+		if (csosn == "101" || csosn == "201") && fiscalConfig.CreditoSimplesPct.IsPositive() {
+			pct := fiscalConfig.CreditoSimplesPct
 			r.AliqCreditoSimplesPct = pct.Round(4)
 			r.ValorCreditoSimples = baseOperacao.Mul(pct).Div(cem).Round(2)
 			nota("crédito de ICMS do Simples para o comprador: %s%%", pctBR(pct))
@@ -682,9 +682,9 @@ func calculateItemTax(
 
 	// CalcFomentar: portion of ICMS retained by state via FOMENTAR/PRODUZIR incentive.
 	// ValorFomentar = ValorICMS × FomentarRetentionPct (ICMS that is credited back to the company).
-	if flags.CalcFomentar && flags.FomentarRetentionPct > 0 {
+	if flags.CalcFomentar && flags.FomentarRetentionPct.IsPositive() {
 		r.ValorFomentar = r.ValorICMS.
-			Mul(decimal.NewFromFloat(flags.FomentarRetentionPct)).Round(2)
+			Mul(flags.FomentarRetentionPct).Round(2)
 	}
 
 	roundResult(&r)
@@ -722,27 +722,27 @@ func roundResult(r *TaxItemResult) {
 }
 
 type NcmTaxConfig struct {
-	AliqIPI    float64
-	AliqPis    float64
-	AliqCofins float64
+	AliqIPI    decimal.Decimal
+	AliqPis    decimal.Decimal
+	AliqCofins decimal.Decimal
 	CstPis     string
 	CstCofins  string
 	CstIPI     string
 }
 
 type ICMSInternalConfig struct {
-	ICMS float64
-	FCP  float64
+	ICMS decimal.Decimal
+	FCP  decimal.Decimal
 }
 
 type FiscalConfig struct {
 	UFEmpresa                 string
-	IcmsInternoAliquota       float64
-	IcmsDiferimentoPercentual float64
+	IcmsInternoAliquota       decimal.Decimal
+	IcmsDiferimentoPercentual decimal.Decimal
 	// Regime do emitente; vazio = Lucro Real.
 	Regime Regime
 	// CreditoSimplesPct: pCredSN (%) do optante do Simples.
-	CreditoSimplesPct float64
+	CreditoSimplesPct decimal.Decimal
 }
 
 var _ = fmt.Println
@@ -751,8 +751,7 @@ var _ = fmt.Println
 // para fração. A configuração guarda fração (0,3846 = 38,46%, como diz a tela),
 // mas o motor dividia por 100 de novo e o ICMS diferido saía cem vezes menor.
 // Valor acima de 1 é tratado como porcentagem, para não errar em quem digitou 38,46.
-func FracaoDiferimento(v float64) decimal.Decimal {
-	d := decimal.NewFromFloat(v)
+func FracaoDiferimento(d decimal.Decimal) decimal.Decimal {
 	if d.GreaterThan(decimal.NewFromInt(1)) {
 		return d.Div(decimal.NewFromInt(100))
 	}
@@ -777,23 +776,23 @@ var regiaoDaUF = map[string]string{
 // está na tabela. Antes a configuração mandava sempre: empresa de SP com 19,5%
 // digitado ali (a alíquota do PR) emitia toda venda interna com o ICMS errado.
 func AliquotaInternaDaEmpresa(uf string, cfg FiscalConfig, tabela map[string]ICMSInternalConfig) (decimal.Decimal, string) {
-	if t, ok := tabela[strings.ToUpper(strings.TrimSpace(uf))]; ok && t.ICMS > 0 {
-		return decimal.NewFromFloat(t.ICMS), "tabela de ICMS interno por UF"
+	if t, ok := tabela[strings.ToUpper(strings.TrimSpace(uf))]; ok && t.ICMS.IsPositive() {
+		return t.ICMS, "tabela de ICMS interno por UF"
 	}
-	return decimal.NewFromFloat(cfg.IcmsInternoAliquota), "configuração fiscal da empresa"
+	return cfg.IcmsInternoAliquota, "configuração fiscal da empresa"
 }
 
 // AliquotaInterestadualLegal é a alíquota da Resolução SF 22/1989 quando a
 // tabela de ICMS interestadual não tem o par: do Sul e do Sudeste (exceto ES)
 // para Norte, Nordeste, Centro-Oeste e ES, 7%; nas demais, 12%. Antes a falta
 // do par valia 12% sempre — errado para metade das vendas de quem não é do PR.
-func AliquotaInterestadualLegal(origem, destino string) float64 {
+func AliquotaInterestadualLegal(origem, destino string) decimal.Decimal {
 	o, d := strings.ToUpper(strings.TrimSpace(origem)), strings.ToUpper(strings.TrimSpace(destino))
 	ro, rd := regiaoDaUF[o], regiaoDaUF[d]
 	if (ro == "S" || ro == "SE") && o != "ES" && (rd == "N" || rd == "NE" || rd == "CO" || d == "ES") {
-		return 0.07
+		return decimal.New(7, -2)
 	}
-	return 0.12
+	return decimal.New(12, -2)
 }
 
 // pctBR escreve o número com duas casas e vírgula decimal, para as notas.

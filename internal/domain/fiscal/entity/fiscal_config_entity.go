@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -16,13 +18,13 @@ type FiscalConfig struct {
 	IEEmpresa                 *string
 	RegimeTributario          string
 	UFEmpresa                 string
-	IcmsInternoAliquota       float64
-	IcmsDiferimentoPercentual float64
+	IcmsInternoAliquota       decimal.Decimal
+	IcmsDiferimentoPercentual decimal.Decimal
 	// ExigirRegraICMSIPI: a linha de nota sem regra no cadastro de parâmetros
 	// de ICMS/IPI (VFIS0320) não é transmitida. Desligado vale a regra geral.
 	ExigirRegraICMSIPI bool
 	// AliquotaCreditoSimples: pCredSN (%) do optante do Simples Nacional.
-	AliquotaCreditoSimples float64
+	AliquotaCreditoSimples decimal.Decimal
 	// CBenefDiferimento: cBenef do diferimento da configuração (PR830001 no PR),
 	// usado no CST 51 quando a linha e a regra não trazem outro.
 	CBenefDiferimento *string
@@ -33,8 +35,8 @@ type FiscalConfig struct {
 	CBenefSuspensao        *string
 	FocusNfeToken          *string
 	FocusNfeAmbiente       string
-	JurosMes               float64
-	MultaAtraso            float64
+	JurosMes               decimal.Decimal
+	MultaAtraso            decimal.Decimal
 	VencimentoIcmsDia      int
 	VencimentoIPIDia       int
 	VencimentoPisCofinsDia int
@@ -64,7 +66,7 @@ type TipoNotaFiscal struct {
 	Descricao          string
 	Tipo               string
 	TipoICMS           string // TRIBUTADO, ISENTO, OUTROS
-	ReducaoICMSPct     float64
+	ReducaoICMSPct     decimal.Decimal
 	CalculaST          bool
 	CalculaDiferimento bool
 	CalculaPISCOFINS   bool

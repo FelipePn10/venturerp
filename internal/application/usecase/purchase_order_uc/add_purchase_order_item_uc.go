@@ -3,6 +3,7 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -76,7 +77,7 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		ipiPct = *dto.IPIPct
 	} else if dto.FiscalClassificationCode != nil && uc.FiscalClass != nil {
 		if rate, found, ferr := uc.FiscalClass.GetIPIRate(ctx, *dto.FiscalClassificationCode); ferr == nil && found {
-			ipiPct = decimal.NewFromFloat(rate)
+			ipiPct = rate
 		}
 	}
 

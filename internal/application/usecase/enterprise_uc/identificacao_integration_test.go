@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
@@ -72,7 +74,7 @@ func TestIdentificacaoUnicaETokenDeProducao(t *testing.T) {
 	fiscalRepo := fiscal.NewFiscalRepositoryPG(pool)
 	cfgUC := &fiscal_uc.UpdateFiscalConfigUseCase{Repo: fiscalRepo, Auth: az}
 	tokH := "token-de-homologacao"
-	salvo, err := cfgUC.Execute(ctx, request.UpdateFiscalConfigDTO{IcmsInternoAliquota: 0.195, FocusNfeAmbiente: "homologacao",
+	salvo, err := cfgUC.Execute(ctx, request.UpdateFiscalConfigDTO{IcmsInternoAliquota: decimal.NewFromFloat(0.195), FocusNfeAmbiente: "homologacao",
 		FocusNfeToken: &tokH, VencimentoIcmsDia: 10, VencimentoIPIDia: 15, VencimentoPisCofinsDia: 25})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +95,7 @@ func TestIdentificacaoUnicaETokenDeProducao(t *testing.T) {
 	if _, err := cfgUC.Execute(ctx, request.UpdateFiscalConfigDTO{FocusNfeAmbiente: "homologacao", VencimentoIcmsDia: 10, VencimentoIPIDia: 15, VencimentoPisCofinsDia: 25}); err == nil {
 		t.Fatal("a tela não pode sair da produção")
 	}
-	salvo, err = cfgUC.Execute(ctx, request.UpdateFiscalConfigDTO{IcmsInternoAliquota: 0.12, FocusNfeAmbiente: "producao", VencimentoIcmsDia: 12, VencimentoIPIDia: 15, VencimentoPisCofinsDia: 25})
+	salvo, err = cfgUC.Execute(ctx, request.UpdateFiscalConfigDTO{IcmsInternoAliquota: decimal.NewFromFloat(0.12), FocusNfeAmbiente: "producao", VencimentoIcmsDia: 12, VencimentoIPIDia: 15, VencimentoPisCofinsDia: 25})
 	if err != nil {
 		t.Fatalf("em produção os outros parâmetros continuam editáveis: %v", err)
 	}

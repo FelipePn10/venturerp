@@ -60,13 +60,13 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		return errorsuc.NewValidationError(fmt.Sprintf("valor recebido + desconto (%s) passa do saldo do título (%s)", valorRecebido.Add(desconto).StringFixed(2), valorOriginal.StringFixed(2)))
 	}
 
-	jurosMes := 0.01
-	multaAtraso := 0.02
+	jurosMes := decimal.New(1, -2)
+	multaAtraso := decimal.New(2, -2)
 	if fiscalCfg, err := uc.FiscalRepo.GetFiscalConfig(ctx); err == nil && fiscalCfg != nil {
-		if fiscalCfg.JurosMes > 0 {
+		if fiscalCfg.JurosMes.IsPositive() {
 			jurosMes = fiscalCfg.JurosMes
 		}
-		if fiscalCfg.MultaAtraso > 0 {
+		if fiscalCfg.MultaAtraso.IsPositive() {
 			multaAtraso = fiscalCfg.MultaAtraso
 		}
 	}
@@ -79,8 +79,8 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		// saldo vira outro título e paga os seus quando for quitado. Calcular
 		// sobre o saldo inteiro cobrava a multa duas vezes sobre o mesmo valor.
 		base := valorRecebido.Add(desconto)
-		jurosDec = base.Mul(decimal.NewFromFloat(jurosMes)).Mul(decimal.NewFromFloat(monthsLate))
-		multaDec = base.Mul(decimal.NewFromFloat(multaAtraso))
+		jurosDec = base.Mul(jurosMes).Mul(decimal.NewFromFloat(monthsLate))
+		multaDec = base.Mul(multaAtraso)
 	}
 
 	params := repository.BaixaParams{

@@ -23,10 +23,10 @@ type ParametroICMSIPI struct {
 	NaoContrib LadoParametroICMSIPI
 	// DiferimentoPct substitui o diferimento da configuração fiscal (só para
 	// destinatário contribuinte, como na configuração).
-	DiferimentoPct float64
+	DiferimentoPct decimal.Decimal
 	// AliqImportadoPct: alíquota interestadual de mercadoria importada (origens
 	// 1, 2, 3 e 8 do cadastro). Sem ela vale a Resolução SF 13/2012 (4%).
-	AliqImportadoPct float64
+	AliqImportadoPct decimal.Decimal
 	// CSTIPI substitui o CST de IPI da tabela de NCM na saída.
 	CSTIPI string
 	// CodBeneficio é o cBenef geral da regra; o de cada lado vence este.
@@ -35,18 +35,18 @@ type ParametroICMSIPI struct {
 	CSOSN string
 	// Substituição tributária: MvaPct é a MVA original (40 = 40%); MvaAjustar
 	// liga o ajuste da MVA na venda interestadual; RedBaseSTPct reduz a base da ST.
-	MvaPct       float64
+	MvaPct       decimal.Decimal
 	MvaAjustar   bool
-	RedBaseSTPct float64
+	RedBaseSTPct decimal.Decimal
 	// DIFAL: DifalTipo (TRIBUTADO, ISENTO_OUTRAS, NAO_CONSIDERA) e redução da
 	// base do diferencial (%).
 	DifalTipo   string
-	DifalRedPct float64
+	DifalRedPct decimal.Decimal
 	// FCPProdutoPct: FCP (%) do produto na UF de destino — o acréscimo de ICMS
 	// da regra para não contribuinte do tipo Fundo de Combate à Pobreza. Fora do
 	// RJ e de SE o FCP só incide sobre listas de produtos: vai na regra, e vence
 	// o FCP geral da tabela de ICMS por UF. Zero = vale o da tabela.
-	FCPProdutoPct float64
+	FCPProdutoPct decimal.Decimal
 	// Dispositivos: o texto da base legal (VFIS0310) de cada tratamento da
 	// regra — vai nas informações complementares da nota quando o tratamento
 	// é aplicado (isenção, redução, diferimento, IPI).
@@ -99,9 +99,9 @@ func (p *ParametroICMSIPI) DispositivosAplicados(destinoTipo string, r TaxItemRe
 	if r.ValorICMSDiferido.IsPositive() {
 		add(p.Dispositivos.Diferimento)
 	}
-	redIPI := p.NaoContrib.RedIPIPct > 0
+	redIPI := p.NaoContrib.RedIPIPct.IsPositive()
 	if contrib {
-		redIPI = p.Contrib.RedIPIPct > 0
+		redIPI = p.Contrib.RedIPIPct.IsPositive()
 	}
 	if p.CSTIPI != "" || redIPI {
 		add(escolher(p.Dispositivos.IPIContrib, p.Dispositivos.IPINaoContrib))
@@ -111,15 +111,15 @@ func (p *ParametroICMSIPI) DispositivosAplicados(destinoTipo string, r TaxItemRe
 
 // LadoParametroICMSIPI: o que a regra diz para um tipo de destinatário.
 type LadoParametroICMSIPI struct {
-	AliqICMSPct  float64
+	AliqICMSPct  decimal.Decimal
 	CSTICMS      string
-	RedICMSPct   float64
+	RedICMSPct   decimal.Decimal
 	AlvoRedICMS  string // BASE (reduz a base) ou PERCENTUAL (reduz a alíquota)
-	RedIPIPct    float64
+	RedIPIPct    decimal.Decimal
 	AlvoRedIPI   string
 	CodBeneficio string
 	// AliqSTPct: alíquota interna do destino usada na ST; zero = a da tabela.
-	AliqSTPct float64
+	AliqSTPct decimal.Decimal
 }
 
 // Lado escolhe o que vale para o destinatário da nota.
@@ -144,18 +144,18 @@ func (p *ParametroICMSIPI) BeneficioFiscal(destinoTipo string) string {
 
 var cem = decimal.NewFromInt(100)
 
-func fracao(pct float64) decimal.Decimal { return decimal.NewFromFloat(pct).Div(cem) }
+func fracao(pct decimal.Decimal) decimal.Decimal { return pct.Div(cem) }
 
 // reduzir aplica a redução do lado: na BASE (padrão) ou no PERCENTUAL (a
 // alíquota). Devolve o percentual de redução da BASE — é o pRedBC que a NF-e
 // exige nos CST 20 e 70; redução na alíquota não tem campo próprio no XML.
-func reduzir(base, aliq decimal.Decimal, redPct float64, alvo string) (decimal.Decimal, decimal.Decimal, float64) {
-	if redPct <= 0 {
-		return base, aliq, 0
+func reduzir(base, aliq decimal.Decimal, redPct decimal.Decimal, alvo string) (decimal.Decimal, decimal.Decimal, decimal.Decimal) {
+	if !redPct.IsPositive() {
+		return base, aliq, decimal.Zero
 	}
 	fator := decimal.NewFromInt(1).Sub(fracao(redPct))
 	if strings.EqualFold(strings.TrimSpace(alvo), "PERCENTUAL") {
-		return base, aliq.Mul(fator), 0
+		return base, aliq.Mul(fator), decimal.Zero
 	}
 	return base.Mul(fator), aliq, redPct
 }
@@ -186,15 +186,15 @@ func (p *ParametroICMSIPI) ajustarIPI(destinoTipo string, base, aliq decimal.Dec
 
 // ajustarICMS aplica alíquota e redução de ICMS da regra. `importada` indica
 // mercadoria importada numa operação interestadual (Resolução SF 13/2012).
-func (p *ParametroICMSIPI) ajustarICMS(destinoTipo string, base, aliq decimal.Decimal, importada bool) (decimal.Decimal, decimal.Decimal, float64) {
+func (p *ParametroICMSIPI) ajustarICMS(destinoTipo string, base, aliq decimal.Decimal, importada bool) (decimal.Decimal, decimal.Decimal, decimal.Decimal) {
 	if p == nil {
-		return base, aliq, 0
+		return base, aliq, decimal.Zero
 	}
 	lado := p.Lado(destinoTipo)
 	switch {
-	case importada && p.AliqImportadoPct > 0:
+	case importada && p.AliqImportadoPct.IsPositive():
 		aliq = fracao(p.AliqImportadoPct)
-	case !importada && lado.AliqICMSPct > 0:
+	case !importada && lado.AliqICMSPct.IsPositive():
 		aliq = fracao(lado.AliqICMSPct)
 	}
 	return reduzir(base, aliq, lado.RedICMSPct, lado.AlvoRedICMS)

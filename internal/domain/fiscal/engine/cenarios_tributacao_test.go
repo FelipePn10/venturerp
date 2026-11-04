@@ -48,7 +48,7 @@ func querCST(t *testing.T, label, want, got string) {
 
 func comRegime(r Regime, credito float64) FiscalConfig {
 	c := defaultFiscalConfig()
-	c.Regime, c.CreditoSimplesPct = r, credito
+	c.Regime, c.CreditoSimplesPct = r, decimal.NewFromFloat(credito)
 	return c
 }
 
@@ -168,7 +168,7 @@ func TestCenario_Simples_Interestadual_SemDIFAL(t *testing.T) {
 // Simples substituto: a ST desconta o ICMS próprio calculado pela alíquota
 // normal (LC 123, art. 13, §6º) — CSOSN 201 com crédito.
 func TestCenario_Simples_ComSTDaRegra_CSOSN201(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 7, MvaPct: 40}
+	p := &ParametroICMSIPI{ID: 7, MvaPct: decimal.NewFromFloat(40)}
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", finalidade: FinalidadeRevenda,
 		cfg: comRegime(RegimeSimples, 2.56), item: TaxItem{Parametro: p}})
 	querCST(t, "CSOSN", "201", r.CSTICMS)
@@ -195,7 +195,7 @@ func TestCenario_Simples_RegraIsentaViraCSOSN400(t *testing.T) {
 
 // Interestadual com MVA ajustada: 40% vira 50,2439% (inter 12%, intra SP 18%).
 func TestCenario_STDaRegra_Interestadual_MVAAjustada(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 9, MvaPct: 40, MvaAjustar: true}
+	p := &ParametroICMSIPI{ID: 9, MvaPct: decimal.NewFromFloat(40), MvaAjustar: true}
 	r := calcularCenario(t, cenario{destUF: "SP", destTipo: "contribuinte", finalidade: FinalidadeRevenda, item: TaxItem{Parametro: p}})
 	near(t, "MVA ajustada (fração)", 0.502439, r.MVA)
 	near(t, "base ST (1050 × 1,502439)", 1577.56, r.BaseICMSST)
@@ -204,7 +204,7 @@ func TestCenario_STDaRegra_Interestadual_MVAAjustada(t *testing.T) {
 }
 
 func TestCenario_STDaRegra_SemAjuste(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 9, MvaPct: 40, MvaAjustar: false, Contrib: LadoParametroICMSIPI{AliqSTPct: 18}}
+	p := &ParametroICMSIPI{ID: 9, MvaPct: decimal.NewFromFloat(40), MvaAjustar: false, Contrib: LadoParametroICMSIPI{AliqSTPct: decimal.NewFromFloat(18)}}
 	r := calcularCenario(t, cenario{destUF: "SP", destTipo: "contribuinte", item: TaxItem{Parametro: p}})
 	near(t, "MVA original", 0.40, r.MVA)
 	near(t, "base ST", 1470, r.BaseICMSST)
@@ -213,7 +213,7 @@ func TestCenario_STDaRegra_SemAjuste(t *testing.T) {
 
 // A ST da regra é de operações subsequentes: consumidor final não tem.
 func TestCenario_STDaRegra_NaoValeParaConsumidorFinal(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 9, MvaPct: 40}
+	p := &ParametroICMSIPI{ID: 9, MvaPct: decimal.NewFromFloat(40)}
 	for _, c := range []cenario{
 		{destUF: "PR", destTipo: "nao_contribuinte", item: TaxItem{Parametro: p}},
 		{destUF: "PR", destTipo: "contribuinte", finalidade: FinalidadeUsoConsumo, item: TaxItem{Parametro: p}},
@@ -233,7 +233,7 @@ func TestCenario_DIFAL_RegraNaoConsidera(t *testing.T) {
 }
 
 func TestCenario_DIFAL_ReducaoDaBase(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 5, DifalRedPct: 50}
+	p := &ParametroICMSIPI{ID: 5, DifalRedPct: decimal.NewFromFloat(50)}
 	r := calcularCenario(t, cenario{destUF: "GO", destTipo: "nao_contribuinte", item: TaxItem{Parametro: p}})
 	near(t, "base UF destino", 525, r.BaseUFDest)
 	near(t, "DIFAL", 52.50, r.ValorDIFAL)
@@ -270,7 +270,7 @@ func TestCenario_TipoDeNota_SemDIFAL(t *testing.T) {
 
 // SemST desliga a ST da regra; MVA informada à mão na linha continua valendo.
 func TestCenario_TipoDeNota_SemST(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 9, MvaPct: 40}
+	p := &ParametroICMSIPI{ID: 9, MvaPct: decimal.NewFromFloat(40)}
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", flags: InvoiceTypeFlags{SemST: true}, item: TaxItem{Parametro: p}})
 	near(t, "ST da regra desligada", 0, r.ValorICMSST)
 	r = calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", flags: InvoiceTypeFlags{SemST: true}, item: TaxItem{Parametro: p, MvaPct: decimal.NewFromFloat(0.40)}})
@@ -326,8 +326,8 @@ func TestAliquotaInterestadualLegal(t *testing.T) {
 		{"PR", "GO"}: 0.07, {"PR", "ES"}: 0.07, {"SP", "BA"}: 0.07, {"MG", "DF"}: 0.07, {"RS", "AM"}: 0.07,
 		{"PR", "SP"}: 0.12, {"ES", "BA"}: 0.12, {"BA", "SP"}: 0.12, {"GO", "PR"}: 0.12, {"CE", "PE"}: 0.12, {"rj", "mg"}: 0.12,
 	} {
-		if got := AliquotaInterestadualLegal(par[0], par[1]); got != quer {
-			t.Errorf("%s→%s: %.2f, quer %.2f", par[0], par[1], got, quer)
+		if got := AliquotaInterestadualLegal(par[0], par[1]); !got.Equal(decimal.NewFromFloat(quer)) {
+			t.Errorf("%s→%s: %v, quer %v", par[0], par[1], got, quer)
 		}
 	}
 }
@@ -342,13 +342,13 @@ func TestCenario_ParForaDaTabelaUsaAResolucao(t *testing.T) {
 
 // FCP do produto (acréscimo da regra) vence o FCP geral da tabela no DIFAL.
 func TestCenario_DIFAL_FCPDoProdutoNaRegra(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 8, FCPProdutoPct: 1}
+	p := &ParametroICMSIPI{ID: 8, FCPProdutoPct: decimal.NewFromFloat(1)}
 	r := calcularCenario(t, cenario{destUF: "GO", destTipo: "nao_contribuinte", item: TaxItem{Parametro: p}})
 	near(t, "FCP %", 1, r.FCPUFDestPct)
 	near(t, "FCP 1% de 1050", 10.50, r.ValorFCP)
 	near(t, "DIFAL segue", 105, r.ValorDIFAL)
 	// UF sem FCP geral na tabela (SP): só o do produto.
-	r = calcularCenario(t, cenario{destUF: "SP", destTipo: "nao_contribuinte", item: TaxItem{Parametro: &ParametroICMSIPI{ID: 9, FCPProdutoPct: 2}}})
+	r = calcularCenario(t, cenario{destUF: "SP", destTipo: "nao_contribuinte", item: TaxItem{Parametro: &ParametroICMSIPI{ID: 9, FCPProdutoPct: decimal.NewFromFloat(2)}}})
 	near(t, "FCP do produto em SP", 21, r.ValorFCP)
 	r = calcularCenario(t, cenario{destUF: "SP", destTipo: "nao_contribuinte"})
 	near(t, "sem FCP em SP", 0, r.ValorFCP)
@@ -358,7 +358,7 @@ func TestCenario_DIFAL_FCPDoProdutoNaRegra(t *testing.T) {
 // nada diferido, e a explicação não pode continuar dizendo que houve
 // diferimento (o simulador mostrava "ICMS diferido em 38,46%" com CST 10).
 func TestCenario_STDaRegra_Interna_PrevaleceSobreDiferimento(t *testing.T) {
-	p := &ParametroICMSIPI{ID: 11, MvaPct: 40}
+	p := &ParametroICMSIPI{ID: 11, MvaPct: decimal.NewFromFloat(40)}
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", finalidade: FinalidadeRevenda, item: TaxItem{Parametro: p}})
 	querCST(t, "CST", "10", r.CSTICMS)
 	near(t, "diferido", 0, r.ValorICMSDiferido)

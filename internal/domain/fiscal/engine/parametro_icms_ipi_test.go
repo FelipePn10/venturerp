@@ -39,8 +39,8 @@ func TestParametro_SemRegraMantemARegraGeral(t *testing.T) {
 // (contribuinte) e outra para consumidor final (não contribuinte).
 func TestParametro_AliquotaPorTipoDeDestinatario(t *testing.T) {
 	p := &ParametroICMSIPI{ID: 7,
-		Contrib:    LadoParametroICMSIPI{AliqICMSPct: 18, CSTICMS: "00"},
-		NaoContrib: LadoParametroICMSIPI{AliqICMSPct: 19.5},
+		Contrib:    LadoParametroICMSIPI{AliqICMSPct: decimal.NewFromFloat(18), CSTICMS: "00"},
+		NaoContrib: LadoParametroICMSIPI{AliqICMSPct: decimal.NewFromFloat(19.5)},
 	}
 	c := calcularUm(t, itemDeMil(p), "PR", "contribuinte")
 	near(t, "aliq contrib", 0.18, c.AliquotaICMS)
@@ -55,7 +55,7 @@ func TestParametro_AliquotaPorTipoDeDestinatario(t *testing.T) {
 }
 
 func TestParametro_ReducaoDeBaseViraCST20(t *testing.T) {
-	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{RedICMSPct: 33.33, AlvoRedICMS: "BASE"}}
+	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{RedICMSPct: decimal.NewFromFloat(33.33), AlvoRedICMS: "BASE"}}
 	r := calcularUm(t, itemDeMil(p), "PR", "contribuinte")
 	near(t, "base reduzida", 666.70, r.BaseICMS)
 	near(t, "ICMS", 80.00, r.ValorICMS)
@@ -63,7 +63,7 @@ func TestParametro_ReducaoDeBaseViraCST20(t *testing.T) {
 	if r.CSTICMS != "51" {
 		t.Fatalf("CST = %s, quer 51", r.CSTICMS)
 	}
-	semDif := calcularUmCfg(t, itemDeMil(p), FiscalConfig{UFEmpresa: "PR", IcmsInternoAliquota: 0.12})
+	semDif := calcularUmCfg(t, itemDeMil(p), FiscalConfig{UFEmpresa: "PR", IcmsInternoAliquota: decimal.NewFromFloat(0.12)})
 	if semDif.CSTICMS != "20" || !semDif.ReducaoBaseICMSPct.Equal(decimal.NewFromFloat(33.33)) {
 		t.Fatalf("sem diferimento: CST = %s pRedBC %v, quer 20 e 33,33", semDif.CSTICMS, semDif.ReducaoBaseICMSPct)
 	}
@@ -81,8 +81,8 @@ func calcularUmCfg(t *testing.T, it TaxItem, cfg FiscalConfig) TaxItemResult {
 
 func TestParametro_ReducaoNoPercentual(t *testing.T) {
 	// Redução na alíquota não é redução de base: sem pRedBC e sem forçar CST 20.
-	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: 12, RedICMSPct: 50, AlvoRedICMS: "PERCENTUAL"}}
-	r := calcularUmCfg(t, itemDeMil(p), FiscalConfig{UFEmpresa: "PR", IcmsInternoAliquota: 0.12})
+	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: decimal.NewFromFloat(12), RedICMSPct: decimal.NewFromFloat(50), AlvoRedICMS: "PERCENTUAL"}}
+	r := calcularUmCfg(t, itemDeMil(p), FiscalConfig{UFEmpresa: "PR", IcmsInternoAliquota: decimal.NewFromFloat(0.12)})
 	near(t, "aliq reduzida", 0.06, r.AliquotaICMS)
 	near(t, "base cheia", 1000, r.BaseICMS)
 	near(t, "ICMS", 60, r.ValorICMS)
@@ -92,7 +92,7 @@ func TestParametro_ReducaoNoPercentual(t *testing.T) {
 }
 
 func TestParametro_DiferimentoDaRegra(t *testing.T) {
-	p := &ParametroICMSIPI{DiferimentoPct: 100}
+	p := &ParametroICMSIPI{DiferimentoPct: decimal.NewFromFloat(100)}
 	r := calcularUm(t, itemDeMil(p), "PR", "contribuinte")
 	near(t, "diferido integral", 120, r.ValorICMSDiferido)
 	near(t, "pDif da regra", 100, r.DiferimentoICMSPct)
@@ -122,7 +122,7 @@ func TestParametro_IsencaoZeraICMSEDIFAL(t *testing.T) {
 func TestParametro_Interestadual(t *testing.T) {
 	// A regra da UF de destino traz a alíquota da operação; importada segue a
 	// Resolução SF 13/2012 salvo alíquota própria na regra.
-	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: 12}}
+	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: decimal.NewFromFloat(12)}}
 	r := calcularUm(t, itemDeMil(p), "BA", "contribuinte")
 	near(t, "aliq interestadual da regra", 0.12, r.AliquotaICMS)
 	imp := itemDeMil(p)
@@ -136,7 +136,7 @@ func TestParametro_IPI(t *testing.T) {
 	if r.CSTIPI != "52" || !r.ValorIPI.IsZero() || !r.AliquotaIPI.IsZero() {
 		t.Fatalf("IPI isento: CST %s aliq %v valor %v", r.CSTIPI, r.AliquotaIPI, r.ValorIPI)
 	}
-	reduzido := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{RedIPIPct: 50, AlvoRedIPI: "BASE"}}
+	reduzido := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{RedIPIPct: decimal.NewFromFloat(50), AlvoRedIPI: "BASE"}}
 	r = calcularUm(t, itemDeMil(reduzido), "PR", "contribuinte")
 	near(t, "base IPI reduzida", 500, r.BaseIPI)
 	near(t, "IPI", 25, r.ValorIPI)
@@ -160,7 +160,7 @@ func TestParametro_BeneficioFiscalPorLado(t *testing.T) {
 // outro CST e o diferido foi zerado (aparecia "ICMS diferido em 38,46%" numa
 // linha CST 00 do simulador).
 func TestParametro_CSTImpostoTiraANotaDeDiferimento(t *testing.T) {
-	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: 12, CSTICMS: "00"}}
+	p := &ParametroICMSIPI{Contrib: LadoParametroICMSIPI{AliqICMSPct: decimal.NewFromFloat(12), CSTICMS: "00"}}
 	r := calcularUm(t, itemDeMil(p), "PR", "contribuinte")
 	if r.CSTICMS != "00" || !r.ValorICMSDiferido.IsZero() {
 		t.Fatalf("CST %s diferido %v", r.CSTICMS, r.ValorICMSDiferido)

@@ -44,12 +44,12 @@ type sugestaoFiscal struct {
 func (f sugestaoFiscal) GetFiscalConfig(context.Context) (*entity.FiscalConfig, error) {
 	return &entity.FiscalConfig{UFEmpresa: f.uf}, nil
 }
-func (f sugestaoFiscal) GetICMSInternal(context.Context, string) (*float64, *float64, error) {
-	v := 0.18
+func (f sugestaoFiscal) GetICMSInternal(context.Context, string) (*decimal.Decimal, *decimal.Decimal, error) {
+	v := decimal.RequireFromString("0.18")
 	return &v, nil, nil
 }
-func (f sugestaoFiscal) GetICMSInterstate(context.Context, string, string) (*float64, error) {
-	v := 0.12
+func (f sugestaoFiscal) GetICMSInterstate(context.Context, string, string) (*decimal.Decimal, error) {
+	v := decimal.RequireFromString("0.12")
 	return &v, nil
 }
 

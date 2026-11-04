@@ -106,7 +106,16 @@ func (uc *ListICMSInterstateUseCase) Execute(ctx context.Context) (map[string]fl
 	if !uc.Auth.CanManageFiscalConfig(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListICMSInterstate(ctx)
+	tabela, err := uc.Repo.ListICMSInterstate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// A resposta continua numérica: a conversão fica na borda.
+	out := make(map[string]float64, len(tabela))
+	for k, v := range tabela {
+		out[k] = v.InexactFloat64()
+	}
+	return out, nil
 }
 
 type UpsertICMSInternalUseCase struct {
@@ -134,7 +143,15 @@ func (uc *ListICMSInternalUseCase) Execute(ctx context.Context) (map[string]stru
 	if !uc.Auth.CanManageFiscalConfig(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	return uc.Repo.ListICMSInternal(ctx)
+	tabela, err := uc.Repo.ListICMSInternal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]struct{ ICMS, FCP float64 }, len(tabela))
+	for k, v := range tabela {
+		out[k] = struct{ ICMS, FCP float64 }{ICMS: v.ICMS.InexactFloat64(), FCP: v.FCP.InexactFloat64()}
+	}
+	return out, nil
 }
 
 // ufValida devolve a UF em maiúsculas, recusando o que não é sigla de estado.

@@ -266,11 +266,11 @@ func (r *repoNumeracao) GetFiscalConfig(context.Context) (*fiscalentity.FiscalCo
 func (r *repoNumeracao) ListNcmTaxes(context.Context) ([]*fiscalentity.NcmTaxTable, error) {
 	return nil, nil
 }
-func (r *repoNumeracao) ListICMSInterstate(context.Context) (map[string]float64, error) {
-	return map[string]float64{}, nil
+func (r *repoNumeracao) ListICMSInterstate(context.Context) (map[string]decimal.Decimal, error) {
+	return map[string]decimal.Decimal{}, nil
 }
-func (r *repoNumeracao) ListICMSInternal(context.Context) (map[string]struct{ ICMS, FCP float64 }, error) {
-	return map[string]struct{ ICMS, FCP float64 }{}, nil
+func (r *repoNumeracao) ListICMSInternal(context.Context) (map[string]struct{ ICMS, FCP decimal.Decimal }, error) {
+	return map[string]struct{ ICMS, FCP decimal.Decimal }{}, nil
 }
 func (r *repoNumeracao) CreateExit(_ context.Context, e *fiscalentity.FiscalExit) (*fiscalentity.FiscalExit, error) {
 	e.ID = 1
