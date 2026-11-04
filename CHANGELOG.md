@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.7] — 2026-11-04
+
+- refactor(vendas): expedição, previsão, metas, margem e promessa em decimal (etapa 3b) (`6496da7f`)
+- fix(promessa): reserva de tanque cria a sequência que faltava na base (`2e185bac`)
+- fix(compras): editar o pedido sem mudar o valor não zera mais a alçada (`f6c50956`)
+
 ## [v1.10.6] — 2026-11-04
 
 - refactor(vendas): pedido de venda e cliente em decimal (etapa 3a) (`4c5bbbfd`)
