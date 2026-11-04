@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.9] — 2026-11-04
+
+- refactor(engenharia): estrutura, fórmula e custo do roteiro em decimal (etapa 4b) (`21724a25`)
+
 ## [v1.10.8] — 2026-11-04
 
 - refactor(custos): custo-padrão, conversão de UM, ferramenta e ordem planejada em decimal (etapa 4a) (`03b8de1d`)
