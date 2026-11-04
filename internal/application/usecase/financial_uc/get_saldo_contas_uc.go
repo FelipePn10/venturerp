@@ -47,12 +47,12 @@ func (uc *GetSaldoContasUseCase) Execute(ctx context.Context) (*SaldoContasRespo
 		}
 		items = append(items, SaldoContaItem{
 			ContaID: c.ID,
-			Saldo:   saldo,
+			Saldo:   saldo.InexactFloat64(),
 		})
 	}
 
 	return &SaldoContasResponse{
-		SaldoConsolidado: saldoConsolidado,
+		SaldoConsolidado: saldoConsolidado.InexactFloat64(),
 		Contas:           items,
 	}, nil
 }

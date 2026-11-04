@@ -6,6 +6,7 @@ import (
 	"time"
 
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/accounting/repository"
+	"github.com/shopspring/decimal"
 )
 
 // BalanceteLine is one account row of the trial balance (Balancete).
@@ -54,11 +55,11 @@ func (uc *BalanceteUseCase) Execute(ctx context.Context, planID int64, empresaID
 		info[a.ID] = accInfo{number: a.AccountNumber, desc: a.Description}
 	}
 
-	debits := map[int64]float64{}
-	credits := map[int64]float64{}
+	debits := map[int64]decimal.Decimal{}
+	credits := map[int64]decimal.Decimal{}
 	for _, e := range entries {
-		debits[e.DebitAccountID] += e.Value
-		credits[e.CreditAccountID] += e.Value
+		debits[e.DebitAccountID] = debits[e.DebitAccountID].Add(e.Value)
+		credits[e.CreditAccountID] = credits[e.CreditAccountID].Add(e.Value)
 	}
 
 	touched := map[int64]struct{}{}
@@ -74,6 +75,7 @@ func (uc *BalanceteUseCase) Execute(ctx context.Context, planID int64, empresaID
 		PeriodStart: from.Format("2006-01-02"),
 		PeriodEnd:   to.Format("2006-01-02"),
 	}
+	totalDebit, totalCredit := decimal.Zero, decimal.Zero
 	for id := range touched {
 		d := debits[id]
 		c := credits[id]
@@ -81,24 +83,19 @@ func (uc *BalanceteUseCase) Execute(ctx context.Context, planID int64, empresaID
 			AccountID:     id,
 			AccountNumber: info[id].number,
 			Description:   info[id].desc,
-			Debit:         d,
-			Credit:        c,
-			Balance:       d - c,
+			Debit:         d.InexactFloat64(),
+			Credit:        c.InexactFloat64(),
+			Balance:       d.Sub(c).InexactFloat64(),
 		}
 		res.Lines = append(res.Lines, line)
-		res.TotalDebit += d
-		res.TotalCredit += c
+		totalDebit = totalDebit.Add(d)
+		totalCredit = totalCredit.Add(c)
 	}
 	sort.Slice(res.Lines, func(i, j int) bool {
 		return res.Lines[i].AccountNumber < res.Lines[j].AccountNumber
 	})
 	// Double-entry bookkeeping: total debits must equal total credits.
-	res.Balanced = floatsEqual(res.TotalDebit, res.TotalCredit)
+	res.TotalDebit, res.TotalCredit = totalDebit.InexactFloat64(), totalCredit.InexactFloat64()
+	res.Balanced = totalDebit.Equal(totalCredit)
 	return res, nil
-}
-
-func floatsEqual(a, b float64) bool {
-	const eps = 0.005
-	d := a - b
-	return d < eps && d > -eps
 }

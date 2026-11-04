@@ -3,11 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
+
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/stock_uc"
@@ -541,7 +543,7 @@ func (h *StockHandler) SugerirSeparacao(w http.ResponseWriter, r *http.Request) 
 		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
-	quantidade, err := strconv.ParseFloat(r.URL.Query().Get("qty"), 64)
+	quantidade, err := decimal.NewFromString(r.URL.Query().Get("qty"))
 	if err != nil {
 		security.RespondError(w, http.StatusBadRequest, "informe a quantidade a separar em \"qty\"")
 		return
@@ -618,14 +620,14 @@ func (h *StockHandler) SugerirGuarda(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusBadRequest, "código do item inválido")
 		return
 	}
-	quantidade, err := strconv.ParseFloat(r.URL.Query().Get("qty"), 64)
+	quantidade, err := decimal.NewFromString(r.URL.Query().Get("qty"))
 	if err != nil {
 		security.RespondError(w, http.StatusBadRequest, "informe a quantidade a guardar em \"qty\"")
 		return
 	}
 	almoxarifado, _ := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
 	sugestoes, err := h.separacaoUC.SugerirGuarda(
-		r.Context(), itemCode, r.URL.Query().Get("mask"), almoxarifado, quantidade, r.URL.Query().Get("zone"))
+		r.Context(), itemCode, r.URL.Query().Get("mask"), almoxarifado, quantidade.InexactFloat64(), r.URL.Query().Get("zone"))
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

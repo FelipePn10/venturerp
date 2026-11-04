@@ -1,6 +1,10 @@
 package ecd
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type ECDParams struct {
 	Empresa       ECDEmpresa
@@ -102,7 +106,7 @@ type ECDLancamento struct {
 type ECDPartida struct {
 	CodCta   string
 	CodCCus  string
-	VlLcto   float64
+	VlLcto   decimal.Decimal
 	IndDC    string
 	DescHist string
 	CodHist  string
@@ -113,9 +117,9 @@ type ECDBalancete struct {
 	CodCtaSup string
 	CodCta    string
 	DescCta   string
-	VlIni     float64
+	VlIni     decimal.Decimal
 	IndDCIni  string
-	VlFin     float64
+	VlFin     decimal.Decimal
 	IndDCFin  string
 }
 
@@ -126,6 +130,6 @@ type ECDDREItem struct {
 	TipoDem   string
 	DtIni     time.Time
 	DtFin     time.Time
-	VlCta     float64
+	VlCta     decimal.Decimal
 	IndDC     string
 }

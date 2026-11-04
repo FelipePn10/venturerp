@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/accounting"
@@ -89,11 +91,11 @@ func TestAccountingIsIsolatedByTenant(t *testing.T) {
 	if _, err := repo.CreateAccountingAccount(b.Ctx, &entity.AccountingAccount{PlanID: planoB.ID, ParentID: &raiz.ID, AccountNumber: "9", Description: "X", NatureCode: "01", ValidFrom: inicio}); err == nil {
 		t.Fatal("empresa B pendurou conta na conta-pai da A")
 	}
-	lanc := &entity.AccountingJournalEntry{PlanID: plano.ID, EntryDate: inicio, EntryNumber: "L1", DebitAccountID: deb.ID, CreditAccountID: cred.ID, Value: 10, EntryType: "MANUAL"}
+	lanc := &entity.AccountingJournalEntry{PlanID: plano.ID, EntryDate: inicio, EntryNumber: "L1", DebitAccountID: deb.ID, CreditAccountID: cred.ID, Value: decimal.NewFromFloat(10), EntryType: "MANUAL"}
 	if _, err := repo.CreateJournalEntry(b.Ctx, lanc); err == nil {
 		t.Fatal("empresa B lançou no plano da A")
 	}
-	if _, err := repo.CreateJournalEntry(b.Ctx, &entity.AccountingJournalEntry{PlanID: planoB.ID, EntryDate: inicio, EntryNumber: "L1", DebitAccountID: deb.ID, CreditAccountID: cred.ID, Value: 10, EntryType: "MANUAL"}); err == nil {
+	if _, err := repo.CreateJournalEntry(b.Ctx, &entity.AccountingJournalEntry{PlanID: planoB.ID, EntryDate: inicio, EntryNumber: "L1", DebitAccountID: deb.ID, CreditAccountID: cred.ID, Value: decimal.NewFromFloat(10), EntryType: "MANUAL"}); err == nil {
 		t.Fatal("empresa B lançou no próprio plano usando contas da A")
 	}
 	if _, err := repo.CreateJournalEntry(a.Ctx, lanc); err != nil {

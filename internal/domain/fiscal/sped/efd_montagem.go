@@ -9,8 +9,8 @@ import (
 )
 
 // Dados do período lidos das notas do sistema, para montar a EFD sem
-// digitação. Valores chegam em decimal e somam em decimal; só viram float64,
-// já arredondados em 2 casas, ao preencher os registros do leiaute.
+// digitação. Valores chegam em decimal e somam em decimal; os registros do leiaute
+// recebem o valor já arredondado em 2 casas.
 
 type Participante struct {
 	Cod, Nome, CNPJ, CPF, IE, CodMun, End, Num, Compl, Bairro string
@@ -137,8 +137,8 @@ func TipoAjuste(codigo string) (tipo byte, ok bool) {
 	return c[3], true
 }
 
-func v2(d decimal.Decimal) float64 { return d.Round(2).InexactFloat64() }
-func vn(d decimal.Decimal) float64 { return d.InexactFloat64() }
+func v2(d decimal.Decimal) decimal.Decimal { return d.Round(2) }
+func vn(d decimal.Decimal) decimal.Decimal { return d }
 
 func cfopSaida(c string) bool { return c != "" && (c[0] == '5' || c[0] == '6' || c[0] == '7') }
 
@@ -390,7 +390,7 @@ func Montar(d DadosEFD) EFDParams {
 		cad.item(inv.Item, unid, decimal.NewFromInt(1))
 		valor := inv.Valor.Round(2)
 		p.Inventario = append(p.Inventario, EFDInventarioItem{DtInv: d.DataInventario, CodItem: inv.Item.Cod, Unid: unid,
-			Qtd: vn(inv.Quantidade), VlUnit: valor.Div(inv.Quantidade).Round(6).InexactFloat64(), VlItem: v2(valor), IndProp: "0",
+			Qtd: vn(inv.Quantidade), VlUnit: valor.Div(inv.Quantidade).Round(6), VlItem: v2(valor), IndProp: "0",
 			CodCta: d.ContaEstoque})
 	}
 	if len(p.Inventario) > 0 && p.MotivoInventario == "" {

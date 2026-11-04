@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 func sampleParams() EFDParams {
@@ -23,26 +25,26 @@ func sampleParams() EFDParams {
 		Participantes: []EFDParticipante{{CodPart: "P1", Nome: "Fornecedor A", CNPJ: "99887766000155"}},
 		Unidades:      []EFDUnidade{{CodUnd: "UN", DescUnd: "Unidade"}, {CodUnd: "KG", DescUnd: "Quilograma"}},
 		Itens: []EFDItem{
-			{CodItem: "1001", DescItem: "Chapa aço", UnCom: "KG", TipoItem: "01", CodNCM: "72142000", AliqICMS: 18},
+			{CodItem: "1001", DescItem: "Chapa aço", UnCom: "KG", TipoItem: "01", CodNCM: "72142000", AliqICMS: decimal.NewFromFloat(18)},
 		},
 		DocumentosFiscais: []EFDDocumentoFiscal{{
 			IndOper: "1", IndEmit: "0", CodPart: "P1", CodMod: "55", CodSit: "00",
 			SerDoc: "1", NumDoc: "123", ChvNfe: strings.Repeat("1", 44),
 			DtDoc: d(2026, time.January, 10), DtES: d(2026, time.January, 10),
-			VlDoc: 1000, VlMerc: 1000, VlBcIcms: 1000, VlIcms: 180,
+			VlDoc: decimal.NewFromFloat(1000), VlMerc: decimal.NewFromFloat(1000), VlBcIcms: decimal.NewFromFloat(1000), VlIcms: decimal.NewFromFloat(180),
 			Itens: []EFDItemDoc{
-				{NumItem: 1, CodItem: "1001", Qtd: 100, UnCom: "KG", VlUnt: 10, CstIcms: "00", CfopC170: "5101", AliqIcms: 18, VlBcIcms: 1000, VlIcms: 180},
+				{NumItem: 1, CodItem: "1001", Qtd: decimal.NewFromFloat(100), UnCom: "KG", VlUnt: decimal.NewFromFloat(10), CstIcms: "00", CfopC170: "5101", AliqIcms: decimal.NewFromFloat(18), VlBcIcms: decimal.NewFromFloat(1000), VlIcms: decimal.NewFromFloat(180)},
 			},
 			AnaliticosICMS: []EFDC190{
-				{CstIcms: "00", Cfop: "5101", AliqIcms: 18, VlOpr: 1000, VlBcIcms: 1000, VlIcms: 180},
+				{CstIcms: "00", Cfop: "5101", AliqIcms: decimal.NewFromFloat(18), VlOpr: decimal.NewFromFloat(1000), VlBcIcms: decimal.NewFromFloat(1000), VlIcms: decimal.NewFromFloat(180)},
 			},
 		}},
 		ApuracaoICMS: &EFDApuracaoICMS{
-			VlTotDebitos: 180, VlTotCreditos: 0, VlIcmsRecolher: 180,
-			Ajustes: []EFDApuracaoAjuste{{CodAjApur: "PR000001", DescCompl: "ajuste", VlAjApur: 0}},
+			VlTotDebitos: decimal.NewFromFloat(180), VlTotCreditos: decimal.NewFromFloat(0), VlIcmsRecolher: decimal.NewFromFloat(180),
+			Ajustes: []EFDApuracaoAjuste{{CodAjApur: "PR000001", DescCompl: "ajuste", VlAjApur: decimal.NewFromFloat(0)}},
 		},
 		Inventario: []EFDInventarioItem{
-			{DtInv: d(2026, time.January, 31), CodItem: "1001", Unid: "KG", Qtd: 50, VlUnit: 9.5, VlItem: 475, IndProp: "0"},
+			{DtInv: d(2026, time.January, 31), CodItem: "1001", Unid: "KG", Qtd: decimal.NewFromFloat(50), VlUnit: decimal.NewFromFloat(9.5), VlItem: decimal.NewFromFloat(475), IndProp: "0"},
 		},
 	}
 }
@@ -204,9 +206,9 @@ func TestGenerate_DocumentoCancelado(t *testing.T) {
 func TestGenerate_ConhecimentoEIPI(t *testing.T) {
 	p := sampleParams()
 	p.Conhecimentos = []EFDConhecimento{{IndOper: "0", IndEmit: "1", CodPart: "P1", Ser: "1", NumDoc: "456", ChvCTe: strings.Repeat("4", 44),
-		DtDoc: p.Periodo.DataInicial, DtAP: p.Periodo.DataInicial, VlDoc: 1200, VlServ: 1200, VlBcIcms: 1200, VlIcms: 144,
-		Analiticos: []EFDD190{{CstIcms: "000", Cfop: "1353", AliqIcms: 12, VlOpr: 1200, VlBcIcms: 1200, VlIcms: 144}}}}
-	p.ApuracaoIPI = &EFDApuracaoIPI{Linhas: []EFDE510{{Cfop: "5101", CstIpi: "50", VlCont: 1000, VlBcIpi: 1000, VlIpi: 50}}, Deb: 50, Cred: 80}
+		DtDoc: p.Periodo.DataInicial, DtAP: p.Periodo.DataInicial, VlDoc: decimal.NewFromFloat(1200), VlServ: decimal.NewFromFloat(1200), VlBcIcms: decimal.NewFromFloat(1200), VlIcms: decimal.NewFromFloat(144),
+		Analiticos: []EFDD190{{CstIcms: "000", Cfop: "1353", AliqIcms: decimal.NewFromFloat(12), VlOpr: decimal.NewFromFloat(1200), VlBcIcms: decimal.NewFromFloat(1200), VlIcms: decimal.NewFromFloat(144)}}}}
+	p.ApuracaoIPI = &EFDApuracaoIPI{Linhas: []EFDE510{{Cfop: "5101", CstIpi: "50", VlCont: decimal.NewFromFloat(1000), VlBcIpi: decimal.NewFromFloat(1000), VlIpi: decimal.NewFromFloat(50)}}, Deb: decimal.NewFromFloat(50), Cred: decimal.NewFromFloat(80)}
 	out := Generate(p)
 	validar(t, out)
 	if countReg(out, "D100") != 1 || countReg(out, "D190") != 1 || countReg(out, "E520") != 1 {
@@ -218,10 +220,10 @@ func TestGenerate_ConhecimentoEIPI(t *testing.T) {
 }
 
 func TestFmtHelpers(t *testing.T) {
-	if got := fmtVal(1234.5); got != "1234,50" {
+	if got := fmtVal(decimal.NewFromFloat(1234.5)); got != "1234,50" {
 		t.Errorf("fmtVal = %q", got)
 	}
-	if got := fmtQtd(2.5); got != "2,50000" {
+	if got := fmtQtd(decimal.NewFromFloat(2.5)); got != "2,50000" {
 		t.Errorf("fmtQtd = %q", got)
 	}
 	if got := fmtDate(time.Date(2026, 2, 7, 0, 0, 0, 0, time.UTC)); got != "07022026" {

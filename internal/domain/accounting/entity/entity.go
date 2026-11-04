@@ -1,6 +1,11 @@
 package entity
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type PlanStatus string
 
@@ -55,21 +60,30 @@ type AccountingAccountRef struct {
 }
 
 type AccountingJournalEntry struct {
-	ID              int64     `json:"id"`
-	PlanID          int64     `json:"plan_id"`
-	EmpresaID       int       `json:"empresa_id"`
-	EntryDate       time.Time `json:"entry_date"`
-	EntryNumber     string    `json:"entry_number"`
-	BatchNumber     string    `json:"batch_number"`
-	DebitAccountID  int64     `json:"debit_account_id"`
-	CreditAccountID int64     `json:"credit_account_id"`
-	DebitCCID       *int64    `json:"debit_cc_id,omitempty"`
-	CreditCCID      *int64    `json:"credit_cc_id,omitempty"`
-	Value           float64   `json:"value"`
-	HistoryCode     string    `json:"history_code"`
-	Description     string    `json:"description"`
-	EntryType       string    `json:"entry_type"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID              int64           `json:"id"`
+	PlanID          int64           `json:"plan_id"`
+	EmpresaID       int             `json:"empresa_id"`
+	EntryDate       time.Time       `json:"entry_date"`
+	EntryNumber     string          `json:"entry_number"`
+	BatchNumber     string          `json:"batch_number"`
+	DebitAccountID  int64           `json:"debit_account_id"`
+	CreditAccountID int64           `json:"credit_account_id"`
+	DebitCCID       *int64          `json:"debit_cc_id,omitempty"`
+	CreditCCID      *int64          `json:"credit_cc_id,omitempty"`
+	Value           decimal.Decimal `json:"value"`
+	HistoryCode     string          `json:"history_code"`
+	Description     string          `json:"description"`
+	EntryType       string          `json:"entry_type"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+// MarshalJSON mantém o valor como número na resposta: o decimal sairia texto.
+func (e AccountingJournalEntry) MarshalJSON() ([]byte, error) {
+	type semValor AccountingJournalEntry
+	return json.Marshal(struct {
+		semValor
+		Value float64 `json:"value"`
+	}{semValor(e), e.Value.InexactFloat64()})
 }
 
 type AccountingDemonstrative struct {

@@ -231,16 +231,16 @@ func (uc *SpedAutomaticoUseCase) Gerar(ctx context.Context, req SpedAutomaticoRe
 	}
 	r.Participantes, r.Itens = len(params.Participantes), len(params.Itens)
 	if a := params.ApuracaoICMS; a != nil {
-		r.ICMSDebitos, r.ICMSCreditos = decimal.NewFromFloat(a.VlTotDebitos), decimal.NewFromFloat(a.VlTotCreditos)
-		r.ICMSRecolher, r.ICMSSaldoCredor = decimal.NewFromFloat(a.VlIcmsRecolher), decimal.NewFromFloat(a.VlSaldoCredorTransp)
+		r.ICMSDebitos, r.ICMSCreditos = a.VlTotDebitos, a.VlTotCreditos
+		r.ICMSRecolher, r.ICMSSaldoCredor = a.VlIcmsRecolher, a.VlSaldoCredorTransp
 	}
 	if a := params.ApuracaoIPI; a != nil {
-		r.IPIDebitos, r.IPICreditos = decimal.NewFromFloat(a.Deb), decimal.NewFromFloat(a.Cred)
+		r.IPIDebitos, r.IPICreditos = a.Deb, a.Cred
 	}
 	r.Linhas = strings.Count(arquivo, "\n")
 	r.ItensInventario = len(params.Inventario)
 	for _, inv := range params.Inventario {
-		r.ValorInventario = r.ValorInventario.Add(decimal.NewFromFloat(inv.VlItem))
+		r.ValorInventario = r.ValorInventario.Add(inv.VlItem)
 	}
 	res.Avisos = append(avisosEFD(params, d.CodReceitaICMS), avisosInventario...)
 	res.Avisos = append(res.Avisos, avisosCIAP...)

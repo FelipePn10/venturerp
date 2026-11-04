@@ -3,8 +3,9 @@ package accounting_uc
 import (
 	"context"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/ecd"
 	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
@@ -67,7 +68,7 @@ type JournalEntryUseCase struct {
 }
 
 func (uc *JournalEntryUseCase) Create(ctx context.Context, e *accountingEntity.AccountingJournalEntry) (*accountingEntity.AccountingJournalEntry, error) {
-	if e.Value <= 0 {
+	if !e.Value.IsPositive() {
 		return nil, errorsuc.NewValidationError("o valor de entrada deve ser maior que zero")
 	}
 	return uc.Repo.CreateJournalEntry(ctx, e)

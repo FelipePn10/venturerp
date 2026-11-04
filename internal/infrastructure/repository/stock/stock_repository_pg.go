@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/google/uuid"
 	"sort"
 	"strings"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
@@ -1572,7 +1573,7 @@ func scanInventoryItems(rows pgx.Rows) ([]*entity.PhysicalInventoryItem, error) 
 // Lote vencido nunca é sugerido: ele é contado à parte para que a tela possa
 // avisar em vez de fingir que o saldo está disponível.
 func (r *StockRepositorySQLC) SugerirSeparacaoFEFO(
-	ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario float64, regra string,
+	ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario decimal.Decimal, regra string,
 ) (*entity.ResultadoFEFO, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -1613,18 +1614,20 @@ func (r *StockRepositorySQLC) SugerirSeparacaoFEFO(
 	defer linhas.Close()
 
 	resultado := &entity.ResultadoFEFO{
-		ItemCode: itemCode, Mask: mask, Regra: regra, Necessario: necessario,
+		ItemCode: itemCode, Mask: mask, Regra: regra, Necessario: necessario.InexactFloat64(),
 		Linhas: []entity.SugestaoFEFO{},
 	}
 	restante := necessario
 	for linhas.Next() {
 		var s entity.SugestaoFEFO
 		var vencido, bloqueado bool
-		if err := linhas.Scan(&s.Lot, &s.Address, &s.WarehouseID, &s.Disponivel,
+		var disponivel decimal.Decimal
+		if err := linhas.Scan(&s.Lot, &s.Address, &s.WarehouseID, &disponivel,
 			&s.HeatNumber, &s.Certificate, &s.ExpiresAt, &s.ReceivedAt, &vencido,
 			&s.Zone, &s.PickSequence, &bloqueado); err != nil {
 			return nil, fmt.Errorf("lendo lote para separação: %w", err)
 		}
+		s.Disponivel = disponivel.InexactFloat64()
 		if vencido {
 			resultado.VencidosFora++
 			continue
@@ -1635,22 +1638,20 @@ func (r *StockRepositorySQLC) SugerirSeparacaoFEFO(
 			resultado.BloqueadosFora++
 			continue
 		}
-		if restante <= 0 {
+		if !restante.IsPositive() {
 			continue
 		}
-		s.Sugerido = s.Disponivel
-		if s.Sugerido > restante {
-			s.Sugerido = restante
-		}
-		restante -= s.Sugerido
+		sugerido := decimal.Min(disponivel, restante)
+		s.Sugerido = sugerido.InexactFloat64()
+		restante = restante.Sub(sugerido)
 		resultado.Linhas = append(resultado.Linhas, s)
 	}
 	if err := linhas.Err(); err != nil {
 		return nil, fmt.Errorf("lendo lotes para separação: %w", err)
 	}
-	resultado.Atendido = necessario - restante
-	if restante > 0 {
-		resultado.EmFalta = restante
+	resultado.Atendido = necessario.Sub(restante).InexactFloat64()
+	if restante.IsPositive() {
+		resultado.EmFalta = restante.InexactFloat64()
 	}
 	// O FEFO decide QUAIS lotes; a lista é entregue na ordem de caminhada, que é
 	// o que o separador segue no galpão. Sem sequência cadastrada (0) a ordem

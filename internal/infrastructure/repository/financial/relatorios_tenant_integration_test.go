@@ -5,9 +5,10 @@ package financial_test
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 

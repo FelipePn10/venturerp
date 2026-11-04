@@ -87,17 +87,17 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 
 	params := repository.BaixaParams{
 		ContaBancariaID: dto.ContaBancariaID,
-		ValorPago:       valorPago.InexactFloat64(),
-		Juros:           jurosDec.InexactFloat64(),
-		Multa:           multaDec.InexactFloat64(),
-		Desconto:        desconto.InexactFloat64(),
+		ValorPago:       valorPago,
+		Juros:           jurosDec,
+		Multa:           multaDec,
+		Desconto:        desconto,
 		DataPagamento:   dataPagamento,
 		Observacao:      dto.Observacao,
 		BaixadoPor:      userID,
 	}
 
 	jurosDec, multaDec = jurosDec.Round(2), multaDec.Round(2)
-	params.Juros, params.Multa = jurosDec.InexactFloat64(), multaDec.InexactFloat64()
+	params.Juros, params.Multa = jurosDec, multaDec
 	totalFluxo := valorPago.Add(jurosDec).Add(multaDec)
 
 	lote, err := lotePagamento(ctx, uc.Contabil, cp, dto.ContaBancariaID, valorPago, jurosDec.Add(multaDec), desconto, dataPagamento)

@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/shopspring/decimal"
 )
 
 type ImportarOFXUseCase struct {
@@ -106,7 +106,7 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 			continue
 		}
 
-		valor, err := strconv.ParseFloat(strings.TrimSpace(t.TrnAmt), 64)
+		valor, err := decimal.NewFromString(strings.TrimSpace(t.TrnAmt))
 		if err != nil {
 			result.Ignorados++
 			result.Avisos = append(result.Avisos, fmt.Sprintf(
@@ -114,7 +114,7 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 				data.Format("02/01/2006"), t.TrnAmt))
 			continue
 		}
-		if valor == 0 {
+		if valor.IsZero() {
 			result.Ignorados++
 			result.Avisos = append(result.Avisos, fmt.Sprintf(
 				"lançamento de %s ignorado: valor zero não movimenta a conta",
@@ -123,9 +123,9 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 		}
 
 		tipo := "CREDIT"
-		if valor < 0 {
+		if valor.IsNegative() {
 			tipo = "DEBIT"
-			valor = -valor
+			valor = valor.Neg()
 		}
 
 		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(

@@ -2,8 +2,9 @@ package repository
 
 import (
 	"context"
-	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
@@ -12,14 +13,14 @@ import (
 )
 
 type BaixaParams struct {
-	ContaBancariaID int64     `json:"conta_bancaria_id"`
-	ValorPago       float64   `json:"valor_pago"`
-	Juros           float64   `json:"juros"`
-	Multa           float64   `json:"multa"`
-	Desconto        float64   `json:"desconto"`
-	DataPagamento   time.Time `json:"data_pagamento"`
-	Observacao      *string   `json:"observacao,omitempty"`
-	BaixadoPor      uuid.UUID `json:"baixado_por"`
+	ContaBancariaID int64           `json:"conta_bancaria_id"`
+	ValorPago       decimal.Decimal `json:"valor_pago"`
+	Juros           decimal.Decimal `json:"juros"`
+	Multa           decimal.Decimal `json:"multa"`
+	Desconto        decimal.Decimal `json:"desconto"`
+	DataPagamento   time.Time       `json:"data_pagamento"`
+	Observacao      *string         `json:"observacao,omitempty"`
+	BaixadoPor      uuid.UUID       `json:"baixado_por"`
 }
 
 // DateField diz sobre qual data o período filtra. Vazio significa vencimento: é a
@@ -119,7 +120,7 @@ type FinancialRepository interface {
 	CreateContaBancaria(ctx context.Context, c *entity.ContaBancaria) (*entity.ContaBancaria, error)
 	ListContasBancarias(ctx context.Context) ([]*entity.ContaBancaria, error)
 	GetContaBancaria(ctx context.Context, id int64) (*entity.ContaBancaria, error)
-	UpdateSaldo(ctx context.Context, id int64, novoSaldo float64) error
+	UpdateSaldo(ctx context.Context, id int64, novoSaldo decimal.Decimal) error
 
 	// Condicoes Pagamento
 	CreateCondicaoPagamento(ctx context.Context, c *entity.CondicaoPagamento) (*entity.CondicaoPagamento, error)
@@ -175,8 +176,8 @@ type FinancialRepository interface {
 	CreateFluxoCaixa(ctx context.Context, f *entity.FluxoCaixa) (*entity.FluxoCaixa, error)
 	GetFluxoCaixa(ctx context.Context, startDate, endDate time.Time) ([]*entity.FluxoCaixa, error)
 	GetFluxoProjetado(ctx context.Context, startDate time.Time) ([]*ProjectedFlow, error)
-	GetSaldoConta(ctx context.Context, contaID int64) (float64, error)
-	GetSaldoConsolidado(ctx context.Context) (float64, error)
+	GetSaldoConta(ctx context.Context, contaID int64) (decimal.Decimal, error)
+	GetSaldoConsolidado(ctx context.Context) (decimal.Decimal, error)
 	MarcarConciliado(ctx context.Context, id int64) error
 
 	// Tax Assessment
@@ -230,7 +231,7 @@ type FinancialRepository interface {
 	// JÁ existia (mesmo hash): duplicata é resultado normal de reimportar o mesmo
 	// arquivo, e não erro. Sem esse retorno, "duplicado" e "falhou" eram contados
 	// um pelo outro — e a tela informava importação bem-sucedida de nada.
-	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) (bool, error)
+	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor decimal.Decimal, tipo, descricao, fitid, hash string) (bool, error)
 	GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error)
 	ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error
 	AutoMatchExtrato(ctx context.Context, contaID int64) (int, error)

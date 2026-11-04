@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 func Generate(p ECDParams) string {
@@ -227,4 +229,4 @@ func fmtDate(t time.Time) string {
 	return t.Format("02012006")
 }
 
-func fmtVal(v float64) string { return fmt.Sprintf("%.2f", v) }
+func fmtVal(v decimal.Decimal) string { return v.StringFixed(2) }

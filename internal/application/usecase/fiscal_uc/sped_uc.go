@@ -80,13 +80,11 @@ func buildApuracaoFromSummaries(summaries []*fiscalEntity.ICMSSummaryEntry) *spe
 	if len(summaries) == 0 {
 		return &sped.EFDApuracaoICMS{}
 	}
-	// Soma em decimal; o registro do SPED (float, etapa de exportações) recebe
-	// o total já fechado.
 	totalICMS := decimal.Zero
 	for _, s := range summaries {
 		totalICMS = totalICMS.Add(s.ICMSValue)
 	}
-	t := totalICMS.Round(2).InexactFloat64()
+	t := totalICMS.Round(2)
 	return &sped.EFDApuracaoICMS{
 		VlTotDebitos:   t,
 		VlApuracao:     t,
