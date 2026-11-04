@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/nfse"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
@@ -22,7 +24,7 @@ func TestNFSeIsIsolatedByTenant(t *testing.T) {
 	})
 	repo := nfse.NewNFSeRepositoryPG(pool)
 	nota, err := repo.Create(a.Ctx, &entity.NFSe{TipoRPS: 1, NaturezaOperacao: 1, DataEmissao: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC),
-		Status: "RASCUNHO", ItemListaServico: "14.01", Discriminacao: "SERVICO", CodigoMunicipio: "4106902", ValorServicos: 100})
+		Status: "RASCUNHO", ItemListaServico: "14.01", Discriminacao: "SERVICO", CodigoMunicipio: "4106902", ValorServicos: decimal.NewFromFloat(100)})
 	if err != nil {
 		t.Fatal(err)
 	}

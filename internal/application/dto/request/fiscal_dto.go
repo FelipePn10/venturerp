@@ -272,20 +272,20 @@ type FiscalExitLoadItemOverride struct {
 }
 
 type UpdateFiscalConfigDTO struct {
-	CnpjEmpresa               string  `json:"cnpj_empresa"`
-	RazaoSocial               string  `json:"razao_social"`
-	IEEmpresa                 *string `json:"ie_empresa,omitempty"`
-	RegimeTributario          string  `json:"regime_tributario"`
-	UFEmpresa                 string  `json:"uf_empresa"`
-	IcmsInternoAliquota       float64 `json:"icms_interno_aliquota"`
-	IcmsDiferimentoPercentual float64 `json:"icms_diferimento_percentual"`
-	FocusNfeToken             *string `json:"focus_nfe_token,omitempty"`
-	FocusNfeAmbiente          string  `json:"focus_nfe_ambiente"`
-	JurosMes                  float64 `json:"juros_mes"`
-	MultaAtraso               float64 `json:"multa_atraso"`
-	VencimentoIcmsDia         int     `json:"vencimento_icms_dia"`
-	VencimentoIPIDia          int     `json:"vencimento_ipi_dia"`
-	VencimentoPisCofinsDia    int     `json:"vencimento_pis_cofins_dia"`
+	CnpjEmpresa               string          `json:"cnpj_empresa"`
+	RazaoSocial               string          `json:"razao_social"`
+	IEEmpresa                 *string         `json:"ie_empresa,omitempty"`
+	RegimeTributario          string          `json:"regime_tributario"`
+	UFEmpresa                 string          `json:"uf_empresa"`
+	IcmsInternoAliquota       decimal.Decimal `json:"icms_interno_aliquota"`
+	IcmsDiferimentoPercentual decimal.Decimal `json:"icms_diferimento_percentual"`
+	FocusNfeToken             *string         `json:"focus_nfe_token,omitempty"`
+	FocusNfeAmbiente          string          `json:"focus_nfe_ambiente"`
+	JurosMes                  decimal.Decimal `json:"juros_mes"`
+	MultaAtraso               decimal.Decimal `json:"multa_atraso"`
+	VencimentoIcmsDia         int             `json:"vencimento_icms_dia"`
+	VencimentoIPIDia          int             `json:"vencimento_ipi_dia"`
+	VencimentoPisCofinsDia    int             `json:"vencimento_pis_cofins_dia"`
 	// Endereço do emitente
 	Logradouro      string  `json:"logradouro"`
 	Numero          string  `json:"numero"`
@@ -297,8 +297,8 @@ type UpdateFiscalConfigDTO struct {
 	Telefone        *string `json:"telefone,omitempty"`
 	// ExigirRegraICMSIPI e AliquotaCreditoSimples: ausentes (nil) mantêm o que
 	// está gravado — tela antiga não desliga a exigência nem zera o crédito.
-	ExigirRegraICMSIPI     *bool    `json:"exigir_regra_icms_ipi,omitempty"`
-	AliquotaCreditoSimples *float64 `json:"aliquota_credito_simples,omitempty"`
+	ExigirRegraICMSIPI     *bool            `json:"exigir_regra_icms_ipi,omitempty"`
+	AliquotaCreditoSimples *decimal.Decimal `json:"aliquota_credito_simples,omitempty"`
 	// CBenefDiferimento: cBenef do diferimento (PR830001 no PR). Ausente mantém;
 	// vazio ("") limpa.
 	CBenefDiferimento *string `json:"cbenef_diferimento,omitempty"`
@@ -310,49 +310,49 @@ type UpdateFiscalConfigDTO struct {
 }
 
 type UpsertNcmTaxDTO struct {
-	Ncm         string  `json:"ncm"`
-	AliqIPI     float64 `json:"aliq_ipi"`
-	AliqPis     float64 `json:"aliq_pis"`
-	AliqCofins  float64 `json:"aliq_cofins"`
-	CstPis      string  `json:"cst_pis"`
-	CstCofins   string  `json:"cst_cofins"`
-	CstIPI      string  `json:"cst_ipi"`
-	Description *string `json:"description,omitempty"`
+	Ncm         string          `json:"ncm"`
+	AliqIPI     decimal.Decimal `json:"aliq_ipi"`
+	AliqPis     decimal.Decimal `json:"aliq_pis"`
+	AliqCofins  decimal.Decimal `json:"aliq_cofins"`
+	CstPis      string          `json:"cst_pis"`
+	CstCofins   string          `json:"cst_cofins"`
+	CstIPI      string          `json:"cst_ipi"`
+	Description *string         `json:"description,omitempty"`
 }
 
 type UpsertICMSInterstateDTO struct {
-	OriginUF      string  `json:"origin_uf"`
-	DestinationUF string  `json:"destination_uf"`
-	AliqICMS      float64 `json:"aliq_icms"`
+	OriginUF      string          `json:"origin_uf"`
+	DestinationUF string          `json:"destination_uf"`
+	AliqICMS      decimal.Decimal `json:"aliq_icms"`
 }
 
 type UpsertICMSInternalDTO struct {
-	UF       string  `json:"uf"`
-	AliqICMS float64 `json:"aliq_icms"`
-	AliqFCP  float64 `json:"aliq_fcp"`
+	UF       string          `json:"uf"`
+	AliqICMS decimal.Decimal `json:"aliq_icms"`
+	AliqFCP  decimal.Decimal `json:"aliq_fcp"`
 }
 
 type CreateCTeDTO struct {
-	NumeroCTe           int64   `json:"numero_cte"`
-	Serie               string  `json:"serie"`
-	DataEmissao         string  `json:"data_emissao"`
-	DataEntrada         string  `json:"data_entrada"`
-	CnpjEmitente        string  `json:"cnpj_emitente"`
-	RazaoSocialEmitente string  `json:"razao_social_emitente"`
-	IEEmitente          *string `json:"ie_emitente,omitempty"`
-	UFEmitente          *string `json:"uf_emitente,omitempty"`
-	Cfop                string  `json:"cfop"`
-	ValorFrete          float64 `json:"valor_frete"`
-	ValorSeguro         float64 `json:"valor_seguro"`
-	ValorOutros         float64 `json:"valor_outros"`
-	ValorTotal          float64 `json:"valor_total"`
-	ValorICMS           float64 `json:"valor_icms"`
-	BaseICMS            float64 `json:"base_icms"`
-	AliqICMS            float64 `json:"aliq_icms"`
-	CstICMS             *string `json:"cst_icms,omitempty"`
-	TipoRateio          string  `json:"tipo_rateio"`
-	FiscalEntryID       *int64  `json:"fiscal_entry_id,omitempty"`
-	Notes               *string `json:"notes,omitempty"`
+	NumeroCTe           int64           `json:"numero_cte"`
+	Serie               string          `json:"serie"`
+	DataEmissao         string          `json:"data_emissao"`
+	DataEntrada         string          `json:"data_entrada"`
+	CnpjEmitente        string          `json:"cnpj_emitente"`
+	RazaoSocialEmitente string          `json:"razao_social_emitente"`
+	IEEmitente          *string         `json:"ie_emitente,omitempty"`
+	UFEmitente          *string         `json:"uf_emitente,omitempty"`
+	Cfop                string          `json:"cfop"`
+	ValorFrete          decimal.Decimal `json:"valor_frete"`
+	ValorSeguro         decimal.Decimal `json:"valor_seguro"`
+	ValorOutros         decimal.Decimal `json:"valor_outros"`
+	ValorTotal          decimal.Decimal `json:"valor_total"`
+	ValorICMS           decimal.Decimal `json:"valor_icms"`
+	BaseICMS            decimal.Decimal `json:"base_icms"`
+	AliqICMS            decimal.Decimal `json:"aliq_icms"`
+	CstICMS             *string         `json:"cst_icms,omitempty"`
+	TipoRateio          string          `json:"tipo_rateio"`
+	FiscalEntryID       *int64          `json:"fiscal_entry_id,omitempty"`
+	Notes               *string         `json:"notes,omitempty"`
 	// EmissionData carries the full CT-e emission detail (natureza, tipo_cte,
 	// tipo_servico, modal, remetente, destinatário, tomador, municípios,
 	// produto predominante, valores). Required only when the CT-e will be

@@ -1,17 +1,21 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type TaxScenario struct {
 	ID              int64
 	ScenarioName    string
 	DestinationUF   *string
 	DestinationType *string
-	AliqICMS        float64
-	DifICMSPct      float64
+	AliqICMS        decimal.Decimal
+	DifICMSPct      decimal.Decimal
 	CstICMS         string
 	CalcDifal       bool
-	AliqFCP         float64
+	AliqFCP         decimal.Decimal
 	IsActive        bool
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

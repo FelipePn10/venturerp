@@ -115,7 +115,7 @@ func (r *CadastroTributarioPG) TipoNota(ctx context.Context, id int64) (*entity.
 	var tn entity.TipoNotaFiscal
 	var ativo bool
 	err = r.pool.QueryRow(ctx, `
-		SELECT id, code, description, type::text, icms_type::text, icms_reduction_pct::float8,
+		SELECT id, code, description, type::text, icms_type::text, icms_reduction_pct,
 		       calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, is_active
 		  FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(
 		&tn.ID, &tn.Code, &tn.Descricao, &tn.Tipo, &tn.TipoICMS, &tn.ReducaoICMSPct,

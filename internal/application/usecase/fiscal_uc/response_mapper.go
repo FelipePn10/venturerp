@@ -5,6 +5,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/shopspring/decimal"
 )
 
 func toFiscalExitResponse(e *entity.FiscalExit) *response.FiscalExitResponse {
@@ -144,8 +145,17 @@ func ibscbsEnviadoResponse(e *entity.ReformaEnviada) *response.FiscalExitIBSCBSE
 	if e == nil {
 		return nil
 	}
-	return &response.FiscalExitIBSCBSEnviado{CST: e.CST, ClassTrib: e.ClassTrib, Origem: e.Origem, Base: e.Base,
-		IBSUF: e.IBSUF, IBSMun: e.IBSMun, CBS: e.CBS, AliqEfetivaCBS: e.AliqEfetivaCBS}
+	return &response.FiscalExitIBSCBSEnviado{CST: e.CST, ClassTrib: e.ClassTrib, Origem: e.Origem, Base: fptrD(e.Base),
+		IBSUF: fptrD(e.IBSUF), IBSMun: fptrD(e.IBSMun), CBS: fptrD(e.CBS), AliqEfetivaCBS: fptrD(e.AliqEfetivaCBS)}
+}
+
+// fptrD leva o valor gravado (decimal, opcional) à resposta, que continua numérica.
+func fptrD(d *decimal.Decimal) *float64 {
+	if d == nil {
+		return nil
+	}
+	f := d.InexactFloat64()
+	return &f
 }
 
 func toFiscalEntryResponse(e *entity.FiscalEntry) *response.FiscalEntryResponse {
@@ -252,10 +262,10 @@ func toFiscalConfigResponse(c *entity.FiscalConfig) *response.FiscalConfigRespon
 		IEEmpresa:                  c.IEEmpresa,
 		RegimeTributario:           c.RegimeTributario,
 		UFEmpresa:                  c.UFEmpresa,
-		IcmsInternoAliquota:        c.IcmsInternoAliquota,
-		IcmsDiferimentoPercentual:  c.IcmsDiferimentoPercentual,
+		IcmsInternoAliquota:        c.IcmsInternoAliquota.InexactFloat64(),
+		IcmsDiferimentoPercentual:  c.IcmsDiferimentoPercentual.InexactFloat64(),
 		ExigirRegraICMSIPI:         c.ExigirRegraICMSIPI,
-		AliquotaCreditoSimples:     c.AliquotaCreditoSimples,
+		AliquotaCreditoSimples:     c.AliquotaCreditoSimples.InexactFloat64(),
 		CBenefDiferimento:          c.CBenefDiferimento,
 		ObsRetornoIndustrializacao: c.ObsRetornoIndustrializacao,
 		CBenefSuspensao:            c.CBenefSuspensao,
@@ -263,8 +273,8 @@ func toFiscalConfigResponse(c *entity.FiscalConfig) *response.FiscalConfigRespon
 		FocusNfeAmbiente:           c.FocusNfeAmbiente,
 		FocusProducaoTravado:       c.EmProducao(),
 		NomeFantasia:               c.TradeName,
-		JurosMes:                   c.JurosMes,
-		MultaAtraso:                c.MultaAtraso,
+		JurosMes:                   c.JurosMes.InexactFloat64(),
+		MultaAtraso:                c.MultaAtraso.InexactFloat64(),
 		VencimentoIcmsDia:          c.VencimentoIcmsDia,
 		VencimentoIPIDia:           c.VencimentoIPIDia,
 		VencimentoPisCofinsDia:     c.VencimentoPisCofinsDia,
@@ -299,13 +309,13 @@ func toFiscalCTeResponse(c *entity.FiscalCTe) *response.FiscalCTeResponse {
 		IEEmitente:          c.IEEmitente,
 		UFEmitente:          c.UFEmitente,
 		Cfop:                c.Cfop,
-		ValorFrete:          c.ValorFrete,
-		ValorSeguro:         c.ValorSeguro,
-		ValorOutros:         c.ValorOutros,
-		ValorTotal:          c.ValorTotal,
-		ValorICMS:           c.ValorICMS,
-		BaseICMS:            c.BaseICMS,
-		AliqICMS:            c.AliqICMS,
+		ValorFrete:          c.ValorFrete.InexactFloat64(),
+		ValorSeguro:         c.ValorSeguro.InexactFloat64(),
+		ValorOutros:         c.ValorOutros.InexactFloat64(),
+		ValorTotal:          c.ValorTotal.InexactFloat64(),
+		ValorICMS:           c.ValorICMS.InexactFloat64(),
+		BaseICMS:            c.BaseICMS.InexactFloat64(),
+		AliqICMS:            c.AliqICMS.InexactFloat64(),
 		CstICMS:             c.CstICMS,
 		TipoRateio:          c.TipoRateio,
 		FiscalEntryID:       c.FiscalEntryID,
@@ -357,9 +367,9 @@ func toNcmTaxTableResponse(n *entity.NcmTaxTable) *response.NcmTaxTableResponse 
 	return &response.NcmTaxTableResponse{
 		ID:          n.ID,
 		Ncm:         n.Ncm,
-		AliqIPI:     n.AliqIPI,
-		AliqPis:     n.AliqPis,
-		AliqCofins:  n.AliqCofins,
+		AliqIPI:     n.AliqIPI.InexactFloat64(),
+		AliqPis:     n.AliqPis.InexactFloat64(),
+		AliqCofins:  n.AliqCofins.InexactFloat64(),
 		CstPis:      n.CstPis,
 		CstCofins:   n.CstCofins,
 		CstIPI:      n.CstIPI,

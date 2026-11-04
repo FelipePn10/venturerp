@@ -38,7 +38,7 @@ type loadFiscalRepo struct {
 
 func (r *loadFiscalRepo) GetNextNFNumber(context.Context) (int64, error) { return r.nextNF, nil }
 func (r *loadFiscalRepo) GetFiscalConfig(context.Context) (*fiscalentity.FiscalConfig, error) {
-	return &fiscalentity.FiscalConfig{UFEmpresa: "SP", IcmsInternoAliquota: 0.18}, nil
+	return &fiscalentity.FiscalConfig{UFEmpresa: "SP", IcmsInternoAliquota: decimal.NewFromFloat(0.18)}, nil
 }
 func (r *loadFiscalRepo) NFNumberExists(context.Context, int64, string) (bool, error) {
 	return false, nil
@@ -46,11 +46,11 @@ func (r *loadFiscalRepo) NFNumberExists(context.Context, int64, string) (bool, e
 func (r *loadFiscalRepo) ListNcmTaxes(context.Context) ([]*fiscalentity.NcmTaxTable, error) {
 	return nil, nil
 }
-func (r *loadFiscalRepo) ListICMSInterstate(context.Context) (map[string]float64, error) {
-	return map[string]float64{}, nil
+func (r *loadFiscalRepo) ListICMSInterstate(context.Context) (map[string]decimal.Decimal, error) {
+	return map[string]decimal.Decimal{}, nil
 }
-func (r *loadFiscalRepo) ListICMSInternal(context.Context) (map[string]struct{ ICMS, FCP float64 }, error) {
-	return map[string]struct{ ICMS, FCP float64 }{}, nil
+func (r *loadFiscalRepo) ListICMSInternal(context.Context) (map[string]struct{ ICMS, FCP decimal.Decimal }, error) {
+	return map[string]struct{ ICMS, FCP decimal.Decimal }{}, nil
 }
 func (r *loadFiscalRepo) CreateExit(_ context.Context, e *fiscalentity.FiscalExit) (*fiscalentity.FiscalExit, error) {
 	e.ID = 77

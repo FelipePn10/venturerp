@@ -12,6 +12,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
+	"github.com/shopspring/decimal"
 )
 
 // AuthorizeCTeUseCase transmits a locally registered CT-e to SEFAZ via Focus.
@@ -61,11 +62,12 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 	if payload.NaturezaOperacao == "" {
 		payload.NaturezaOperacao = "Prestação de serviço de transporte"
 	}
+	// O payload da Focus é JSON numérico: a conversão fica aqui, na borda.
 	if payload.ValorTotalPrestacao == 0 {
-		payload.ValorTotalPrestacao = cte.ValorTotal
+		payload.ValorTotalPrestacao = cte.ValorTotal.InexactFloat64()
 	}
 	if payload.ValorReceber == 0 {
-		payload.ValorReceber = cte.ValorTotal
+		payload.ValorReceber = cte.ValorTotal.InexactFloat64()
 	}
 	if payload.ICMS.SituacaoTributaria == "" {
 		st := "90"
@@ -74,9 +76,9 @@ func (uc *AuthorizeCTeUseCase) Execute(ctx context.Context, id int64) (*response
 		}
 		payload.ICMS = focusnfe.CTeICMS{
 			SituacaoTributaria: st,
-			BaseCalculo:        cte.BaseICMS,
-			Aliquota:           cte.AliqICMS * 100,
-			Valor:              cte.ValorICMS,
+			BaseCalculo:        cte.BaseICMS.InexactFloat64(),
+			Aliquota:           cte.AliqICMS.Mul(decimal.NewFromInt(100)).InexactFloat64(),
+			Valor:              cte.ValorICMS.InexactFloat64(),
 		}
 	}
 	payload.Emitente = focusnfe.CTeParte{

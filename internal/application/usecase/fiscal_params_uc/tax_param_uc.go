@@ -2,8 +2,9 @@ package fiscal_params_uc
 
 import (
 	"context"
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -222,7 +223,7 @@ func conferirCenario(dto request.CreateTaxParamDTO) error {
 	if f := finalidadeOuNil(dto.FinalidadeCompra); f != nil && !engine.FinalidadeValida(*f) {
 		return errorsuc.NewValidationError("finalidade da compra inválida: use REVENDA, INDUSTRIALIZACAO ou USO_CONSUMO")
 	}
-	if dto.MvaPct < 0 {
+	if dto.MvaPct.IsNegative() {
 		return errorsuc.NewValidationError("a MVA não pode ser negativa")
 	}
 	if c := dto.CSOSNIGMS; c != nil && strings.TrimSpace(*c) != "" {

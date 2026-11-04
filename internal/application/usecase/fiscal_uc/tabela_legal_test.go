@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 )
@@ -26,7 +28,7 @@ func TestTabelaLegalSoAdministradorEdita(t *testing.T) {
 	if !podeEditarTabelaLegal(ctx, authTabela{escreve: true, admin: true}) {
 		t.Fatal("administrador deveria editar")
 	}
-	if err := (&UpsertICMSInternalUseCase{Auth: authTabela{escreve: true}}).Execute(ctx, request.UpsertICMSInternalDTO{UF: "SP", AliqICMS: 18}); err == nil {
+	if err := (&UpsertICMSInternalUseCase{Auth: authTabela{escreve: true}}).Execute(ctx, request.UpsertICMSInternalDTO{UF: "SP", AliqICMS: decimal.NewFromFloat(18)}); err == nil {
 		t.Fatal("o use case deveria recusar o usuário comum")
 	}
 }

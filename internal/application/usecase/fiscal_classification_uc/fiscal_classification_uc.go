@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -190,14 +192,14 @@ func (uc *FiscalClassificationUseCase) List(ctx context.Context, onlyActive bool
 }
 
 // GetIPIRate implements ports.FiscalClassificationProvider.
-func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classificationCode int64) (float64, bool, error) {
+func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classificationCode int64) (decimal.Decimal, bool, error) {
 	enterpriseID, authErr := uc.auth.EnterpriseID(ctx)
 	if authErr != nil {
-		return 0, false, authErr
+		return decimal.Zero, false, authErr
 	}
 	c, err := uc.repo.GetByCode(ctx, enterpriseID, classificationCode)
 	if err != nil || c == nil {
-		return 0, false, nil
+		return decimal.Zero, false, nil
 	}
 	return c.IPIRate, true, nil
 }

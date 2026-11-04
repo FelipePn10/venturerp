@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
@@ -33,12 +35,12 @@ func TestIntegration_NFSe_CRUDAndAuthorization(t *testing.T) {
 		ItemListaServico:   "14.01",
 		Discriminacao:      "Manutenção de equipamento industrial",
 		CodigoMunicipio:    "4106902",
-		ValorServicos:      1000,
-		ValorDeducoes:      0,
-		AliquotaISS:        0.05,
+		ValorServicos:      decimal.NewFromFloat(1000),
+		ValorDeducoes:      decimal.NewFromFloat(0),
+		AliquotaISS:        decimal.NewFromFloat(0.05),
 		IssRetido:          false,
-		ValorISS:           50,
-		ValorLiquido:       1000,
+		ValorISS:           decimal.NewFromFloat(50),
+		ValorLiquido:       decimal.NewFromFloat(1000),
 		Notes:              sp("teste integração"),
 		CreatedBy:          user,
 	}
@@ -56,8 +58,8 @@ func TestIntegration_NFSe_CRUDAndAuthorization(t *testing.T) {
 	if got.Status != entity.NFSeStatusRascunho {
 		t.Errorf("status = %s, want RASCUNHO", got.Status)
 	}
-	if got.ItemListaServico != "14.01" || got.ValorServicos != 1000 || got.ValorISS != 50 {
-		t.Errorf("unexpected NFS-e fields: item=%s servicos=%.2f iss=%.2f", got.ItemListaServico, got.ValorServicos, got.ValorISS)
+	if got.ItemListaServico != "14.01" || !got.ValorServicos.Equal(decimal.NewFromFloat(1000)) || !got.ValorISS.Equal(decimal.NewFromFloat(50)) {
+		t.Errorf("unexpected NFS-e fields: item=%s servicos=%v iss=%v", got.ItemListaServico, got.ValorServicos, got.ValorISS)
 	}
 	if got.TomadorRazaoSocial == nil || *got.TomadorRazaoSocial != "Cliente Serviços SA" {
 		t.Errorf("tomador = %v", got.TomadorRazaoSocial)

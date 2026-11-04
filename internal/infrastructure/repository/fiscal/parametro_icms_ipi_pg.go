@@ -133,23 +133,23 @@ func (r *ParametroICMSIPIPG) ParametroICMSIPI(ctx context.Context, q engine.Cons
 		return nil, fmt.Errorf("buscando o parâmetro de ICMS/IPI: %w", err)
 	}
 	p.Contrib = engine.LadoParametroICMSIPI{
-		AliqICMSPct: aliqC.InexactFloat64(), CSTICMS: texto(cstC), RedICMSPct: redC.InexactFloat64(), AlvoRedICMS: texto(alvoC),
-		RedIPIPct: ipiC.InexactFloat64(), AlvoRedIPI: texto(alvoIPIC), CodBeneficio: texto(benC), AliqSTPct: stC.InexactFloat64(),
+		AliqICMSPct: aliqC, CSTICMS: texto(cstC), RedICMSPct: redC, AlvoRedICMS: texto(alvoC),
+		RedIPIPct: ipiC, AlvoRedIPI: texto(alvoIPIC), CodBeneficio: texto(benC), AliqSTPct: stC,
 	}
 	p.NaoContrib = engine.LadoParametroICMSIPI{
-		AliqICMSPct: aliqN.InexactFloat64(), CSTICMS: texto(cstN), RedICMSPct: redN.InexactFloat64(), AlvoRedICMS: texto(alvoN),
-		RedIPIPct: ipiN.InexactFloat64(), AlvoRedIPI: texto(alvoIPIN), CodBeneficio: texto(benN), AliqSTPct: stN.InexactFloat64(),
+		AliqICMSPct: aliqN, CSTICMS: texto(cstN), RedICMSPct: redN, AlvoRedICMS: texto(alvoN),
+		RedIPIPct: ipiN, AlvoRedIPI: texto(alvoIPIN), CodBeneficio: texto(benN), AliqSTPct: stN,
 	}
-	p.DiferimentoPct = dif.InexactFloat64()
-	p.AliqImportadoPct = imp.InexactFloat64()
+	p.DiferimentoPct = dif
+	p.AliqImportadoPct = imp
 	p.CSTIPI = texto(cstIPI)
 	p.CodBeneficio = texto(benG)
 	p.CSOSN = texto(csosn)
-	p.MvaPct = mva.InexactFloat64()
-	p.RedBaseSTPct = redST.InexactFloat64()
+	p.MvaPct = mva
+	p.RedBaseSTPct = redST
 	p.DifalTipo = texto(difTipo)
-	p.DifalRedPct = difRed.InexactFloat64()
-	p.FCPProdutoPct = fcpProd.InexactFloat64()
+	p.DifalRedPct = difRed
+	p.FCPProdutoPct = fcpProd
 	return &p, nil
 }
 

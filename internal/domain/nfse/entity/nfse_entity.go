@@ -3,6 +3,8 @@ package entity
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 )
 
@@ -41,16 +43,16 @@ type NFSe struct {
 	TomadorCEP             *string `json:"tomador_cep,omitempty"`
 
 	// Serviço
-	ItemListaServico          string  `json:"item_lista_servico"`
-	CodigoTributarioMunicipio *string `json:"codigo_tributario_municipio,omitempty"`
-	Discriminacao             string  `json:"discriminacao"`
-	CodigoMunicipio           string  `json:"codigo_municipio"`
-	ValorServicos             float64 `json:"valor_servicos"`
-	ValorDeducoes             float64 `json:"valor_deducoes"`
-	AliquotaISS               float64 `json:"aliquota_iss"`
-	IssRetido                 bool    `json:"iss_retido"`
-	ValorISS                  float64 `json:"valor_iss"`
-	ValorLiquido              float64 `json:"valor_liquido"`
+	ItemListaServico          string          `json:"item_lista_servico"`
+	CodigoTributarioMunicipio *string         `json:"codigo_tributario_municipio,omitempty"`
+	Discriminacao             string          `json:"discriminacao"`
+	CodigoMunicipio           string          `json:"codigo_municipio"`
+	ValorServicos             decimal.Decimal `json:"valor_servicos"`
+	ValorDeducoes             decimal.Decimal `json:"valor_deducoes"`
+	AliquotaISS               decimal.Decimal `json:"aliquota_iss"`
+	IssRetido                 bool            `json:"iss_retido"`
+	ValorISS                  decimal.Decimal `json:"valor_iss"`
+	ValorLiquido              decimal.Decimal `json:"valor_liquido"`
 
 	// Emissão / prefeitura
 	FocusRef          *string `json:"focus_ref,omitempty"`

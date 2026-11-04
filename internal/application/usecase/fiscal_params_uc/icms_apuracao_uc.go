@@ -240,7 +240,7 @@ func (uc *ICMSSummaryEntryUseCase) Create(ctx context.Context, e *entity.ICMSSum
 	if e.UF == "" {
 		return nil, errorsuc.NewValidationError("informe a UF")
 	}
-	if e.ICMSBase < 0 || e.ICMSValue < 0 {
+	if e.ICMSBase.IsNegative() || e.ICMSValue.IsNegative() {
 		return nil, errorsuc.NewValidationError("a base e o valor do ICMS devem ser maiores ou iguais a zero")
 	}
 	e.IsActive = true
@@ -260,7 +260,7 @@ func (uc *ICMSSummaryEntryUseCase) Update(ctx context.Context, e *entity.ICMSSum
 			return nil, err
 		}
 	}
-	if e.ICMSBase < 0 || e.ICMSValue < 0 {
+	if e.ICMSBase.IsNegative() || e.ICMSValue.IsNegative() {
 		return nil, errorsuc.NewValidationError("a base e o valor do ICMS devem ser maiores ou iguais a zero")
 	}
 	updated, err := uc.Repo.UpdateICMSSummaryEntry(ctx, e)
@@ -327,7 +327,7 @@ func (uc *SimplesNacionalUseCase) Create(ctx context.Context, s *entity.SimplesN
 	if !validAnnexes[string(s.Annex)] {
 		return nil, errorsuc.NewValidationError("o anexo deve ser I, II, III, IV, V ou VI")
 	}
-	if s.ReceitaInterna < 0 || s.ReceitaExterna < 0 {
+	if s.ReceitaInterna.IsNegative() || s.ReceitaExterna.IsNegative() {
 		return nil, errorsuc.NewValidationError("os valores de receita devem ser maiores ou iguais a zero")
 	}
 	s.IsActive = true

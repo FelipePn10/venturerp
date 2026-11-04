@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	nfseentity "github.com/FelipePn10/panossoerp/internal/domain/nfse/entity"
@@ -81,8 +83,8 @@ func validCreateDTO() request.CreateNFSeDTO {
 		ItemListaServico: "1.01",
 		Discriminacao:    "Servico de montagem industrial",
 		CodigoMunicipio:  "3550308",
-		ValorServicos:    1200.00,
-		AliquotaISS:      0.05,
+		ValorServicos:    decimal.NewFromFloat(1200.00),
+		AliquotaISS:      decimal.NewFromFloat(0.05),
 	}
 }
 
@@ -122,7 +124,7 @@ func TestCreateNFSe_ValidationErrors(t *testing.T) {
 		name   string
 		mutate func(*request.CreateNFSeDTO)
 	}{
-		{"missing valor_servicos", func(d *request.CreateNFSeDTO) { d.ValorServicos = 0 }},
+		{"missing valor_servicos", func(d *request.CreateNFSeDTO) { d.ValorServicos = decimal.NewFromFloat(0) }},
 		{"missing item_lista_servico", func(d *request.CreateNFSeDTO) { d.ItemListaServico = "" }},
 		{"missing discriminacao", func(d *request.CreateNFSeDTO) { d.Discriminacao = "" }},
 		{"missing codigo_municipio", func(d *request.CreateNFSeDTO) { d.CodigoMunicipio = "" }},
@@ -147,16 +149,16 @@ func TestCreateNFSe_ISSCalculation(t *testing.T) {
 	uc := &CreateNFSeUseCase{Repo: repo, Auth: &fakeNFSeAuth{canCreate: true}}
 
 	dto := validCreateDTO()
-	dto.ValorServicos = 1000
-	dto.ValorDeducoes = 200
-	dto.AliquotaISS = 0.05
+	dto.ValorServicos = decimal.NewFromFloat(1000)
+	dto.ValorDeducoes = decimal.NewFromFloat(200)
+	dto.AliquotaISS = decimal.NewFromFloat(0.05)
 
 	_, err := uc.Execute(context.Background(), dto)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// base = 1000 − 200 = 800; ISS = 800 × 0.05 = 40
-	if repo.created.ValorISS != 40 {
+	if !repo.created.ValorISS.Equal(decimal.NewFromFloat(40)) {
 		t.Errorf("ValorISS = %v, want 40", repo.created.ValorISS)
 	}
 }

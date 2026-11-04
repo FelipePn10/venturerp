@@ -1,13 +1,17 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 type NcmTaxTable struct {
 	ID          int64
 	Ncm         string
-	AliqIPI     float64
-	AliqPis     float64
-	AliqCofins  float64
+	AliqIPI     decimal.Decimal
+	AliqPis     decimal.Decimal
+	AliqCofins  decimal.Decimal
 	CstPis      string
 	CstCofins   string
 	CstIPI      string

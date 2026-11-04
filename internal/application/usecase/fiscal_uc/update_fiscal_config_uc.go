@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -81,7 +83,7 @@ func (uc *UpdateFiscalConfigUseCase) Execute(ctx context.Context, dto request.Up
 		cfg.TradeName, cfg.Email = atual.TradeName, atual.Email
 	}
 
-	if dto.AliquotaCreditoSimples != nil && (*dto.AliquotaCreditoSimples < 0 || *dto.AliquotaCreditoSimples > 100) {
+	if dto.AliquotaCreditoSimples != nil && (dto.AliquotaCreditoSimples.IsNegative() || dto.AliquotaCreditoSimples.GreaterThan(decimal.NewFromInt(100))) {
 		return nil, errorsuc.NewValidationError("a alíquota de crédito do Simples Nacional deve estar entre 0 e 100%")
 	}
 	if atual != nil && (dto.ExigirRegraICMSIPI == nil || dto.AliquotaCreditoSimples == nil || dto.CBenefDiferimento == nil) {

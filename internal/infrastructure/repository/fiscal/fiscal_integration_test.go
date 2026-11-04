@@ -4,10 +4,11 @@ package fiscal_test
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 
@@ -133,11 +134,11 @@ func TestIntegration_CTe_AuthorizationPersistence(t *testing.T) {
 		CnpjEmitente:        "11222333000181",
 		RazaoSocialEmitente: "Transportadora Teste",
 		Cfop:                "1352",
-		ValorFrete:          500,
-		ValorTotal:          500,
-		ValorICMS:           60,
-		BaseICMS:            500,
-		AliqICMS:            0.12,
+		ValorFrete:          decimal.NewFromFloat(500),
+		ValorTotal:          decimal.NewFromFloat(500),
+		ValorICMS:           decimal.NewFromFloat(60),
+		BaseICMS:            decimal.NewFromFloat(500),
+		AliqICMS:            decimal.NewFromFloat(0.12),
 		TipoRateio:          "VALOR",
 		Status:              "PENDENTE",
 		EmissionData:        &emission,

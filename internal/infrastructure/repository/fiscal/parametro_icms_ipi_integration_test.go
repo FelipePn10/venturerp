@@ -5,6 +5,8 @@ package fiscal_test
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	fiscalpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
@@ -58,7 +60,7 @@ func TestParametroICMSIPIHierarquia(t *testing.T) {
 			}
 			return
 		}
-		if p == nil || p.ID != id || p.Contrib.AliqICMSPct != pct {
+		if p == nil || p.ID != id || !p.Contrib.AliqICMSPct.Equal(decimal.NewFromFloat(pct)) {
 			t.Fatalf("%s: regra %+v, quer %d (%.2f%%)", nome, p, id, pct)
 		}
 	}
@@ -80,7 +82,7 @@ func TestParametroICMSIPIHierarquia(t *testing.T) {
 	porCliente := regra("PR", "SAIDA", s("73269000"), nil, &clienteSeg, nil, false, 19)
 	quer("cliente vence segmento", &item, &clienteSeg, porCliente, 19)
 	// Empresa do Simples: a regra de optante (do item) passa a valer e vence o NCM.
-	if p, err := r.ParametroICMSIPI(ctx, engine.ConsultaParametroICMSIPI{ItemCode: &item, NCM: &ncm, UF: "PR", Simples: true}); err != nil || p == nil || p.Contrib.AliqICMSPct != 3 {
+	if p, err := r.ParametroICMSIPI(ctx, engine.ConsultaParametroICMSIPI{ItemCode: &item, NCM: &ncm, UF: "PR", Simples: true}); err != nil || p == nil || !p.Contrib.AliqICMSPct.Equal(decimal.NewFromFloat(3)) {
 		t.Fatalf("empresa do Simples: %+v %v, quer a regra de optante (3%%)", p, err)
 	}
 	doItem := regra("PR", "SAIDA", nil, &item, nil, nil, false, 20)
@@ -147,7 +149,7 @@ func TestParametroICMSIPIFiltrosDeCenario(t *testing.T) {
 		return p
 	}
 	p := busca("sem finalidade nem tipo: a geral", engine.ConsultaParametroICMSIPI{}, geral)
-	if p.CSOSN != "101" || p.MvaPct != 40 || p.MvaAjustar || p.RedBaseSTPct != 10 || p.Contrib.AliqSTPct != 18 || p.DifalTipo != "NAO_CONSIDERA" || p.DifalRedPct != 20 || p.FCPProdutoPct != 2 {
+	if p.CSOSN != "101" || !p.MvaPct.Equal(decimal.NewFromFloat(40)) || p.MvaAjustar || !p.RedBaseSTPct.Equal(decimal.NewFromFloat(10)) || !p.Contrib.AliqSTPct.Equal(decimal.NewFromFloat(18)) || p.DifalTipo != "NAO_CONSIDERA" || !p.DifalRedPct.Equal(decimal.NewFromFloat(20)) || !p.FCPProdutoPct.Equal(decimal.NewFromFloat(2)) {
 		t.Fatalf("campos de cenário não lidos: %+v", p)
 	}
 	busca("revenda não pega a regra de uso e consumo", engine.ConsultaParametroICMSIPI{Finalidade: "REVENDA"}, geral)
