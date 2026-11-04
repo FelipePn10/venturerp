@@ -25,10 +25,12 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) NextReservationCode(ctx context.Context) (int64, error) {
 	var code int64
+	// Cria a linha na primeira reserva: a base da Tecnofer não tinha a linha 1
+	// (a migração que a semeia não chegou a ela) e o UPDATE puro não achava
+	// nada — toda reserva gravada respondia 404.
 	err := r.pool.QueryRow(ctx, `
-		UPDATE delivery_tank_reservation_sequences
-		SET last_code = last_code + 1
-		WHERE id = 1
+		INSERT INTO delivery_tank_reservation_sequences (id, last_code) VALUES (1, 1)
+		ON CONFLICT (id) DO UPDATE SET last_code = delivery_tank_reservation_sequences.last_code + 1
 		RETURNING last_code
 	`).Scan(&code)
 	if err != nil {

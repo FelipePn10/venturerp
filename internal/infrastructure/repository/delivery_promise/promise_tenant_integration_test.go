@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/google/uuid"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/delivery_promise/entity"
@@ -32,7 +34,7 @@ func TestDeliveryPromiseIsIsolatedByTenant(t *testing.T) {
 	testutil.SeedItem(t, pool, a.Ctx, item, testutil.Actor(t, pool))
 	repo := delivery_promise.New(pool)
 	hoje := time.Date(2030, 3, 10, 0, 0, 0, 0, time.UTC)
-	res := &entity.TankReservation{Code: testutil.UniqueCode(), ItemCode: item, TankCode: 1, RequestedQty: 10, ReservedQty: 10,
+	res := &entity.TankReservation{Code: testutil.UniqueCode(), ItemCode: item, TankCode: 1, RequestedQty: decimal.NewFromFloat(10), ReservedQty: decimal.NewFromFloat(10),
 		AllocationDate: hoje, ExpiresAt: hoje.AddDate(0, 0, 5), Status: entity.TankReservationActive, CreatedBy: uuid.New()}
 	if _, err := repo.CreateReservation(b.Ctx, res); err == nil {
 		t.Fatal("empresa B reservou tanque para item da A")
@@ -65,5 +67,30 @@ func TestDeliveryPromiseIsIsolatedByTenant(t *testing.T) {
 	}
 	if got, err := params.Get(a.Ctx); err != nil || !got.UseDeliveryPromise {
 		t.Fatalf("a configuração da B sobrescreveu a da A: %+v (%v)", got, err)
+	}
+}
+
+// TestNextReservationCodeCriaASequencia: a base da Tecnofer não tinha a linha da
+// sequência das reservas, e o UPDATE puro respondia "não encontrado" a toda
+// reserva gravada. Sem a linha, o próximo código é 1; com ela, segue contando.
+func TestNextReservationCodeCriaASequencia(t *testing.T) {
+	pool := testutil.Pool(t)
+	ctx := context.Background()
+	var antes *int64
+	_ = pool.QueryRow(ctx, `SELECT last_code FROM delivery_tank_reservation_sequences WHERE id = 1`).Scan(&antes)
+	t.Cleanup(func() {
+		if antes != nil {
+			_, _ = pool.Exec(ctx, `UPDATE delivery_tank_reservation_sequences SET last_code = GREATEST(last_code, $1) WHERE id = 1`, *antes)
+		}
+	})
+	if _, err := pool.Exec(ctx, `DELETE FROM delivery_tank_reservation_sequences`); err != nil {
+		t.Fatal(err)
+	}
+	repo := delivery_promise.New(pool)
+	if c, err := repo.NextReservationCode(ctx); err != nil || c != 1 {
+		t.Fatalf("sem a linha da sequência: código %d, erro %v; esperado 1", c, err)
+	}
+	if c, err := repo.NextReservationCode(ctx); err != nil || c != 2 {
+		t.Fatalf("segundo código %d, erro %v; esperado 2", c, err)
 	}
 }
