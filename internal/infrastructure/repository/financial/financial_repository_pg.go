@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/journal"
-	"strings"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
@@ -35,7 +36,7 @@ func (r *FinancialRepositoryPG) CreateContaBancaria(ctx context.Context, c *enti
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 		 RETURNING id, created_at, updated_at`,
 		c.Banco, c.Agencia, c.Conta, c.Digito, c.Descricao, c.Titular,
-		c.SaldoInicial.InexactFloat64(), c.ChavePix, c.TipoChavePix, c.IsActive, c.CreatedBy, empresa,
+		c.SaldoInicial, c.ChavePix, c.TipoChavePix, c.IsActive, c.CreatedBy, empresa,
 	).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating conta bancaria: %w", err)
@@ -60,13 +61,13 @@ func (r *FinancialRepositoryPG) ListContasBancarias(ctx context.Context) ([]*ent
 	var out []*entity.ContaBancaria
 	for rows.Next() {
 		var c entity.ContaBancaria
-		var saldo float64
+		var saldo decimal.Decimal
 		if err := rows.Scan(&c.ID, &c.Banco, &c.Agencia, &c.Conta, &c.Digito, &c.Descricao,
 			&c.Titular, &saldo, &c.ChavePix, &c.TipoChavePix, &c.IsActive,
 			&c.CreatedAt, &c.UpdatedAt, &c.CreatedBy, &c.AccountingAccountID); err != nil {
 			return nil, fmt.Errorf("scanning conta bancaria: %w", err)
 		}
-		c.SaldoInicial = decimal.NewFromFloat(saldo)
+		c.SaldoInicial = saldo
 		out = append(out, &c)
 	}
 	return out, rows.Err()
@@ -74,7 +75,7 @@ func (r *FinancialRepositoryPG) ListContasBancarias(ctx context.Context) ([]*ent
 
 func (r *FinancialRepositoryPG) GetContaBancaria(ctx context.Context, id int64) (*entity.ContaBancaria, error) {
 	var c entity.ContaBancaria
-	var saldo float64
+	var saldo decimal.Decimal
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -91,11 +92,11 @@ func (r *FinancialRepositoryPG) GetContaBancaria(ctx context.Context, id int64) 
 		}
 		return nil, fmt.Errorf("getting conta bancaria: %w", err)
 	}
-	c.SaldoInicial = decimal.NewFromFloat(saldo)
+	c.SaldoInicial = saldo
 	return &c, nil
 }
 
-func (r *FinancialRepositoryPG) UpdateSaldo(ctx context.Context, id int64, novoSaldo float64) error {
+func (r *FinancialRepositoryPG) UpdateSaldo(ctx context.Context, id int64, novoSaldo decimal.Decimal) error {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return err
@@ -331,7 +332,7 @@ func inserirContaPagar(ctx context.Context, tx pgx.Tx, empresa int64, c *entity.
 		 RETURNING id, created_at, updated_at`,
 		c.NumeroDocumento, c.TipoDocumento, c.FornecedorID, c.FiscalEntryID, c.PurchaseOrderID,
 		c.DataLancamento, c.DataEmissao, c.DataVencimento,
-		c.ValorBruto.InexactFloat64(), c.Desconto.InexactFloat64(), c.Juros.InexactFloat64(), c.Multa.InexactFloat64(), c.ValorPago.InexactFloat64(),
+		c.ValorBruto, c.Desconto, c.Juros, c.Multa, c.ValorPago,
 		c.ParcelaNumero, c.ParcelaTotal, c.ParcelaPaiID,
 		c.FormaPagamento, c.PlanoContasID, c.CentroCustoID,
 		string(c.StatusAprovacao), string(c.Status),
@@ -626,7 +627,7 @@ func (r *FinancialRepositoryPG) UpdateContaPagar(ctx context.Context, c *entity.
 		 WHERE id=$17 AND enterprise_id=$18`,
 		c.NumeroDocumento, c.TipoDocumento, c.FornecedorID,
 		c.DataEmissao, c.DataVencimento,
-		c.ValorBruto.InexactFloat64(), c.Desconto.InexactFloat64(), c.Juros.InexactFloat64(), c.Multa.InexactFloat64(), c.ValorPago.InexactFloat64(),
+		c.ValorBruto, c.Desconto, c.Juros, c.Multa, c.ValorPago,
 		c.ParcelaNumero, c.ParcelaTotal,
 		c.FormaPagamento, c.PlanoContasID, c.CentroCustoID,
 		c.Observacao, c.ID, empresa)
@@ -750,7 +751,7 @@ func (r *FinancialRepositoryPG) CreateContaReceber(ctx context.Context, c *entit
 		 RETURNING id, created_at, updated_at`,
 		c.NumeroDocumento, c.ClienteID, c.FiscalExitID, c.SalesOrderID,
 		c.DataLancamento, c.DataEmissao, c.DataVencimento,
-		c.ValorBruto.InexactFloat64(), c.Desconto.InexactFloat64(), c.Juros.InexactFloat64(), c.Multa.InexactFloat64(), c.ValorRecebido.InexactFloat64(),
+		c.ValorBruto, c.Desconto, c.Juros, c.Multa, c.ValorRecebido,
 		c.ParcelaNumero, c.ParcelaTotal,
 		c.FormaPagamento, c.PlanoContasID, c.CentroCustoID,
 		string(c.Status), c.IsActive, c.CriadoPor, empresa,
@@ -954,7 +955,7 @@ func (r *FinancialRepositoryPG) CreateFluxoCaixa(ctx context.Context, f *entity.
 			 contas_pagar_id, contas_receber_id, descricao, conciliado, enterprise_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		 RETURNING id, created_at`,
-		f.Data, string(f.Tipo), f.Valor.InexactFloat64(), f.ContaBancariaID, f.ContaBancariaDestinoID,
+		f.Data, string(f.Tipo), f.Valor, f.ContaBancariaID, f.ContaBancariaDestinoID,
 		f.ContasPagarID, f.ContasReceberID, f.Descricao, f.Conciliado, empresa,
 	).Scan(&f.ID, &f.CreatedAt)
 	if err != nil {
@@ -982,13 +983,13 @@ func (r *FinancialRepositoryPG) GetFluxoCaixa(ctx context.Context, startDate, en
 	var out []*entity.FluxoCaixa
 	for rows.Next() {
 		var f entity.FluxoCaixa
-		var valor float64
+		var valor decimal.Decimal
 		if err := rows.Scan(&f.ID, &f.Data, &f.Tipo, &valor, &f.ContaBancariaID,
 			&f.ContaBancariaDestinoID, &f.ContasPagarID, &f.ContasReceberID,
 			&f.Descricao, &f.Conciliado, &f.ExtratoHash, &f.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning fluxo caixa: %w", err)
 		}
-		f.Valor = decimal.NewFromFloat(valor)
+		f.Valor = valor
 		out = append(out, &f)
 	}
 	return out, rows.Err()
@@ -1022,65 +1023,67 @@ func (r *FinancialRepositoryPG) GetFluxoProjetado(ctx context.Context, startDate
 	defer rows.Close()
 
 	var out []*repository.ProjectedFlow
-	var saldo float64
+	var saldo decimal.Decimal
 	for rows.Next() {
 		var p repository.ProjectedFlow
-		if err := rows.Scan(&p.Data, &p.ValorEntradas, &p.ValorSaidas); err != nil {
+		var entradas, saidas decimal.Decimal
+		if err := rows.Scan(&p.Data, &entradas, &saidas); err != nil {
 			return nil, fmt.Errorf("scanning projected flow: %w", err)
 		}
-		saldo += p.ValorEntradas - p.ValorSaidas
-		p.Saldo = saldo
+		saldo = saldo.Add(entradas).Sub(saidas)
+		// A resposta é número; a soma corrida fica em decimal.
+		p.ValorEntradas, p.ValorSaidas, p.Saldo = entradas.InexactFloat64(), saidas.InexactFloat64(), saldo.InexactFloat64()
 		out = append(out, &p)
 	}
 	return out, rows.Err()
 }
 
-func (r *FinancialRepositoryPG) GetSaldoConta(ctx context.Context, contaID int64) (float64, error) {
+func (r *FinancialRepositoryPG) GetSaldoConta(ctx context.Context, contaID int64) (decimal.Decimal, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
-	var saldo float64
+	var saldo decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT saldo_inicial FROM contas_bancarias WHERE id = $1 AND enterprise_id = $2`, contaID, empresa,
 	).Scan(&saldo)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return 0, errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d não encontrada", contaID))
+			return decimal.Zero, errorsuc.NewNotFoundError(fmt.Sprintf("conta bancária %d não encontrada", contaID))
 		}
-		return 0, fmt.Errorf("getting saldo conta %d: %w", contaID, err)
+		return decimal.Zero, fmt.Errorf("getting saldo conta %d: %w", contaID, err)
 	}
 
 	// O movimento segue a conta: `fluxo_caixa` não tem coluna de empresa, e a
 	// posse dele é a da conta bancária que ele movimenta.
-	var movSum float64
+	var movSum decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN tipo = 'ENTRADA' THEN valor ELSE -valor END), 0)
 		 FROM fluxo_caixa WHERE conta_bancaria_id = $1 AND conciliado = true`, contaID,
 	).Scan(&movSum)
 	if err == nil {
-		saldo += movSum
+		saldo = saldo.Add(movSum)
 	}
 
 	return saldo, nil
 }
 
-func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (float64, error) {
+func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (decimal.Decimal, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
-	var saldo float64
+	var saldo decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(saldo_inicial), 0) FROM contas_bancarias WHERE is_active = true AND enterprise_id = $1`, empresa,
 	).Scan(&saldo)
 	if err != nil {
-		return 0, fmt.Errorf("getting saldo consolidado: %w", err)
+		return decimal.Zero, fmt.Errorf("getting saldo consolidado: %w", err)
 	}
 
 	// Somar `fluxo_caixa` inteiro somaria o caixa das outras empresas ao saldo
 	// desta. O movimento entra pela conta bancária a que pertence.
-	var movSum float64
+	var movSum decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(CASE WHEN f.tipo = 'ENTRADA' THEN f.valor ELSE -f.valor END), 0)
 		 FROM fluxo_caixa f
@@ -1088,7 +1091,7 @@ func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (float6
 		 WHERE f.conciliado = true`, empresa,
 	).Scan(&movSum)
 	if err == nil {
-		saldo += movSum
+		saldo = saldo.Add(movSum)
 	}
 
 	return saldo, nil
@@ -1120,8 +1123,8 @@ func (r *FinancialRepositoryPG) CreateTaxAssessment(ctx context.Context, t *enti
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
 		 RETURNING id, created_at, updated_at`,
 		t.Imposto, t.Competencia,
-		t.Debitos.InexactFloat64(), t.Creditos.InexactFloat64(),
-		t.SaldoDevedor.InexactFloat64(), t.SaldoCredor.InexactFloat64(),
+		t.Debitos, t.Creditos,
+		t.SaldoDevedor, t.SaldoCredor,
 		string(t.Status), t.CpID, t.DataVencimento, empresa,
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -1132,7 +1135,7 @@ func (r *FinancialRepositoryPG) CreateTaxAssessment(ctx context.Context, t *enti
 
 func (r *FinancialRepositoryPG) GetTaxAssessment(ctx context.Context, imposto, competencia string) (*entity.TaxAssessment, error) {
 	var t entity.TaxAssessment
-	var debitos, creditos, saldoDevedor, saldoCredor float64
+	var debitos, creditos, saldoDevedor, saldoCredor decimal.Decimal
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -1151,10 +1154,10 @@ func (r *FinancialRepositoryPG) GetTaxAssessment(ctx context.Context, imposto, c
 		}
 		return nil, fmt.Errorf("getting tax assessment: %w", err)
 	}
-	t.Debitos = decimal.NewFromFloat(debitos)
-	t.Creditos = decimal.NewFromFloat(creditos)
-	t.SaldoDevedor = decimal.NewFromFloat(saldoDevedor)
-	t.SaldoCredor = decimal.NewFromFloat(saldoCredor)
+	t.Debitos = debitos
+	t.Creditos = creditos
+	t.SaldoDevedor = saldoDevedor
+	t.SaldoCredor = saldoCredor
 	return &t, nil
 }
 
@@ -1175,16 +1178,16 @@ func (r *FinancialRepositoryPG) ListTaxAssessments(ctx context.Context, competen
 	var out []*entity.TaxAssessment
 	for rows.Next() {
 		var t entity.TaxAssessment
-		var debitos, creditos, saldoDevedor, saldoCredor float64
+		var debitos, creditos, saldoDevedor, saldoCredor decimal.Decimal
 		if err := rows.Scan(&t.ID, &t.Imposto, &t.Competencia,
 			&debitos, &creditos, &saldoDevedor, &saldoCredor,
 			&t.Status, &t.CpID, &t.DataVencimento, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning tax assessment: %w", err)
 		}
-		t.Debitos = decimal.NewFromFloat(debitos)
-		t.Creditos = decimal.NewFromFloat(creditos)
-		t.SaldoDevedor = decimal.NewFromFloat(saldoDevedor)
-		t.SaldoCredor = decimal.NewFromFloat(saldoCredor)
+		t.Debitos = debitos
+		t.Creditos = creditos
+		t.SaldoDevedor = saldoDevedor
+		t.SaldoCredor = saldoCredor
 		out = append(out, &t)
 	}
 	return out, rows.Err()
@@ -1316,7 +1319,7 @@ func (r *FinancialRepositoryPG) GetFiscalConfig(ctx context.Context) (*fiscalEnt
 
 func (r *FinancialRepositoryPG) scanContaPagarRow(row pgx.Row) (*entity.ContaPagar, error) {
 	var c entity.ContaPagar
-	var valorBruto, desconto, juros, multa, valorPago, valorAdiantAbatido float64
+	var valorBruto, desconto, juros, multa, valorPago, valorAdiantAbatido decimal.Decimal
 	err := row.Scan(
 		&c.ID, &c.NumeroDocumento, &c.TipoDocumento, &c.FornecedorID, &c.FiscalEntryID, &c.PurchaseOrderID,
 		&c.DataLancamento, &c.DataEmissao, &c.DataVencimento, &c.DataPagamento,
@@ -1335,18 +1338,18 @@ func (r *FinancialRepositoryPG) scanContaPagarRow(row pgx.Row) (*entity.ContaPag
 		}
 		return nil, fmt.Errorf("scanning conta pagar: %w", err)
 	}
-	c.ValorBruto = decimal.NewFromFloat(valorBruto)
-	c.Desconto = decimal.NewFromFloat(desconto)
-	c.Juros = decimal.NewFromFloat(juros)
-	c.Multa = decimal.NewFromFloat(multa)
-	c.ValorPago = decimal.NewFromFloat(valorPago)
-	c.ValorAdiantamentoAbatido = decimal.NewFromFloat(valorAdiantAbatido)
+	c.ValorBruto = valorBruto
+	c.Desconto = desconto
+	c.Juros = juros
+	c.Multa = multa
+	c.ValorPago = valorPago
+	c.ValorAdiantamentoAbatido = valorAdiantAbatido
 	return &c, nil
 }
 
 func (r *FinancialRepositoryPG) scanContaPagar(rows pgx.Rows) (*entity.ContaPagar, error) {
 	var c entity.ContaPagar
-	var valorBruto, desconto, juros, multa, valorPago, valorAdiantAbatido float64
+	var valorBruto, desconto, juros, multa, valorPago, valorAdiantAbatido decimal.Decimal
 	err := rows.Scan(
 		&c.ID, &c.NumeroDocumento, &c.TipoDocumento, &c.FornecedorID, &c.FiscalEntryID, &c.PurchaseOrderID,
 		&c.DataLancamento, &c.DataEmissao, &c.DataVencimento, &c.DataPagamento,
@@ -1362,18 +1365,18 @@ func (r *FinancialRepositoryPG) scanContaPagar(rows pgx.Rows) (*entity.ContaPaga
 	if err != nil {
 		return nil, fmt.Errorf("scanning conta pagar: %w", err)
 	}
-	c.ValorBruto = decimal.NewFromFloat(valorBruto)
-	c.Desconto = decimal.NewFromFloat(desconto)
-	c.Juros = decimal.NewFromFloat(juros)
-	c.Multa = decimal.NewFromFloat(multa)
-	c.ValorPago = decimal.NewFromFloat(valorPago)
-	c.ValorAdiantamentoAbatido = decimal.NewFromFloat(valorAdiantAbatido)
+	c.ValorBruto = valorBruto
+	c.Desconto = desconto
+	c.Juros = juros
+	c.Multa = multa
+	c.ValorPago = valorPago
+	c.ValorAdiantamentoAbatido = valorAdiantAbatido
 	return &c, nil
 }
 
 func (r *FinancialRepositoryPG) scanContaReceberRow(row pgx.Row) (*entity.ContaReceber, error) {
 	var c entity.ContaReceber
-	var valorBruto, desconto, juros, multa, valorRecebido float64
+	var valorBruto, desconto, juros, multa, valorRecebido decimal.Decimal
 	err := row.Scan(
 		&c.ID, &c.NumeroDocumento, &c.ClienteID, &c.FiscalExitID, &c.SalesOrderID, &c.FornecedorID,
 		&c.DataLancamento, &c.DataEmissao, &c.DataVencimento, &c.DataRecebimento,
@@ -1391,17 +1394,17 @@ func (r *FinancialRepositoryPG) scanContaReceberRow(row pgx.Row) (*entity.ContaR
 		}
 		return nil, fmt.Errorf("scanning conta receber: %w", err)
 	}
-	c.ValorBruto = decimal.NewFromFloat(valorBruto)
-	c.Desconto = decimal.NewFromFloat(desconto)
-	c.Juros = decimal.NewFromFloat(juros)
-	c.Multa = decimal.NewFromFloat(multa)
-	c.ValorRecebido = decimal.NewFromFloat(valorRecebido)
+	c.ValorBruto = valorBruto
+	c.Desconto = desconto
+	c.Juros = juros
+	c.Multa = multa
+	c.ValorRecebido = valorRecebido
 	return &c, nil
 }
 
 func (r *FinancialRepositoryPG) scanContaReceber(rows pgx.Rows) (*entity.ContaReceber, error) {
 	var c entity.ContaReceber
-	var valorBruto, desconto, juros, multa, valorRecebido float64
+	var valorBruto, desconto, juros, multa, valorRecebido decimal.Decimal
 	err := rows.Scan(
 		&c.ID, &c.NumeroDocumento, &c.ClienteID, &c.FiscalExitID, &c.SalesOrderID, &c.FornecedorID,
 		&c.DataLancamento, &c.DataEmissao, &c.DataVencimento, &c.DataRecebimento,
@@ -1416,11 +1419,11 @@ func (r *FinancialRepositoryPG) scanContaReceber(rows pgx.Rows) (*entity.ContaRe
 	if err != nil {
 		return nil, fmt.Errorf("scanning conta receber: %w", err)
 	}
-	c.ValorBruto = decimal.NewFromFloat(valorBruto)
-	c.Desconto = decimal.NewFromFloat(desconto)
-	c.Juros = decimal.NewFromFloat(juros)
-	c.Multa = decimal.NewFromFloat(multa)
-	c.ValorRecebido = decimal.NewFromFloat(valorRecebido)
+	c.ValorBruto = valorBruto
+	c.Desconto = desconto
+	c.Juros = juros
+	c.Multa = multa
+	c.ValorRecebido = valorRecebido
 	return &c, nil
 }
 
@@ -1440,7 +1443,7 @@ func (r *FinancialRepositoryPG) UpsertTaxAssessmentCredito(ctx context.Context, 
 		 ON CONFLICT (enterprise_id, imposto, competencia) DO UPDATE SET
 		     creditos = tax_assessments.creditos + EXCLUDED.creditos,
 		     updated_at = NOW()`,
-		t.Imposto, t.Competencia, t.Creditos.InexactFloat64(), empresa)
+		t.Imposto, t.Competencia, t.Creditos, empresa)
 	if err != nil {
 		return fmt.Errorf("upserting tax assessment credito: %w", err)
 	}
@@ -1546,7 +1549,7 @@ func (r *FinancialRepositoryPG) GetDRE(ctx context.Context, startDate, endDate t
 	if err != nil {
 		return nil, err
 	}
-	var receitaBruta, impostosVendas float64
+	var receitaBruta, impostosVendas decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(valor_produtos),0), COALESCE(SUM(valor_icms + valor_ipi + valor_pis + valor_cofins),0)
 		 FROM fiscal_exits WHERE data_emissao BETWEEN $1 AND $2 AND status = 'AUTHORIZED' AND enterprise_id = $3`,
@@ -1554,7 +1557,7 @@ func (r *FinancialRepositoryPG) GetDRE(ctx context.Context, startDate, endDate t
 		return nil, fmt.Errorf("DRE receita: %w", err)
 	}
 
-	var despesas float64
+	var despesas decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(valor_bruto - COALESCE(valor_pago,0)),0)
 		 FROM contas_pagar WHERE data_vencimento BETWEEN $1 AND $2 AND status IN ('PAGO','CANCELADO') AND enterprise_id = $3`,
@@ -1562,15 +1565,15 @@ func (r *FinancialRepositoryPG) GetDRE(ctx context.Context, startDate, endDate t
 		return nil, fmt.Errorf("DRE despesas: %w", err)
 	}
 
-	receitaLiquida := receitaBruta - impostosVendas
-	resultado := receitaLiquida - despesas
+	receitaLiquida := receitaBruta.Sub(impostosVendas)
+	resultado := receitaLiquida.Sub(despesas)
 
 	return map[string]interface{}{
-		"receita_bruta":     receitaBruta,
-		"impostos_vendas":   impostosVendas,
-		"receita_liquida":   receitaLiquida,
-		"despesas":          despesas,
-		"resultado_liquido": resultado,
+		"receita_bruta":     receitaBruta.InexactFloat64(),
+		"impostos_vendas":   impostosVendas.InexactFloat64(),
+		"receita_liquida":   receitaLiquida.InexactFloat64(),
+		"despesas":          despesas.InexactFloat64(),
+		"resultado_liquido": resultado.InexactFloat64(),
 		"periodo_inicio":    startDate.Format("2006-01-02"),
 		"periodo_fim":       endDate.Format("2006-01-02"),
 	}, nil
@@ -1749,8 +1752,8 @@ func (r *FinancialRepositoryPG) baixarAtomico(ctx context.Context, lado ladoBaix
 		return errorsuc.NewConflictError(fmt.Sprintf("o título %d já está %s", id, status))
 	}
 
-	principal := decimal.NewFromFloat(params.ValorPago).Round(2)
-	desconto := decimal.NewFromFloat(params.Desconto).Round(2)
+	principal := params.ValorPago.Round(2)
+	desconto := params.Desconto.Round(2)
 	quitado := principal.Add(desconto)
 	saldo := valorOriginal.Sub(quitado).Round(2)
 	parcial := saldo.IsPositive()
@@ -1788,14 +1791,14 @@ func (r *FinancialRepositoryPG) baixarAtomico(ctx context.Context, lado ladoBaix
 	if _, err = tx.Exec(ctx,
 		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, `+lado.colunaFluxo+`, descricao, conciliado, enterprise_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, id, fc.Descricao, false, empresa); err != nil {
+		fc.Data, string(fc.Tipo), fc.Valor, fc.ContaBancariaID, id, fc.Descricao, false, empresa); err != nil {
 		return fmt.Errorf("creating fluxo caixa: %w", err)
 	}
 
 	// A conta movimentada tem de ser da empresa autenticada.
 	tagSaldo, err := tx.Exec(ctx,
 		`UPDATE contas_bancarias SET saldo_inicial = saldo_inicial `+lado.sinalSaldo+` $1, updated_at = NOW() WHERE id = $2 AND enterprise_id = $3`,
-		fc.Valor.InexactFloat64(), contaBancariaID, empresa)
+		fc.Valor, contaBancariaID, empresa)
 	if err != nil {
 		return fmt.Errorf("updating saldo: %w", err)
 	}
@@ -2046,7 +2049,7 @@ func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, end
 	if err != nil {
 		return nil, err
 	}
-	var receitaBruta, impostosVendas float64
+	var receitaBruta, impostosVendas decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(valor_produtos),0), COALESCE(SUM(valor_icms + valor_ipi + valor_pis + valor_cofins),0)
 		 FROM fiscal_exits WHERE data_emissao BETWEEN $1 AND $2 AND status = 'AUTHORIZED' AND enterprise_id = $3`,
@@ -2055,7 +2058,7 @@ func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, end
 	}
 
 	// CMV: qty sold × avg_cost at time of sale (uses current avg_cost as best approximation)
-	var cmv float64
+	var cmv decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(fei.quantity * COALESCE(c.custo, fei.unit_price * 0.6)), 0)
 		 FROM fiscal_exit_items fei
@@ -2066,7 +2069,7 @@ func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, end
 		return nil, fmt.Errorf("DRE CMV: %w", err)
 	}
 
-	var despesasOperacionais float64
+	var despesasOperacionais decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(valor_bruto - COALESCE(desconto,0)),0)
 		 FROM contas_pagar
@@ -2075,34 +2078,34 @@ func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, end
 		return nil, fmt.Errorf("DRE despesas operacionais: %w", err)
 	}
 
-	var despesasFinanceiras float64
+	var despesasFinanceiras decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(juros + multa),0) FROM contas_pagar WHERE data_pagamento BETWEEN $1 AND $2 AND status='PAGO' AND enterprise_id = $3`,
 		startDate, endDate, empresa).Scan(&despesasFinanceiras); err != nil {
 		return nil, fmt.Errorf("DRE despesas financeiras: %w", err)
 	}
 
-	var receitasFinanceiras float64
+	var receitasFinanceiras decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(juros + multa),0) FROM contas_receber WHERE data_recebimento BETWEEN $1 AND $2 AND status='RECEBIDO' AND enterprise_id = $3`,
 		startDate, endDate, empresa).Scan(&receitasFinanceiras); err != nil {
 		return nil, fmt.Errorf("DRE receitas financeiras: %w", err)
 	}
 
-	receitaLiquida := receitaBruta - impostosVendas
-	lucroBruto := receitaLiquida - cmv
-	resultado := lucroBruto - despesasOperacionais - despesasFinanceiras + receitasFinanceiras
+	receitaLiquida := receitaBruta.Sub(impostosVendas)
+	lucroBruto := receitaLiquida.Sub(cmv)
+	resultado := lucroBruto.Sub(despesasOperacionais).Sub(despesasFinanceiras).Add(receitasFinanceiras)
 
 	return map[string]interface{}{
-		"receita_bruta":         receitaBruta,
-		"impostos_vendas":       impostosVendas,
-		"receita_liquida":       receitaLiquida,
-		"cmv":                   cmv,
-		"lucro_bruto":           lucroBruto,
-		"despesas_operacionais": despesasOperacionais,
-		"despesas_financeiras":  despesasFinanceiras,
-		"receitas_financeiras":  receitasFinanceiras,
-		"resultado_liquido":     resultado,
+		"receita_bruta":         receitaBruta.InexactFloat64(),
+		"impostos_vendas":       impostosVendas.InexactFloat64(),
+		"receita_liquida":       receitaLiquida.InexactFloat64(),
+		"cmv":                   cmv.InexactFloat64(),
+		"lucro_bruto":           lucroBruto.InexactFloat64(),
+		"despesas_operacionais": despesasOperacionais.InexactFloat64(),
+		"despesas_financeiras":  despesasFinanceiras.InexactFloat64(),
+		"receitas_financeiras":  receitasFinanceiras.InexactFloat64(),
+		"resultado_liquido":     resultado.InexactFloat64(),
 		"periodo_inicio":        startDate.Format("2006-01-02"),
 		"periodo_fim":           endDate.Format("2006-01-02"),
 	}, nil
@@ -2130,7 +2133,7 @@ func (r *FinancialRepositoryPG) contaDaEmpresa(ctx context.Context, contaID int6
 	return nil
 }
 
-func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor float64, tipo, descricao, fitid, hash string) (bool, error) {
+func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor decimal.Decimal, tipo, descricao, fitid, hash string) (bool, error) {
 	if err := r.contaDaEmpresa(ctx, contaID); err != nil {
 		return false, err
 	}

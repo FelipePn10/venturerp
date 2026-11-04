@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"time"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
-	"time"
 
 	accountingEntity "github.com/FelipePn10/panossoerp/internal/domain/accounting/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/accounting/repository"
@@ -337,7 +338,7 @@ func (r *AccountingRepositorySQLC) CreateJournalEntry(ctx context.Context, e *ac
 		CreditAccountID: e.CreditAccountID,
 		DebitCCID:       e.DebitCCID,
 		CreditCCID:      e.CreditCCID,
-		Value:           pgutil.ToPgNumericFromFloat64(e.Value),
+		Value:           pgutil.ToPgNumericFromDecimal(e.Value),
 		HistoryCode:     e.HistoryCode,
 		Description:     e.Description,
 		EntryType:       e.EntryType,
@@ -383,7 +384,7 @@ func journalEntryRowToEntity(row sqlc.JournalEntryRow) *accountingEntity.Account
 		CreditAccountID: row.CreditAccountID,
 		DebitCCID:       row.DebitCCID,
 		CreditCCID:      row.CreditCCID,
-		Value:           pgutil.FromPgNumericToFloat64(row.Value),
+		Value:           pgutil.FromPgNumericToDecimal(row.Value),
 		HistoryCode:     row.HistoryCode,
 		Description:     row.Description,
 		EntryType:       row.EntryType,

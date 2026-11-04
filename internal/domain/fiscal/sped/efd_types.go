@@ -1,6 +1,10 @@
 package sped
 
-import "time"
+import (
+	"time"
+
+	"github.com/shopspring/decimal"
+)
 
 // EFDParams holds all data needed to generate a SPED EFD ICMS/IPI file.
 type EFDParams struct {
@@ -88,7 +92,7 @@ type EFDItem struct {
 	ExIPI    string
 	CodGen   string
 	CodLST   string
-	AliqICMS float64
+	AliqICMS decimal.Decimal
 	CEST     string
 	// Conversoes (0220): unidades dos documentos diferentes da de estoque.
 	Conversoes []EFDConversao
@@ -97,7 +101,7 @@ type EFDItem struct {
 // EFDConversao — 0220: a unidade do documento e quantas unidades de estoque ela vale.
 type EFDConversao struct {
 	UnidConv string
-	FatConv  float64
+	FatConv  decimal.Decimal
 }
 
 // EFDConhecimento — D100 (CT-e) e os seus D190.
@@ -113,12 +117,12 @@ type EFDConhecimento struct {
 	DtDoc      time.Time
 	DtAP       time.Time
 	TpCTe      string // 0 normal
-	VlDoc      float64
+	VlDoc      decimal.Decimal
 	IndFrt     string // 0 por conta do emitente, 1 do destinatário, 2 de terceiros, 9 sem frete
-	VlServ     float64
-	VlBcIcms   float64
-	VlIcms     float64
-	VlNt       float64
+	VlServ     decimal.Decimal
+	VlBcIcms   decimal.Decimal
+	VlIcms     decimal.Decimal
+	VlNt       decimal.Decimal
 	CodMunOrig string
 	CodMunDest string
 	Analiticos []EFDD190
@@ -128,11 +132,11 @@ type EFDConhecimento struct {
 type EFDD190 struct {
 	CstIcms  string
 	Cfop     string
-	AliqIcms float64
-	VlOpr    float64
-	VlBcIcms float64
-	VlIcms   float64
-	VlRedBc  float64
+	AliqIcms decimal.Decimal
+	VlOpr    decimal.Decimal
+	VlBcIcms decimal.Decimal
+	VlIcms   decimal.Decimal
+	VlRedBc  decimal.Decimal
 }
 
 type EFDDocumentoFiscal struct {
@@ -147,24 +151,24 @@ type EFDDocumentoFiscal struct {
 	ChvNfe     string
 	DtDoc      time.Time
 	DtES       time.Time // data entrada/saída
-	VlDoc      float64
+	VlDoc      decimal.Decimal
 	IndPgto    string // 0=à vista, 1=a prazo, 9=outros
-	VlDesc     float64
-	VlAbatNt   float64
-	VlMerc     float64
+	VlDesc     decimal.Decimal
+	VlAbatNt   decimal.Decimal
+	VlMerc     decimal.Decimal
 	IndFrt     string // 0=CIF, 1=FOB, 2=terceiros, 3=próprio remetente, 4=próprio destinatário, 9=sem frete
-	VlFrt      float64
-	VlSeg      float64
-	VlOutDa    float64
-	VlBcIcms   float64
-	VlIcms     float64
-	VlBcIcmsSt float64
-	VlIcmsSt   float64
-	VlIpi      float64
-	VlPis      float64
-	VlCofins   float64
-	VlPisSt    float64
-	VlCofinsSt float64
+	VlFrt      decimal.Decimal
+	VlSeg      decimal.Decimal
+	VlOutDa    decimal.Decimal
+	VlBcIcms   decimal.Decimal
+	VlIcms     decimal.Decimal
+	VlBcIcmsSt decimal.Decimal
+	VlIcmsSt   decimal.Decimal
+	VlIpi      decimal.Decimal
+	VlPis      decimal.Decimal
+	VlCofins   decimal.Decimal
+	VlPisSt    decimal.Decimal
+	VlCofinsSt decimal.Decimal
 	Itens      []EFDItemDoc
 	// C101: DIFAL e FCP da UF de destino (venda a não contribuinte de outra UF).
 	C101 *EFDC101
@@ -177,73 +181,73 @@ type EFDItemDoc struct {
 	NumItem     int
 	CodItem     string
 	DescCompl   string
-	Qtd         float64
+	Qtd         decimal.Decimal
 	UnCom       string
-	VlUnt       float64
-	VlDesc      float64
+	VlUnt       decimal.Decimal
+	VlDesc      decimal.Decimal
 	IndMov      string // 0=sim, 1=não
 	CstIcms     string
 	CfopC170    string
 	CodNat      string
-	VlBcIcms    float64
-	AliqIcms    float64
-	VlIcms      float64
-	VlBcIcmsSt  float64
-	AliqSt      float64
-	VlIcmsSt    float64
+	VlBcIcms    decimal.Decimal
+	AliqIcms    decimal.Decimal
+	VlIcms      decimal.Decimal
+	VlBcIcmsSt  decimal.Decimal
+	AliqSt      decimal.Decimal
+	VlIcmsSt    decimal.Decimal
 	IndApur     string
 	CstIpi      string
 	CodEnq      string
-	VlBcIpi     float64
-	AliqIpi     float64
-	VlIpi       float64
+	VlBcIpi     decimal.Decimal
+	AliqIpi     decimal.Decimal
+	VlIpi       decimal.Decimal
 	CstPis      string
-	VlBcPis     float64
-	AliqPis     float64
-	QtdBcPis    float64
-	AliqPisQ    float64
-	VlPis       float64
+	VlBcPis     decimal.Decimal
+	AliqPis     decimal.Decimal
+	QtdBcPis    decimal.Decimal
+	AliqPisQ    decimal.Decimal
+	VlPis       decimal.Decimal
 	CstCofins   string
-	VlBcCofins  float64
-	AliqCofins  float64
-	QtdBcCofins float64
-	AliqCofinsQ float64
-	VlCofins    float64
+	VlBcCofins  decimal.Decimal
+	AliqCofins  decimal.Decimal
+	QtdBcCofins decimal.Decimal
+	AliqCofinsQ decimal.Decimal
+	VlCofins    decimal.Decimal
 	CodCta      string
-	VlAbatNt    float64
+	VlAbatNt    decimal.Decimal
 }
 
 // EFDC190 — Registro analítico do documento (C190).
 type EFDC190 struct {
 	CstIcms    string
 	Cfop       string
-	AliqIcms   float64
-	VlOpr      float64
-	VlBcIcms   float64
-	VlIcms     float64
-	VlBcIcmsSt float64
-	VlIcmsSt   float64
-	VlRedBc    float64
-	VlIpi      float64
+	AliqIcms   decimal.Decimal
+	VlOpr      decimal.Decimal
+	VlBcIcms   decimal.Decimal
+	VlIcms     decimal.Decimal
+	VlBcIcmsSt decimal.Decimal
+	VlIcmsSt   decimal.Decimal
+	VlRedBc    decimal.Decimal
+	VlIpi      decimal.Decimal
 	CodObs     string
 }
 
 // EFDApuracaoICMS — Registros E110/E111/E116.
 type EFDApuracaoICMS struct {
-	VlTotDebitos        float64
-	VlAjDebitos         float64
-	VlTotAjDebitos      float64
-	VlEstornosCreditos  float64
-	VlTotCreditos       float64
-	VlAjCreditos        float64
-	VlTotAjCreditos     float64
-	VlEstornosDebitos   float64
-	VlSaldoCredorAnt    float64
-	VlApuracao          float64
-	VlTotDed            float64
-	VlIcmsRecolher      float64
-	VlSaldoCredorTransp float64
-	DebEspeciais        float64
+	VlTotDebitos        decimal.Decimal
+	VlAjDebitos         decimal.Decimal
+	VlTotAjDebitos      decimal.Decimal
+	VlEstornosCreditos  decimal.Decimal
+	VlTotCreditos       decimal.Decimal
+	VlAjCreditos        decimal.Decimal
+	VlTotAjCreditos     decimal.Decimal
+	VlEstornosDebitos   decimal.Decimal
+	VlSaldoCredorAnt    decimal.Decimal
+	VlApuracao          decimal.Decimal
+	VlTotDed            decimal.Decimal
+	VlIcmsRecolher      decimal.Decimal
+	VlSaldoCredorTransp decimal.Decimal
+	DebEspeciais        decimal.Decimal
 	Ajustes             []EFDApuracaoAjuste
 	// Obrigacoes (E116): o ICMS a recolher.
 	Obrigacoes []EFDObrigacao
@@ -252,7 +256,7 @@ type EFDApuracaoICMS struct {
 // EFDObrigacao — E116.
 type EFDObrigacao struct {
 	CodOr    string // 000 ICMS a recolher
-	VlOr     float64
+	VlOr     decimal.Decimal
 	DtVcto   time.Time
 	CodRec   string // código de receita da UF
 	TxtCompl string
@@ -263,59 +267,59 @@ type EFDObrigacao struct {
 type EFDApuracaoIPI struct {
 	IndApur string // 0 mensal
 	Linhas  []EFDE510
-	SdAnt   float64
-	Deb     float64
-	Cred    float64
-	Od      float64
-	Oc      float64
+	SdAnt   decimal.Decimal
+	Deb     decimal.Decimal
+	Cred    decimal.Decimal
+	Od      decimal.Decimal
+	Oc      decimal.Decimal
 }
 
 // EFDE510 — consolidação por CFOP e CST do IPI.
 type EFDE510 struct {
 	Cfop    string
 	CstIpi  string
-	VlCont  float64
-	VlBcIpi float64
-	VlIpi   float64
+	VlCont  decimal.Decimal
+	VlBcIpi decimal.Decimal
+	VlIpi   decimal.Decimal
 }
 
 // EFDApuracaoAjuste — Registro E111 (ajustes de apuração).
 type EFDApuracaoAjuste struct {
 	CodAjApur string
 	DescCompl string
-	VlAjApur  float64
+	VlAjApur  decimal.Decimal
 }
 
 type EFDInventarioItem struct {
 	DtInv    time.Time
 	CodItem  string
 	Unid     string
-	Qtd      float64
-	VlUnit   float64
-	VlItem   float64
+	Qtd      decimal.Decimal
+	VlUnit   decimal.Decimal
+	VlItem   decimal.Decimal
 	IndProp  string // 0=posse própria, 1=posse de terceiros, 2=posse de terceiros em nosso poder
 	CodPart  string
 	TxtCompl string
 	CodCta   string
-	VlItemIr float64
+	VlItemIr decimal.Decimal
 }
 
 // EFDC101 — informação complementar do C100 na venda interestadual a
 // consumidor final não contribuinte (EC 87/2015).
 type EFDC101 struct {
-	VlFcpUfDest, VlIcmsUfDest, VlIcmsUfRem float64
+	VlFcpUfDest, VlIcmsUfDest, VlIcmsUfRem decimal.Decimal
 }
 
 // EFDApuracaoST — E200 (período), E210 (apuração) e E250 (obrigação) de uma UF.
 type EFDApuracaoST struct {
 	UF                 string
-	Retencao, Recolher float64
+	Retencao, Recolher decimal.Decimal
 	Obrigacao          EFDObrigacao
 }
 
 // EFDApuracaoDIFAL — E300 (período), E310 (apuração) e E316 (obrigações) de uma UF.
 type EFDApuracaoDIFAL struct {
 	UF         string
-	Difal, FCP float64
+	Difal, FCP decimal.Decimal
 	Obrigacoes []EFDObrigacao
 }

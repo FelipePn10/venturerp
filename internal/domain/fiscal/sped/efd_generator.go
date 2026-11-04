@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // CodVer é a versão do leiaute da EFD ICMS/IPI pelo ano do período (Ato
@@ -87,7 +89,7 @@ func Generate(p EFDParams) string {
 	}
 	for _, it := range p.Itens {
 		aliq := ""
-		if it.AliqICMS > 0 {
+		if it.AliqICMS.IsPositive() {
 			aliq = fmtAliq(it.AliqICMS)
 		}
 		line("0200", it.CodItem, it.DescItem, it.CodBarra, it.CodAnt, it.UnCom, it.TipoItem, it.CodNCM, it.ExIPI,
@@ -149,7 +151,7 @@ func Generate(p EFDParams) string {
 	}
 	for _, d := range p.Conhecimentos {
 		line("D100", d.IndOper, d.IndEmit, d.CodPart, firstNonBlank(d.CodMod, "57"), firstNonBlank(d.CodSit, "00"), d.Ser, "", d.NumDoc,
-			d.ChvCTe, fmtDate(d.DtDoc), fmtDate(d.DtAP), firstNonBlank(d.TpCTe, "0"), "", fmtVal(d.VlDoc), fmtVal(0),
+			d.ChvCTe, fmtDate(d.DtDoc), fmtDate(d.DtAP), firstNonBlank(d.TpCTe, "0"), "", fmtVal(d.VlDoc), fmtVal(decimal.Zero),
 			firstNonBlank(d.IndFrt, "1"), fmtVal(d.VlServ), fmtVal(d.VlBcIcms), fmtVal(d.VlIcms), fmtVal(d.VlNt), "", "",
 			d.CodMunOrig, d.CodMunDest)
 		for _, a := range d.Analiticos {
@@ -184,9 +186,9 @@ func Generate(p EFDParams) string {
 		// créditos, ajustes de crédito, RETENÇÃO, outros débitos, ajustes de
 		// débito, saldo devedor antes das deduções, deduções, A RECOLHER, saldo
 		// credor a transportar, débitos especiais.
-		line("E210", "1", fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(st.Retencao), fmtVal(0), fmtVal(0),
-			fmtVal(st.Retencao), fmtVal(0), fmtVal(st.Recolher), fmtVal(0), fmtVal(0))
-		if st.Recolher > 0 {
+		line("E210", "1", fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(st.Retencao), fmtVal(decimal.Zero), fmtVal(decimal.Zero),
+			fmtVal(st.Retencao), fmtVal(decimal.Zero), fmtVal(st.Recolher), fmtVal(decimal.Zero), fmtVal(decimal.Zero))
+		if st.Recolher.IsPositive() {
 			obrigacao("E250", st.Obrigacao)
 		}
 	}
@@ -196,8 +198,8 @@ func Generate(p EFDParams) string {
 		// créditos, outros créditos, saldo devedor, deduções, A RECOLHER, saldo
 		// credor a transportar, débitos especiais; e os mesmos campos do FCP.
 		line("E310", "1",
-			fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(df.Difal), fmtVal(0), fmtVal(0),
-			fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(0), fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(df.FCP), fmtVal(0), fmtVal(0))
+			fmtVal(decimal.Zero), fmtVal(df.Difal), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(df.Difal), fmtVal(decimal.Zero), fmtVal(df.Difal), fmtVal(decimal.Zero), fmtVal(decimal.Zero),
+			fmtVal(decimal.Zero), fmtVal(df.FCP), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(decimal.Zero), fmtVal(df.FCP), fmtVal(decimal.Zero), fmtVal(df.FCP), fmtVal(decimal.Zero), fmtVal(decimal.Zero))
 		for _, o := range df.Obrigacoes {
 			obrigacao("E316", o)
 		}
@@ -207,12 +209,12 @@ func Generate(p EFDParams) string {
 		for _, l := range ipi.Linhas {
 			line("E510", l.Cfop, l.CstIpi, fmtVal(l.VlCont), fmtVal(l.VlBcIpi), fmtVal(l.VlIpi))
 		}
-		saldo := ipi.SdAnt + ipi.Cred + ipi.Oc - ipi.Deb - ipi.Od
-		sc, sd := 0.0, 0.0
-		if saldo >= 0 {
+		saldo := ipi.SdAnt.Add(ipi.Cred).Add(ipi.Oc).Sub(ipi.Deb).Sub(ipi.Od)
+		sc, sd := decimal.Zero, decimal.Zero
+		if !saldo.IsNegative() {
 			sc = saldo
 		} else {
-			sd = -saldo
+			sd = saldo.Neg()
 		}
 		line("E520", fmtVal(ipi.SdAnt), fmtVal(ipi.Deb), fmtVal(ipi.Cred), fmtVal(ipi.Od), fmtVal(ipi.Oc), fmtVal(sc), fmtVal(sd))
 	}
@@ -227,9 +229,9 @@ func Generate(p EFDParams) string {
 		line("H001", "1")
 	} else {
 		line("H001", "0")
-		var vlInv float64
+		vlInv := decimal.Zero
 		for _, inv := range p.Inventario {
-			vlInv += inv.VlItem
+			vlInv = vlInv.Add(inv.VlItem)
 		}
 		line("H005", fmtDate(p.Inventario[0].DtInv), fmtVal(vlInv), firstNonBlank(p.MotivoInventario, "01"))
 		for _, inv := range p.Inventario {
@@ -292,25 +294,25 @@ type timeVal interface {
 }
 
 // Números no padrão do leiaute: vírgula decimal, sem separador de milhar.
-func fmtNum(v float64, casas int) string {
-	return strings.Replace(fmt.Sprintf("%.*f", casas, v), ".", ",", 1)
+func fmtNum(v decimal.Decimal, casas int32) string {
+	return strings.Replace(v.StringFixed(casas), ".", ",", 1)
 }
 
-func fmtVal(v float64) string   { return fmtNum(v, 2) }
-func fmtAliq(v float64) string  { return fmtNum(v, 2) }
-func fmtQtd(v float64) string   { return fmtNum(v, 5) }
-func fmtUnit(v float64) string  { return fmtNum(v, 6) }
-func fmtFator(v float64) string { return fmtNum(v, 6) }
+func fmtVal(v decimal.Decimal) string   { return fmtNum(v, 2) }
+func fmtAliq(v decimal.Decimal) string  { return fmtNum(v, 2) }
+func fmtQtd(v decimal.Decimal) string   { return fmtNum(v, 5) }
+func fmtUnit(v decimal.Decimal) string  { return fmtNum(v, 6) }
+func fmtFator(v decimal.Decimal) string { return fmtNum(v, 6) }
 
-func fmtQtdOpt(v float64) string {
-	if v == 0 {
+func fmtQtdOpt(v decimal.Decimal) string {
+	if v.IsZero() {
 		return ""
 	}
 	return fmtNum(v, 3)
 }
 
-func fmtAliqOpt(v float64) string {
-	if v == 0 {
+func fmtAliqOpt(v decimal.Decimal) string {
+	if v.IsZero() {
 		return ""
 	}
 	return fmtNum(v, 4)

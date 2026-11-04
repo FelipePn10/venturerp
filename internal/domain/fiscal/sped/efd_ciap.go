@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/ciap"
+	"github.com/shopspring/decimal"
 )
 
 // CIAP na EFD (Guia Prático, Bloco G e registros 0300, 0305, 0500 e 0600).
@@ -13,8 +14,8 @@ import (
 // EFDCIAP: o Bloco G do período e os cadastros que ele referencia.
 type EFDCIAP struct {
 	// G110
-	SaldoInicial, SomaParcelas, TribExp, Total, ICMSApropriado float64
-	Indice                                                     float64 // 8 casas
+	SaldoInicial, SomaParcelas, TribExp, Total, ICMSApropriado decimal.Decimal
+	Indice                                                     decimal.Decimal // 8 casas
 	Movimentos                                                 []EFDG125
 	Bens                                                       []EFD0300
 	Contas                                                     []EFD0500
@@ -24,10 +25,10 @@ type EFDCIAP struct {
 type EFDG125 struct {
 	CodBem, TipoMov  string
 	DtMov            time.Time
-	Op, ST, Frt, Dif float64
+	Op, ST, Frt, Dif decimal.Decimal
 	ComValores       bool
 	NumParc          int
-	VlParc           float64
+	VlParc           decimal.Decimal
 	Documento        *EFDG130
 }
 
@@ -40,8 +41,8 @@ type EFDG130 struct {
 type EFDG140 struct {
 	NumItem          int
 	CodItem, Unid    string
-	Qtde             float64
-	Op, ST, Frt, Dif float64
+	Qtde             decimal.Decimal
+	Op, ST, Frt, Dif decimal.Decimal
 }
 
 type EFD0300 struct {
@@ -87,7 +88,7 @@ func montarCIAP(d DadosEFD, indAtiv string) (*EFDCIAP, *AjusteApuracao) {
 	}
 	a := d.CIAP.Apuracao
 	g := &EFDCIAP{SaldoInicial: v2(a.SaldoInicial), SomaParcelas: v2(a.SomaParcelas), TribExp: v2(a.SaidasTribExp), Total: v2(a.SaidasTotal),
-		Indice: a.Indice.Round(8).InexactFloat64(), ICMSApropriado: v2(a.ICMSApropriado)}
+		Indice: a.Indice.Round(8), ICMSApropriado: v2(a.ICMSApropriado)}
 	bens, contas, centros := map[string]EFD0300{}, map[string]EFD0500{}, map[string]EFD0600{}
 	for _, m := range a.Movimentos {
 		b := m.Bem
@@ -100,7 +101,7 @@ func montarCIAP(d DadosEFD, indAtiv string) (*EFDCIAP, *AjusteApuracao) {
 			mov.Documento = &EFDG130{IndEmit: "1", CodPart: doc.CodPart, CodMod: firstNonBlank(doc.Modelo, "55"), Serie: doc.Serie, NumDoc: doc.Numero,
 				Chave: doc.Chave, DtDoc: doc.Emissao,
 				Itens: []EFDG140{{NumItem: primeiroPositivo(doc.NumItem, 1), CodItem: doc.CodItem, Unid: firstNonBlank(doc.Unidade, "UN"),
-					Qtde: doc.Quantidade.InexactFloat64(), Op: v2(b.ICMSOp), ST: v2(b.ICMSST), Frt: v2(b.ICMSFrete), Dif: v2(b.ICMSDifal)}}}
+					Qtde: doc.Quantidade, Op: v2(b.ICMSOp), ST: v2(b.ICMSST), Frt: v2(b.ICMSFrete), Dif: v2(b.ICMSDifal)}}}
 		}
 		g.Movimentos = append(g.Movimentos, mov)
 		centro := EFD0600{CodCcus: b.CentroCodigo, Nome: b.CentroNome}
@@ -144,12 +145,12 @@ func montarCIAP(d DadosEFD, indAtiv string) (*EFDCIAP, *AjusteApuracao) {
 	var aj *AjusteApuracao
 	if d.CIAP.CodigoAjuste != "" && a.ICMSApropriado.IsPositive() {
 		aj = &AjusteApuracao{Codigo: d.CIAP.CodigoAjuste, Valor: a.ICMSApropriado,
-			Descricao: fmt.Sprintf("CREDITO CIAP %02d/%d - SOMA DAS PARCELAS %s X INDICE %s", a.Mes, a.Ano, fmtVal(v2(a.SomaParcelas)), fmtNum(a.Indice.InexactFloat64(), 8))}
+			Descricao: fmt.Sprintf("CREDITO CIAP %02d/%d - SOMA DAS PARCELAS %s X INDICE %s", a.Mes, a.Ano, fmtVal(v2(a.SomaParcelas)), fmtNum(a.Indice, 8))}
 	}
 	return g, aj
 }
 
-func optVal(v float64, informar bool) string {
+func optVal(v decimal.Decimal, informar bool) string {
 	if !informar {
 		return ""
 	}
@@ -195,7 +196,7 @@ func linhasG(line func(string, ...string), dtIni, dtFin string, g *EFDCIAP) {
 	}
 	line("G001", "0")
 	line("G110", dtIni, dtFin, fmtVal(g.SaldoInicial), fmtVal(g.SomaParcelas), fmtVal(g.TribExp), fmtVal(g.Total),
-		fmtNum(g.Indice, 8), fmtVal(g.ICMSApropriado), fmtVal(0))
+		fmtNum(g.Indice, 8), fmtVal(g.ICMSApropriado), fmtVal(decimal.Zero))
 	for _, m := range g.Movimentos {
 		parc, vl := "", ""
 		if m.NumParc > 0 {

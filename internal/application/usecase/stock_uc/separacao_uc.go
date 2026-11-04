@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -21,9 +22,9 @@ type SeparacaoUseCase struct {
 // SugerirFEFO monta a sugestão de separação. A regra padrão é FEFO; FIFO fica
 // disponível para quem controla por recebimento e não por validade.
 func (uc *SeparacaoUseCase) SugerirFEFO(
-	ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario float64, regra string,
+	ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario decimal.Decimal, regra string,
 ) (*entity.ResultadoFEFO, error) {
-	if necessario <= 0 {
+	if !necessario.IsPositive() {
 		return nil, errorsuc.NewValidationError("informe a quantidade a separar")
 	}
 	return uc.Repo.SugerirSeparacaoFEFO(ctx, itemCode, mask, warehouseID, necessario, regra)

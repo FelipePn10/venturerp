@@ -135,7 +135,7 @@ func TestBaixarContaPagar_OnTimeHasNoInterestOrFine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if repo.baixaParams.Juros != 0 || repo.baixaParams.Multa != 0 {
+	if !repo.baixaParams.Juros.IsZero() || !repo.baixaParams.Multa.IsZero() {
 		t.Fatalf("on-time payment should have no juros/multa, got juros=%v multa=%v",
 			repo.baixaParams.Juros, repo.baixaParams.Multa)
 	}
@@ -247,12 +247,23 @@ func TestAplicarAdiantamento_AppliesWithParsedDate(t *testing.T) {
 	}
 }
 
-func almostEqual(a, b float64) bool {
+func almostEqual(x, y any) bool {
+	a, b := paraFloat(x), paraFloat(y)
 	d := a - b
 	if d < 0 {
 		d = -d
 	}
 	return d < 1e-6
+}
+
+func paraFloat(v any) float64 {
+	switch n := v.(type) {
+	case decimal.Decimal:
+		return n.InexactFloat64()
+	case int:
+		return float64(n)
+	}
+	return v.(float64)
 }
 
 // Data em formato errado é erro de QUEM DIGITA, não falha do sistema. Antes era

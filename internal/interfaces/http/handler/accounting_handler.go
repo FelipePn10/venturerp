@@ -1,10 +1,12 @@
 package handler
 
 import (
-	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
+	"github.com/shopspring/decimal"
 
 	accounting_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/accounting_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/accounting/ecd"
@@ -186,19 +188,19 @@ func (h *AccountingHandler) ListAccounts(w http.ResponseWriter, r *http.Request)
 // ─── Journal Entries ──────────────────────────────────────────────────────────
 
 type createJournalEntryRequest struct {
-	PlanID          int64   `json:"plan_id"`
-	EmpresaID       int     `json:"empresa_id"`
-	EntryDate       string  `json:"entry_date"`
-	EntryNumber     string  `json:"entry_number"`
-	BatchNumber     string  `json:"batch_number"`
-	DebitAccountID  int64   `json:"debit_account_id"`
-	CreditAccountID int64   `json:"credit_account_id"`
-	DebitCCID       *int64  `json:"debit_cc_id"`
-	CreditCCID      *int64  `json:"credit_cc_id"`
-	Value           float64 `json:"value"`
-	HistoryCode     string  `json:"history_code"`
-	Description     string  `json:"description"`
-	EntryType       string  `json:"entry_type"`
+	PlanID          int64           `json:"plan_id"`
+	EmpresaID       int             `json:"empresa_id"`
+	EntryDate       string          `json:"entry_date"`
+	EntryNumber     string          `json:"entry_number"`
+	BatchNumber     string          `json:"batch_number"`
+	DebitAccountID  int64           `json:"debit_account_id"`
+	CreditAccountID int64           `json:"credit_account_id"`
+	DebitCCID       *int64          `json:"debit_cc_id"`
+	CreditCCID      *int64          `json:"credit_cc_id"`
+	Value           decimal.Decimal `json:"value"`
+	HistoryCode     string          `json:"history_code"`
+	Description     string          `json:"description"`
+	EntryType       string          `json:"entry_type"`
 }
 
 func (h *AccountingHandler) CreateJournalEntry(w http.ResponseWriter, r *http.Request) {

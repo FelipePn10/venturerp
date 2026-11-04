@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"time"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/google/uuid"
-	"time"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 )
@@ -50,7 +52,7 @@ type StockRepository interface {
 	GetLotGenealogy(ctx context.Context, itemCode int64, lot string) (*entity.LotGenealogy, error)
 
 	// Endereçamento e separação (migração 344)
-	SugerirSeparacaoFEFO(ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario float64, regra string) (*entity.ResultadoFEFO, error)
+	SugerirSeparacaoFEFO(ctx context.Context, itemCode int64, mask string, warehouseID int64, necessario decimal.Decimal, regra string) (*entity.ResultadoFEFO, error)
 	ListarSaldoPorEndereco(ctx context.Context, warehouseID int64, itemCode int64) ([]*entity.StockLotBalance, error)
 	TransferirEntreEnderecos(ctx context.Context, m *entity.StockMovement, origem, destino string) (*entity.StockMovement, error)
 	ApurarCurvaABC(ctx context.Context, janelaMeses int, corteA, corteB float64) (*entity.ResumoABC, error)

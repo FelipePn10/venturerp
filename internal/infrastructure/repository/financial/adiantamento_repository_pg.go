@@ -41,7 +41,7 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 		 VALUES ($1,$2,$3,$4,$5,$6,0,'ABERTO',$7,$8,$9)
 		 RETURNING id, status, valor_utilizado, is_active, created_at, updated_at`,
 		string(a.Tipo), a.ParceiroID, a.ContaBancariaID, a.NumeroDocumento, a.DataAdiantamento,
-		a.ValorOriginal.InexactFloat64(), a.Descricao, a.CreatedBy, empresa,
+		a.ValorOriginal, a.Descricao, a.CreatedBy, empresa,
 	).Scan(&a.ID, &a.Status, &a.ValorUtilizado, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating adiantamento: %w", err)
@@ -51,7 +51,7 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 	_, err = tx.Exec(ctx,
 		`INSERT INTO fluxo_caixa (data, tipo, valor, conta_bancaria_id, descricao, conciliado, enterprise_id)
 		 VALUES ($1,$2,$3,$4,$5,false,$6)`,
-		fc.Data, string(fc.Tipo), fc.Valor.InexactFloat64(), fc.ContaBancariaID, fc.Descricao, empresa)
+		fc.Data, string(fc.Tipo), fc.Valor, fc.ContaBancariaID, fc.Descricao, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("creating fluxo caixa for adiantamento: %w", err)
 	}
@@ -63,7 +63,7 @@ func (r *FinancialRepositoryPG) CreateAdiantamentoAtomico(ctx context.Context, a
 	}
 	_, err = tx.Exec(ctx,
 		fmt.Sprintf(`UPDATE contas_bancarias SET saldo_inicial = saldo_inicial %s $1, updated_at = NOW() WHERE id = $2 AND enterprise_id = $3`, sign),
-		fc.Valor.InexactFloat64(), a.ContaBancariaID, empresa)
+		fc.Valor, a.ContaBancariaID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("updating saldo for adiantamento: %w", err)
 	}
@@ -100,7 +100,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 
 	// Lock and read the advance.
 	var advTipo, advStatus string
-	var valorOriginal, valorUtilizado float64
+	var valorOriginal, valorUtilizado decimal.Decimal
 	var advActive bool
 	var advParceiro *int64
 	err = tx.QueryRow(ctx,
@@ -120,7 +120,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		return nil, errorsuc.NewValidationError("adiantamento pago a fornecedor só abate conta a pagar, e o recebido de cliente só abate conta a receber")
 	}
 
-	saldoAdv := decimal.NewFromFloat(valorOriginal).Sub(decimal.NewFromFloat(valorUtilizado))
+	saldoAdv := valorOriginal.Sub(valorUtilizado)
 	if valor.GreaterThan(saldoAdv) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo do adiantamento (R$ %s)", valor.StringFixed(2), saldoAdv.StringFixed(2)))
 	}
@@ -139,7 +139,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	// Settle the title and validate its remaining balance.
 	switch contaTipo {
 	case string(entity.AdiantamentoTipoPagar):
-		var bruto, desconto, pago, abatido float64
+		var bruto, desconto, pago, abatido decimal.Decimal
 		var fornecedor *int64
 		var status string
 		var ativo bool
@@ -159,30 +159,30 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		if err := mesmoParceiro(fornecedor, "fornecedor"); err != nil {
 			return nil, err
 		}
-		remaining := decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)).
-			Sub(decimal.NewFromFloat(pago)).Sub(decimal.NewFromFloat(abatido))
+		remaining := bruto.Sub(desconto).
+			Sub(pago).Sub(abatido)
 		if valor.GreaterThan(remaining) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo da conta a pagar (R$ %s)", valor.StringFixed(2), remaining.StringFixed(2)))
 		}
-		novoAbatido := decimal.NewFromFloat(abatido).Add(valor)
-		quita := decimal.NewFromFloat(pago).Add(novoAbatido).
-			GreaterThanOrEqual(decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)))
+		novoAbatido := abatido.Add(valor)
+		quita := pago.Add(novoAbatido).
+			GreaterThanOrEqual(bruto.Sub(desconto))
 		if quita {
 			_, err = tx.Exec(ctx,
 				`UPDATE contas_pagar SET valor_adiantamento_abatido=$1, adiantamento_id=$2,
 				     status='PAGO', data_pagamento=$3, updated_at=NOW() WHERE id=$4 AND enterprise_id=$5`,
-				novoAbatido.InexactFloat64(), advID, dataAplicacao, contaID, empresa)
+				novoAbatido, advID, dataAplicacao, contaID, empresa)
 		} else {
 			_, err = tx.Exec(ctx,
 				`UPDATE contas_pagar SET valor_adiantamento_abatido=$1, adiantamento_id=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
-				novoAbatido.InexactFloat64(), advID, contaID, empresa)
+				novoAbatido, advID, contaID, empresa)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("abatendo conta pagar: %w", err)
 		}
 
 	case string(entity.AdiantamentoTipoReceber):
-		var bruto, desconto, recebido float64
+		var bruto, desconto, recebido decimal.Decimal
 		var cliente *int64
 		var status string
 		var ativo bool
@@ -202,20 +202,20 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		if err := mesmoParceiro(cliente, "cliente"); err != nil {
 			return nil, err
 		}
-		remaining := decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)).Sub(decimal.NewFromFloat(recebido))
+		remaining := bruto.Sub(desconto).Sub(recebido)
 		if valor.GreaterThan(remaining) {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("o valor de R$ %s passa do saldo da conta a receber (R$ %s)", valor.StringFixed(2), remaining.StringFixed(2)))
 		}
-		novoRecebido := decimal.NewFromFloat(recebido).Add(valor)
-		quita := novoRecebido.GreaterThanOrEqual(decimal.NewFromFloat(bruto).Sub(decimal.NewFromFloat(desconto)))
+		novoRecebido := recebido.Add(valor)
+		quita := novoRecebido.GreaterThanOrEqual(bruto.Sub(desconto))
 		if quita {
 			_, err = tx.Exec(ctx,
 				`UPDATE contas_receber SET valor_recebido=$1, status='RECEBIDO', data_recebimento=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
-				novoRecebido.InexactFloat64(), dataAplicacao, contaID, empresa)
+				novoRecebido, dataAplicacao, contaID, empresa)
 		} else {
 			_, err = tx.Exec(ctx,
 				`UPDATE contas_receber SET valor_recebido=$1, updated_at=NOW() WHERE id=$2 AND enterprise_id=$3`,
-				novoRecebido.InexactFloat64(), contaID, empresa)
+				novoRecebido, contaID, empresa)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("abatendo conta receber: %w", err)
@@ -226,14 +226,14 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 	}
 
 	// Update the advance usage / status.
-	novoUtilizado := decimal.NewFromFloat(valorUtilizado).Add(valor)
+	novoUtilizado := valorUtilizado.Add(valor)
 	novoStatus := entity.AdiantamentoStatusParcial
-	if novoUtilizado.GreaterThanOrEqual(decimal.NewFromFloat(valorOriginal)) {
+	if novoUtilizado.GreaterThanOrEqual(valorOriginal) {
 		novoStatus = entity.AdiantamentoStatusQuitado
 	}
 	_, err = tx.Exec(ctx,
 		`UPDATE public.adiantamentos SET valor_utilizado=$1, status=$2, updated_at=NOW() WHERE id=$3 AND enterprise_id=$4`,
-		novoUtilizado.InexactFloat64(), string(novoStatus), advID, empresa)
+		novoUtilizado, string(novoStatus), advID, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("atualizando adiantamento: %w", err)
 	}
@@ -251,7 +251,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		    (adiantamento_id, conta_tipo, conta_id, valor_aplicado, data_aplicacao, created_by)
 		 VALUES ($1,$2,$3,$4,$5,$6)
 		 RETURNING id, data_aplicacao, created_at`,
-		advID, contaTipo, contaID, valor.InexactFloat64(), dataAplicacao, userID,
+		advID, contaTipo, contaID, valor, dataAplicacao, userID,
 	).Scan(&ap.ID, &ap.DataAplicacao, &ap.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("registrando aplicação: %w", err)
@@ -328,11 +328,11 @@ func (r *FinancialRepositoryPG) ListAplicacoesByAdiantamento(ctx context.Context
 	var result []*entity.AdiantamentoAplicacao
 	for rows.Next() {
 		var ap entity.AdiantamentoAplicacao
-		var valor float64
+		var valor decimal.Decimal
 		if err := rows.Scan(&ap.ID, &ap.AdiantamentoID, &ap.ContaTipo, &ap.ContaID, &valor, &ap.DataAplicacao, &ap.CreatedBy, &ap.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scanning aplicação: %w", err)
 		}
-		ap.ValorAplicado = decimal.NewFromFloat(valor)
+		ap.ValorAplicado = valor
 		result = append(result, &ap)
 	}
 	return result, rows.Err()
@@ -344,7 +344,7 @@ const adiantamentoSelect = `SELECT id, tipo, parceiro_id, COALESCE(conta_bancari
 
 func scanAdiantamentoRow(row pgx.Row) (*entity.Adiantamento, error) {
 	var a entity.Adiantamento
-	var valorOriginal, valorUtilizado float64
+	var valorOriginal, valorUtilizado decimal.Decimal
 	err := row.Scan(&a.ID, &a.Tipo, &a.ParceiroID, &a.ContaBancariaID, &a.NumeroDocumento, &a.DataAdiantamento,
 		&valorOriginal, &valorUtilizado, &a.Status, &a.Descricao, &a.IsActive, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
@@ -353,21 +353,21 @@ func scanAdiantamentoRow(row pgx.Row) (*entity.Adiantamento, error) {
 		}
 		return nil, fmt.Errorf("scanning adiantamento: %w", err)
 	}
-	a.ValorOriginal = decimal.NewFromFloat(valorOriginal)
-	a.ValorUtilizado = decimal.NewFromFloat(valorUtilizado)
+	a.ValorOriginal = valorOriginal
+	a.ValorUtilizado = valorUtilizado
 	return &a, nil
 }
 
 func scanAdiantamento(rows pgx.Rows) (*entity.Adiantamento, error) {
 	var a entity.Adiantamento
-	var valorOriginal, valorUtilizado float64
+	var valorOriginal, valorUtilizado decimal.Decimal
 	err := rows.Scan(&a.ID, &a.Tipo, &a.ParceiroID, &a.ContaBancariaID, &a.NumeroDocumento, &a.DataAdiantamento,
 		&valorOriginal, &valorUtilizado, &a.Status, &a.Descricao, &a.IsActive, &a.CreatedBy, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("scanning adiantamento: %w", err)
 	}
-	a.ValorOriginal = decimal.NewFromFloat(valorOriginal)
-	a.ValorUtilizado = decimal.NewFromFloat(valorUtilizado)
+	a.ValorOriginal = valorOriginal
+	a.ValorUtilizado = valorUtilizado
 	return &a, nil
 }
 

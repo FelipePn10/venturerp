@@ -107,7 +107,7 @@ func TestAvisosEFD(t *testing.T) {
 		Participantes: []sped.EFDParticipante{{CodPart: "1", Nome: "X"}},
 		Itens:         []sped.EFDItem{{CodItem: "A", TipoItem: "01"}, {CodItem: "B", TipoItem: "07"}},
 		Conhecimentos: []sped.EFDConhecimento{{NumDoc: "9"}},
-		ApuracaoICMS:  &sped.EFDApuracaoICMS{Obrigacoes: []sped.EFDObrigacao{{VlOr: 1}}},
+		ApuracaoICMS:  &sped.EFDApuracaoICMS{Obrigacoes: []sped.EFDObrigacao{{VlOr: decimal.NewFromFloat(1)}}},
 	}
 	if a := avisosEFD(p, ""); len(a) != 4 {
 		t.Errorf("avisos = %v", a)
