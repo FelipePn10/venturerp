@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.6] — 2026-11-04
+
+- refactor(vendas): pedido de venda e cliente em decimal (etapa 3a) (`4c5bbbfd`)
+
 ## [v1.10.5] — 2026-11-04
 
 - refactor(fiscal): parâmetros, tabelas, CT-e, NFS-e e apurações em decimal (etapa 2b) (`2cc6ef8e`)
