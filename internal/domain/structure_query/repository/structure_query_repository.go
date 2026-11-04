@@ -8,6 +8,7 @@ import (
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
 	str "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type StructureQueryRepository interface {
@@ -28,7 +29,7 @@ type StructureQueryRepository interface {
 	ConsultChildren(ctx context.Context, parentCode int64, mask string, effectivenessDate *time.Time) ([]*str.ConsultRow, error)
 
 	// GetMaskAnswersWithNames retorna question_name → option_value para avaliação de fórmulas.
-	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]decimal.Decimal, error)
 
 	// GetLatestMaskForItem retorna a máscara mais recente do item ou "" se não houver.
 	GetLatestMaskForItem(ctx context.Context, itemCode int64) (string, error)

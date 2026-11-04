@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 const createStructureComponent = `-- name: CreateStructureComponent :one
@@ -58,9 +59,9 @@ type CreateStructureComponentParams struct {
 	ParentCode          int64
 	ChildCode           int64
 	ParentMask          pgtype.Text
-	Quantity            float64
+	Quantity            decimal.Decimal
 	UnitOfMeasurement   UnitOfMeasurementEnum
-	LossPercentage      float64
+	LossPercentage      decimal.Decimal
 	Sequence            int32
 	Health              HealthEnum
 	Notes               pgtype.Text
@@ -279,8 +280,8 @@ type GetAllDirectChildrenRow struct {
 	ChildDescription    string
 	ChildStockUom       UnitOfMeasurementEnum
 	ParentMask          pgtype.Text
-	Quantity            float64
-	LossPercentage      float64
+	Quantity            decimal.Decimal
+	LossPercentage      decimal.Decimal
 	LossFormula         pgtype.Text
 	UnitOfMeasurement   UnitOfMeasurementEnum
 	Health              HealthEnum
@@ -429,8 +430,8 @@ type GetDirectChildrenForMaskRow struct {
 	ParentCode          int64
 	ChildCode           int64
 	ParentMask          pgtype.Text
-	Quantity            float64
-	LossPercentage      float64
+	Quantity            decimal.Decimal
+	LossPercentage      decimal.Decimal
 	LossFormula         pgtype.Text
 	UnitOfMeasurement   UnitOfMeasurementEnum
 	Health              HealthEnum
@@ -542,9 +543,9 @@ type GetGenericChildrenParams struct {
 type GetGenericChildrenRow struct {
 	ID                int64
 	ParentMask        pgtype.Text
-	Quantity          float64
+	Quantity          decimal.Decimal
 	UnitOfMeasurement UnitOfMeasurementEnum
-	LossPercentage    float64
+	LossPercentage    decimal.Decimal
 	Sequence          int32
 	Notes             pgtype.Text
 	IsActive          bool
@@ -793,9 +794,9 @@ type UpdateStructureComponentParams struct {
 	ParentCode          int64
 	ChildCode           int64
 	ParentMask          pgtype.Text
-	Quantity            float64
+	Quantity            decimal.Decimal
 	UnitOfMeasurement   UnitOfMeasurementEnum
-	LossPercentage      float64
+	LossPercentage      decimal.Decimal
 	Sequence            int32
 	Health              HealthEnum
 	Notes               pgtype.Text

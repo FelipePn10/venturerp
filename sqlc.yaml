@@ -16,10 +16,14 @@ sql:
 
         overrides:
           - column: "item_structures.quantity"
-            go_type: "float64"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "Decimal"
 
           - column: "item_structures.loss_percentage"
-            go_type: "float64"
+            go_type:
+              import: "github.com/shopspring/decimal"
+              type: "Decimal"
 
           - column: "allocation_base_items.amount"
             go_type:

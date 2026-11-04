@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
@@ -133,7 +134,7 @@ func TestApplyLossFormula(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := applyLossFormula(dq(tc.parentQty), tc.childPer, tc.lossPct, tc.formula)
+			got := applyLossFormula(dq(tc.parentQty), dq(tc.childPer), dq(tc.lossPct), tc.formula)
 			if abs(got.InexactFloat64()-tc.want) > 1e-6 {
 				t.Errorf("applyLossFormula = %v, want %v", got, tc.want)
 			}
@@ -173,8 +174,8 @@ func TestExplodeFromBOMWithFormula_MaskFilter(t *testing.T) {
 	maskA := "A"
 	bom := map[int64][]*structentity.ItemStructure{
 		1: {
-			{ChildCode: 10, Quantity: 2},                     // generic (no parent mask)
-			{ChildCode: 20, Quantity: 1, ParentMask: &maskA}, // only for mask A
+			{ChildCode: 10, Quantity: decimal.NewFromFloat(2)},                     // generic (no parent mask)
+			{ChildCode: 20, Quantity: decimal.NewFromFloat(1), ParentMask: &maskA}, // only for mask A
 		},
 	}
 	// With mask "A": both apply (generic + A).
@@ -360,9 +361,9 @@ func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
 	// Parent 1 → normal child 2 (2/un), co-product 3 (output), fixed child 4 (1 por OF).
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {
-			{ChildCode: 2, Quantity: 2},
-			{ChildCode: 3, Quantity: 5, IsCoproduct: true},
-			{ChildCode: 4, Quantity: 1, IsFixedQty: true},
+			{ChildCode: 2, Quantity: decimal.NewFromFloat(2)},
+			{ChildCode: 3, Quantity: decimal.NewFromFloat(5), IsCoproduct: true},
+			{ChildCode: 4, Quantity: decimal.NewFromFloat(1), IsFixedQty: true},
 		},
 	}
 	// Produzindo 10 unidades, sem perda, fórmula 1.
@@ -389,9 +390,9 @@ func TestExplodeFromBOM_CoproductAndFixedQty(t *testing.T) {
 func TestExplodeFromBOM_SelectsPrimarySubstitute(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {
-			{ChildCode: 20, Quantity: 2, SubstituteGroup: 1, SubstitutePriority: 2},
-			{ChildCode: 10, Quantity: 3, SubstituteGroup: 1, SubstitutePriority: 1},
-			{ChildCode: 30, Quantity: 5},
+			{ChildCode: 20, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 2},
+			{ChildCode: 10, Quantity: decimal.NewFromFloat(3), SubstituteGroup: 1, SubstitutePriority: 1},
+			{ChildCode: 30, Quantity: decimal.NewFromFloat(5)},
 		},
 	}
 
@@ -449,10 +450,10 @@ func TestBuildLLCFromBOM_SkipsCoproduct(t *testing.T) {
 func TestExplodeFromBOM_IgnoraMaterialDoCliente(t *testing.T) {
 	bomMap := map[int64][]*structentity.ItemStructure{
 		1: {
-			{ChildCode: 2, Quantity: 1},
-			{ChildCode: 3, Quantity: 2, CustomerSupplied: true},
+			{ChildCode: 2, Quantity: decimal.NewFromFloat(1)},
+			{ChildCode: 3, Quantity: decimal.NewFromFloat(2), CustomerSupplied: true},
 		},
-		3: {{ChildCode: 9, Quantity: 1}},
+		3: {{ChildCode: 9, Quantity: decimal.NewFromFloat(1)}},
 	}
 	inputs := explodeFromBOMWithFormula(bomMap, 1, "", decimal.NewFromFloat(10), 1, 1)
 	if len(inputs) != 1 || inputs[0].ItemCode != 2 {

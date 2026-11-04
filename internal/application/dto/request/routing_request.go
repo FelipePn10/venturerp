@@ -23,11 +23,11 @@ type CreateOperationDTO struct {
 	TimeUnit   string  `json:"time_unit"`    // MIN | HORA | DIA (default HORA)
 
 	// Subcontracting (EXTERNA / TERCEIROS).
-	SupplierID           *int64    `json:"supplier_id,omitempty"`
-	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
+	SupplierID           *int64           `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode        `json:"service_item_code,omitempty"`
+	CostPerUnit          *decimal.Decimal `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32           `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance string           `json:"third_party_remittance,omitempty"`
 
 	// ScrapPct é o refugo padrão da operação, em %.
 	ScrapPct float64 `json:"scrap_pct"`
@@ -52,11 +52,11 @@ type UpdateOperationDTO struct {
 	CrewSize   float64 `json:"crew_size"`
 	TimeUnit   string  `json:"time_unit"`
 
-	SupplierID           *int64    `json:"supplier_id,omitempty"`
-	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance string    `json:"third_party_remittance,omitempty"`
+	SupplierID           *int64           `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode        `json:"service_item_code,omitempty"`
+	CostPerUnit          *decimal.Decimal `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32           `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance string           `json:"third_party_remittance,omitempty"`
 
 	// ScrapPct é o refugo padrão da operação, em %.
 	ScrapPct float64 `json:"scrap_pct"`
@@ -102,11 +102,11 @@ type AddRouteOperationDTO struct {
 	CrewSize   *float64 `json:"crew_size,omitempty"`
 	TimeUnit   *string  `json:"time_unit,omitempty"`
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
-	SupplierID           *int64    `json:"supplier_id,omitempty"`
-	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
+	SupplierID           *int64           `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode        `json:"service_item_code,omitempty"`
+	CostPerUnit          *decimal.Decimal `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32           `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance *string          `json:"third_party_remittance,omitempty"`
 	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
 	ScrapPct *float64 `json:"scrap_pct,omitempty"`
 	// InspectionRequired marca a etapa como ponto de inspeção.
@@ -116,23 +116,23 @@ type AddRouteOperationDTO struct {
 }
 
 type UpdateRouteOperationDTO struct {
-	ID                   int64     `json:"id"`
-	WorkCenterID         *int64    `json:"work_center_id,omitempty"`
-	StandardTime         *float64  `json:"standard_time,omitempty"`
-	SetupTime            *float64  `json:"setup_time,omitempty"`
-	RunTime              *float64  `json:"run_time,omitempty"`
-	LaborTime            *float64  `json:"labor_time,omitempty"`
-	RunBaseQty           *float64  `json:"run_base_qty,omitempty"`
-	QueueTime            *float64  `json:"queue_time,omitempty"`
-	WaitTime             *float64  `json:"wait_time,omitempty"`
-	MoveTime             *float64  `json:"move_time,omitempty"`
-	CrewSize             *float64  `json:"crew_size,omitempty"`
-	TimeUnit             *string   `json:"time_unit,omitempty"`
-	SupplierID           *int64    `json:"supplier_id,omitempty"`
-	ServiceItemCode      *TextCode `json:"service_item_code,omitempty"`
-	CostPerUnit          *float64  `json:"cost_per_unit,omitempty"`
-	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
-	ThirdPartyRemittance *string   `json:"third_party_remittance,omitempty"`
+	ID                   int64            `json:"id"`
+	WorkCenterID         *int64           `json:"work_center_id,omitempty"`
+	StandardTime         *float64         `json:"standard_time,omitempty"`
+	SetupTime            *float64         `json:"setup_time,omitempty"`
+	RunTime              *float64         `json:"run_time,omitempty"`
+	LaborTime            *float64         `json:"labor_time,omitempty"`
+	RunBaseQty           *float64         `json:"run_base_qty,omitempty"`
+	QueueTime            *float64         `json:"queue_time,omitempty"`
+	WaitTime             *float64         `json:"wait_time,omitempty"`
+	MoveTime             *float64         `json:"move_time,omitempty"`
+	CrewSize             *float64         `json:"crew_size,omitempty"`
+	TimeUnit             *string          `json:"time_unit,omitempty"`
+	SupplierID           *int64           `json:"supplier_id,omitempty"`
+	ServiceItemCode      *TextCode        `json:"service_item_code,omitempty"`
+	CostPerUnit          *decimal.Decimal `json:"cost_per_unit,omitempty"`
+	LeadTimeDays         *int32           `json:"lead_time_days,omitempty"`
+	ThirdPartyRemittance *string          `json:"third_party_remittance,omitempty"`
 	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
 	ScrapPct *float64 `json:"scrap_pct,omitempty"`
 	// InspectionRequired marca a etapa como ponto de inspeção.

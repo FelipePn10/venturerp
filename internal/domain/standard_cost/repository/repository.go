@@ -39,10 +39,9 @@ type BOMChild struct {
 	// quadrado, quando a chapa é estocada em quilo.
 	Quantity         decimal.Decimal
 	ConversionFactor decimal.Decimal
-	// LossPercentage vem de coluna double precision (perda da estrutura).
-	LossPercentage float64
-	IsCoproduct    bool // OUTPUT (co-produto/sucata) → credita o custo do pai
-	IsFixedQty     bool // quantidade por lote → amortizada pelo lote de referência
+	LossPercentage   decimal.Decimal
+	IsCoproduct      bool // OUTPUT (co-produto/sucata) → credita o custo do pai
+	IsFixedQty       bool // quantidade por lote → amortizada pelo lote de referência
 	// CustomerSupplied: material do cliente (beneficiamento) — não é custo da
 	// empresa, que cobra só a industrialização.
 	CustomerSupplied   bool

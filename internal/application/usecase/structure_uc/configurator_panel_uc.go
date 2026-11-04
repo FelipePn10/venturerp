@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 // configuratorPort é a fatia do configurador que a Estrutura de Produto consome
@@ -18,7 +19,7 @@ type configuratorPort interface {
 	StructurePanel(ctx context.Context, itemCode int64, itemName string) (*response.StructureConfiguratorPanelResponse, error)
 	ValidateCombination(ctx context.Context, itemCode int64, answers []request.CfgMaskAnswerInput) ([]response.StructureConfiguratorViolation, error)
 	GenerateMask(ctx context.Context, dto request.CfgGenerateMaskDTO) (*response.CfgGeneratedMaskResponse, error)
-	FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]float64, error)
+	FormulaVariables(ctx context.Context, answers []request.CfgMaskAnswerInput) (map[string]decimal.Decimal, error)
 }
 
 // structureResolver resolve a árvore da estrutura para uma configuração.
@@ -116,7 +117,7 @@ func (uc *StructureConfiguratorUseCase) Apply(
 		Persisted: generated.Persisted,
 		MaskID:    generated.MaskID,
 		Answers:   generated.Answers,
-		Variables: variables,
+		Variables: variaveisJSON(variables),
 		Warnings:  []string{},
 	}
 
@@ -157,4 +158,13 @@ func (e *RestrictionViolationError) Error() string {
 		msg += v.Message
 	}
 	return msg
+}
+
+// variaveisJSON leva as variáveis da fórmula à resposta, que continua numérica.
+func variaveisJSON(in map[string]decimal.Decimal) map[string]float64 {
+	out := make(map[string]float64, len(in))
+	for k, v := range in {
+		out[k] = v.InexactFloat64()
+	}
+	return out
 }

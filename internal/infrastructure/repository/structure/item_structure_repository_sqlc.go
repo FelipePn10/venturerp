@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -308,8 +309,8 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 		child := &entity.ItemStructure{
 			ParentCode:         e.ParentCode,
 			ChildCode:          e.ChildCode,
-			Quantity:           pgutil.FromPgNumericToFloat64(e.Quantity),
-			LossPercentage:     pgutil.FromPgNumericToFloat64(e.LossPercentage),
+			Quantity:           pgutil.FromPgNumericToDecimal(e.Quantity),
+			LossPercentage:     pgutil.FromPgNumericToDecimal(e.LossPercentage),
 			IsCoproduct:        e.IsCoproduct,
 			CustomerSupplied:   e.CustomerSupplied,
 			IsFixedQty:         e.IsFixedQty,
@@ -318,7 +319,7 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 			IsActive:           true,
 			StartDate:          pgutil.FromPgDateToPtr(e.StartDate),
 			EndDate:            pgutil.FromPgDateToPtr(e.EndDate),
-			ConversionFactor:   pgutil.FromPgNumericToFloat64(e.ConversionFactor),
+			ConversionFactor:   pgutil.FromPgNumericToDecimal(e.ConversionFactor),
 			QuantityRounding:   e.QuantityRounding,
 			QuantityScale:      e.QuantityScale,
 		}
@@ -361,8 +362,8 @@ func rowToEntity(row sqlc.ItemStructure) *entity.ItemStructure {
 		IsCriticalMPS:       row.IsCriticalMps,
 		GeneratesInspection: row.GeneratesInspection,
 		CustomerSupplied:    row.CustomerSupplied,
-		QuantityStockUOM:    pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
-		ConversionFactor:    pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+		QuantityStockUOM:    pgutil.FromPgNumericToDecimal(row.QuantityStockUom),
+		ConversionFactor:    pgutil.FromPgNumericToDecimal(row.ConversionFactor),
 		ID:                  row.ID,
 		ParentCode:          row.ParentCode,
 		ChildCode:           row.ChildCode,
@@ -418,8 +419,8 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 			ChildCode:              row.ChildCode,
 			ChildDescription:       row.ChildDescription,
 			StockUnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.ChildStockUom),
-			QuantityStockUOM:       pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
-			ConversionFactor:       pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+			QuantityStockUOM:       pgutil.FromPgNumericToDecimal(row.QuantityStockUom),
+			ConversionFactor:       pgutil.FromPgNumericToDecimal(row.ConversionFactor),
 			Quantity:               row.Quantity,
 			LossPercentage:         row.LossPercentage,
 			UnitOfMeasurement:      types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
@@ -476,8 +477,8 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 			ChildCode:              row.ChildCode,
 			ChildDescription:       row.ChildDescription,
 			StockUnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.ChildStockUom),
-			QuantityStockUOM:       pgutil.FromPgNumericToFloat64(row.QuantityStockUom),
-			ConversionFactor:       pgutil.FromPgNumericToFloat64(row.ConversionFactor),
+			QuantityStockUOM:       pgutil.FromPgNumericToDecimal(row.QuantityStockUom),
+			ConversionFactor:       pgutil.FromPgNumericToDecimal(row.ConversionFactor),
 			Quantity:               row.Quantity,
 			LossPercentage:         row.LossPercentage,
 			UnitOfMeasurement:      types.TypeUnitOfMeasurementItem(row.UnitOfMeasurement),
@@ -536,15 +537,15 @@ func stringPtrToPgText(v *string) pgtype.Text {
 // zero — a ordem nasceria sem componente. Quando o caso de uso não calculou
 // (unidades iguais), a própria quantidade e o fator 1 são a resposta certa.
 func quantidadeDeEstoque(s *entity.ItemStructure) pgtype.Numeric {
-	if s.QuantityStockUOM > 0 {
-		return pgutil.ToPgNumericFromFloat64(s.QuantityStockUOM)
+	if s.QuantityStockUOM.IsPositive() {
+		return pgutil.ToPgNumericFromDecimal(s.QuantityStockUOM)
 	}
-	return pgutil.ToPgNumericFromFloat64(s.Quantity)
+	return pgutil.ToPgNumericFromDecimal(s.Quantity)
 }
 
 func fatorDeConversao(s *entity.ItemStructure) pgtype.Numeric {
-	if s.ConversionFactor > 0 {
-		return pgutil.ToPgNumericFromFloat64(s.ConversionFactor)
+	if s.ConversionFactor.IsPositive() {
+		return pgutil.ToPgNumericFromDecimal(s.ConversionFactor)
 	}
 	return pgutil.ToPgNumericFromFloat64(1)
 }

@@ -3,20 +3,24 @@ package entity
 import (
 	"math"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
 func strPtr(s string) *string { return &s }
 
-func nearly(got, want float64) bool { return math.Abs(got-want) < 1e-9 }
+func nearly(got decimal.Decimal, want float64) bool {
+	return math.Abs(got.InexactFloat64()-want) < 1e-9
+}
 
 // O exemplo da própria especificação: perímetro em metros de um quadro cujas
 // medidas são respondidas em milímetros no configurador.
 func TestResolvedQuantity_PerimeterFormula(t *testing.T) {
 	s := &ItemStructure{
-		Quantity:        1,
+		Quantity:        decimal.NewFromFloat(1),
 		QuantityFormula: strPtr("2*(COMPRIMENTO/1000)+2*(PROFUNDIDADE/1000)"),
 	}
-	got, applied := s.ResolvedQuantity(map[string]float64{"COMPRIMENTO": 1200, "PROFUNDIDADE": 600})
+	got, applied := s.ResolvedQuantity(map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1200), "PROFUNDIDADE": decimal.NewFromFloat(600)})
 	if !applied {
 		t.Fatal("fórmula não foi aplicada")
 	}
@@ -26,21 +30,21 @@ func TestResolvedQuantity_PerimeterFormula(t *testing.T) {
 }
 
 func TestResolvedQuantity_FallsBackToFixedQuantity(t *testing.T) {
-	s := &ItemStructure{Quantity: 4, QuantityFormula: strPtr("2*COMPRIMENTO")}
+	s := &ItemStructure{Quantity: decimal.NewFromFloat(4), QuantityFormula: strPtr("2*COMPRIMENTO")}
 	// Sem a variável respondida, a fórmula não é avaliável.
 	got, applied := s.ResolvedQuantity(nil)
 	if applied {
 		t.Fatal("fórmula aplicada sem as variáveis")
 	}
-	if got != 4 {
+	if !got.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("quantidade = %v, quer a fixa 4", got)
 	}
 }
 
 func TestResolvedQuantity_NoFormulaKeepsFixedQuantity(t *testing.T) {
-	s := &ItemStructure{Quantity: 2.5}
-	got, applied := s.ResolvedQuantity(map[string]float64{"COMPRIMENTO": 1000})
-	if applied || got != 2.5 {
+	s := &ItemStructure{Quantity: decimal.NewFromFloat(2.5)}
+	got, applied := s.ResolvedQuantity(map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(1000)})
+	if applied || !got.Equal(decimal.NewFromFloat(2.5)) {
 		t.Fatalf("quantidade = %v applied=%v, quer 2.5/false", got, applied)
 	}
 }
@@ -61,7 +65,7 @@ func TestResolvedQuantity_Rounding(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.mode, func(t *testing.T) {
 			s := &ItemStructure{
-				Quantity:         1,
+				Quantity:         decimal.NewFromFloat(1),
 				QuantityFormula:  strPtr("4/3"),
 				QuantityRounding: tc.mode,
 				QuantityScale:    tc.scale,
@@ -80,11 +84,11 @@ func TestResolvedQuantity_Rounding(t *testing.T) {
 // A perda continua sendo aplicada sobre o resultado da fórmula.
 func TestEffectiveQuantityWith_AppliesLossOverFormula(t *testing.T) {
 	s := &ItemStructure{
-		Quantity:        1,
-		LossPercentage:  10,
+		Quantity:        decimal.NewFromFloat(1),
+		LossPercentage:  decimal.NewFromFloat(10),
 		QuantityFormula: strPtr("COMPRIMENTO/1000"),
 	}
-	got := s.EffectiveQuantityWith(map[string]float64{"COMPRIMENTO": 2000})
+	got := s.EffectiveQuantityWith(map[string]decimal.Decimal{"COMPRIMENTO": decimal.NewFromFloat(2000)})
 	if !nearly(got, 2.2) {
 		t.Fatalf("quantidade efetiva = %v, quer 2.2", got)
 	}
@@ -105,9 +109,9 @@ func TestFormulaVariables_ListsQuestionsInOrder(t *testing.T) {
 }
 
 func TestResolvedQuantity_NegativeResultFallsBack(t *testing.T) {
-	s := &ItemStructure{Quantity: 3, QuantityFormula: strPtr("0-LARGURA")}
-	got, applied := s.ResolvedQuantity(map[string]float64{"LARGURA": 5})
-	if applied || got != 3 {
+	s := &ItemStructure{Quantity: decimal.NewFromFloat(3), QuantityFormula: strPtr("0-LARGURA")}
+	got, applied := s.ResolvedQuantity(map[string]decimal.Decimal{"LARGURA": decimal.NewFromFloat(5)})
+	if applied || !got.Equal(decimal.NewFromFloat(3)) {
 		t.Fatalf("resultado negativo aceito: %v applied=%v", got, applied)
 	}
 }

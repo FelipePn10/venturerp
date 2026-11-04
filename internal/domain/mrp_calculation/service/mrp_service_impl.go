@@ -73,21 +73,21 @@ type MRPServiceImpl struct {
 // MaskVariableReader devolve variável → valor da configuração de um item,
 // alimentando as fórmulas de quantidade da estrutura (FENG0210).
 type MaskVariableReader interface {
-	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]decimal.Decimal, error)
 }
 
 // maskVarCache evita reconsultar as respostas do mesmo par item/máscara durante
 // uma explosão inteira.
 type maskVarCache struct {
 	reader MaskVariableReader
-	cache  map[string]map[string]float64
+	cache  map[string]map[string]decimal.Decimal
 }
 
 func newMaskVarCache(reader MaskVariableReader) *maskVarCache {
-	return &maskVarCache{reader: reader, cache: map[string]map[string]float64{}}
+	return &maskVarCache{reader: reader, cache: map[string]map[string]decimal.Decimal{}}
 }
 
-func (c *maskVarCache) vars(ctx context.Context, itemCode int64, mask string) map[string]float64 {
+func (c *maskVarCache) vars(ctx context.Context, itemCode int64, mask string) map[string]decimal.Decimal {
 	if c == nil || c.reader == nil || mask == "" {
 		return nil
 	}
@@ -1760,7 +1760,7 @@ func explodeFromBOMWithVars(
 	quantity decimal.Decimal,
 	level int,
 	formula int,
-	vars map[string]float64,
+	vars map[string]decimal.Decimal,
 	necessidade time.Time,
 ) []*entity.MRPInput {
 	return explode(bomMap, parentCode, mask, quantity, level, formula, vars, necessidade)
@@ -1785,7 +1785,7 @@ func explode(
 	quantity decimal.Decimal,
 	level int,
 	formula int,
-	vars map[string]float64,
+	vars map[string]decimal.Decimal,
 	necessidade time.Time,
 ) []*entity.MRPInput {
 	if level > 20 {
@@ -1843,8 +1843,8 @@ func explode(
 // Fórmula 1: Qty = QtdPai * QtdComponente * (1 + %Perda/100)
 // Fórmula 2: Qty = QtdPai * QtdComponente / (1 - %Perda/100)
 // Fórmula 3: Qty = QtdPai * QtdComponente (ignora perda)
-func applyLossFormula(parentQty decimal.Decimal, childQtyPer, lossPercentage float64, formula int) decimal.Decimal {
-	return quantidadeComPerda(parentQty.Mul(dq(childQtyPer)), lossPercentage, formula)
+func applyLossFormula(parentQty, childQtyPer, lossPercentage decimal.Decimal, formula int) decimal.Decimal {
+	return quantidadeComPerda(parentQty.Mul(childQtyPer.Round(6)), lossPercentage, formula)
 }
 
 func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots []int64) []int64 {

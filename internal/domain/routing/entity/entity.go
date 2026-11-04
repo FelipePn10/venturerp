@@ -1,9 +1,10 @@
 package entity
 
 import (
+	"time"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/shopspring/decimal"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -58,7 +59,7 @@ type Operation struct {
 	// Subcontracting defaults (EXTERNA / TERCEIROS). Nil for internal operations.
 	SupplierID           *int64
 	ServiceItemCode      *int64
-	CostPerUnit          *float64
+	CostPerUnit          *decimal.Decimal
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
 
@@ -210,7 +211,7 @@ type RouteOperation struct {
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
 	SupplierID           *int64
 	ServiceItemCode      *int64
-	CostPerUnit          *float64
+	CostPerUnit          *decimal.Decimal
 	LeadTimeDays         *int32
 	ThirdPartyRemittance *string
 
@@ -258,7 +259,7 @@ type ExternalOp struct {
 	// Subcontracting (effective: route-op override ∘ operation default).
 	SupplierID      *int64
 	ServiceItemCode *int64
-	CostPerUnit     float64
+	CostPerUnit     decimal.Decimal
 	LeadTimeDays    int32
 	RemittanceType  string
 }

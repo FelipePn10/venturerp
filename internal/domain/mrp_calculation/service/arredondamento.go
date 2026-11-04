@@ -35,11 +35,11 @@ func dq(v float64) decimal.Decimal { return decimal.NewFromFloat(v).Round(6) }
 // quantidadeComPerda é a perda da estrutura (structentity.QuantidadeComPerda)
 // em decimal: 1 multiplica (1 + %/100), 3 ignora, 2 (padrão) divide (1 − %/100).
 // Arredonda na escala das colunas: a divisão pode ser dízima.
-func quantidadeComPerda(base decimal.Decimal, perda float64, formula int) decimal.Decimal {
-	if perda <= 0 {
+func quantidadeComPerda(base, perda decimal.Decimal, formula int) decimal.Decimal {
+	if !perda.IsPositive() {
 		return base
 	}
-	p := dq(perda).Div(decimal.NewFromInt(100))
+	p := perda.Div(decimal.NewFromInt(100))
 	um := decimal.NewFromInt(1)
 	switch formula {
 	case 1:

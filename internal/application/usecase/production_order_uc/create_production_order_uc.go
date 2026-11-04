@@ -166,7 +166,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 			vigentes = append(vigentes, child)
 		}
 	}
-	var vars map[string]float64
+	var vars map[string]decimal.Decimal
 	if uc.MaskVars != nil && dto.Mask != "" {
 		var errMascara error
 		vars, errMascara = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, dto.Mask)
@@ -178,7 +178,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	rework := false
 	for _, child := range structentity.SelectPrimarySubstituteComponents(vigentes) {
 		perUnit, _ := child.ResolvedQuantity(vars)
-		if child.IsCoproduct || perUnit <= 0 {
+		if child.IsCoproduct || !perUnit.IsPositive() {
 			continue
 		}
 		// Material do cliente (beneficiamento) não é demanda do estoque próprio:
@@ -187,13 +187,11 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		if child.CustomerSupplied {
 			continue
 		}
-		quantity := decimal.NewFromFloat(perUnit)
+		quantity := perUnit
 		if !child.IsFixedQty {
 			quantity = quantity.Mul(dto.PlannedQty)
 		}
-		quantityFloat, _ := quantity.Float64()
-		quantity = decimal.NewFromFloat(structentity.QuantidadeComPerda(
-			quantityFloat, child.LossPercentage, structentity.FormulaPerdaPadrao))
+		quantity = structentity.QuantidadeComPerdaDecimal(quantity, child.LossPercentage, structentity.FormulaPerdaPadrao)
 		automatic, warehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
 		if infoErr != nil {
 			return nil, infoErr
@@ -241,7 +239,7 @@ func (uc *CreateProductionOrderUseCase) Execute(
 
 // orderMaskVariableReader resolve as variáveis da configuração de um item.
 type orderMaskVariableReader interface {
-	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]float64, error)
+	GetMaskAnswersWithNames(ctx context.Context, itemCode int64, mask string) (map[string]decimal.Decimal, error)
 }
 
 // maskBOMReader é a leitura de estrutura que respeita a máscara da ordem.

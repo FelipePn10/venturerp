@@ -7,18 +7,19 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	strentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
+	"github.com/shopspring/decimal"
 )
 
 // SimulateFormulaInput são a expressão e os valores das perguntas.
 type SimulateFormulaInput struct {
-	Formula   string             `json:"formula"`
-	Rounding  string             `json:"quantity_rounding,omitempty"`
-	Scale     int16              `json:"quantity_scale,omitempty"`
-	Variables map[string]float64 `json:"variables,omitempty"`
+	Formula   string                     `json:"formula"`
+	Rounding  string                     `json:"quantity_rounding,omitempty"`
+	Scale     int16                      `json:"quantity_scale,omitempty"`
+	Variables map[string]decimal.Decimal `json:"variables,omitempty"`
 	// LossPercentage e SetupLoss entram no resultado para a tela mostrar a
 	// quantidade que a ordem vai realmente consumir, não só o valor bruto.
-	LossPercentage float64 `json:"loss_percentage,omitempty"`
-	SetupLoss      float64 `json:"setup_loss,omitempty"`
+	LossPercentage decimal.Decimal `json:"loss_percentage,omitempty"`
+	SetupLoss      float64         `json:"setup_loss,omitempty"`
 }
 
 // SimulateFormulaOutput é o que a tela mostra antes de gravar.
@@ -99,10 +100,10 @@ func (uc *SimulateQuantityFormulaUseCase) Execute(
 	return &SimulateFormulaOutput{
 		Valid:            true,
 		Variables:        usadas,
-		RawResult:        bruto,
-		RoundedResult:    arredondado,
-		QuantityWithLoss: comPerda,
-		QuantityPerOrder: comPerda + in.SetupLoss,
+		RawResult:        bruto.InexactFloat64(),
+		RoundedResult:    arredondado.InexactFloat64(),
+		QuantityWithLoss: comPerda.InexactFloat64(),
+		QuantityPerOrder: comPerda.Add(decimal.NewFromFloat(in.SetupLoss)).InexactFloat64(),
 		Explanation: "Resultado da fórmula, já com o arredondamento, a perda e a perda de preparação " +
 			"— é a quantidade que a ordem vai consumir.",
 	}, nil

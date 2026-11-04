@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
+	"github.com/shopspring/decimal"
 )
 
 // CreateStructureComponentDTO representa a entrada para criar um componente
@@ -20,10 +21,10 @@ type CreateStructureComponentDTO struct {
 	ParentCode          TextCode                        `json:"parent_code"`
 	ChildCode           TextCode                        `json:"child_code"`
 	ParentMask          *string                         `json:"parent_mask,omitempty"`
-	Quantity            float64                         `json:"quantity"`
+	Quantity            decimal.Decimal                 `json:"quantity"`
 	UnitOfMeasurement   types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
 	Health              types.Health                    `json:"health"`
-	LossPercentage      float64                         `json:"loss_percentage"`
+	LossPercentage      decimal.Decimal                 `json:"loss_percentage"`
 	LossFormula         *string                         `json:"loss_formula,omitempty"`
 	QuantityFormula     *string                         `json:"quantity_formula,omitempty"`
 	QuantityRounding    string                          `json:"quantity_rounding,omitempty"` // NONE | UP | DOWN | NEAREST
@@ -54,10 +55,10 @@ type UpdateStructureComponentDTO struct {
 	ChildCode  TextCode `json:"child_code"`
 	ParentMask *string  `json:"parent_mask,omitempty"`
 
-	Quantity            float64                         `json:"quantity"`
+	Quantity            decimal.Decimal                 `json:"quantity"`
 	UnitOfMeasurement   types.TypeUnitOfMeasurementItem `json:"unit_of_measurement"`
 	Health              types.Health                    `json:"health"`
-	LossPercentage      float64                         `json:"loss_percentage"`
+	LossPercentage      decimal.Decimal                 `json:"loss_percentage"`
 	LossFormula         *string                         `json:"loss_formula,omitempty"`
 	QuantityFormula     *string                         `json:"quantity_formula,omitempty"`
 	QuantityRounding    string                          `json:"quantity_rounding,omitempty"`

@@ -82,7 +82,7 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		TimeUnit:             op.TimeUnit,
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
@@ -119,7 +119,7 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		TimeUnit:             op.TimeUnit,
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
@@ -381,7 +381,7 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 		TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
@@ -416,7 +416,7 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 		TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
 		SupplierID:           op.SupplierID,
 		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          pgutil.ToPgNumericFromFloat64Ptr(op.CostPerUnit),
+		CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
@@ -704,7 +704,7 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		TimeUnit:             row.TimeUnit,
 		SupplierID:           row.SupplierID,
 		ServiceItemCode:      row.ServiceItemCode,
-		CostPerUnit:          numToPtr(row.CostPerUnit),
+		CostPerUnit:          pgutil.FromPgNumericToDecimalPtr(row.CostPerUnit),
 		LeadTimeDays:         row.LeadTimeDays,
 		ThirdPartyRemittance: row.ThirdPartyRemittance,
 		ScrapPct:             pgutil.FromPgNumericToFloat64(row.ScrapPct),
@@ -795,7 +795,7 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 	e.TimeUnit = textToPtr(row.TimeUnit)
 	e.SupplierID = row.SupplierID
 	e.ServiceItemCode = row.ServiceItemCode
-	e.CostPerUnit = numToPtr(row.CostPerUnit)
+	e.CostPerUnit = pgutil.FromPgNumericToDecimalPtr(row.CostPerUnit)
 	e.LeadTimeDays = row.LeadTimeDays
 	e.ThirdPartyRemittance = textToPtr(row.ThirdPartyRemittance)
 	e.ScrapPct = numToPtr(row.ScrapPct)
@@ -887,7 +887,7 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 			WorkCenterID:    row.WorkCenterID,
 			SupplierID:      supplierID,
 			ServiceItemCode: row.ServiceItemCode,
-			CostPerUnit:     pgutil.FromPgNumericToFloat64(row.CostPerUnit),
+			CostPerUnit:     pgutil.FromPgNumericToDecimal(row.CostPerUnit),
 			LeadTimeDays:    row.LeadTimeDays,
 			RemittanceType:  row.RemittanceType,
 		}

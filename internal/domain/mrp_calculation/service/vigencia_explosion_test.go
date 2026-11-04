@@ -1,9 +1,10 @@
 package service
 
 import (
-	"github.com/shopspring/decimal"
 	"testing"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 )
@@ -16,13 +17,13 @@ func TestExplosaoRespeitaVigencia(t *testing.T) {
 	necessidade, _ := time.Parse("2006-01-02", "2026-09-15")
 
 	bom := map[int64][]*structentity.ItemStructure{1: {
-		{ParentCode: 1, ChildCode: 10, Quantity: 1},                             // sem datas: entra
-		{ParentCode: 1, ChildCode: 20, Quantity: 1, EndDate: d("2026-08-12")},   // vencido: sai
-		{ParentCode: 1, ChildCode: 30, Quantity: 1, StartDate: d("2026-10-01")}, // futuro: sai
+		{ParentCode: 1, ChildCode: 10, Quantity: decimal.NewFromFloat(1)},                             // sem datas: entra
+		{ParentCode: 1, ChildCode: 20, Quantity: decimal.NewFromFloat(1), EndDate: d("2026-08-12")},   // vencido: sai
+		{ParentCode: 1, ChildCode: 30, Quantity: decimal.NewFromFloat(1), StartDate: d("2026-10-01")}, // futuro: sai
 		// Alternativos: o principal (prioridade 1) venceu, então a necessidade
 		// tem de ir para o de prioridade 2 — e não desaparecer.
-		{ParentCode: 1, ChildCode: 40, Quantity: 1, SubstituteGroup: 1, SubstitutePriority: 1, EndDate: d("2026-09-01")},
-		{ParentCode: 1, ChildCode: 41, Quantity: 1, SubstituteGroup: 1, SubstitutePriority: 2},
+		{ParentCode: 1, ChildCode: 40, Quantity: decimal.NewFromFloat(1), SubstituteGroup: 1, SubstitutePriority: 1, EndDate: d("2026-09-01")},
+		{ParentCode: 1, ChildCode: 41, Quantity: decimal.NewFromFloat(1), SubstituteGroup: 1, SubstitutePriority: 2},
 	}}
 
 	got := map[int64]bool{}

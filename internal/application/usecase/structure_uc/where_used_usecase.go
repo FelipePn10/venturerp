@@ -38,8 +38,8 @@ func (uc *WhereUsedUseCase) Execute(ctx context.Context, publicCode request.Text
 			ParentCode:        r.ParentCode,
 			ParentDescription: r.ParentDescription,
 			ChildCode:         r.ChildCode,
-			Quantity:          r.Quantity,
-			LossPercentage:    r.LossPercentage,
+			Quantity:          r.Quantity.InexactFloat64(),
+			LossPercentage:    r.LossPercentage.InexactFloat64(),
 			Sequence:          r.Sequence,
 			ParentMask:        r.ParentMask,
 		}

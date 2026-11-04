@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/structure"
@@ -33,7 +35,7 @@ func TestStructureIsIsolatedByTenant(t *testing.T) {
 
 	q := sqlc.New(pool)
 	repo := structure.NewItemStructureRepository(q).WithHistory(pool)
-	comp := &entity.ItemStructure{ParentCode: pai, ChildCode: filho, Quantity: 2, UnitOfMeasurement: "UN", Health: "ATIVO", Sequence: 10, CreatedBy: actor}
+	comp := &entity.ItemStructure{ParentCode: pai, ChildCode: filho, Quantity: decimal.NewFromFloat(2), UnitOfMeasurement: "UN", Health: "ATIVO", Sequence: 10, CreatedBy: actor}
 
 	if _, err := repo.Create(b.Ctx, comp); err == nil {
 		t.Fatal("empresa B criou componente na estrutura do item da A")
@@ -41,7 +43,7 @@ func TestStructureIsIsolatedByTenant(t *testing.T) {
 	if ok, err := repo.ItemExists(b.Ctx, pai); err != nil || ok {
 		t.Fatalf("empresa B enxergou o item da A (%v)", err)
 	}
-	if _, err := repo.Create(a.Ctx, &entity.ItemStructure{ParentCode: pai, ChildCode: filho + 1, Quantity: 1, UnitOfMeasurement: "UN", Health: "ATIVO", Sequence: 20, CreatedBy: actor}); err == nil {
+	if _, err := repo.Create(a.Ctx, &entity.ItemStructure{ParentCode: pai, ChildCode: filho + 1, Quantity: decimal.NewFromFloat(1), UnitOfMeasurement: "UN", Health: "ATIVO", Sequence: 20, CreatedBy: actor}); err == nil {
 		t.Fatal("empresa A pôs item da B na própria estrutura")
 	}
 	criado, err := repo.Create(a.Ctx, comp)
@@ -54,7 +56,7 @@ func TestStructureIsIsolatedByTenant(t *testing.T) {
 	if _, err := repo.GetByID(b.Ctx, criado.ID); err == nil {
 		t.Fatal("empresa B leu o componente da A pelo id")
 	}
-	comp.Quantity = 99
+	comp.Quantity = decimal.NewFromFloat(99)
 	if _, err := repo.Update(b.Ctx, comp); err == nil {
 		t.Fatal("empresa B alterou a estrutura da A")
 	}
@@ -74,7 +76,7 @@ func TestStructureIsIsolatedByTenant(t *testing.T) {
 	if l, err := consulta.ConsultChildren(b.Ctx, pai, "", nil); err != nil || len(l) != 0 {
 		t.Fatalf("empresa B consultou a estrutura da A: %d (%v)", len(l), err)
 	}
-	if l, err := repo.GetAllDirectChildren(a.Ctx, pai); err != nil || len(l) != 1 || l[0].Quantity != 2 {
+	if l, err := repo.GetAllDirectChildren(a.Ctx, pai); err != nil || len(l) != 1 || !l[0].Quantity.Equal(decimal.NewFromFloat(2)) {
 		t.Fatalf("a estrutura da A mudou: %+v (%v)", l, err)
 	}
 	if l, err := consulta.GetWhereUsed(a.Ctx, filho, 0); err != nil || len(l) != 1 {

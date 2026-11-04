@@ -3,7 +3,9 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -212,7 +214,7 @@ func (uc *ConfiguratorUseCase) EvaluateItemRules(ctx context.Context, dto reques
 		return nil, fmt.Errorf("carregando regras: %w", err)
 	}
 	// vars for Botão F (formula) — numeric answers keyed by normalized code.
-	var vars map[string]float64
+	var vars map[string]decimal.Decimal
 	out := &response.CfgEvaluatedRulesResponse{ItemCode: dto.ItemCode}
 	for _, r := range rules {
 		conds, err := uc.Q.ListCfgItemRuleConditions(ctx, r.ID)

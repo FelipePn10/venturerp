@@ -10,6 +10,7 @@ import (
 	routingrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 func TestThirdPartyRoutingDetailsRoundTrip(t *testing.T) {
@@ -34,7 +35,7 @@ func TestThirdPartyRoutingDetailsRoundTrip(t *testing.T) {
 		_, _ = pool.Exec(ctx, `DELETE FROM items WHERE code=$1`, itemCode)
 	})
 	remittance := "ORDER_ITEM"
-	supplier, serviceItem, cost, lead := int64(88), itemCode, 25.75, int32(3)
+	supplier, serviceItem, cost, lead := int64(88), itemCode, decimal.RequireFromString("25.75"), int32(3)
 	repo := routingrepo.New(sqlc.New(pool))
 	created, err := repo.AddRouteOperation(ctx, &entity.RouteOperation{RouteID: routeID, Sequence: 10, OperationID: operationID, Situation: entity.RouteOpApproved, SupplierID: &supplier, ServiceItemCode: &serviceItem, CostPerUnit: &cost, LeadTimeDays: &lead, ThirdPartyRemittance: &remittance})
 	if err != nil {
@@ -45,7 +46,7 @@ func TestThirdPartyRoutingDetailsRoundTrip(t *testing.T) {
 		t.Fatalf("route operations=%+v err=%v", rows, err)
 	}
 	got := rows[0]
-	if got.ID != created.ID || got.SupplierID == nil || *got.SupplierID != supplier || got.ServiceItemCode == nil || *got.ServiceItemCode != serviceItem || got.CostPerUnit == nil || *got.CostPerUnit != cost || got.LeadTimeDays == nil || *got.LeadTimeDays != lead || got.ThirdPartyRemittance == nil || *got.ThirdPartyRemittance != remittance {
+	if got.ID != created.ID || got.SupplierID == nil || *got.SupplierID != supplier || got.ServiceItemCode == nil || *got.ServiceItemCode != serviceItem || got.CostPerUnit == nil || !got.CostPerUnit.Equal(cost) || got.LeadTimeDays == nil || *got.LeadTimeDays != lead || got.ThirdPartyRemittance == nil || *got.ThirdPartyRemittance != remittance {
 		t.Fatalf("third-party details were not preserved: %+v", got)
 	}
 }

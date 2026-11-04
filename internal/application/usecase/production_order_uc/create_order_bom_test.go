@@ -28,9 +28,9 @@ func (f *estruturaPorMascara) GetDirectChildrenForMask(_ context.Context, _ int6
 	return f.filhos, nil
 }
 
-type variaveisFixas map[string]float64
+type variaveisFixas map[string]decimal.Decimal
 
-func (v variaveisFixas) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]float64, error) {
+func (v variaveisFixas) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]decimal.Decimal, error) {
 	return v, nil
 }
 
@@ -42,15 +42,15 @@ func TestCriarOFRespeitaMascaraVigenciaEFormula(t *testing.T) {
 	d := func(s string) *time.Time { v, _ := time.Parse("2006-01-02", s); return &v }
 	formula := "COMPRIMENTO/1000"
 	estrutura := &estruturaPorMascara{filhos: []*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: 1},                             // vigente
-		{ChildCode: 30, Quantity: 1, EndDate: d("2026-08-12")},   // vencido
-		{ChildCode: 40, Quantity: 1, StartDate: d("2026-12-01")}, // ainda não vale
-		{ChildCode: 50, Quantity: 9, QuantityFormula: &formula},  // paramétrico
+		{ChildCode: 20, Quantity: decimal.NewFromFloat(1)},                             // vigente
+		{ChildCode: 30, Quantity: decimal.NewFromFloat(1), EndDate: d("2026-08-12")},   // vencido
+		{ChildCode: 40, Quantity: decimal.NewFromFloat(1), StartDate: d("2026-12-01")}, // ainda não vale
+		{ChildCode: 50, Quantity: decimal.NewFromFloat(9), QuantityFormula: &formula},  // paramétrico
 	}}
 	repo := &fakePORepo{automatic: map[int64]int64{}}
 	uc := CreateProductionOrderUseCase{
 		Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: estrutura,
-		MaskVars: variaveisFixas{"COMPRIMENTO": 2000},
+		MaskVars: variaveisFixas{"COMPRIMENTO": decimal.NewFromFloat(2000)},
 		Items:    &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "MOVEL-10"}},
 	}
 	inicio := "2026-09-15"

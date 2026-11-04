@@ -3,8 +3,6 @@ package configurator_uc
 import (
 	"context"
 	"fmt"
-	"math"
-	"strconv"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -14,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/structure/formula"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/shopspring/decimal"
 )
 
 // GenerateMask assembles the configured item's mask from the answers, ordered by
@@ -51,7 +50,7 @@ func (uc *ConfiguratorUseCase) GenerateMask(ctx context.Context, dto request.Cfg
 
 	// vars accumulates numeric answers (normalized characteristic code → value)
 	// so a FORMULA characteristic can reference earlier characteristics' answers.
-	vars := map[string]float64{}
+	vars := map[string]decimal.Decimal{}
 
 	for _, ic := range itemChars {
 		char, err := uc.Q.GetCfgCharacteristic(ctx, ic.CharacteristicID)
@@ -193,20 +192,22 @@ func resolveNumeric(char sqlc.DBCfgCharacteristic, val string) (string, *int64, 
 	if val == "" {
 		return "", nil, nil
 	}
-	n, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+	n, err := decimal.NewFromString(strings.TrimSpace(val))
 	if err != nil {
 		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s exige um número", char.Code))
 	}
-	if char.NumMin.Valid && n < pgutil.FromPgNumericToFloat64(char.NumMin) {
+	if char.NumMin.Valid && n.LessThan(pgutil.FromPgNumericToDecimal(char.NumMin)) {
 		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor abaixo do mínimo", char.Code))
 	}
-	if char.NumMax.Valid && n > pgutil.FromPgNumericToFloat64(char.NumMax) {
+	if char.NumMax.Valid && n.GreaterThan(pgutil.FromPgNumericToDecimal(char.NumMax)) {
 		return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor acima do máximo", char.Code))
 	}
 	if char.NumMultiple.Valid {
-		m := pgutil.FromPgNumericToFloat64(char.NumMultiple)
-		if m > 0 && math.Mod(n, m) != 0 {
-			return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor deve ser múltiplo de %g", char.Code, m))
+		// Em decimal: em float, 0,3 não era múltiplo de 0,1 (math.Mod dava 0,0999…)
+		// e a resposta válida era recusada.
+		m := pgutil.FromPgNumericToDecimal(char.NumMultiple)
+		if m.IsPositive() && !n.Mod(m).IsZero() {
+			return "", nil, errorsuc.NewValidationError(fmt.Sprintf("característica %s: valor deve ser múltiplo de %s", char.Code, m))
 		}
 	}
 	return val, nil, nil
@@ -240,7 +241,7 @@ func firstValue(a []request.CfgMaskAnswerInput) string {
 // evalFormulaAnswer computes a FORMULA characteristic's answer from its formula
 // (item-level, falling back to the characteristic default) using the numeric
 // answers already resolved (only earlier sequences are available).
-func (uc *ConfiguratorUseCase) evalFormulaAnswer(ic sqlc.DBCfgItemCharacteristic, char sqlc.DBCfgCharacteristic, vars map[string]float64) (string, error) {
+func (uc *ConfiguratorUseCase) evalFormulaAnswer(ic sqlc.DBCfgItemCharacteristic, char sqlc.DBCfgCharacteristic, vars map[string]decimal.Decimal) (string, error) {
 	expr := pgutil.FromPgText(ic.Formula)
 	if expr == "" {
 		expr = pgutil.FromPgText(char.Formula)

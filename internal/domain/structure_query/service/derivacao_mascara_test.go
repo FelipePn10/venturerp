@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	cfgentity "github.com/FelipePn10/panossoerp/internal/domain/configurator/entity"
 	maskservice "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/mask/service"
 	maskvo "github.com/FelipePn10/panossoerp/internal/domain/generate_mask_for_item/valueobject"
@@ -58,7 +60,7 @@ func (f *repoFalso) ListEquivalentRules(context.Context, int64) ([]structqueryre
 func (f *repoFalso) GetVariableMaskComposition(_ context.Context, id int64) (string, error) {
 	return f.composicao[id], nil
 }
-func (f *repoFalso) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]float64, error) {
+func (f *repoFalso) GetMaskAnswersWithNames(context.Context, int64, string) (map[string]decimal.Decimal, error) {
 	return nil, nil
 }
 
@@ -94,7 +96,7 @@ func TestDerivacaoDaMascaraDoFilho(t *testing.T) {
 	novoRepo := func(perguntasDoFilho []maskservice.ItemQuestion, caracteristicas []structqueryrepo.ItemCharacteristic) *repoFalso {
 		return &repoFalso{
 			filhos: map[int64][]*str.ItemStructure{
-				pai: {{ParentCode: pai, ChildCode: filho, Quantity: 1, Inherit: true}},
+				pai: {{ParentCode: pai, ChildCode: filho, Quantity: decimal.NewFromFloat(1), Inherit: true}},
 			},
 			perguntas:       map[int64][]maskservice.ItemQuestion{filho: perguntasDoFilho},
 			caracteristicas: map[int64][]structqueryrepo.ItemCharacteristic{filho: caracteristicas},

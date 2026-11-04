@@ -43,7 +43,7 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	op, _ := routingentity.NewOperation(testutil.UniqueCode(), "Zincagem", nil, routingentity.OriginExternal, nil, 0, 0, uid)
 	op.ServiceItemCode = &serviceItem
 	op.SupplierID = &supplier
-	cost := 12.5
+	cost := decimal.RequireFromString("12.5")
 	op.CostPerUnit = &cost
 	lead := int32(7)
 	op.LeadTimeDays = &lead
