@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.8] — 2026-11-04
+
+- refactor(custos): custo-padrão, conversão de UM, ferramenta e ordem planejada em decimal (etapa 4a) (`03b8de1d`)
+
 ## [v1.10.7] — 2026-11-04
 
 - refactor(vendas): expedição, previsão, metas, margem e promessa em decimal (etapa 3b) (`6496da7f`)
