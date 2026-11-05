@@ -208,6 +208,10 @@ type CreateFiscalExitDTO struct {
 }
 
 type CreateFiscalExitItemDTO struct {
+	// Mask, Lot e Address: de onde sai o estoque (opcionais).
+	Mask     string          `json:"mask,omitempty"`
+	Lot      *string         `json:"lot,omitempty"`
+	Address  *string         `json:"address,omitempty"`
 	Sequence int             `json:"sequence"`
 	ItemCode *int64          `json:"item_code,omitempty"`
 	Ncm      *string         `json:"ncm,omitempty"`

@@ -147,6 +147,13 @@ func (f *fakeStockRepo) CreateMovement(_ context.Context, m *stockentity.StockMo
 func (f *fakeStockRepo) ListActiveReservations(context.Context) ([]*stockentity.StockReservation, error) {
 	return f.reservations, nil
 }
+func (f *fakeStockRepo) ConsumirReservaParcial(ctx context.Context, id int64, qtd decimal.Decimal) (decimal.Decimal, error) {
+	if !qtd.IsPositive() {
+		return decimal.Zero, nil
+	}
+	return qtd, f.ConsumeReservation(ctx, id)
+}
+
 func (f *fakeStockRepo) ConsumeReservation(_ context.Context, id int64) error {
 	f.consumed = append(f.consumed, id)
 	return nil

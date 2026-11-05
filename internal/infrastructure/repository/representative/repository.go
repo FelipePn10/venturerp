@@ -336,7 +336,7 @@ func (r *Repository) ListInterestClassifications(ctx context.Context, enterprise
 		return nil, err
 	}
 	if contextEnterpriseID != enterpriseID {
-		return nil, fmt.Errorf("empresa informada não corresponde à empresa autenticada")
+		return nil, errorsuc.NewValidationError("empresa informada não corresponde à empresa autenticada")
 	}
 	// A tabela items não tem coluna is_active: o estado do item é health
 	// (ATIVO / INATIVO / FANTASMA). Filtrar por is_active quebrava a consulta

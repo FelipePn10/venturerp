@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 )
 
@@ -19,6 +20,18 @@ func (uc *ListStockMovementsUseCase) Execute(ctx context.Context) ([]*response.S
 		return nil, errorsuc.ErrUnauthorized
 	}
 	list, err := uc.Repo.ListMovements(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toStockMovementResponses(list), nil
+}
+
+// Pagina lista os movimentos por página.
+func (uc *ListStockMovementsUseCase) Pagina(ctx context.Context, f entity.FiltroMovimentos) ([]*response.StockMovementResponse, error) {
+	if !uc.Auth.CanListStockMovements(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	list, err := uc.Repo.ListMovementsPage(ctx, f)
 	if err != nil {
 		return nil, err
 	}

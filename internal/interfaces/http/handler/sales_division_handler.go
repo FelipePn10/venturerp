@@ -46,7 +46,7 @@ func (h *SalesDivisionHandler) SetStatus(w http.ResponseWriter, r *http.Request)
 	}
 	var dto request.SetSalesDivisionStatusDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return
 	}
 	result, err := h.statusUC.Execute(r.Context(), code, dto.IsActive)

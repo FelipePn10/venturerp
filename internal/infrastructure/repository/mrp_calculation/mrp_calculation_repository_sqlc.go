@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/shopspring/decimal"
 	"strings"
 	"time"
@@ -274,14 +275,14 @@ func (r *MRPCalculationRepositorySQLC) GetStockSnapshot(
 	var qty, reservedQty, safetyStock decimal.Decimal
 	err = r.db.QueryRow(ctx, `
 		SELECT
-			COALESCE(SUM(quantity), 0),
+			COALESCE(SUM(quantity), 0) - (`+retidoDoItem+`),
 			COALESCE(SUM(reserved_qty), 0),
 			COALESCE(SUM(safety_stock), 0)
 		FROM stock_balances b
 		WHERE item_code = $1 AND enterprise_id = $2 AND `+saldoPlanejavel+`
 	`, itemCode, enterpriseID).Scan(&qty, &reservedQty, &safetyStock)
 	if err != nil {
-		return nil, nil
+		return nil, fmt.Errorf("lendo o saldo do item para o MRP: %w", err)
 	}
 	return &entity.StockSnapshot{
 		ItemCode:    itemCode,
@@ -290,6 +291,11 @@ func (r *MRPCalculationRepositorySQLC) GetStockSnapshot(
 		SafetyStock: safetyStock,
 	}, nil
 }
+
+// retidoDoItem: o que o saldo do item tem em lote que não abastece a necessidade.
+const retidoDoItem = `SELECT COALESCE(SUM(l.quantity), 0) FROM stock_lot_balances l
+	WHERE l.enterprise_id = $2 AND l.item_code = $1 AND l.quantity > 0
+	  AND EXISTS (SELECT 1 FROM stock_lot_balances b WHERE b.id = l.id AND ` + stockrepo.LoteForaDoDisponivelSQL + ` AND ` + saldoPlanejavel + `)`
 
 // saldoPlanejavel: saldo que o MRP conta como disponível. Rejeição e
 // almoxarifado sem disposição (sucata, avaria) não abastecem a produção; o
@@ -677,15 +683,22 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 			   AND NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id = r.warehouse_id AND w.enterprise_id = r.enterprise_id
 			                   AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))
 			 GROUP BY r.item_code
+		),
+		retido AS (
+			SELECT b.item_code, SUM(b.quantity) AS qtd
+			  FROM stock_lot_balances b
+			 WHERE b.enterprise_id = $1 AND b.quantity > 0 AND `+stockrepo.LoteForaDoDisponivelSQL+` AND `+saldoPlanejavel+`
+			 GROUP BY b.item_code
 		)
 		SELECT
 			b.item_code,
-			COALESCE(SUM(b.quantity), 0)      AS quantity,
+			COALESCE(SUM(b.quantity), 0) - COALESCE(MAX(rt.qtd), 0) AS quantity,
 			COALESCE(SUM(b.reserved_qty), 0)  AS reserved_qty,
 			COALESCE(MAX(v.qtd), 0)           AS sales_reserved_qty,
 			COALESCE(SUM(b.safety_stock), 0)  AS safety_stock
 		FROM stock_balances b
 		LEFT JOIN venda v ON v.item_code = b.item_code
+		LEFT JOIN retido rt ON rt.item_code = b.item_code
 		WHERE b.enterprise_id = $1 AND `+saldoPlanejavel+`
 		GROUP BY b.item_code
 	`, enterpriseID)

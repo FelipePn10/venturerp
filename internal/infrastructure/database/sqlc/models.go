@@ -5766,6 +5766,9 @@ type FiscalExitItem struct {
 	FcpUfDestValor         pgtype.Numeric
 	IcmsStReducaoBasePct   pgtype.Numeric
 	FiscalExitItemOrigemID *int64
+	Mask                   string
+	Lot                    pgtype.Text
+	Address                pgtype.Text
 }
 
 type FiscalExitItemSeries struct {
@@ -6995,6 +6998,7 @@ type KanbanCard struct {
 	UpdatedAt       pgtype.Timestamptz
 	CreatedBy       pgtype.UUID
 	EnterpriseID    *int64
+	WarehouseID     *int64
 }
 
 type LegalDevice struct {
@@ -7280,6 +7284,7 @@ type ManufacturingStockItemControl struct {
 	UpdatedAt          pgtype.Timestamptz
 	AutomaticIssueType string
 	LineWarehouseID    *int64
+	LotIssueRule       string
 }
 
 type ManufacturingStockParameter struct {
@@ -7410,19 +7415,21 @@ type MaterialConsumption struct {
 }
 
 type MaterialRequisition struct {
-	ID                    int64
-	EnterpriseID          int64
-	Code                  int64
-	WarehouseID           int64
-	RequesterName         pgtype.Text
-	RequesterEmployeeCode *int64
-	CostCenterCode        *int32
-	NeededDate            pgtype.Date
-	Status                string
-	Notes                 pgtype.Text
-	CreatedBy             pgtype.UUID
-	CreatedAt             pgtype.Timestamptz
-	UpdatedAt             pgtype.Timestamptz
+	ID                     int64
+	EnterpriseID           int64
+	Code                   int64
+	WarehouseID            int64
+	RequesterName          pgtype.Text
+	RequesterEmployeeCode  *int64
+	CostCenterCode         *int32
+	NeededDate             pgtype.Date
+	Status                 string
+	Notes                  pgtype.Text
+	CreatedBy              pgtype.UUID
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	Kind                   string
+	DestinationWarehouseID *int64
 }
 
 type MaterialRequisitionItem struct {
@@ -7580,6 +7587,7 @@ type MrpPlannedSuggestion struct {
 	SupplierCode         *int64
 	ServiceItemCode      *int64
 	RemittanceType       pgtype.Text
+	Priority             pgtype.Text
 }
 
 type MrpProfileDetail struct {
@@ -8183,6 +8191,14 @@ type PhysicalInventory struct {
 	EnterpriseID    int64
 	ClosedBy        pgtype.UUID
 	AdjustmentValue pgtype.Numeric
+	BlocksMovements bool
+	BlindCount      bool
+	Partial         bool
+	ApprovalMode    string
+	TolerancePct    pgtype.Numeric
+	ToleranceValue  pgtype.Numeric
+	CloseReason     pgtype.Text
+	ZeroUncounted   bool
 }
 
 type PhysicalInventoryItem struct {
@@ -8204,6 +8220,9 @@ type PhysicalInventoryItem struct {
 	CountNumber          int32
 	PreviousCountedQty   pgtype.Numeric
 	AdjustmentMovementID *int64
+	Address              string
+	Lot                  string
+	NeedsRecount         bool
 }
 
 type PlannedOrder struct {
@@ -9079,6 +9098,7 @@ type PurchaseRequisitionItem struct {
 	Status            string
 	IsActive          bool
 	CreatedAt         pgtype.Timestamptz
+	WarehouseID       *int64
 }
 
 type QualityCalibration struct {
@@ -11046,6 +11066,56 @@ type StockBalance struct {
 	Address        string
 }
 
+type StockClosing struct {
+	ID                int64
+	EnterpriseID      int64
+	Competence        pgtype.Date
+	Status            string
+	TotalValue        pgtype.Numeric
+	RecalculatedItems int32
+	VarianceValue     pgtype.Numeric
+	JournalPosted     bool
+	ClosedBy          pgtype.UUID
+	ClosedAt          pgtype.Timestamptz
+	ReopenedBy        pgtype.UUID
+	ReopenedAt        pgtype.Timestamptz
+	ReopenReason      pgtype.Text
+}
+
+type StockClosingBalance struct {
+	ClosingID   int64
+	ItemCode    int64
+	Mask        string
+	WarehouseID int64
+	Quantity    pgtype.Numeric
+	AvgCost     pgtype.Numeric
+	TotalValue  pgtype.Numeric
+}
+
+type StockCostRecalcLog struct {
+	ID         int64
+	ClosingID  int64
+	MovementID int64
+	OldUnit    pgtype.Numeric
+	NewUnit    pgtype.Numeric
+	OldTotal   pgtype.Numeric
+	NewTotal   pgtype.Numeric
+}
+
+type StockCostVariance struct {
+	ID           int64
+	EnterpriseID int64
+	Kind         string
+	ItemCode     int64
+	Mask         string
+	WarehouseID  int64
+	MovementID   *int64
+	Value        pgtype.Numeric
+	OccurredOn   pgtype.Date
+	ClosingID    *int64
+	CreatedAt    pgtype.Timestamptz
+}
+
 type StockCycleCount struct {
 	ID           pgtype.UUID
 	EnterpriseID int64
@@ -11086,6 +11156,29 @@ type StockCycleCountAudit struct {
 	CreatedAt     pgtype.Timestamptz
 }
 
+type StockDiscrepancyReason struct {
+	EnterpriseID int64
+	Code         string
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+}
+
+type StockInconsistencyFix struct {
+	ID           int64
+	EnterpriseID int64
+	Kind         string
+	ItemCode     int64
+	Mask         string
+	WarehouseID  int64
+	BeforeQty    pgtype.Numeric
+	AfterQty     pgtype.Numeric
+	Reason       string
+	FixedBy      pgtype.UUID
+	FixedAt      pgtype.Timestamptz
+}
+
 type StockLot struct {
 	ID           int64
 	ItemCode     int64
@@ -11100,6 +11193,8 @@ type StockLot struct {
 	EnterpriseID int64
 	Mask         string
 	ExpiresAt    pgtype.Date
+	StatusCode   pgtype.Text
+	Grade        pgtype.Text
 }
 
 type StockLotBalance struct {
@@ -11115,6 +11210,30 @@ type StockLotBalance struct {
 	EnterpriseID   *int64
 	Address        string
 	ReservedQty    pgtype.Numeric
+}
+
+type StockLotStatus struct {
+	EnterpriseID    int64
+	Code            string
+	Description     string
+	AllowsIssue     bool
+	AllowsTransfer  bool
+	CountsAvailable bool
+	IsActive        bool
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type StockLotStatusEvent struct {
+	ID           int64
+	EnterpriseID int64
+	ItemCode     int64
+	Mask         string
+	Lot          string
+	FromStatus   pgtype.Text
+	ToStatus     pgtype.Text
+	Reason       string
+	ChangedBy    pgtype.UUID
+	ChangedAt    pgtype.Timestamptz
 }
 
 type StockMovement struct {
@@ -11142,6 +11261,9 @@ type StockMovement struct {
 	ReversedByMovementID *int64
 	MovementTypeCode     pgtype.Text
 	CostCenterCode       *int32
+	MovementDate         pgtype.Date
+	Backdated            bool
+	WaveLineID           *int64
 }
 
 type StockMovementType struct {
@@ -11165,6 +11287,19 @@ type StockMovementType struct {
 	AllowsManual         bool
 }
 
+type StockParameter struct {
+	EnterpriseID         int64
+	ExpiredLotAction     string
+	UpdatedBy            pgtype.UUID
+	UpdatedAt            pgtype.Timestamptz
+	RetroactiveMonths    pgtype.Int2
+	ToleranceA           pgtype.Numeric
+	ToleranceB           pgtype.Numeric
+	ToleranceC           pgtype.Numeric
+	ObsoleteDays         *int32
+	ObsoleteProvisionPct pgtype.Numeric
+}
+
 type StockPickingWafe struct {
 	ID           int64
 	EnterpriseID int64
@@ -11180,19 +11315,21 @@ type StockPickingWafe struct {
 }
 
 type StockPickingWaveLine struct {
-	ID            int64
-	EnterpriseID  int64
-	WaveID        int64
-	ItemCode      int64
-	Mask          string
-	Lot           string
-	Address       string
-	PickSequence  int32
-	Quantity      pgtype.Numeric
-	PickedQty     pgtype.Numeric
-	ReservationID *int64
-	ReferenceType pgtype.Text
-	ReferenceCode *int64
+	ID               int64
+	EnterpriseID     int64
+	WaveID           int64
+	ItemCode         int64
+	Mask             string
+	Lot              string
+	Address          string
+	PickSequence     int32
+	Quantity         pgtype.Numeric
+	PickedQty        pgtype.Numeric
+	ReservationID    *int64
+	ReferenceType    pgtype.Text
+	ReferenceCode    *int64
+	OrderReservedQty pgtype.Numeric
+	InvoicedQty      pgtype.Numeric
 }
 
 type StockRemnant struct {
@@ -11213,6 +11350,22 @@ type StockRemnant struct {
 	WidthMm        pgtype.Numeric
 	HeightMm       pgtype.Numeric
 	EnterpriseID   int64
+}
+
+type StockReplenishmentPolicy struct {
+	ID                int64
+	EnterpriseID      int64
+	ItemCode          int64
+	WarehouseID       int64
+	MinimumQty        pgtype.Numeric
+	MaximumQty        pgtype.Numeric
+	SafetyQty         pgtype.Numeric
+	SourceType        string
+	SourceWarehouseID *int64
+	IsActive          bool
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
 }
 
 type StockReservation struct {
@@ -11249,6 +11402,29 @@ type StockSnapshot struct {
 	MaximumStock  pgtype.Numeric
 	MinMaxActive  bool
 	EnterpriseID  *int64
+}
+
+type StockTransitShipment struct {
+	ID                 int64
+	EnterpriseID       int64
+	Code               int64
+	ItemCode           int64
+	Mask               string
+	Lot                pgtype.Text
+	FromWarehouseID    int64
+	TransitWarehouseID int64
+	ToWarehouseID      int64
+	Quantity           pgtype.Numeric
+	ReceivedQty        pgtype.Numeric
+	ReturnedQty        pgtype.Numeric
+	LostQty            pgtype.Numeric
+	Status             string
+	ExpectedDate       pgtype.Date
+	RequisitionID      *int64
+	Notes              pgtype.Text
+	CreatedBy          pgtype.UUID
+	CreatedAt          pgtype.Timestamptz
+	ClosedAt           pgtype.Timestamptz
 }
 
 type Supplier struct {

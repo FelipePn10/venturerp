@@ -40,6 +40,12 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		return nil, err
 	}
 
+	// Quem fez a devolução responde por ela, não quem abriu a OF.
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	refType := stockentity.ReferenceTypeProductionOrder
 	refCode := order.ID
 	mov := &stockentity.StockMovement{
@@ -54,7 +60,7 @@ func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScr
 		ReferenceCode: &refCode,
 		Lot:           dto.Lot,
 		Notes:         dto.Notes,
-		CreatedBy:     order.CreatedBy,
+		CreatedBy:     ator,
 	}
 	return uc.StockRepo.CreateMovement(ctx, mov)
 }

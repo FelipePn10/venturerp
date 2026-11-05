@@ -77,13 +77,13 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 			// tarde demais (e traduzir de novo converteria o código errado).
 			if !nativeItemBusinessCodeRequest(r) {
 				if err = translateItemQuery(r, pool, enterpriseID); err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					recusarCodigoDeItem(w, err)
 					return
 				}
 				if requestHasJSON(r) && r.Body != nil {
 					traduziu, errBody := translateItemBody(r, pool, enterpriseID)
 					if errBody != nil {
-						http.Error(w, errBody.Error(), http.StatusUnprocessableEntity)
+						recusarCodigoDeItem(w, errBody)
 						return
 					}
 					if traduziu {
@@ -211,6 +211,7 @@ var itemPathPatterns = []struct {
 	{[]string{"api", "stock", "lots", "item"}, 4},
 	{[]string{"api", "stock", "lots", "genealogy"}, 4},
 	{[]string{"api", "stock", "consumption-average"}, 3},
+	{[]string{"api", "stock", "item-control"}, 3},
 	{[]string{"api", "bom-headers", "item"}, 3},
 	{[]string{"api", "restriction", "item"}, 3},
 	{[]string{"api", "sales-forecast", "item"}, 3},
@@ -457,7 +458,7 @@ func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value
 			return nil, err
 		}
 		if !exists {
-			return nil, errorsuc.NewNotFoundError("item não encontrado na empresa autenticada")
+			return nil, errorsuc.NewNotFoundError("item não encontrado nesta empresa")
 		}
 		slog.WarnContext(r.Context(), "contrato numérico de item descontinuado",
 			"operation", r.Method+" "+r.URL.Path,
@@ -509,7 +510,7 @@ func resolveBusinessCode(ctx context.Context, pool *pgxpool.Pool, e int64, code 
 			return existe, nil
 		}
 	}
-	return 0, fmt.Errorf("item %q não encontrado na empresa autenticada", code)
+	return 0, fmt.Errorf("item %s não encontrado nesta empresa", code)
 }
 
 type itemCodeResponseRecorder struct {
@@ -604,4 +605,16 @@ func translateOutputReference(ctx context.Context, pool *pgxpool.Pool, e int64, 
 	default:
 		return nil, nil, false
 	}
+}
+
+// recusarCodigoDeItem responde como o resto da API. Era texto puro, com o nome do
+// campo na frente ("item_code: item X não encontrado"), e assim chegava à tela.
+func recusarCodigoDeItem(w http.ResponseWriter, err error) {
+	msg := err.Error()
+	if i := strings.Index(msg, ": item "); i >= 0 {
+		msg = msg[i+2:]
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg, "code": "ITEM_NAO_ENCONTRADO"})
 }

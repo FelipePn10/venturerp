@@ -191,3 +191,23 @@ func TestGeraVinculosItemFornecedorPeloHistorico(t *testing.T) {
 		t.Fatalf("segunda rodada criou %d (%v), esperado 0", criados, err)
 	}
 }
+
+// A troca de situação citava o parâmetro com dois tipos: a instrução nem preparava.
+func TestMudarSituacaoDoRegistroDeCompras(t *testing.T) {
+	pool := testutil.Pool(t)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		testutil.Exec(t, pool, `DELETE FROM procurement_records WHERE enterprise_code = ANY($1)`, []int64{a.Code, b.Code})
+	})
+	repo := procurement.New(pool)
+	rec, err := repo.CreateRecord(a.Ctx, &entity.Record{RecordType: "SUPPLIER_EDI", Status: "OPEN", Payload: json.RawMessage(`{}`)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mudado, err := repo.UpdateRecordStatus(a.Ctx, rec.ID, "APPROVED")
+	if err != nil {
+		t.Fatalf("mudar a situação: %v", err)
+	}
+	if mudado.Status != "APPROVED" {
+		t.Fatalf("situação: %s", mudado.Status)
+	}
+}

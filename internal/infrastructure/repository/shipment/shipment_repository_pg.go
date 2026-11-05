@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -790,7 +791,7 @@ func (r *ShipmentRepositoryPG) RemoveShipmentFromLoad(ctx context.Context, loadC
 		return fmt.Errorf("removing shipment from load: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("romaneio %d não está vinculado à carga %d", shipmentCode, loadCode)
+		return errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não está vinculado à carga %d", shipmentCode, loadCode))
 	}
 	return nil
 }
@@ -1135,7 +1136,11 @@ func (r *ShipmentRepositoryPG) SeparationMonitor(ctx context.Context, f reposito
 		        l.dispatch_box_code, COUNT(si.id)::int,
 		        COALESCE(SUM(CASE WHEN si.is_conferred THEN 1 ELSE 0 END),0)::int,
 		        COALESCE(SUM(CASE WHEN si.is_conferred AND si.conferred_qty <> si.quantity THEN 1 ELSE 0 END),0)::int,
-		        s.total_volumes, s.total_gross_weight
+		        s.total_volumes, s.total_gross_weight,
+		        (SELECT COUNT(*) FROM public.stock_picking_wave_lines wl JOIN public.stock_picking_waves w ON w.id = wl.wave_id
+		          WHERE wl.reference_type = 'SALES_ORDER' AND wl.reference_code = s.sales_order_code AND w.status = 'ABERTA' AND wl.enterprise_id = `+strconv.FormatInt(enterpriseID, 10)+`)::int,
+		        (SELECT COUNT(*) FROM public.stock_picking_wave_lines wl JOIN public.stock_picking_waves w ON w.id = wl.wave_id
+		          WHERE wl.reference_type = 'SALES_ORDER' AND wl.reference_code = s.sales_order_code AND w.status = 'SEPARADA' AND wl.enterprise_id = `+strconv.FormatInt(enterpriseID, 10)+`)::int
 		 FROM public.shipments s
 		 LEFT JOIN public.shipment_load_shipments lsi ON lsi.shipment_id = s.id
 		 LEFT JOIN public.shipment_loads l ON l.id = lsi.load_id
@@ -1153,7 +1158,7 @@ func (r *ShipmentRepositoryPG) SeparationMonitor(ctx context.Context, f reposito
 		var loadStatus *string
 		if err := rows.Scan(&row.ShipmentCode, &row.LoadCode, &shipStatus, &loadStatus, &row.SalesOrderCode, &row.CarrierCode,
 			&row.DispatchBoxCode, &row.TotalItems, &row.ConferredItems, &row.DivergentItems,
-			&row.TotalVolumes, &row.TotalGrossWeight); err != nil {
+			&row.TotalVolumes, &row.TotalGrossWeight, &row.WaveLinesOpen, &row.WaveLinesPicked); err != nil {
 			return nil, fmt.Errorf("scanning separation monitor: %w", err)
 		}
 		row.ShipmentStatus = entity.ShipmentStatus(shipStatus)

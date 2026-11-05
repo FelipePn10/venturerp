@@ -70,6 +70,20 @@ func applyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (n
 	}
 	lastCost = cur.AvgCost
 
+	if delta.IsPositive() && cur.Quantity.IsNegative() {
+		// A entrada cobre primeiro o que saiu sem saldo: só o que sobra fica em
+		// estoque, e fica pelo preço dela. Somar o valor inteiro sobre a
+		// quantidade líquida dobrava o custo (10 a R$ 100 sobre −5 dava 5 a R$ 200).
+		preco := unitPrice
+		if !preco.IsPositive() {
+			preco = cur.AvgCost
+		}
+		if next.Quantity.IsPositive() {
+			next.AvgCost = preco
+			next.TotalCost = next.Quantity.Mul(preco).Round(CasasValor)
+		}
+		return next, preco
+	}
 	if delta.IsPositive() {
 		// O valor da entrada é o do movimento: quantidade × preço em 4 casas.
 		next.TotalCost = cur.TotalCost.Add(delta.Mul(unitPrice).Round(CasasValor))

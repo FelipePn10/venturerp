@@ -24,6 +24,7 @@ type CreatePlannedOrderDTO struct {
 	CostCenterCode *int64    `json:"cost_center_code,omitempty"`
 	EmployeeCode   *int64    `json:"employee_code,omitempty"`
 	MachineCode    *int64    `json:"machine_code,omitempty"`
+	WarehouseCode  *int64    `json:"warehouse_code,omitempty"`
 	ProductionTime float64   `json:"production_time"`
 	Notes          *string   `json:"notes,omitempty"`
 	CreatedBy      uuid.UUID `json:"created_by"`

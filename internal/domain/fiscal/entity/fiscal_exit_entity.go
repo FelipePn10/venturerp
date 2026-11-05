@@ -103,6 +103,12 @@ type FiscalExit struct {
 }
 
 type FiscalExitItem struct {
+	// Mask, Lot e Address dizem de onde sai o estoque. Sem lote ou endereço a
+	// baixa é automática, pela regra do item.
+	Mask    string
+	Lot     *string
+	Address *string
+
 	ID                int64
 	FiscalExitID      int64
 	Sequence          int

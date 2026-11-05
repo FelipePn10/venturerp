@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 )
 
@@ -34,12 +35,20 @@ func (uc *GetInventoryUseCase) ListItems(ctx context.Context, inventoryID int64)
 	if !uc.Auth.CanGetInventory(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if _, err := uc.Repo.GetInventory(ctx, inventoryID); err != nil {
+	inv, err := uc.Repo.GetInventory(ctx, inventoryID)
+	if err != nil {
 		return nil, err
 	}
 	items, err := uc.Repo.ListInventoryItems(ctx, inventoryID)
 	if err != nil {
 		return nil, err
 	}
-	return toPhysicalInventoryItemResponses(items), nil
+	out := toPhysicalInventoryItemResponses(items)
+	// Contagem cega: o saldo não sai do servidor enquanto a contagem durar.
+	if inv.BlindCount && inv.Status == entity.InventarioAberto {
+		for _, it := range out {
+			it.SystemQty, it.DifferenceQty, it.UnitCost, it.PreviousCountedQty = 0, nil, nil, nil
+		}
+	}
+	return out, nil
 }

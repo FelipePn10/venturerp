@@ -228,7 +228,7 @@ Dois caminhos para firmar, dependendo de onde a sugestão está:
 > `purchase_order_code`, as quantidades da NF-e **baixam os itens do pedido de
 > compra** (`received_qty`), recalculando o status de cada linha e do pedido
 > (`PARTIAL`/`RECEIVED`). Implementado em
-> `PurchaseOrderRepository.RegisterReceipts` consumido por `ImportNFePurchaseUseCase`.
+> `PurchaseOrderRepository.RegisterReceipts`, consumido pela aprovação da NF-e de entrada.
 >
 > ✅ **automático (recebimento físico):** o endpoint `/receipts` recebe por linha do
 > pedido, então dois itens iguais em linhas diferentes não se misturam. A quantidade

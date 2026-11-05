@@ -238,6 +238,9 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 				ReferenceCode: &a.EntryID,
 				Notes:         &nota,
 				CreatedBy:     a.UserID,
+				// A entrada vale na data dela; de mês fechado, entra hoje.
+				MovementDate:  &dataEntrada,
+				DataAjustavel: true,
 			}
 			if err := stockrepo.CreateMovementTx(ctx, tx, empresa, mov); err != nil {
 				return nil, fmt.Errorf("dando entrada no estoque do item %d: %w", m.ItemCode, err)

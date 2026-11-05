@@ -3,6 +3,7 @@ package purchase_price
 import (
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
@@ -255,7 +256,7 @@ func (r *PurchasePriceRepositorySQLC) ListSourcePrices(ctx context.Context, f do
 		source = "BOTH"
 	}
 	if source != "BOTH" && source != "PURCHASE_ORDER" && source != "ENTRY_INVOICE" {
-		return nil, fmt.Errorf("invalid source")
+		return nil, errorsuc.NewValidationError("tipo de origem inválido")
 	}
 	q := `SELECT source_type,source_id,document_code,document_date,supplier_code,item_code,uom,unit_price FROM (` +
 		`SELECT 'PURCHASE_ORDER'::text source_type,poi.code source_id,po.order_number document_code,po.emission_date document_date,po.supplier_code,poi.item_code,COALESCE(poi.purchase_uom,poi.internal_uom,'') uom,poi.unit_price FROM purchase_order_items poi JOIN purchase_orders po ON po.code=poi.purchase_order_code JOIN enterprise e ON e.code=po.enterprise_code WHERE e.id=$1 AND po.supplier_code IS NOT NULL AND po.order_type<>'OSL' AND po.is_active AND poi.is_active AND poi.unit_price>0 AND po.emission_date BETWEEN $3 AND $4 ` +
@@ -296,7 +297,7 @@ func (r *PurchasePriceRepositorySQLC) ApplySourcePrices(ctx context.Context, e, 
 		case "ENTRY_INVOICE":
 			err = tx.QueryRow(ctx, `SELECT fi.item_code,COALESCE(fi.uom,ips.uom,i.warehouse_unit_of_measurement::text,''),fi.unit_price FROM fiscal_entry_items fi JOIN fiscal_entries fe ON fe.id=fi.fiscal_entry_id LEFT JOIN item_preferred_suppliers ips ON ips.enterprise_id=fe.enterprise_id AND ips.supplier_code=fe.supplier_code AND ips.item_code=fi.item_code AND ips.is_active LEFT JOIN items i ON i.code=fi.item_code WHERE fe.enterprise_id=$1 AND fe.supplier_code=$2 AND fi.id=$3 AND fi.unit_price>0 AND fe.is_active`, e, supplier, s.SourceID).Scan(&item, &uom, &price)
 		default:
-			return 0, fmt.Errorf("tipo de origem %q inválido", s.SourceType)
+			return 0, errorsuc.NewValidationError(fmt.Sprintf("tipo de origem %q inválido", s.SourceType))
 		}
 		if err != nil {
 			return 0, err

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
 	"time"
 
@@ -64,7 +65,7 @@ func RenderCutMap(planCode int64, patterns []*entity.CuttingPattern, format MapF
 	case MapPDF:
 		return renderPDF(planCode, patterns, b), "application/pdf", nil
 	default:
-		return nil, "", fmt.Errorf("unsupported map format %q (svg|dxf|pdf)", format)
+		return nil, "", domainerr.NewValidation(fmt.Sprintf("o formato de mapa %q não é aceito: use SVG, DXF ou PDF", format))
 	}
 }
 

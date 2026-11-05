@@ -2,10 +2,8 @@ package stock
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"sort"
 	"strings"
 	"time"
@@ -30,7 +28,7 @@ const qtdSQL = `(` + sinalSQL + ` * ABS(m.quantity))`
 const valorSQL = `(CASE WHEN m.movement_type = 'AJUSTE_CUSTO' THEN m.total_price ELSE ` + sinalSQL + ` * ABS(m.total_price) END)`
 
 // almoxPrometivelSQL: almoxarifado cujo saldo conta para promessa (ATP).
-const almoxPrometivelSQL = `(w.disposition AND w.location::text NOT IN ('INSPECAO','REJEICAO'))`
+const almoxPrometivelSQL = `(w.disposition AND w.location::text NOT IN ('INSPECAO','REJEICAO','TRANSITO'))`
 
 // ---------- Transferência entre almoxarifados ----------
 
@@ -50,6 +48,19 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 		return nil, fmt.Errorf("beginning transfer tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+	out, err := transferirTx(ctx, tx, empresa, t, t.ReferenciaTipo == nil || *t.ReferenciaTipo == "" || t.ReferenciaCodigo == nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transfer: %w", err)
+	}
+	return out, nil
+}
+
+// transferirTx lança as duas pernas na transação de quem chamou. exigirRastreio
+// cobra lote e endereço na saída: quem transfere por ordem de inspeção já os fixou.
+func transferirTx(ctx context.Context, tx pgx.Tx, empresa int64, t entity.TransferenciaEstoque, exigirRastreio bool) (*entity.ResultadoTransferencia, error) {
 	var n int
 	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM warehouse WHERE enterprise_id=$1 AND id = ANY($2)`, empresa, []int64{t.DeAlmox, t.ParaAlmox}).Scan(&n); err != nil {
 		return nil, fmt.Errorf("checking transfer warehouses: %w", err)
@@ -66,6 +77,7 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 		ItemCode: t.ItemCode, Mask: t.Mask, WarehouseID: t.DeAlmox, MovementType: entity.MovementTypeTransferOut,
 		Quantity: t.Quantidade, Lot: t.Lote, Address: t.EnderecoDe,
 		ReferenceType: &ref, ReferenceCode: t.ReferenciaCodigo, Notes: t.Notas, CreatedBy: t.Ator,
+		ExigirRastreio: exigirRastreio,
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, saida); err != nil {
 		return nil, err
@@ -86,9 +98,6 @@ func (r *StockRepositorySQLC) TransferirEntreAlmoxarifados(ctx context.Context, 
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, entrada); err != nil {
 		return nil, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("committing transfer: %w", err)
 	}
 	return &entity.ResultadoTransferencia{Saida: saida, Entrada: entrada}, nil
 }
@@ -146,6 +155,10 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 	// A saída que atende a demanda independente é lançamento manual com
 	// referência: estornada, a demanda volta a ter o saldo.
 	case "", entity.ReferenceTypeManual, entity.ReferenceTypeIndependentDemand:
+	case entity.ReferenceTypeRequisition:
+		if orig.tipo != entity.MovementTypeOut || orig.refCodigo == nil {
+			return nil, errorsuc.NewValidationError("a entrega de ordem de reposição se desfaz lançando a transferência de volta")
+		}
 	case entity.ReferenceTypeTransfer:
 		if orig.refCodigo == nil {
 			return nil, errorsuc.NewValidationError("transferência sem a outra perna: estorne lançando a transferência de volta")
@@ -171,7 +184,7 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 			codigo = fmt.Sprintf(" %d", *orig.refCodigo)
 		}
 		return nil, errorsuc.NewValidationError(fmt.Sprintf(
-			"o movimento foi gerado por %s%s: desfaça pelo próprio documento (cancelar a nota, estornar o apontamento, reabrir o inventário…)", ref, codigo))
+			"o movimento foi gerado por %s%s: desfaça pelo próprio documento (cancelar a nota, estornar o apontamento, reabrir o inventário…)", nomeDoDocumento(ref), codigo))
 	}
 
 	nota := fmt.Sprintf("Estorno do movimento %d: %s", orig.id, motivo)
@@ -180,7 +193,7 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 	for _, p := range pernas {
 		oposto, ok := tipoOposto[p.tipo]
 		if !ok {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("movimento do tipo %s não é estornável por aqui", p.tipo))
+			return nil, errorsuc.NewValidationError("este tipo de movimento não pode ser estornado por aqui")
 		}
 		qtd := p.qtd.Abs()
 		if p.tipo == entity.MovementTypeAdjustment {
@@ -200,6 +213,11 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 		if _, err := tx.Exec(ctx, `UPDATE stock_movements SET reversed_by_movement_id=$2 WHERE id=$1`, p.id, rev.ID); err != nil {
 			return nil, fmt.Errorf("linking the reversal: %w", err)
 		}
+		if ref == entity.ReferenceTypeRequisition {
+			if err := devolverEntregaDaRequisicaoTx(ctx, tx, empresa, *p.refCodigo, p.item, p.mask, p.qtd.Abs()); err != nil {
+				return nil, err
+			}
+		}
 		// Estornada a saída para a demanda, a peça volta reservada para ela.
 		if ref == entity.ReferenceTypeIndependentDemand && p.refCodigo != nil {
 			if _, err := ReservarDeVoltaDoEstornoTx(ctx, tx, empresa, *p.refCodigo, rev, ator); err != nil {
@@ -212,6 +230,21 @@ func (r *StockRepositorySQLC) EstornarMovimento(ctx context.Context, id int64, a
 		return nil, fmt.Errorf("committing reversal: %w", err)
 	}
 	return out, nil
+}
+
+// nomeDoDocumento diz em português de onde veio o movimento.
+func nomeDoDocumento(ref string) string {
+	nomes := map[string]string{
+		entity.ReferenceTypePurchaseOrder: "pedido de compra", entity.ReferenceTypeProductionOrder: "ordem de produção",
+		entity.ReferenceTypeSalesOrder: "pedido de venda", entity.ReferenceTypeNFEntry: "nota de entrada", entity.ReferenceTypeNFExit: "nota de saída",
+		entity.ReferenceTypeInventory: "inventário", entity.ReferenceTypeCycleCount: "contagem cíclica", entity.ReferenceTypeReversal: "estorno",
+		entity.ReferenceTypeRequisition: "requisição ao almoxarifado", entity.ReferenceTypeTransit: "envio em trânsito",
+		entity.ReferenceTypeLotImplant: "implantação de lote", "ONDA_SEPARACAO": "onda de separação", "QUALITY_LOT": "lote de inspeção",
+	}
+	if n, ok := nomes[ref]; ok {
+		return n
+	}
+	return "outro documento"
 }
 
 func lerMovimentoParaEstorno(ctx context.Context, tx pgx.Tx, empresa, id int64) (*movimentoOriginal, error) {
@@ -291,7 +324,7 @@ func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox 
 		`SELECT COALESCE(NULLIF(business_code,''), code::text), COALESCE(name,''), COALESCE(warehouse_unit_of_measurement::text,'')
 		   FROM items WHERE code=$1 AND enterprise_id=$2`, itemCode, empresa).Scan(&k.Codigo, &k.Nome, &k.Unidade)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado nesta empresa", itemCode))
+		return nil, errorsuc.NewNotFoundError("item não encontrado nesta empresa")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reading kardex item: %w", err)
@@ -299,17 +332,17 @@ func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox 
 	fim := ate.AddDate(0, 0, 1)
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(`+qtdSQL+`),0), COALESCE(SUM(`+valorSQL+`),0)
-		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.created_at < $3
-		    AND ($4::bigint IS NULL OR m.warehouse_id=$4)`, empresa, itemCode, de, almox).Scan(&k.SaldoAnterior, &k.ValorAnterior); err != nil {
+		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.movement_date < $3::date
+		    AND ($4::bigint IS NULL OR m.warehouse_id=$4)`, empresa, itemCode, de.Format("2006-01-02"), almox).Scan(&k.SaldoAnterior, &k.ValorAnterior); err != nil {
 		return nil, fmt.Errorf("reading kardex opening balance: %w", err)
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.id, m.created_at, m.movement_type, m.movement_type_code, m.reference_type, m.reference_code,
+		`SELECT m.id, m.created_at, to_char(m.movement_date,'YYYY-MM-DD'), m.movement_type, m.movement_type_code, m.reference_type, m.reference_code,
 		        m.warehouse_id, m.lot, m.address, `+qtdSQL+`, m.unit_price, `+valorSQL+`,
 		        m.cost_center_code, m.reversed_by_movement_id IS NOT NULL, m.reverses_movement_id IS NOT NULL, m.notes
-		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.created_at >= $3 AND m.created_at < $4
+		   FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2 AND m.movement_date >= $3::date AND m.movement_date < $4::date
 		    AND ($5::bigint IS NULL OR m.warehouse_id=$5)
-		  ORDER BY m.created_at, m.id`, empresa, itemCode, de, fim, almox)
+		  ORDER BY m.movement_date, m.id`, empresa, itemCode, de.Format("2006-01-02"), fim.Format("2006-01-02"), almox)
 	if err != nil {
 		return nil, fmt.Errorf("listing kardex movements: %w", err)
 	}
@@ -318,7 +351,7 @@ func (r *StockRepositorySQLC) Kardex(ctx context.Context, itemCode int64, almox 
 	for rows.Next() {
 		var l entity.LinhaKardex
 		var q decimal.Decimal
-		if err := rows.Scan(&l.MovementID, &l.Data, &l.Tipo, &l.TipoCodigo, &l.Referencia, &l.ReferenciaCodigo,
+		if err := rows.Scan(&l.MovementID, &l.Data, &l.DataDocumento, &l.Tipo, &l.TipoCodigo, &l.Referencia, &l.ReferenciaCodigo,
 			&l.Almoxarifado, &l.Lote, &l.Endereco, &q, &l.CustoUnitario, &l.Valor,
 			&l.CentroCusto, &l.Estornado, &l.EstornaOutro, &l.Notas); err != nil {
 			return nil, fmt.Errorf("scanning kardex line: %w", err)
@@ -365,10 +398,10 @@ func (r *StockRepositorySQLC) PosicaoEmData(ctx context.Context, data time.Time,
 		        COALESCE(i.warehouse_unit_of_measurement::text,''), COALESCE(i.supplies_purchase_uom,''), m.warehouse_id,
 		        SUM(`+qtdSQL+`), SUM(`+valorSQL+`)
 		   FROM stock_movements m JOIN items i ON i.code = m.item_code AND i.enterprise_id = m.enterprise_id
-		  WHERE m.enterprise_id=$1 AND m.created_at < $2 AND ($3::bigint IS NULL OR m.warehouse_id=$3)
+		  WHERE m.enterprise_id=$1 AND m.movement_date <= $2::date AND ($3::bigint IS NULL OR m.warehouse_id=$3)
 		  GROUP BY 1,2,3,4,5,6
 		 HAVING SUM(`+qtdSQL+`) <> 0
-		  ORDER BY 2, 6`, empresa, data.AddDate(0, 0, 1), almox)
+		  ORDER BY 2, 6`, empresa, data.Format("2006-01-02"), almox)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock position: %w", err)
 	}
@@ -459,6 +492,9 @@ func (r *StockRepositorySQLC) SaldosComSituacao(ctx context.Context, itemCode in
 	rows, err := r.pool.Query(ctx,
 		`SELECT b.id, b.item_code, b.mask, b.warehouse_id, SUM(b.quantity), SUM(b.reserved_qty),
 		        MAX(b.avg_cost), SUM(b.total_cost),
+		        COALESCE((SELECT SUM(x.quantity) FROM stock_lot_balances x WHERE x.enterprise_id=b.enterprise_id AND x.item_code=b.item_code
+		                    AND x.mask=b.mask AND x.warehouse_id=b.warehouse_id AND x.address=b.address AND x.quantity > 0
+		                    AND `+strings.ReplaceAll(loteForaDoDisponivelSQL, "= b.", "= x.")+`), 0),
 		        COALESCE(BOOL_OR(`+almoxPrometivelSQL+`), TRUE),
 		        COALESCE(MAX(CASE WHEN w.location::text IN ('INSPECAO') THEN 'INSPECAO'
 		                          WHEN w.location::text = 'REJEICAO' OR NOT w.disposition THEN 'BLOQUEADO' END), 'LIVRE')
@@ -473,121 +509,16 @@ func (r *StockRepositorySQLC) SaldosComSituacao(ctx context.Context, itemCode in
 	var out []entity.SaldoComSituacao
 	for rows.Next() {
 		var s entity.SaldoComSituacao
+		var retido decimal.Decimal
 		if err := rows.Scan(&s.ID, &s.ItemCode, &s.Mask, &s.WarehouseID, &s.Quantity, &s.ReservedQty,
-			&s.AvgCost, &s.TotalCost, &s.Prometivel, &s.Situacao); err != nil {
+			&s.AvgCost, &s.TotalCost, &retido, &s.Prometivel, &s.Situacao); err != nil {
 			return nil, err
 		}
-		s.AvailableQty = s.Quantity.Sub(s.ReservedQty)
+		// Lote vencido ou em situação que não conta fica fora do disponível.
+		s.AvailableQty = s.Quantity.Sub(s.ReservedQty).Sub(retido)
 		out = append(out, s)
 	}
 	return out, rows.Err()
-}
-
-// ---------- Reposição (ponto de pedido / mínimo) ----------
-
-// SugestoesDeReposicao lista os itens com projeção (disponível − reservado +
-// em pedido) no ponto de pedido ou abaixo dele, e quanto comprar.
-//
-// Ponto de pedido: o do cadastro (TR × CM / CR + ES); sem consumo cadastrado,
-// o consumo médio apurado; sem nada disso, o estoque mínimo do item.
-func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entity.SugestaoReposicao, error) {
-	empresa, err := tenant.ID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.pool.Query(ctx,
-		`SELECT i.code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''),
-		        COALESCE(i.warehouse_unit_of_measurement::text,''), i.planning_reorder_point,
-		        COALESCE(i.warehouse_minimum_stock,0), COALESCE(i.planning_safety_stock,0),
-		        COALESCE(i.planning_minimum_lot,0), COALESCE(i.planning_multiple_lot,0),
-		        COALESCE((SELECT SUM(b.quantity) FROM stock_balances b JOIN warehouse w ON w.id=b.warehouse_id AND w.enterprise_id=b.enterprise_id
-		                   WHERE b.enterprise_id=i.enterprise_id AND b.item_code=i.code AND `+almoxPrometivelSQL+`), 0),
-		        COALESCE((SELECT SUM(b.reserved_qty) FROM stock_balances b JOIN warehouse w ON w.id=b.warehouse_id AND w.enterprise_id=b.enterprise_id
-		                   WHERE b.enterprise_id=i.enterprise_id AND b.item_code=i.code AND `+almoxPrometivelSQL+`), 0),
-		        COALESCE((SELECT SUM(GREATEST(p.requested_qty - p.received_qty - p.cancelled_qty, 0)
-		                             * CASE WHEN p.internal_qty > 0 AND p.requested_qty > 0 THEN p.internal_qty / p.requested_qty ELSE 1 END)
-		                    FROM purchase_order_items p JOIN purchase_orders o ON o.code = p.purchase_order_code
-		                    JOIN enterprise e ON e.code = o.enterprise_code
-		                   WHERE e.id = i.enterprise_id AND p.item_code = i.code AND p.is_active AND o.is_active
-		                     AND p.status IN ('OPEN','PARTIAL') AND o.status IN ('REQUESTED','APPROVED','PARTIAL')), 0)
-		        -- Requisição de compra ainda não atendida também já está pedida.
-		        + COALESCE((SELECT SUM(GREATEST(ri.quantity - ri.attended_qty - ri.cancelled_qty, 0))
-		                      FROM purchase_requisition_items ri JOIN purchase_requisitions rq ON rq.code = ri.requisition_code
-		                      JOIN enterprise e2 ON e2.code = rq.enterprise_code
-		                     WHERE e2.id = i.enterprise_id AND ri.item_code = i.code AND ri.is_active AND rq.is_active
-		                       AND rq.status IN ('OPEN','PARTIAL')), 0),
-		        COALESCE((SELECT a.avg_monthly_consumption FROM item_consumption_averages a
-		                   WHERE a.enterprise_id=i.enterprise_id AND a.item_code=i.code ORDER BY a.calculated_at DESC LIMIT 1), 0)
-		   FROM items i
-		  WHERE i.enterprise_id=$1
-		    AND (COALESCE(i.warehouse_minimum_stock,0) > 0 OR (i.planning_reorder_point IS NOT NULL AND i.planning_reorder_point <> 'null'::jsonb))
-		  ORDER BY 2`, empresa)
-	if err != nil {
-		return nil, fmt.Errorf("listing replenishment candidates: %w", err)
-	}
-	defer rows.Close()
-	var out []entity.SugestaoReposicao
-	for rows.Next() {
-		var s entity.SugestaoReposicao
-		var ppRaw []byte
-		var minimo, seg, lmin, lmul decimal.Decimal
-		if err := rows.Scan(&s.ItemCode, &s.Codigo, &s.Nome, &s.Unidade, &ppRaw, &minimo, &seg, &lmin, &lmul,
-			&s.Disponivel, &s.Reservado, &s.EmPedido, &s.ConsumoMedio); err != nil {
-			return nil, fmt.Errorf("scanning replenishment candidate: %w", err)
-		}
-		s.EstoqueSeguranca = seg
-		s.LoteMinimo, s.LoteMultiplo = lmin, lmul
-		s.PontoPedido, s.Motivo = calcularPontoDePedido(ppRaw, minimo, s.ConsumoMedio)
-		if !s.PontoPedido.IsPositive() {
-			continue
-		}
-		s.Projetado = s.Disponivel.Sub(s.Reservado).Add(s.EmPedido)
-		if s.Projetado.GreaterThan(s.PontoPedido) {
-			continue
-		}
-		s.Sugerido = quantidadeDeReposicao(s.PontoPedido, s.EstoqueSeguranca, s.Projetado, s.LoteMinimo, s.LoteMultiplo)
-		out = append(out, s)
-	}
-	return out, rows.Err()
-}
-
-// calcularPontoDePedido: TR × CM / CR + ES do cadastro; CM zerado usa o consumo
-// médio apurado (mensal, levado ao ciclo CR em dias); sem fórmula, o mínimo.
-func calcularPontoDePedido(raw []byte, minimo decimal.Decimal, consumoMensal decimal.Decimal) (decimal.Decimal, string) {
-	var pp valueobject.ReorderPoint
-	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &pp) == nil && pp.CR > 0 && pp.TR > 0 {
-		cm := pp.CM
-		origem := "ponto de pedido do cadastro"
-		if !cm.IsPositive() && consumoMensal.IsPositive() {
-			cm = consumoMensal.Mul(decimal.NewFromInt(int64(pp.CR))).Div(decimal.NewFromInt(30))
-			origem = "ponto de pedido com o consumo médio apurado"
-		}
-		if cm.IsPositive() {
-			return valueobject.PontoDePedido(pp.TR, cm, pp.CR, pp.ES), origem
-		}
-	}
-	if minimo.IsPositive() {
-		return minimo, "estoque mínimo do cadastro"
-	}
-	return decimal.Zero, ""
-}
-
-// quantidadeDeReposicao: o que leva a projeção de volta ao ponto de pedido mais
-// o estoque de segurança, no mínimo o lote mínimo, arredondado para cima ao
-// múltiplo de compra. Com múltiplo o resultado já é múltiplo exato (barra de
-// 6,35 M sugere 12,7 M, não 13); sem múltiplo sobe para o inteiro, como antes.
-func quantidadeDeReposicao(ponto, seguranca, projetado, loteMin, multiplo decimal.Decimal) decimal.Decimal {
-	q := ponto.Add(seguranca).Sub(projetado)
-	if !q.IsPositive() {
-		q = decimal.NewFromInt(1)
-	}
-	if loteMin.IsPositive() && q.LessThan(loteMin) {
-		q = loteMin
-	}
-	if multiplo.IsPositive() {
-		return q.Div(multiplo).Ceil().Mul(multiplo)
-	}
-	return q.Ceil()
 }
 
 // ---------- Análise (giro, cobertura, parados) ----------
@@ -613,31 +544,55 @@ func (r *StockRepositorySQLC) AnaliseDeEstoque(ctx context.Context, meses int, d
 		  consumo AS (
 		     SELECT m.item_code, SUM(ABS(m.quantity)) q, SUM(ABS(m.total_price)) v
 		       FROM stock_movements m
-		      WHERE m.enterprise_id=$1 AND m.created_at >= $2 AND m.movement_type IN ('OUT','SAIDA','REP')
-		        AND m.reverses_movement_id IS NULL AND m.reversed_by_movement_id IS NULL
+		      WHERE m.enterprise_id=$1 AND m.movement_date >= $2::date AND `+consumoSQL+`
 		      GROUP BY m.item_code),
 		  ultimo AS (
-		     SELECT item_code, MAX(created_at) quando FROM stock_movements WHERE enterprise_id=$1 GROUP BY item_code)
+		     -- Contar, transferir e estornar não tira o item da prateleira: se
+		     -- contassem, o ajuste de inventário escondia o estoque parado.
+		     SELECT item_code, MAX(movement_date) quando FROM stock_movements
+		      WHERE enterprise_id=$1 AND reverses_movement_id IS NULL AND reversed_by_movement_id IS NULL
+		        AND movement_type NOT IN ('TRANSFER_OUT','TRANSFER_IN','TRANSF_ENDERECO','AJUSTE_CUSTO','ADJUSTMENT')
+		        AND COALESCE(reference_type,'') NOT IN ('INVENTORY','CONTAGEM_CICLICA','TRANSFERENCIA','TRANSITO','ESTORNO')
+		      GROUP BY item_code),
+		  demanda AS (
+		     SELECT item_code, SUM(q) q FROM (
+		       SELECT si.item_code, GREATEST(si.requested_qty - si.attended_qty - si.cancelled_qty, 0) q
+		         FROM sales_order_items si JOIN sales_orders so ON so.code = si.sales_order_code
+		         JOIN enterprise e ON e.code = so.enterprise_code
+		        WHERE e.id=$1 AND si.is_active AND so.is_active AND si.status IN ('OPEN','PARTIAL')
+		       UNION ALL
+		       SELECT m.item_code, GREATEST(m.quantity - m.attended_quantity, 0)
+		         FROM production_order_materials m JOIN production_orders o ON o.id = m.production_order_id AND o.enterprise_id = $1
+		        WHERE m.enterprise_id=$1 AND m.material_kind='DEMAND' AND o.is_active AND o.status IN ('OPEN','RELEASED','IN_PROGRESS')
+		       UNION ALL
+		       SELECT d.item_code, d.quantity FROM independent_demands d
+		        WHERE d.enterprise_id=$1 AND d.is_active AND d.encerrada_em IS NULL) x
+		      GROUP BY item_code)
 		 SELECT i.code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''),
 		        COALESCE(i.warehouse_unit_of_measurement::text,''),
 		        COALESCE(s.q,0), COALESCE(s.v,0), COALESCE(c.q,0), COALESCE(c.v,0),
-		        u.quando, NULLIF(i.planning_abc_class::text,'')
+		        u.quando, NULLIF(i.planning_abc_class::text,''), COALESCE(d.q,0)
 		   FROM items i
 		   LEFT JOIN saldo s ON s.item_code=i.code
 		   LEFT JOIN consumo c ON c.item_code=i.code
 		   LEFT JOIN ultimo u ON u.item_code=i.code
-		  WHERE i.enterprise_id=$1 AND (COALESCE(s.q,0) <> 0 OR COALESCE(c.q,0) <> 0)
+		   LEFT JOIN demanda d ON d.item_code=i.code
+		  WHERE i.enterprise_id=$1 AND (COALESCE(s.q,0) <> 0 OR COALESCE(c.q,0) <> 0 OR COALESCE(d.q,0) <> 0)
 		  ORDER BY COALESCE(s.v,0) DESC`, empresa, desde)
 	if err != nil {
 		return nil, fmt.Errorf("listing stock analysis: %w", err)
 	}
 	defer rows.Close()
+	param, err := lerParametrosDeEstoque(ctx, r.pool, empresa)
+	if err != nil {
+		return nil, err
+	}
 	agora := time.Now()
 	var out []entity.AnaliseItem
 	for rows.Next() {
 		var a entity.AnaliseItem
 		if err := rows.Scan(&a.ItemCode, &a.Codigo, &a.Nome, &a.Unidade, &a.Saldo, &a.Valor, &a.ConsumoQtd, &a.ConsumoValor,
-			&a.UltimoMovimento, &a.ClasseABC); err != nil {
+			&a.UltimoMovimento, &a.ClasseABC, &a.DemandaAberta); err != nil {
 			return nil, fmt.Errorf("scanning stock analysis: %w", err)
 		}
 		a.Valor = a.Valor.Round(2)
@@ -654,6 +609,14 @@ func (r *StockRepositorySQLC) AnaliseDeEstoque(ctx context.Context, meses int, d
 			d := int(agora.Sub(*a.UltimoMovimento).Hours() / 24)
 			a.DiasSemMovimento = &d
 			a.Parado = d >= diasParado && a.Saldo.IsPositive()
+		} else {
+			// Saldo que só entrou por ajuste ou transferência nunca girou.
+			a.Parado = a.Saldo.IsPositive()
+		}
+		a.Falta = decimal.Max(a.DemandaAberta.Sub(a.Saldo), decimal.Zero)
+		if param.ObsoleteDays != nil && param.ObsoleteProvisionPct != nil && a.Saldo.IsPositive() &&
+			(a.DiasSemMovimento == nil || *a.DiasSemMovimento >= *param.ObsoleteDays) {
+			a.Provisao = a.Valor.Mul(*param.ObsoleteProvisionPct).Div(decimal.NewFromInt(100)).Round(2)
 		}
 		out = append(out, a)
 	}
@@ -669,20 +632,27 @@ func (r *StockRepositorySQLC) LotesAVencer(ctx context.Context, dias int) ([]ent
 	if dias <= 0 {
 		dias = 30
 	}
+	// O dia é o do relógio da empresa: em UTC, às 22h de Brasília o lote que vence
+	// hoje já aparecia vencido.
+	loc, err := r.fusoDaEmpresa(ctx, empresa)
+	if err != nil {
+		return nil, err
+	}
+	agora := time.Now().In(loc)
+	hoje := time.Date(agora.Year(), agora.Month(), agora.Day(), 0, 0, 0, 0, time.UTC)
 	rows, err := r.pool.Query(ctx,
 		`SELECT lb.item_code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''), lb.lot, lb.warehouse_id,
 		        SUM(lb.quantity), l.expires_at
 		   FROM stock_lot_balances lb
-		   JOIN stock_lots l ON l.item_code=lb.item_code AND l.lot=lb.lot AND l.enterprise_id=lb.enterprise_id
+		   JOIN stock_lots l ON l.item_code=lb.item_code AND l.lot=lb.lot AND l.mask=lb.mask AND l.enterprise_id=lb.enterprise_id
 		   JOIN items i ON i.code=lb.item_code AND i.enterprise_id=lb.enterprise_id
 		  WHERE lb.enterprise_id=$1 AND l.expires_at IS NOT NULL AND l.expires_at <= $2
 		  GROUP BY 1,2,3,4,5,7 HAVING SUM(lb.quantity) > 0
-		  ORDER BY l.expires_at, 2`, empresa, time.Now().AddDate(0, 0, dias))
+		  ORDER BY l.expires_at, 2`, empresa, hoje.AddDate(0, 0, dias))
 	if err != nil {
 		return nil, fmt.Errorf("listing expiring lots: %w", err)
 	}
 	defer rows.Close()
-	hoje := time.Now().Truncate(24 * time.Hour)
 	var out []entity.LoteAVencer
 	for rows.Next() {
 		var l entity.LoteAVencer

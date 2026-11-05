@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -103,7 +104,7 @@ func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCutt
 	switch plan.CutType {
 	case entity.CutTypeLinear1D, entity.CutTypeGuillotine2D, entity.CutTypeTrueShape2D:
 	default:
-		return nil, fmt.Errorf("tipo de corte %q não suportado", plan.CutType)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de corte %q não suportado", plan.CutType))
 	}
 	plan.WarehouseID = dto.WarehouseID
 	plan.ProductionOrderCode = dto.ProductionOrderCode
@@ -295,10 +296,10 @@ func (uc *CuttingPlanUseCase) Optimize(ctx context.Context, planID int64) (*resp
 		return nil, err
 	}
 	if len(parts) == 0 {
-		return nil, fmt.Errorf("o plano não tem peças a cortar")
+		return nil, errorsuc.NewValidationError("o plano não tem peças a cortar")
 	}
 	if len(stock) == 0 {
-		return nil, fmt.Errorf("o plano não tem estoque de onde cortar")
+		return nil, errorsuc.NewValidationError("o plano não tem estoque de onde cortar")
 	}
 
 	optimizer, err := uc.resolveOptimizer(plan.CutType)

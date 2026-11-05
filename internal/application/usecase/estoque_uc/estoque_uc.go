@@ -5,6 +5,7 @@ package estoque_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
@@ -25,10 +27,23 @@ type RequisicoesDeCompra interface {
 	Create(ctx context.Context, dto request.CreatePurchaseRequisitionDTO) (*response.PurchaseRequisitionResponse, error)
 }
 
+// OrdensPlanejadas cria a ordem planejada do item reposto por produção.
+type OrdensPlanejadas interface {
+	Execute(ctx context.Context, dto request.CreatePlannedOrderDTO) (*response.PlannedOrderResponse, error)
+}
+
+// AprovacoesDeRequisicao é o motor de aprovação visto pela requisição.
+type AprovacoesDeRequisicao interface {
+	TemPoliticaAtiva(ctx context.Context, t aprovacao.Tipo) (bool, error)
+	Solicitar(ctx context.Context, t aprovacao.Tipo, documento int64, valor decimal.Decimal, descricao string) (*aprovacao.Solicitacao, error)
+}
+
 type UseCase struct {
-	Ops     repository.OperacoesEstoque
-	Auth    ports.AuthService
-	Compras RequisicoesDeCompra
+	Ops        repository.OperacoesEstoque
+	Auth       ports.AuthService
+	Compras    RequisicoesDeCompra
+	Planejadas OrdensPlanejadas
+	Aprovacoes AprovacoesDeRequisicao
 }
 
 func (uc *UseCase) podeMovimentar(ctx context.Context) error {
@@ -204,7 +219,64 @@ func (uc *UseCase) Analise(ctx context.Context, meses, diasParado int) ([]entity
 	if err := uc.podeConsultar(ctx); err != nil {
 		return nil, err
 	}
-	return uc.Ops.AnaliseDeEstoque(ctx, meses, diasParado)
+	return uc.Ops.AnaliseDeEstoque(ctx, min(meses, maxMesesDeAnalise), diasParado)
+}
+
+// maxMesesDeAnalise limita a janela: um número digitado errado virava uma data
+// fora do que o banco aceita.
+const maxMesesDeAnalise = 120
+
+// Acuracidade apura as contagens encerradas nos últimos meses. Sem tolerância
+// informada: classe A exata, B 2% e C 5%.
+func (uc *UseCase) Acuracidade(ctx context.Context, meses int, almox *int64, tolA, tolB, tolC string) (*entity.ResultadoAcuracidade, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	if meses <= 0 {
+		meses = 12
+	}
+	meses = min(meses, maxMesesDeAnalise)
+	param, err := uc.Ops.ParametrosDeEstoque(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tol := entity.ToleranciaAcuracidade{A: decimal.Zero, B: decimal.NewFromInt(2), C: decimal.NewFromInt(5)}
+	for _, p := range []struct{ de, para *decimal.Decimal }{{param.ToleranceA, &tol.A}, {param.ToleranceB, &tol.B}, {param.ToleranceC, &tol.C}} {
+		if p.de != nil {
+			*p.para = *p.de
+		}
+	}
+	for _, t := range []struct {
+		classe, valor string
+		destino       *decimal.Decimal
+	}{{"A", tolA, &tol.A}, {"B", tolB, &tol.B}, {"C", tolC, &tol.C}} {
+		if strings.TrimSpace(t.valor) == "" {
+			continue
+		}
+		v, err := decimal.NewFromString(strings.ReplaceAll(strings.TrimSpace(t.valor), ",", "."))
+		if err != nil || v.IsNegative() {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("tolerância da classe %s: informe um percentual", t.classe))
+		}
+		*t.destino = v
+	}
+	contagens, err := uc.Ops.ContagensParaAcuracidade(ctx, meses, almox)
+	if err != nil {
+		return nil, err
+	}
+	r := entity.ApurarAcuracidade(contagens, tol)
+	return &r, nil
+}
+
+// IdadeDoEstoque agrupa o saldo pelo tempo sem movimento real.
+func (uc *UseCase) IdadeDoEstoque(ctx context.Context) ([]entity.FaixaDeIdade, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	itens, err := uc.Ops.AnaliseDeEstoque(ctx, 12, 90)
+	if err != nil {
+		return nil, err
+	}
+	return entity.FaixasDeIdade(itens), nil
 }
 
 func (uc *UseCase) LotesAVencer(ctx context.Context, dias int) ([]entity.LoteAVencer, error) {
@@ -212,6 +284,73 @@ func (uc *UseCase) LotesAVencer(ctx context.Context, dias int) ([]entity.LoteAVe
 		return nil, err
 	}
 	return uc.Ops.LotesAVencer(ctx, dias)
+}
+
+// Inconsistencias lista as divergências entre o saldo gravado e a sua origem.
+func (uc *UseCase) Inconsistencias(ctx context.Context, almox, item *int64) ([]entity.InconsistenciaEstoque, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	return uc.Ops.ListarInconsistencias(ctx, almox, item)
+}
+
+// AcertarInconsistencia refaz o saldo e deixa registrado quem acertou e por quê.
+func (uc *UseCase) AcertarInconsistencia(ctx context.Context, dto request.AcertoInconsistenciaDTO) error {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return err
+	}
+	motivo := strings.TrimSpace(dto.Reason)
+	if len([]rune(motivo)) < 5 {
+		return errorsuc.NewValidationError("informe o motivo do acerto")
+	}
+	if dto.ItemCode <= 0 || dto.WarehouseID <= 0 {
+		return errorsuc.NewValidationError("informe o item e o almoxarifado do acerto")
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Ops.CorrigirInconsistencia(ctx, dto.Kind, dto.ItemCode, dto.Mask, dto.WarehouseID, motivo, ator)
+}
+
+// Fechamentos lista os meses de estoque fechados.
+func (uc *UseCase) Fechamentos(ctx context.Context) ([]entity.Fechamento, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	return uc.Ops.Fechamentos(ctx)
+}
+
+// FecharMes fecha a competência (AAAA-MM); com simular, só mostra o resultado.
+func (uc *UseCase) FecharMes(ctx context.Context, competencia string, simular bool) (*entity.ResultadoFechamento, error) {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return nil, err
+	}
+	t, err := time.Parse("2006-01", strings.TrimSpace(competencia))
+	if err != nil {
+		return nil, errorsuc.NewValidationError("informe o mês a fechar")
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return uc.Ops.FecharMes(ctx, t, ator, simular)
+}
+
+// ReabrirMes reabre o último mês fechado, com motivo.
+func (uc *UseCase) ReabrirMes(ctx context.Context, id int64, motivo string) error {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return err
+	}
+	motivo = strings.TrimSpace(motivo)
+	if len([]rune(motivo)) < 5 {
+		return errorsuc.NewValidationError("informe o motivo da reabertura")
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Ops.ReabrirMes(ctx, id, motivo, ator)
 }
 
 // ---------- Requisição ao almoxarifado ----------
@@ -231,7 +370,7 @@ func (uc *UseCase) CriarRequisicao(ctx context.Context, dto request.RequisicaoMa
 		return nil, err
 	}
 	req := &entity.RequisicaoMaterial{
-		Code: dto.Code, WarehouseID: dto.WarehouseID, RequesterName: vazioNil(dto.RequesterName),
+		Code: dto.Code, WarehouseID: dto.WarehouseID, DestinoID: dto.DestinationWarehouseID, RequesterName: vazioNil(dto.RequesterName),
 		RequesterEmployeeCode: dto.RequesterEmployeeCode, CostCenterCode: dto.CostCenterCode,
 		Notes: vazioNil(dto.Notes), CreatedBy: ator,
 	}
@@ -252,7 +391,23 @@ func (uc *UseCase) CriarRequisicao(ctx context.Context, dto request.RequisicaoMa
 		}
 		req.Itens = append(req.Itens, entity.RequisicaoMaterialItem{ItemCode: it.ItemCode, Mask: it.Mask, Quantity: q, Notes: vazioNil(it.Notes)})
 	}
-	return uc.Ops.CriarRequisicaoMaterial(ctx, req)
+	if uc.Aprovacoes != nil {
+		if req.AguardaAprovacao, err = uc.Aprovacoes.TemPoliticaAtiva(ctx, aprovacao.RequisicaoMaterial); err != nil {
+			return nil, err
+		}
+	}
+	criada, err := uc.Ops.CriarRequisicaoMaterial(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if criada.Status == entity.RequisicaoPendente {
+		descricao := fmt.Sprintf("Requisição ao almoxarifado %d", criada.Code)
+		if _, err := uc.Aprovacoes.Solicitar(ctx, aprovacao.RequisicaoMaterial, criada.ID, criada.Valor, descricao); err != nil {
+			// Sem a solicitação ninguém aprovaria: a requisição não pode ficar parada.
+			return nil, errors.Join(err, uc.Ops.CancelarRequisicaoMaterial(ctx, criada.ID))
+		}
+	}
+	return criada, nil
 }
 
 func (uc *UseCase) ObterRequisicao(ctx context.Context, id int64) (*entity.RequisicaoMaterial, error) {
@@ -293,7 +448,7 @@ func (uc *UseCase) AtenderRequisicao(ctx context.Context, id int64, dto request.
 		if err != nil {
 			return nil, err
 		}
-		linhas = append(linhas, entity.AtendimentoLinha{ItemID: l.ItemID, Quantity: q, Lot: vazioNil(l.Lot), Address: vazioNil(l.Address)})
+		linhas = append(linhas, entity.AtendimentoLinha{ItemID: l.ItemID, Quantity: q, Lot: vazioNil(l.Lot), Address: vazioNil(l.Address), DestinationAddress: vazioNil(l.DestinationAddress), ViaTransito: l.ViaTransit, AlmoxTransito: l.TransitWarehouseID})
 	}
 	if len(linhas) == 0 {
 		return nil, errorsuc.NewValidationError("nenhuma quantidade a entregar")

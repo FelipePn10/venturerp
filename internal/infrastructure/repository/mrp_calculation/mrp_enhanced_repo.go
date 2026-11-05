@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
-	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
@@ -169,8 +170,8 @@ func (r *MRPCalculationRepositorySQLC) ListKanbanCards(ctx context.Context) ([]*
 		return nil, err
 	}
 	rows, err := r.db.Query(ctx,
-		`SELECT code, item_code, reorder_point, quantity_per_card, card_count, is_active
-		 FROM kanban_cards WHERE enterprise_id = $1 AND is_active = true ORDER BY item_code`, enterpriseID)
+		`SELECT id, item_code, reorder_point, quantity_per_card, card_count, status = 'ACTIVE'
+		 FROM kanban_cards WHERE enterprise_id = $1 AND status = 'ACTIVE' ORDER BY item_code`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing kanban cards: %w", err)
 	}
@@ -225,7 +226,7 @@ func (r *MRPCalculationRepositorySQLC) ListItemPlanningExtras(ctx context.Contex
 	}
 	rows, err := r.db.Query(ctx,
 		`SELECT item_code, maximum_stock, safety_time, coverage, grouping_key, is_critical, use_tank_date
-		 FROM item_planning_extras WHERE enterprise_id = $1 AND is_active = true`, enterpriseID)
+		 FROM item_planning_extras WHERE enterprise_id = $1`, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing item planning extras: %w", err)
 	}
@@ -256,59 +257,13 @@ func (r *MRPCalculationRepositorySQLC) CreateMachineSchedule(ctx context.Context
  AND a.enterprise_id=$5 AND s.enterprise_id=$5 AND a.machine_id=$6`,
 		schedule.ScheduleDate, schedule.ProductionTime, schedule.PlannedOrderCode, schedule.PlanCode, enterpriseID, schedule.MachineID)
 	if err == nil && tag.RowsAffected() != 1 {
-		return fmt.Errorf("alocação de máquina não encontrada nesta empresa")
+		return errorsuc.NewNotFoundError("alocação de máquina não encontrada nesta empresa")
 	}
 
 	return err
 }
 
 // ---------- Item Sales Divisions ----------
-
-func (r *MRPCalculationRepositorySQLC) ListItemSalesDivisions(ctx context.Context, itemCodes []int64) (map[int64]*salesdivision.SalesDivision, error) {
-	if len(itemCodes) == 0 {
-		return make(map[int64]*salesdivision.SalesDivision), nil
-	}
-
-	enterpriseID, err := tenant.ID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := r.db.Query(ctx,
-		`SELECT DISTINCT ON (sd.code)
-		        sd.code, sd.description, sd.commercial_analysis, sd.financial_analysis,
-		        sd.is_technical_assistance, sd.consider_delivery_promise, sd.consider_mrp,
-		        sd.allow_outside_limits, sd.minimum_delivery_days, sd.financial_delay_days,
-		        sd.pis_percentage, sd.cofins_percentage, sd.parent_division_id, sd.is_active,
-		        sd.created_at, sd.updated_at, sd.created_by
-		 FROM sales_divisions sd
-		 INNER JOIN item_sales_divisions isd ON isd.sales_division_code = sd.code
-		 WHERE isd.item_code = ANY($1) AND sd.enterprise_id = $2 AND sd.is_active = true`,
-		itemCodes, enterpriseID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("listing item sales divisions: %w", err)
-	}
-	defer rows.Close()
-
-	m := make(map[int64]*salesdivision.SalesDivision)
-	for rows.Next() {
-		var sd salesdivision.SalesDivision
-		var createdAt, updatedAt time.Time
-		if err := rows.Scan(
-			&sd.Code, &sd.Description, &sd.CommercialAnalysis, &sd.FinancialAnalysis,
-			&sd.IsTechnicalAssistance, &sd.ConsiderDeliveryPromise, &sd.ConsiderMRP,
-			&sd.AllowOutsideLimits, &sd.MinimumDeliveryDays, &sd.FinancialDelayDays,
-			&sd.PISPercentage, &sd.CofinsPercentage, &sd.ParentDivisionID, &sd.IsActive,
-			&createdAt, &updatedAt, &sd.CreatedBy,
-		); err != nil {
-			return nil, fmt.Errorf("scanning sales division: %w", err)
-		}
-		sd.CreatedAt = createdAt
-		sd.UpdatedAt = updatedAt
-		m[sd.Code] = &sd
-	}
-	return m, rows.Err()
-}
 
 // ---------- Update Planned Order Priority ----------
 
@@ -344,7 +299,7 @@ func (r *MRPCalculationRepositorySQLC) UpdatePlannedOrderMachine(ctx context.Con
 		return err
 	}
 	if tag.RowsAffected() != 1 {
-		return fmt.Errorf("sugestão ou máquina inválida para esta empresa")
+		return errorsuc.NewValidationError("sugestão ou máquina inválida para esta empresa")
 	}
 	return nil
 }

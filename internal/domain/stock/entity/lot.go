@@ -42,6 +42,10 @@ type StockLotBalance struct {
 	LastCost       decimal.Decimal `json:"last_cost"`
 	LastMovementAt *time.Time      `json:"last_movement_at"`
 	UpdatedAt      time.Time       `json:"updated_at"`
+	// Do cadastro do lote: situação, grau e validade.
+	StatusCode *string    `json:"status_code,omitempty"`
+	Grade      *string    `json:"grade,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
 // LotGenealogy is the full traceability of an item lot, in both directions:
@@ -148,11 +152,24 @@ type SugestaoGuarda struct {
 
 // NecessidadeOnda é uma linha de demanda entregue à onda.
 type NecessidadeOnda struct {
-	ItemCode      int64   `json:"item_code"`
-	Mask          string  `json:"mask"`
-	Quantity      float64 `json:"quantity"`
-	ReferenceType *string `json:"reference_type,omitempty"`
-	ReferenceCode *int64  `json:"reference_code,omitempty"`
+	ItemCode      int64           `json:"item_code"`
+	Mask          string          `json:"mask"`
+	Quantity      decimal.Decimal `json:"quantity"`
+	ReferenceType *string         `json:"reference_type,omitempty"`
+	ReferenceCode *int64          `json:"reference_code,omitempty"`
+}
+
+// EhDoPedido: a onda do pedido só separa. Quem baixa o estoque é a nota fiscal.
+func (n NecessidadeOnda) EhDoPedido() bool {
+	return n.ReferenceType != nil && *n.ReferenceType == ReferenceTypeSalesOrder && n.ReferenceCode != nil
+}
+
+// LinhaPedidoOnda é o que falta separar de um item do pedido.
+type LinhaPedidoOnda struct {
+	ItemCode      int64           `json:"item_code"`
+	Mask          string          `json:"mask"`
+	Quantity      decimal.Decimal `json:"quantity"`
+	ReferenceCode int64           `json:"reference_code"`
 }
 
 // LinhaOnda é uma parada do separador: um lote, num endereço, com a quantidade.

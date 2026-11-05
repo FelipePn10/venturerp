@@ -110,8 +110,10 @@ func efeitosDeTeste(exit *fiscalentity.FiscalExit, itens []*fiscalentity.FiscalE
 // só a reserva do pedido da nota é consumida e o pedido fica faturado.
 func TestEfeitosAutorizacao_BaixaPeloDepositoDaLinhaOuPadrao(t *testing.T) {
 	stock := &fakeStockRepo{reservations: []*stockentity.StockReservation{
-		{ID: 42, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 500},
-		{ID: 99, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 777},
+		{ID: 42, ItemCode: 1001, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 500},
+		{ID: 99, ItemCode: 1001, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 777},
+		// Item que esta nota não faturou: a reserva dele fica.
+		{ID: 43, ItemCode: 2002, ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 500},
 	}}
 	sales := &fakeSalesRepo{items: []*salesentity.SalesOrderItem{
 		{ItemCode: 1001, WarehouseCode: i64p(7)},
@@ -193,5 +195,28 @@ func TestEfeitosAutorizacao_TituloGuardaOCodigoDoCliente(t *testing.T) {
 	}
 	if len(fin.titulos) != 1 || fin.titulos[0].ClienteID == nil || *fin.titulos[0].ClienteID != 77 {
 		t.Fatalf("cliente do título = %v, quer o código 77", fin.titulos)
+	}
+}
+
+// A linha da nota diz a máscara, o lote e o endereço; nota antiga, sem máscara na
+// linha, vai pela do pedido.
+func TestBaixaUsaMascaraLoteEEnderecoDaLinha(t *testing.T) {
+	stock := &fakeStockRepo{}
+	lote, endereco := "L1", "A1"
+	exit := &fiscalentity.FiscalExit{ID: 7}
+	itens := []*fiscalentity.FiscalExitItem{
+		{ItemCode: i64p(1), Quantity: decimal.NewFromInt(1), Mask: "AZUL", Lot: &lote, Address: &endereco},
+		{ItemCode: i64p(2), Quantity: decimal.NewFromInt(1)},
+	}
+	err := baixarEstoque(context.Background(), stock, exit, itens, map[int64]int64{1: 9, 2: 9}, nil, map[int64]string{1: "VERDE", 2: "VERMELHO"}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := stock.movements[0], stock.movements[1]
+	if a.Mask != "AZUL" || a.Lot == nil || *a.Lot != "L1" || a.Address == nil || *a.Address != "A1" {
+		t.Errorf("linha com máscara, lote e endereço: %+v", a)
+	}
+	if b.Mask != "VERMELHO" {
+		t.Errorf("nota antiga deve usar a máscara do pedido: %q", b.Mask)
 	}
 }

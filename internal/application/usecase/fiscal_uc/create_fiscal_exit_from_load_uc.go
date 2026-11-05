@@ -254,7 +254,12 @@ func fiscalItemFromShipmentItem(
 		desc = *ov.Description
 	}
 	itemCode := si.ItemCode
+	mascara := ""
+	if orderItem != nil {
+		mascara = orderItem.Mask
+	}
 	return request.CreateFiscalExitItemDTO{
+		Mask:                 mascara,
 		Sequence:             seq,
 		ItemCode:             &itemCode,
 		Ncm:                  ov.Ncm,

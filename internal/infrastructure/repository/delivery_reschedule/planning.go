@@ -191,7 +191,7 @@ func (r *DeliveryRescheduleRepositorySQLC) CreateBatch(ctx context.Context, c re
 		if _, err = tx.Exec(ctx, `UPDATE sales_order_demands SET delivery_date=$1,updated_at=NOW() WHERE enterprise_id=$2 AND sales_order_code=$3 AND item_code=$4 AND is_active AND NOT EXISTS(SELECT 1 FROM sales_order_items other WHERE other.sales_order_code=$3 AND other.item_code=$4 AND other.is_active AND other.code<>$5)`, line.NewDate, enterpriseID, c.SalesOrderCode, int64(line.ItemCode), line.SalesOrderItemCode); err != nil {
 			return nil, err
 		}
-		if _, err = tx.Exec(ctx, `UPDATE stock_reservations SET expiration_date=$1,updated_at=NOW() WHERE reference_type='SALES_ORDER' AND reference_code=$2 AND item_code=$3 AND status='ACTIVE' AND (reference_item_code=$4 OR (reference_item_code IS NULL AND NOT EXISTS(SELECT 1 FROM sales_order_items other WHERE other.sales_order_code=$2 AND other.item_code=$3 AND other.is_active AND other.code<>$4)))`, line.NewDate, c.SalesOrderCode, int64(line.ItemCode), line.SalesOrderItemCode); err != nil {
+		if _, err = tx.Exec(ctx, `UPDATE stock_reservations SET expiration_date=$1,updated_at=NOW() WHERE enterprise_id=$5 AND reference_type='SALES_ORDER' AND reference_code=$2 AND item_code=$3 AND status='ACTIVE' AND (reference_item_code=$4 OR (reference_item_code IS NULL AND NOT EXISTS(SELECT 1 FROM sales_order_items other WHERE other.sales_order_code=$2 AND other.item_code=$3 AND other.is_active AND other.code<>$4)))`, line.NewDate, c.SalesOrderCode, int64(line.ItemCode), line.SalesOrderItemCode, enterpriseID); err != nil {
 			return nil, err
 		}
 	}

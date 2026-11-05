@@ -249,6 +249,9 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 
 		item := &entity.FiscalExitItem{
 			FiscalExitID:       created.ID,
+			Mask:               it.Mask,
+			Lot:                it.Lot,
+			Address:            it.Address,
 			Sequence:           it.Sequence,
 			ItemCode:           it.ItemCode,
 			Ncm:                it.Ncm,

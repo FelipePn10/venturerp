@@ -1,8 +1,8 @@
 package service
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
@@ -76,13 +76,13 @@ func (optimizer2DGuillotine) Optimize(demand []DemandPiece, stock []StockPiece, 
 // placement geometry, kerf accounting and remnant preference.
 func nest2DGuillotine(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*sheet, []DemandPiece, error) {
 	if p.Kerf < 0 || p.Trim < 0 || p.MinRemnant < 0 {
-		return nil, nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
+		return nil, nil, domainerr.NewValidation("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 
 	var units []unit2D
 	for _, d := range demand {
 		if d.Width <= 0 || d.Height <= 0 {
-			return nil, nil, fmt.Errorf("a demanda 2D %q precisa de largura e altura maiores que zero", d.Label)
+			return nil, nil, domainerr.NewValidation(fmt.Sprintf("a demanda 2D %q precisa de largura e altura maiores que zero", d.Label))
 		}
 		if d.Qty <= 0 {
 			continue

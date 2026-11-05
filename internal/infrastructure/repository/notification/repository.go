@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"strconv"
@@ -291,7 +292,7 @@ func (r *Repository) ListRecords(ctx context.Context, tenant int64, kind string,
 	case "dead_letters":
 		query = `SELECT id,delivery_id,reason_code,sanitized_reason,created_at,retried_at FROM notification_dead_letters WHERE enterprise_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	default:
-		return nil, errors.New("consulta inválida")
+		return nil, errorsuc.NewValidationError("consulta inválida")
 	}
 	rows, err := r.pool.Query(ctx, query, tenant, limit, offset)
 	if err != nil {
@@ -421,14 +422,14 @@ func (r *Repository) ProcessOutbox(ctx context.Context, e notificationentity.Out
 			summary = v
 		}
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO notification_alerts(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,cycle,deduplication_key,severity,summary,details) SELECT $1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),COALESCE(MAX(cycle),0)+1,$7,$8,$9,$10 FROM notification_alerts WHERE enterprise_id=$1 AND event_key=$2 AND aggregate_type=$4 AND COALESCE(aggregate_internal_id,'')=$5 ON CONFLICT(enterprise_id,event_key,deduplication_key) WHERE state='ABERTO' DO UPDATE SET last_seen_at=NOW(),summary=EXCLUDED.summary,details=EXCLUDED.details`, e.EnterpriseID, e.EventKey, e.EventVersion, e.AggregateType, e.AggregateInternalID, e.AggregatePublicID, e.DeduplicationKey, severity, summary, e.Payload)
+	_, err = tx.Exec(ctx, `INSERT INTO notification_alerts(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,cycle,deduplication_key,severity,summary,details) SELECT $1::bigint,$2::text,$3::int,$4::text,NULLIF($5::text,''),NULLIF($6::text,''),COALESCE(MAX(cycle),0)+1,$7::text,$8::text,$9::text,$10::jsonb FROM notification_alerts WHERE enterprise_id=$1 AND event_key=$2 AND aggregate_type=$4 AND COALESCE(aggregate_internal_id,'')=$5 ON CONFLICT(enterprise_id,event_key,deduplication_key) WHERE state='ABERTO' DO UPDATE SET last_seen_at=NOW(),summary=EXCLUDED.summary,details=EXCLUDED.details`, e.EnterpriseID, e.EventKey, e.EventVersion, e.AggregateType, e.AggregateInternalID, e.AggregatePublicID, e.DeduplicationKey, severity, summary, e.Payload)
 	if err != nil {
 		return err
 	}
 	if cadence == string(notificationentity.CadenceImmediate) || cadence == string(notificationentity.CadenceBoth) {
 		_, err = tx.Exec(ctx, `WITH recipients AS (
 		SELECT DISTINCT u.id,u.email,u.name FROM enterprise_notification_subscriptions s JOIN enterprise_notification_recipients r ON r.subscription_id=s.id AND r.enterprise_id=s.enterprise_id JOIN user_enterprises ue ON ue.enterprise_id=s.enterprise_id AND ((r.recipient_type='USUARIO' AND ue.user_id=r.user_id) OR (r.recipient_type='PAPEL' AND ue.role=r.recipient_key) OR (r.recipient_type='DEPARTAMENTO' AND EXISTS(SELECT 1 FROM enterprise_departments dep JOIN enterprise_department_users du ON du.enterprise_id=dep.enterprise_id AND du.department_id=dep.id WHERE dep.enterprise_id=s.enterprise_id AND dep.code=r.recipient_key AND dep.active AND du.user_id=ue.user_id))) JOIN users u ON u.id=ue.user_id AND u.is_active WHERE s.enterprise_id=$1 AND s.event_key=$2 AND s.enabled
-		) INSERT INTO notification_deliveries(enterprise_id,outbox_id,recipient_user_id,recipient_email_snapshot,recipient_name_snapshot,subject_snapshot,message_id) SELECT $1,$3,id,email,name,$4,'<'||$3::text||'.'||id::text||'@venturerp.local>' FROM recipients ON CONFLICT(enterprise_id,message_id) DO NOTHING`, e.EnterpriseID, e.EventKey, e.ID, "[VentureERP] "+name)
+		) INSERT INTO notification_deliveries(enterprise_id,outbox_id,recipient_user_id,recipient_email_snapshot,recipient_name_snapshot,subject_snapshot,message_id) SELECT $1::bigint,$3::uuid,id,email,name,$4::text,'<'||$3::uuid::text||'.'||id::text||'@venturerp.local>' FROM recipients ON CONFLICT(enterprise_id,message_id) DO NOTHING`, e.EnterpriseID, e.EventKey, e.ID, "[VentureERP] "+name)
 		if err != nil {
 			return err
 		}
@@ -604,7 +605,7 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		   'saldo_id',b.id,
 		   'descricao',CASE WHEN b.quantity<0 THEN 'O saldo físico do item está negativo e precisa de conferência imediata.' ELSE 'A disponibilidade do item ficou abaixo do estoque mínimo e pode comprometer o abastecimento.' END,
 		   'item',jsonb_build_object('codigo',i.business_code,'codigo_interno',i.code,'descricao',i.name,'mascara',NULLIF(b.mask,''),'unidade_estoque',i.warehouse_unit_of_measurement::text,'unidade_compra',COALESCE(pref.uom,i.supplies_purchase_uom,i.warehouse_unit_of_measurement::text),'classe_abc',i.planning_abc_class,'critico',i.planning_critical),
-		   'estoque',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code),'saldo_fisico',b.quantity,'reservado',b.reserved_qty,'disponivel',b.available_qty,'minimo',b.minimum_stock,'seguranca',b.safety_stock,'maximo',b.maximum_stock,'necessidade_reposicao',GREATEST(b.minimum_stock-b.available_qty,0),'consumo_medio_mensal',i.warehouse_avg_monthly_consumption_manual,'cobertura_dias',CASE WHEN COALESCE(i.warehouse_avg_monthly_consumption_manual,0)>0 THEN ROUND((b.available_qty/i.warehouse_avg_monthly_consumption_manual::numeric)*30,1) END,'custo_medio',b.avg_cost,'valor_saldo',b.total_cost,'ultima_movimentacao',b.last_movement_at),
+		   'estoque',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code),'saldo_fisico',COALESCE(pol.fisico,b.quantity),'reservado',COALESCE(pol.reservado,b.reserved_qty),'disponivel',COALESCE(pol.disponivel,b.available_qty),'minimo',pol.minimo,'seguranca',pol.seguranca,'maximo',pol.maximo,'necessidade_reposicao',GREATEST(COALESCE(pol.minimo,0)-pol.disponivel,0),'consumo_medio_mensal',i.warehouse_avg_monthly_consumption_manual,'cobertura_dias',CASE WHEN COALESCE(i.warehouse_avg_monthly_consumption_manual,0)>0 THEN ROUND((COALESCE(pol.disponivel,b.available_qty)/i.warehouse_avg_monthly_consumption_manual::numeric)*30,1) END,'custo_medio',b.avg_cost,'valor_saldo',COALESCE(pol.valor,b.total_cost),'ultima_movimentacao',b.last_movement_at),
 		   'fornecedor_recomendado',CASE WHEN pref.supplier_code IS NULL THEN NULL ELSE jsonb_build_object('codigo',pref.supplier_code,'nome',pref.supplier_name,'codigo_item_fornecedor',pref.supplier_item_code,'unidade_compra',COALESCE(pref.uom,i.supplies_purchase_uom),'lead_time_dias',pref.lead_time_days,'quantidade_embalagem',pref.package_quantity,'homologado',pref.homologated,'bloqueado',pref.blocked,'validade_cadastro',pref.valid_until) END,
 		   'compras_em_aberto',open_po.orders
 		 )),
@@ -612,6 +613,7 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		 FROM stock_balances b
 		 JOIN items i ON i.enterprise_id=b.enterprise_id AND i.code=b.item_code
 		 JOIN warehouse w ON w.id=b.warehouse_id
+		 LEFT JOIN LATERAL (` + minimoDoAlmoxarifadoSQL + `) pol ON TRUE
 		 LEFT JOIN LATERAL (
 		   SELECT ips.supplier_code,COALESCE(s.trade_name,s.name) supplier_name,ips.supplier_item_code,ips.uom,ips.lead_time_days,ips.package_quantity,ips.valid_until,s.homologated,s.blocked
 		   FROM item_preferred_suppliers ips JOIN suppliers s ON s.code=ips.supplier_code
@@ -625,9 +627,9 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		         WHERE e.id=b.enterprise_id AND poi.item_code=b.item_code AND poi.is_active AND po.is_active AND po.status NOT IN('CANCELLED','CANCELED','CLOSED') AND poi.requested_qty-poi.received_qty-poi.cancelled_qty>0
 		         ORDER BY COALESCE(poi.promised_date,poi.delivery_date,po.delivery_date) NULLS LAST LIMIT 5) x
 		 ) open_po ON TRUE
-		 WHERE b.quantity<0 OR (b.minimum_stock>0 AND b.available_qty<b.minimum_stock)
+		 WHERE b.quantity<0 OR (pol.primeira_linha AND pol.minimo>0 AND pol.disponivel<pol.minimo)
 		 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
-		`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Saldo regularizado' WHERE a.state='ABERTO' AND a.event_key IN('ESTOQUE_NEGATIVO','ESTOQUE_ABAIXO_MINIMO') AND EXISTS(SELECT 1 FROM stock_balances b WHERE b.enterprise_id=a.enterprise_id AND b.id::text=a.aggregate_internal_id AND b.quantity>=0 AND (a.event_key<>'ESTOQUE_ABAIXO_MINIMO' OR b.minimum_stock<=0 OR b.available_qty>=b.minimum_stock))`,
+		`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Saldo regularizado' WHERE a.state='ABERTO' AND a.event_key IN('ESTOQUE_NEGATIVO','ESTOQUE_ABAIXO_MINIMO') AND EXISTS(SELECT 1 FROM stock_balances b LEFT JOIN LATERAL (` + minimoDoAlmoxarifadoSQL + `) pol ON TRUE WHERE b.enterprise_id=a.enterprise_id AND b.id::text=a.aggregate_internal_id AND b.quantity>=0 AND (a.event_key<>'ESTOQUE_ABAIXO_MINIMO' OR COALESCE(pol.minimo,0)<=0 OR pol.disponivel>=pol.minimo))`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
 		 SELECT m.enterprise_id,'ESTOQUE_LOTE_PROXIMO_VENCIMENTO',1,'LOTE_ESTOQUE',m.id::text,COALESCE(m.lot,''),jsonb_build_object('movimentacao_id',m.id,'descricao','Há saldo disponível em lote próximo do vencimento. Avalie consumo, remanejamento ou bloqueio.','item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'unidade_estoque',i.warehouse_unit_of_measurement::text),'lote',jsonb_build_object('codigo',m.lot,'validade',m.expiration_date,'dias_ate_vencimento',m.expiration_date-CURRENT_DATE,'quantidade_disponivel',lb.quantity),'localizacao',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code))),'lote_movimento:'||m.id::text FROM stock_movements m JOIN enterprise_notification_subscriptions s ON s.enterprise_id=m.enterprise_id AND s.event_key='ESTOQUE_LOTE_PROXIMO_VENCIMENTO' AND s.enabled JOIN items i ON i.enterprise_id=m.enterprise_id AND i.code=m.item_code JOIN warehouse w ON w.id=m.warehouse_id JOIN stock_lot_balances lb ON lb.enterprise_id=m.enterprise_id AND lb.item_code=m.item_code AND lb.warehouse_id=m.warehouse_id AND lb.lot=m.lot AND lb.quantity>0 WHERE m.lot IS NOT NULL AND m.expiration_date IS NOT NULL AND m.expiration_date BETWEEN CURRENT_DATE AND CURRENT_DATE+COALESCE((s.thresholds->>'antecedencia_dias')::int,30) ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key,originator_user_id,occurred_at)
@@ -643,6 +645,17 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 	}
 	return tx.Commit(ctx)
 }
+
+// minimoDoAlmoxarifadoSQL: o mínimo vem da política de reposição e vale para o
+// item no almoxarifado inteiro, somados os endereços. Cada endereço tem a sua
+// linha de saldo: primeira_linha evita um alerta por endereço. As colunas de
+// mínimo em stock_balances nunca foram preenchidas.
+const minimoDoAlmoxarifadoSQL = `SELECT p.minimum_qty minimo, p.safety_qty seguranca, p.maximum_qty maximo, t.disponivel, t.fisico, t.reservado, t.valor,
+		   b.id=t.primeira primeira_linha
+		 FROM stock_replenishment_policies p
+		 JOIN LATERAL (SELECT SUM(x.available_qty) disponivel, SUM(x.quantity) fisico, SUM(x.reserved_qty) reservado, SUM(x.total_cost) valor, MIN(x.id) primeira FROM stock_balances x
+		   WHERE x.enterprise_id=b.enterprise_id AND x.item_code=b.item_code AND x.warehouse_id=b.warehouse_id) t ON TRUE
+		 WHERE p.enterprise_id=b.enterprise_id AND p.item_code=b.item_code AND p.warehouse_id=b.warehouse_id AND p.is_active`
 
 // slaAssistenciaStatements: cada prazo do chamado (primeira resposta e
 // solução) vira pendência "em risco" no momento de risco gravado no chamado
@@ -1205,7 +1218,7 @@ func (r *Repository) TransitionCycleCount(ctx context.Context, tenant int64, id,
 		}
 		tolerance, toleranceErr := decimal.NewFromString(toleranceText)
 		if toleranceErr != nil || tolerance.IsNegative() {
-			return notificationentity.CycleCount{}, errors.New("tolerância de contagem inválida")
+			return notificationentity.CycleCount{}, errorsuc.NewValidationError("tolerância de contagem inválida")
 		}
 		current.CountedQuantity = counted
 		current.DivergenceQuantity = &div

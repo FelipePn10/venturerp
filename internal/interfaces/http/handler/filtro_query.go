@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
 
@@ -29,7 +30,7 @@ func filtroValido(w http.ResponseWriter, r *http.Request, numeros ...string) boo
 			continue
 		}
 		if _, err := strconv.ParseInt(v, 10, 64); err != nil {
-			respondErr(w, errorsuc.NewValidationError(fmt.Sprintf("o filtro %s precisa ser um número (veio %q)", nome, v)))
+			respondErr(w, errorsuc.NewValidationError(fmt.Sprintf("o filtro %s precisa ser um número (veio %q)", security.RotuloDoCampo(nome), v)))
 			return false
 		}
 	}
@@ -64,14 +65,14 @@ func queryValida(w http.ResponseWriter, r *http.Request, f filtrosDaQuery) bool 
 	for _, nome := range f.Inteiros {
 		if v := q.Get(nome); !ausenteNaQuery(v) {
 			if _, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err != nil {
-				return recusa(fmt.Sprintf("o filtro %s precisa ser um número inteiro (veio %q)", nome, v))
+				return recusa(fmt.Sprintf("o filtro %s precisa ser um número inteiro (veio %q)", security.RotuloDoCampo(nome), v))
 			}
 		}
 	}
 	for _, nome := range f.Decimais {
 		if v := q.Get(nome); !ausenteNaQuery(v) {
 			if _, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err != nil {
-				return recusa(fmt.Sprintf("o filtro %s precisa ser um número (veio %q)", nome, v))
+				return recusa(fmt.Sprintf("o filtro %s precisa ser um número (veio %q)", security.RotuloDoCampo(nome), v))
 			}
 		}
 	}
@@ -82,7 +83,7 @@ func queryValida(w http.ResponseWriter, r *http.Request, f filtrosDaQuery) bool 
 					continue
 				}
 				if _, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err != nil {
-					return recusa(fmt.Sprintf("o filtro %s aceita só números separados por vírgula (veio %q)", nome, bruto))
+					return recusa(fmt.Sprintf("o filtro %s aceita só números separados por vírgula (veio %q)", security.RotuloDoCampo(nome), bruto))
 				}
 			}
 		}

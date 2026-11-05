@@ -113,15 +113,17 @@ func TestMaterialControl_SubstitutionWMSAndLotRules(t *testing.T) {
 	}
 	testutil.Exec(t, pool, "UPDATE production_orders SET scrapped_qty=2 WHERE id=$1", orderID)
 	scrapItem := testutil.UniqueCode()
+	testutil.NovosItens(t, pool, enterpriseID, uid, scrapItem)
+	almoxSucata := testutil.NovoAlmoxarifado(t, pool, enterpriseID)
 	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_item_controls(enterprise_id,item_code,stock_uom,inventory_group_type) VALUES($1,$2,'UN','SECONDARY_MATERIAL')`, enterpriseID, scrapItem)
 	defer testutil.Exec(t, pool, "DELETE FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2", enterpriseID, scrapItem)
-	destination, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: 8, Quantity: decimal.RequireFromString("1.25"), DestinationDate: time.Now(), CreatedBy: uid})
+	destination, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Quantity: decimal.RequireFromString("1.25"), DestinationDate: time.Now(), CreatedBy: uid})
 	if err != nil || destination.ID == 0 {
 		t.Fatalf("scrap destination failed: %+v err=%v", destination, err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2", enterpriseID, scrapItem)
 	defer testutil.Exec(t, pool, "DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2", enterpriseID, scrapItem)
-	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: 8, Quantity: decimal.NewFromInt(1), DestinationDate: time.Now(), CreatedBy: uid}); err == nil {
+	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Quantity: decimal.NewFromInt(1), DestinationDate: time.Now(), CreatedBy: uid}); err == nil {
 		t.Fatal("scrap destination above scrapped quantity must be blocked")
 	}
 }

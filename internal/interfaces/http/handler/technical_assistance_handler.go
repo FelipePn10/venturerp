@@ -299,7 +299,7 @@ func (h *TechnicalAssistanceHandler) respond(w http.ResponseWriter, result any, 
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return false
 	}
 	return true

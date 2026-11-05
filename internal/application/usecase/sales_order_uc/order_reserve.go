@@ -2,6 +2,7 @@ package sales_order_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -81,6 +82,10 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 			CreatedBy:         order.CreatedBy,
 		}
 		if _, err := estoque.CreateReservation(ctx, res); err != nil {
+			// O depósito do pedido não aceita reservas: o pedido segue sem reservar.
+			if errors.Is(err, stockrepo.ErrAlmoxSemReserva) {
+				continue
+			}
 			return fmt.Errorf("reservando o item %d: %w", it.ItemCode, err)
 		}
 	}

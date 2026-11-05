@@ -111,6 +111,7 @@ func buildItem(reqCode int64, seq int32, in request.RequisitionItemInput) *entit
 		AccountingAccount: in.AccountingAccount,
 		SuggestedPrice:    in.SuggestedPrice,
 		DeliveryDate:      parseDate(in.DeliveryDate),
+		WarehouseID:       in.WarehouseID,
 		Application:       in.Application,
 		UtilizationType:   in.UtilizationType,
 		Status:            entity.ReqStatusOpen,

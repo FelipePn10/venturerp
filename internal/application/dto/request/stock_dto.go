@@ -6,6 +6,8 @@ import (
 )
 
 type CreateStockMovementDTO struct {
+	// MovementDate: data do documento (AAAA-MM-DD). Vazia = hoje.
+	MovementDate   *string         `json:"movement_date,omitempty"`
 	ItemCode       int64           `json:"item_code"`
 	Mask           string          `json:"mask"`
 	WarehouseID    int64           `json:"warehouse_id"`
@@ -50,11 +52,20 @@ type OndaDeSeparacaoDTO struct {
 	// FEFO (padrão) ou FIFO.
 	Rule  string `json:"rule"`
 	Lines []struct {
-		ItemCode      int64   `json:"item_code"`
-		Mask          string  `json:"mask"`
-		Quantity      float64 `json:"quantity"`
-		ReferenceType *string `json:"reference_type,omitempty"`
-		ReferenceCode *int64  `json:"reference_code,omitempty"`
+		ItemCode      int64           `json:"item_code"`
+		Mask          string          `json:"mask"`
+		Quantity      decimal.Decimal `json:"quantity"`
+		ReferenceType *string         `json:"reference_type,omitempty"`
+		ReferenceCode *int64          `json:"reference_code,omitempty"`
+	} `json:"lines"`
+}
+
+// ConfirmarOndaDTO: quanto foi separado de cada linha. Linha fora da lista foi
+// separada inteira.
+type ConfirmarOndaDTO struct {
+	Lines []struct {
+		ID        int64           `json:"id"`
+		PickedQty decimal.Decimal `json:"picked_qty"`
 	} `json:"lines"`
 }
 
@@ -80,12 +91,36 @@ type CreateInventoryDTO struct {
 	Notes       *string `json:"notes,omitempty"`
 	// ItemCodes: inventário parcial (só esses itens). Vazio = almoxarifado inteiro.
 	ItemCodes []int64 `json:"item_codes,omitempty"`
+	// BlocksMovements: nenhuma movimentação dos itens até o inventário terminar.
+	BlocksMovements bool `json:"blocks_movements,omitempty"`
+	// BlindCount: quem conta não vê o saldo do sistema.
+	BlindCount bool `json:"blind_count,omitempty"`
+	// ApprovalMode: NUNCA (padrão), FORA_TOLERANCIA ou SEMPRE.
+	ApprovalMode   string           `json:"approval_mode,omitempty"`
+	TolerancePct   *decimal.Decimal `json:"tolerance_pct,omitempty"`
+	ToleranceValue *decimal.Decimal `json:"tolerance_value,omitempty"`
+}
+
+// RecontagemInventarioDTO: linhas a recontar. Vazio = as fora da tolerância.
+type RecontagemInventarioDTO struct {
+	LineIDs []int64 `json:"line_ids,omitempty"`
+}
+
+// AcertoInconsistenciaDTO: qual divergência acertar e por quê.
+type AcertoInconsistenciaDTO struct {
+	Kind        string `json:"kind"`
+	ItemCode    int64  `json:"item_code"`
+	Mask        string `json:"mask"`
+	WarehouseID int64  `json:"warehouse_id"`
+	Reason      string `json:"reason"`
 }
 
 // CloseInventoryDTO: fechar zerando os itens que não foram contados (o padrão é
 // recusar o fechamento enquanto houver item sem contagem).
 type CloseInventoryDTO struct {
 	ZerarNaoContados bool `json:"zerar_nao_contados"`
+	// Reason: motivo geral do acerto, que vai na observação dos movimentos.
+	Reason string `json:"reason,omitempty"`
 }
 
 type CountInventoryItemDTO struct {
@@ -93,6 +128,8 @@ type CountInventoryItemDTO struct {
 	ItemCode         int64            `json:"item_code"`
 	Mask             string           `json:"mask"`
 	WarehouseID      int64            `json:"warehouse_id"`
+	Address          string           `json:"address,omitempty"`
+	Lot              string           `json:"lot,omitempty"`
 	CountedQty       decimal.Decimal  `json:"counted_qty"`
 	UnitCost         *decimal.Decimal `json:"unit_cost,omitempty"`
 	AdjustmentType   *string          `json:"adjustment_type,omitempty"`

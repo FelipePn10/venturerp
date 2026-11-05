@@ -115,6 +115,10 @@ func (h *CIAPHandler) ExcluirBem(w http.ResponseWriter, r *http.Request) {
 // Previa: GET ?ano=&mes=&saidas_trib_exp=&saidas_total= (sem gravar).
 func (h *CIAPHandler) Previa(w http.ResponseWriter, r *http.Request) {
 	ano, mes := anoMes(r)
+	if mes < 1 || mes > 12 {
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("informe o mês da apuração, de 1 a 12"))
+		return
+	}
 	q := r.URL.Query()
 	out, err := h.UC.Previa(r.Context(), fiscal_uc.CIAPApurarDTO{Ano: ano, Mes: mes, SaidasTribExp: q.Get("saidas_trib_exp"), SaidasTotal: q.Get("saidas_total")})
 	responderCIAP(w, http.StatusOK, out, err)

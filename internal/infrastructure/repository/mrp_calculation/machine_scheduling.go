@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
@@ -119,7 +120,7 @@ func (r *MRPCalculationRepositorySQLC) SaveMachineSlots(ctx context.Context, sug
 		return err
 	}
 	if len(slots) == 0 {
-		return fmt.Errorf("programação vazia")
+		return errorsuc.NewValidationError("programação vazia")
 	}
 	if reset {
 		if _, err = r.db.Exec(ctx, `DELETE FROM mrp_machine_allocation_slots sl USING mrp_machine_allocations a WHERE sl.suggestion_code=a.suggestion_code AND a.suggestion_code=$1 AND a.enterprise_id=$2`, suggestion, e); err != nil {
@@ -132,7 +133,7 @@ func (r *MRPCalculationRepositorySQLC) SaveMachineSlots(ctx context.Context, sug
 			return insertErr
 		}
 		if tag.RowsAffected() != 1 {
-			return fmt.Errorf("alocação de máquina não encontrada nesta empresa ao reservar horário")
+			return errorsuc.NewNotFoundError("alocação de máquina não encontrada nesta empresa ao reservar horário")
 		}
 	}
 	_, err = r.db.Exec(ctx, `UPDATE mrp_machine_allocations SET scheduled_start=(SELECT MIN(starts_at) FROM mrp_machine_allocation_slots WHERE suggestion_code=$1),scheduled_end=(SELECT MAX(ends_at) FROM mrp_machine_allocation_slots WHERE suggestion_code=$1),schedule_date=(SELECT MIN(starts_at)::date FROM mrp_machine_allocation_slots WHERE suggestion_code=$1) WHERE suggestion_code=$1 AND enterprise_id=$2`, suggestion, e)

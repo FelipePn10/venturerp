@@ -47,6 +47,7 @@ type cenario struct {
 	empresa int64
 	nota    int64
 	item    int64
+	almox   int64
 }
 
 // novaNotaAutorizada monta uma empresa NOVA (id ≠ código, para o agendador
@@ -64,8 +65,9 @@ func novaNotaAutorizada(t *testing.T) cenario {
 	c.ctx = context.WithValue(context.Background(), contextkey.UserKey,
 		&security.AuthUser{ID: c.ator.String(), Role: "ADMIN", EnterpriseID: c.empresa, EnterpriseCode: code})
 
+	c.almox = testutil.NovoAlmoxarifado(t, pool, c.empresa)
 	testutil.Exec(t, pool, `INSERT INTO items(code, business_code, warehouse_code, created_by, enterprise_id)
-		VALUES ($1, ($1::bigint)::text, 7, $2, $3)`, c.item, c.ator, c.empresa)
+		VALUES ($1, ($1::bigint)::text, $4, $2, $3)`, c.item, c.ator, c.empresa, c.almox)
 	if err := pool.QueryRow(context.Background(),
 		`INSERT INTO fiscal_exits(numero_nf, data_emissao, cfop, natureza_operacao, valor_total, status, created_by, enterprise_id)
 		 VALUES (77, $3::date, '5102', 'Venda', 150, 'AUTHORIZED', $1, $2) RETURNING id`,
@@ -76,7 +78,7 @@ func novaNotaAutorizada(t *testing.T) cenario {
 		VALUES ($1, $2, '5102', 3, 50, 150)`, c.nota, c.item)
 	// Saldo para a baixa: a saída sem estoque é recusada (saldo negativo bloqueado).
 	if _, err := stockRepo.NewStockRepositorySQLC(pool).CreateMovement(c.ctx, &stockentity.StockMovement{
-		ItemCode: c.item, WarehouseID: 7, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(20), CreatedBy: c.ator,
+		ItemCode: c.item, WarehouseID: c.almox, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(20), CreatedBy: c.ator,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -193,8 +195,8 @@ func TestEfeitosDaNFeSaoTudoOuNadaEReprocessam(t *testing.T) {
 		`SELECT warehouse_id FROM stock_movements WHERE reference_type = 'NF_SAIDA' AND reference_code = $1`, c.nota).Scan(&deposito); err != nil {
 		t.Fatalf("baixa da nota: %v", err)
 	}
-	if deposito != 7 {
-		t.Fatalf("depósito da baixa = %d, quer o padrão do item (7)", deposito)
+	if deposito != c.almox {
+		t.Fatalf("depósito da baixa = %d, quer o padrão do item (%d)", deposito, c.almox)
 	}
 
 	// Reprocessar com tudo resolvido não aplica de novo.

@@ -189,6 +189,17 @@ func reservarParaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandC
 func LiberarReservasDaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandCode int64, warehouseID *int64,
 	qtd *decimal.Decimal, consumir bool) (decimal.Decimal, error) {
 	liberado := decimal.Zero
+	var item int64
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(MIN(item_code), 0) FROM stock_reservations
+		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = $3 AND status = 'ACTIVE'`,
+		enterpriseID, entity.ReferenceTypeIndependentDemand, demandCode).Scan(&item); err != nil {
+		return liberado, fmt.Errorf("lendo o item das reservas da demanda %d: %w", demandCode, err)
+	}
+	if item != 0 {
+		if err := TravarItensTx(ctx, tx, enterpriseID, item); err != nil {
+			return liberado, err
+		}
+	}
 	rows, err := tx.Query(ctx, `SELECT id, item_code, mask, warehouse_id, COALESCE(address, ''), COALESCE(lot, ''), quantity
 		  FROM stock_reservations
 		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = $3 AND status = 'ACTIVE'

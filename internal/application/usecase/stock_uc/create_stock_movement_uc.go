@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/shopspring/decimal"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -60,6 +61,10 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 		return nil, errorsuc.NewValidationError("a quantidade do movimento precisa ser maior que zero")
 	}
 
+	if err := conferirReferenciaManual(dto.ReferenceType); err != nil {
+		return nil, err
+	}
+
 	userID, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return nil, err
@@ -86,6 +91,20 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 		MovementTypeCode:   siglaTipo,
 		CostCenterCode:     dto.CostCenterCode,
 		ValorizarPelaMedia: valorizarPelaMedia,
+		// A saída da demanda vem de um atendimento sem lote: só o lançamento à
+		// mão exige o rastreio.
+		ExigirRastreio: dto.ReferenceType == nil || strings.EqualFold(*dto.ReferenceType, entity.ReferenceTypeManual),
+	}
+
+	if dto.MovementDate != nil && strings.TrimSpace(*dto.MovementDate) != "" {
+		t, msg := datetime.Opcional("data do movimento", dto.MovementDate)
+		if msg != "" {
+			return nil, errorsuc.NewValidationError(msg)
+		}
+		if t != nil && t.After(time.Now()) {
+			return nil, errorsuc.NewValidationError("a data do movimento não pode ser futura")
+		}
+		m.MovementDate = t
 	}
 
 	if t, msg := datetime.Opcional("data de validade", dto.ExpirationDate); msg != "" {
@@ -99,6 +118,24 @@ func (uc *CreateStockMovementUseCase) Execute(ctx context.Context, dto request.C
 		return nil, err
 	}
 	return toStockMovementResponse(created), nil
+}
+
+// referenciasDeDocumento: o lançamento manual não pode se passar por documento.
+// São essas referências que liberam a saída do almoxarifado de inspeção e que
+// impedem o estorno manual; digitadas, abriam o bloqueio da qualidade.
+var referenciasDeDocumento = map[string]bool{
+	"QUALITY_LOT": true, "RECEIVING_INSPECTION": true, "RECEIVING_INSPECTION_ANALYSIS": true,
+	entity.ReferenceTypeNFEntry: true, entity.ReferenceTypeNFExit: true, entity.ReferenceTypePurchaseOrder: true,
+	entity.ReferenceTypeProductionOrder: true, entity.ReferenceTypeInventory: true, entity.ReferenceTypeCycleCount: true,
+	entity.ReferenceTypeReversal: true, entity.ReferenceTypeTransfer: true, entity.ReferenceTypeRequisition: true,
+	entity.ReferenceTypeTransit: true,
+}
+
+func conferirReferenciaManual(ref *string) error {
+	if ref != nil && referenciasDeDocumento[strings.ToUpper(strings.TrimSpace(*ref))] {
+		return errorsuc.NewValidationError("este tipo de referência é gerado pelo próprio documento e não pode ser usado num lançamento manual")
+	}
+	return nil
 }
 
 // totalDoMovimento devolve o valor total do movimento. A tela não envia o campo
@@ -131,7 +168,7 @@ func aplicarTipoDeMovimento(t *entity.TipoMovimentoConfig, dto *request.CreateSt
 		return errorsuc.NewValidationError(fmt.Sprintf("o tipo %s é de transferência: use a transferência entre almoxarifados", t.Sigla))
 	default:
 		if dto.MovementType != entity.MovementTypeIn && dto.MovementType != entity.MovementTypeOut && dto.MovementType != entity.MovementTypeAdjustment {
-			return errorsuc.NewValidationError(fmt.Sprintf("o tipo %s serve para entrada e saída: diga qual (IN ou OUT)", t.Sigla))
+			return errorsuc.NewValidationError(fmt.Sprintf("o tipo %s serve para entrada e saída: informe se é entrada ou saída", t.Sigla))
 		}
 	}
 	if t.ExigeCentroCusto && (dto.CostCenterCode == nil || *dto.CostCenterCode <= 0) {

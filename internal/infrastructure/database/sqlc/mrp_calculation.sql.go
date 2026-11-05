@@ -223,7 +223,7 @@ WHERE NOT EXISTS (
     WHERE po.enterprise_id = $21 AND po.order_number = $1 AND po.is_active = TRUE
 )
 ON CONFLICT (enterprise_id, order_number) WHERE enterprise_id IS NOT NULL AND order_number IS NOT NULL DO NOTHING
-    RETURNING code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release, mask, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type
+    RETURNING code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release, mask, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type, priority
 `
 
 type CreateMRPPlannedSuggestionParams struct {
@@ -302,6 +302,7 @@ func (q *Queries) CreateMRPPlannedSuggestion(ctx context.Context, arg CreateMRPP
 		&i.SupplierCode,
 		&i.ServiceItemCode,
 		&i.RemittanceType,
+		&i.Priority,
 	)
 	return i, err
 }
@@ -948,7 +949,7 @@ func (q *Queries) ListMRPExceptionMessages(ctx context.Context, arg ListMRPExcep
 }
 
 const listMRPPlannedSuggestions = `-- name: ListMRPPlannedSuggestions :many
-SELECT code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release, mask, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type FROM mrp_planned_suggestions WHERE plan_code = $1 AND enterprise_id = $2 ORDER BY llc, need_date
+SELECT code, plan_code, item_code, quantity, need_date, start_date, order_type, demand_type, parent_item_code, llc, created_at, notes, enterprise_id, order_number, warehouse_code, inter_factory, source_enterprise_code, auto_release, mask, route_operation_id, operation_id, supplier_code, service_item_code, remittance_type, priority FROM mrp_planned_suggestions WHERE plan_code = $1 AND enterprise_id = $2 ORDER BY llc, need_date
 `
 
 type ListMRPPlannedSuggestionsParams struct {
@@ -990,6 +991,7 @@ func (q *Queries) ListMRPPlannedSuggestions(ctx context.Context, arg ListMRPPlan
 			&i.SupplierCode,
 			&i.ServiceItemCode,
 			&i.RemittanceType,
+			&i.Priority,
 		); err != nil {
 			return nil, err
 		}

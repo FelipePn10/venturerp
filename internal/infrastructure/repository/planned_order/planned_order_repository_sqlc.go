@@ -514,7 +514,7 @@ func (r *PlannedOrderRepositorySQLC) ResolveMachineID(ctx context.Context, code 
 		return 0, err
 	}
 	if !m.IsActive {
-		return 0, fmt.Errorf("máquina %d está inativa", code)
+		return 0, errorsuc.NewValidationError(fmt.Sprintf("máquina %d está inativa", code))
 	}
 	return m.ID, nil
 }

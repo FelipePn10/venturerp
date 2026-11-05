@@ -17,5 +17,8 @@ func (uc *ReleaseReservationUseCase) Execute(ctx context.Context, id int64) erro
 	if !uc.Auth.CanReleaseReservation(ctx) {
 		return errorsuc.ErrUnauthorized
 	}
+	if err := conferirReservaAvulsa(ctx, uc.Repo, id); err != nil {
+		return err
+	}
 	return uc.Repo.CancelReservation(ctx, id)
 }

@@ -30,6 +30,7 @@ func TestRotaDeItemEhReconhecidaPelaPosicaoDoSegmento(t *testing.T) {
 		{"/api/items/search/MP-CH-3MM", 3},
 		{"/api/stock/movements/item/MP-CH-3MM", 4},
 		{"/api/stock/balances/atp/MP-CH-3MM", 4},
+		{"/api/stock/item-control/MP-CH-3MM", 3},
 		{"/api/items/structure/resolve/PA-CHASSI", 4},
 		{"/api/quality/plans/by-item/MP-CH-3MM", 4},
 		{"/api/standard-cost/items/MP-CH-3MM", 3},

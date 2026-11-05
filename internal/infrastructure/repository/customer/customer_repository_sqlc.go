@@ -2482,7 +2482,7 @@ func (r *CustomerRepositorySQLC) ResolveSalesCost(ctx context.Context, itemCode 
 	case entity.SalesCostStockLast:
 		return r.resolveStockCost(ctx, itemCode, mask, warehouseID, false)
 	default:
-		return decimal.Zero, string(source), fmt.Errorf("cost source %s requires informed base_cost", source)
+		return decimal.Zero, string(source), errorsuc.NewValidationError(fmt.Sprintf("a origem de custo %s exige o custo base informado", source))
 	}
 }
 

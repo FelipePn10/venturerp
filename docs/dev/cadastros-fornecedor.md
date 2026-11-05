@@ -198,7 +198,7 @@ consumido pelo Pedido de Compra e pelo Fiscal:
 
 ### Fiscal — NF de entrada (Fase 2 — entregue)
 - Nova coluna `fiscal_entries.supplier_code` (migration 000136).
-- Na importação de NF-e de compra (`ImportNFePurchaseUseCase`), o **CNPJ do emitente**
+- Na importação de NF-e de compra pela tela de NF-e de entrada, o **CNPJ do emitente**
   é casado a um fornecedor cadastrado e o vínculo é gravado na entrada
   (`supplier_matched` no retorno). Habilita conta a pagar por fornecedor e o uso de
   `icms_contributor` / tipo de NF default no cálculo fiscal.

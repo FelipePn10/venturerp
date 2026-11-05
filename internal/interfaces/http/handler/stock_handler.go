@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/shopspring/decimal"
@@ -112,8 +113,35 @@ func (h *StockHandler) CreateMovement(w http.ResponseWriter, r *http.Request) {
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
+// ListMovements lista por página: limit (padrão 500), offset, warehouse_id e o
+// período from/to (dias AAAA-MM-DD; to inclui o dia).
 func (h *StockHandler) ListMovements(w http.ResponseWriter, r *http.Request) {
-	results, err := h.listMovementsUC.Execute(r.Context())
+	q := r.URL.Query()
+	f := stockentity.FiltroMovimentos{}
+	f.Limite, _ = strconv.Atoi(q.Get("limit"))
+	f.Deslocamento, _ = strconv.Atoi(q.Get("offset"))
+	if f.Deslocamento < 0 {
+		f.Deslocamento = 0
+	}
+	if v, err := strconv.ParseInt(q.Get("warehouse_id"), 10, 64); err == nil && v > 0 {
+		f.Almoxarifado = &v
+	}
+	for campo, destino := range map[string]**time.Time{"from": &f.De, "to": &f.Ate} {
+		v := strings.TrimSpace(q.Get(campo))
+		if v == "" {
+			continue
+		}
+		t, err := time.Parse("2006-01-02", v)
+		if err != nil {
+			security.RespondError(w, http.StatusBadRequest, "data do filtro inválida: use o formato AAAA-MM-DD")
+			return
+		}
+		if campo == "to" {
+			t = t.AddDate(0, 0, 1)
+		}
+		*destino = &t
+	}
+	results, err := h.listMovementsUC.Pagina(r.Context(), f)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
@@ -393,11 +421,30 @@ func (h *StockHandler) ReserveStock(w http.ResponseWriter, r *http.Request) {
 	security.RespondJSON(w, http.StatusCreated, result)
 }
 
+// ListReservations lista as reservas (filtros opcionais: item e só as ativas).
+func (h *StockHandler) ListReservations(w http.ResponseWriter, r *http.Request) {
+	var item int64
+	if v := r.URL.Query().Get("item_code"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			security.RespondError(w, http.StatusBadRequest, "item inválido")
+			return
+		}
+		item = n
+	}
+	result, err := h.reserveStockUC.Listar(r.Context(), item, r.URL.Query().Get("active") == "true")
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
 func (h *StockHandler) ReleaseReservation(w http.ResponseWriter, r *http.Request) {
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
+		security.RespondError(w, http.StatusBadRequest, "identificador da reserva inválido")
 		return
 	}
 	if err := h.releaseReserveUC.Execute(r.Context(), code); err != nil {
@@ -411,7 +458,7 @@ func (h *StockHandler) ConsumeReservation(w http.ResponseWriter, r *http.Request
 	codeStr := chi.URLParam(r, "id")
 	code, err := strconv.ParseInt(codeStr, 10, 64)
 	if err != nil {
-		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
+		security.RespondError(w, http.StatusBadRequest, "identificador da reserva inválido")
 		return
 	}
 	if err := h.consumeReserveUC.Execute(r.Context(), code); err != nil {
@@ -492,6 +539,43 @@ func (h *StockHandler) AdjustInventoryItem(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// FinishCount encerra a contagem e leva o inventário à conferência.
+func (h *StockHandler) FinishCount(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
+		return
+	}
+	res, err := h.closeInventoryUC.EncerrarContagem(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, res)
+}
+
+// RecountInventory devolve linhas à contagem.
+func (h *StockHandler) RecountInventory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "identificador do inventário inválido")
+		return
+	}
+	var dto request.RecontagemInventarioDTO
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&dto); err != nil && !errors.Is(err, io.EOF) {
+			security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+			return
+		}
+	}
+	n, err := h.closeInventoryUC.Recontar(r.Context(), id, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]int{"lines": n})
 }
 
 func (h *StockHandler) CloseInventory(w http.ResponseWriter, r *http.Request) {
@@ -579,7 +663,7 @@ func (h *StockHandler) SaldoPorEndereco(w http.ResponseWriter, r *http.Request) 
 func (h *StockHandler) TransferirEndereco(w http.ResponseWriter, r *http.Request) {
 	var dto request.TransferenciaEnderecoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return
 	}
 	movimento, err := h.separacaoUC.TransferirEndereco(r.Context(), dto)
@@ -639,7 +723,7 @@ func (h *StockHandler) SugerirGuarda(w http.ResponseWriter, r *http.Request) {
 func (h *StockHandler) CriarOnda(w http.ResponseWriter, r *http.Request) {
 	var dto request.OndaDeSeparacaoDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return
 	}
 	onda, err := h.separacaoUC.CriarOnda(r.Context(), dto)
@@ -655,6 +739,32 @@ func (h *StockHandler) ConfirmarOnda(w http.ResponseWriter, r *http.Request) {
 	h.encerrarOnda(w, r, true)
 }
 
+// ListarOndas: GET /api/stock/waves?status=
+func (h *StockHandler) ListarOndas(w http.ResponseWriter, r *http.Request) {
+	out, err := h.separacaoUC.ListarOndas(r.Context(), r.URL.Query().Get("status"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+// LinhasDePedidoParaOnda: GET /api/stock/waves/order-lines/{orderCode}?warehouse_id=
+func (h *StockHandler) LinhasDePedidoParaOnda(w http.ResponseWriter, r *http.Request) {
+	pedido, errPedido := strconv.ParseInt(chi.URLParam(r, "orderCode"), 10, 64)
+	almox, errAlmox := strconv.ParseInt(r.URL.Query().Get("warehouse_id"), 10, 64)
+	if errPedido != nil || errAlmox != nil {
+		security.RespondError(w, http.StatusBadRequest, "informe o pedido e o almoxarifado")
+		return
+	}
+	out, err := h.separacaoUC.LinhasDePedidoParaOnda(r.Context(), pedido, almox)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
 // CancelarOnda devolve o reservado. POST /api/stock/waves/{code}/cancel
 func (h *StockHandler) CancelarOnda(w http.ResponseWriter, r *http.Request) {
 	h.encerrarOnda(w, r, false)
@@ -668,7 +778,12 @@ func (h *StockHandler) encerrarOnda(w http.ResponseWriter, r *http.Request, conf
 	}
 	var onda *stockentity.OndaDeSeparacao
 	if confirmar {
-		onda, err = h.separacaoUC.ConfirmarOnda(r.Context(), codigo)
+		// Sem corpo: a onda foi separada inteira, como no desktop já instalado.
+		var dto request.ConfirmarOndaDTO
+		if !security.DecodeBodyOptional(w, r, &dto) {
+			return
+		}
+		onda, err = h.separacaoUC.ConfirmarOnda(r.Context(), codigo, dto)
 	} else {
 		onda, err = h.separacaoUC.CancelarOnda(r.Context(), codigo)
 	}

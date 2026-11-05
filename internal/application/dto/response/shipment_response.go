@@ -215,6 +215,8 @@ type SeparationMonitorResponse struct {
 	DivergentItems   int     `json:"divergent_items"`
 	TotalVolumes     int     `json:"total_volumes"`
 	TotalGrossWeight float64 `json:"total_gross_weight"`
+	WaveLinesOpen    int     `json:"wave_lines_open"`
+	WaveLinesPicked  int     `json:"wave_lines_picked"`
 }
 
 type LogisticPanelResponse struct {

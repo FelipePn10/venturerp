@@ -4,6 +4,7 @@ package production_order_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ func TestPhase4MaintenanceLotPoliciesAndScrapControls(t *testing.T) {
 	repo := production_order.NewProductionOrderRepositoryPGX(pool)
 	uid := uuid.New()
 	orderItem, component, scrapItem := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
+	almoxSucata := testutil.NovoAlmoxarifado(t, pool, enterpriseID)
 	var orderID, kanbanID int64
 	if err := pool.QueryRow(ctx, `INSERT INTO production_orders(order_number,item_code,planned_qty,scrapped_qty,status,origin_type,created_by,enterprise_id) VALUES($1,$2,5,2,'RELEASED','MANUAL',$3,$4) RETURNING id`, testutil.UniqueCode(), orderItem, uid, enterpriseID).Scan(&orderID); err != nil {
 		t.Fatal(err)
@@ -82,26 +84,27 @@ func TestPhase4MaintenanceLotPoliciesAndScrapControls(t *testing.T) {
 	if err := repo.ConfigureManufacturingItemStock(ctx, entity.ManufacturingItemStockControl{ItemCode: scrapItem, StockUOM: "KG", ControlsLot: true, ControlsAddress: true, InventoryGroupType: "SECONDARY_MATERIAL"}); err == nil {
 		t.Fatal("configuration must reject nonexistent item")
 	}
+	testutil.NovosItens(t, pool, enterpriseID, uid, scrapItem)
 	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_item_controls(enterprise_id,item_code,stock_uom,controls_lot,controls_address,inventory_group_type) VALUES($1,$2,'KG',true,true,'SECONDARY_MATERIAL'),($1,$3,'UN',false,false,'STANDARD')`, enterpriseID, scrapItem, component)
 	testutil.Exec(t, pool, `INSERT INTO item_unit_conversions(item_code,from_uom,to_uom,factor,created_by) VALUES($1,'UN','KG',2,$2)`, scrapItem, uid)
-	if err := repo.ConfigureWarehouseAddress(ctx, 8, "A-01", true); err != nil {
+	if err := repo.ConfigureWarehouseAddress(ctx, almoxSucata, "A-01", true); err != nil {
 		t.Fatal(err)
 	}
 	lotCode, address := "SCRAP-1", "A-01"
-	destination, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: 8, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), Quantity: decimal.NewFromInt(1), SourceUOM: "UN", ScrapUOM: "KG", DestinationDate: time.Now(), CreatedBy: uid})
+	destination, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), Quantity: decimal.NewFromInt(1), SourceUOM: "UN", ScrapUOM: "KG", DestinationDate: time.Now(), CreatedBy: uid})
 	if err != nil {
 		t.Fatal(err)
 	}
 	otherTenantCtx := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID + 999999})
-	if _, err := repo.UpdateScrapDestination(otherTenantCtx, destination.ID, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: 8, Quantity: decimal.NewFromInt(1), DestinationDate: time.Now(), CreatedBy: uid}); err == nil {
+	if _, err := repo.UpdateScrapDestination(otherTenantCtx, destination.ID, &entity.ScrapDestination{ProductionOrderID: orderID, ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Quantity: decimal.NewFromInt(1), DestinationDate: time.Now(), CreatedBy: uid}); err == nil {
 		t.Fatal("cross-tenant scrap update must be rejected")
 	}
-	updated, err := repo.UpdateScrapDestination(ctx, destination.ID, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: 8, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.RequireFromString("0.5"), Quantity: decimal.RequireFromString("0.5"), SourceUOM: "UN", ScrapUOM: "KG", DestinationDate: time.Now(), CreatedBy: uid})
+	updated, err := repo.UpdateScrapDestination(ctx, destination.ID, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.RequireFromString("0.5"), Quantity: decimal.RequireFromString("0.5"), SourceUOM: "UN", ScrapUOM: "KG", DestinationDate: time.Now(), CreatedBy: uid})
 	if err != nil || updated.ID != destination.ID {
 		t.Fatalf("updated destination=%+v err=%v", updated, err)
 	}
 	var balanceAfterUpdate decimal.Decimal
-	if err := pool.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask='' AND warehouse_id=8`, enterpriseID, scrapItem).Scan(&balanceAfterUpdate); err != nil || !balanceAfterUpdate.Equal(decimal.NewFromInt(1)) {
+	if err := pool.QueryRow(ctx, `SELECT quantity FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND mask='' AND warehouse_id=$3`, enterpriseID, scrapItem, almoxSucata).Scan(&balanceAfterUpdate); err != nil || !balanceAfterUpdate.Equal(decimal.NewFromInt(1)) {
 		t.Fatalf("balance after update=%s err=%v", balanceAfterUpdate, err)
 	}
 	if err := repo.DeleteScrapDestination(ctx, destination.ID, uid); err != nil {
@@ -117,7 +120,7 @@ func TestPhase4MaintenanceLotPoliciesAndScrapControls(t *testing.T) {
 	// período não cobria o lançamento e a trava parecia não existir.
 	hoje := time.Now()
 	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_closed_periods(enterprise_id,period_from,period_to) VALUES($1,$2::date,$2::date)`, enterpriseID, hoje)
-	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: 8, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), DestinationDate: hoje, CreatedBy: uid}); err == nil {
+	if _, err := repo.AddScrapDestination(ctx, &entity.ScrapDestination{ProductionOrderID: orderID, DestinationKind: "ORDER_ITEM", ScrapItemCode: scrapItem, WarehouseID: almoxSucata, Lot: &lotCode, Address: &address, ScrapQuantity: decimal.NewFromInt(1), DestinationDate: hoje, CreatedBy: uid}); err == nil {
 		t.Fatal("closed stock period must reject scrap destination")
 	}
 }
@@ -133,8 +136,11 @@ func TestPhase4ManualOrderTransfersAutomaticComponentsToLineWarehouse(t *testing
 	repo := production_order.NewProductionOrderRepositoryPGX(pool)
 	uid := uuid.New()
 	parent, child := testutil.UniqueCode(), testutil.UniqueCode()
-	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_item_controls(enterprise_id,item_code,automatic_issue_type,inventory_group_type,line_warehouse_id) VALUES($1,$2,'TRANSFER','STANDARD',1),($1,$3,'ISSUE','STANDARD',2)`, enterpriseID, parent, child)
-	testutil.Exec(t, pool, `INSERT INTO stock_balances(item_code,mask,warehouse_id,quantity,avg_cost,total_cost,enterprise_id) VALUES($1,'',1,10,4.5,45,$2)`, child, enterpriseID)
+	testutil.NovosItens(t, pool, enterpriseID, uid, parent, child)
+	almoxOrigem := testutil.NovoAlmoxarifado(t, pool, enterpriseID)
+	almoxLinha := testutil.NovoAlmoxarifado(t, pool, enterpriseID)
+	testutil.Exec(t, pool, `INSERT INTO manufacturing_stock_item_controls(enterprise_id,item_code,automatic_issue_type,inventory_group_type,line_warehouse_id) VALUES($1,$2,'TRANSFER','STANDARD',$4),($1,$3,'ISSUE','STANDARD',$5)`, enterpriseID, parent, child, almoxOrigem, almoxLinha)
+	testutil.Exec(t, pool, `INSERT INTO stock_balances(item_code,mask,warehouse_id,address,quantity,avg_cost,total_cost,enterprise_id) VALUES($1,'',$3,'A1',2,4.5,9,$2),($1,'',$3,'A2',8,4.5,36,$2)`, child, enterpriseID, almoxOrigem)
 	var orderID int64
 	t.Cleanup(func() {
 		pool.Exec(ctx, "DELETE FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER_TRANSFER'", enterpriseID)
@@ -142,26 +148,26 @@ func TestPhase4ManualOrderTransfersAutomaticComponentsToLineWarehouse(t *testing
 		pool.Exec(ctx, "DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2", enterpriseID, child)
 		pool.Exec(ctx, "DELETE FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=ANY($2)", enterpriseID, []int64{parent, child})
 	})
-	created, err := repo.CreateWithMaterials(ctx, &entity.ProductionOrder{OrderNumber: testutil.UniqueCode(), ItemCode: parent, PlannedQty: decimal.RequireFromString("2"), Status: entity.StatusOpen, IsActive: true, CreatedBy: uid}, []*entity.ProductionOrderMaterial{{Kind: entity.MaterialDemand, ItemCode: child, Quantity: decimal.NewFromInt(3), WarehouseID: 1, AutomaticIssue: true, CreatedBy: uid}})
+	created, err := repo.CreateWithMaterials(ctx, &entity.ProductionOrder{OrderNumber: testutil.UniqueCode(), ItemCode: parent, PlannedQty: decimal.RequireFromString("2"), Status: entity.StatusOpen, IsActive: true, CreatedBy: uid}, []*entity.ProductionOrderMaterial{{Kind: entity.MaterialDemand, ItemCode: child, Quantity: decimal.NewFromInt(3), WarehouseID: almoxOrigem, AutomaticIssue: true, CreatedBy: uid}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	orderID = created.ID
 	var movements int
 	var lineQty decimal.Decimal
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN movement_type='TRANSFER_IN' AND warehouse_id=2 THEN quantity ELSE 0 END),0) FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER_TRANSFER' AND reference_code=$2`, enterpriseID, orderID).Scan(&movements, &lineQty); err != nil || movements != 2 || !lineQty.Equal(decimal.NewFromInt(3)) {
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*),COALESCE(SUM(CASE WHEN movement_type='TRANSFER_IN' AND warehouse_id=`+fmt.Sprint(almoxLinha)+` THEN quantity ELSE 0 END),0) FROM stock_movements WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER_TRANSFER' AND reference_code=$2`, enterpriseID, orderID).Scan(&movements, &lineQty); err != nil || movements != 2 || !lineQty.Equal(decimal.NewFromInt(3)) {
 		t.Fatalf("transfer movements=%d line=%s err=%v", movements, lineQty, err)
 	}
 	// O valor acompanha o material: 3 a R$ 4,50 saem da origem e entram na linha.
 	// Antes a entrada ia sem preço e os R$ 13,50 sumiam do inventário.
 	var origem, linha decimal.Decimal
-	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=1),0), COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=2),0)
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=`+fmt.Sprint(almoxOrigem)+`),0), COALESCE(SUM(total_cost) FILTER (WHERE warehouse_id=`+fmt.Sprint(almoxLinha)+`),0)
 		FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, child).Scan(&origem, &linha); err != nil ||
 		!origem.Equal(decimal.RequireFromString("31.5")) || !linha.Equal(decimal.RequireFromString("13.5")) {
 		t.Fatalf("valor na origem %s (esperado 31,5) e na linha %s (esperado 13,5): %v", origem, linha, err)
 	}
 	var warehouse int64
-	if err := pool.QueryRow(ctx, `SELECT warehouse_id FROM production_order_materials WHERE production_order_id=$1`, orderID).Scan(&warehouse); err != nil || warehouse != 2 {
+	if err := pool.QueryRow(ctx, `SELECT warehouse_id FROM production_order_materials WHERE production_order_id=$1`, orderID).Scan(&warehouse); err != nil || warehouse != almoxLinha {
 		t.Fatalf("material warehouse=%d err=%v", warehouse, err)
 	}
 }

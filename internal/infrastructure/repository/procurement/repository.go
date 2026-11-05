@@ -116,8 +116,8 @@ func (r *Repository) UpdateRecordStatus(ctx context.Context, id int64, status en
 	}
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE procurement_records
-		SET status=$2,
-		    closed_at = CASE WHEN $2 IN ('APPROVED','REJECTED','CLOSED','CANCELLED') THEN COALESCE(closed_at, NOW()) ELSE closed_at END,
+		SET status=$2::text::procurement_record_status,
+		    closed_at = CASE WHEN $2::text IN ('APPROVED','REJECTED','CLOSED','CANCELLED') THEN COALESCE(closed_at, NOW()) ELSE closed_at END,
 		    updated_at=NOW()
 		WHERE id=$1 AND enterprise_code=$3`, id, status, emp)
 	if err != nil {
@@ -310,7 +310,7 @@ func (r *Repository) LinkReceivingInspectionQualityReport(ctx context.Context, e
 			return candidate, nil
 		}
 	}
-	return nil, fmt.Errorf("laudo vinculado não pôde ser recuperado")
+	return nil, errorsuc.NewValidationError("laudo vinculado não pôde ser recuperado")
 }
 
 func (r *Repository) ListReceivingInspectionQualityReports(ctx context.Context, enterpriseID, orderID int64) ([]*entity.ReceivingInspectionQualityReport, error) {

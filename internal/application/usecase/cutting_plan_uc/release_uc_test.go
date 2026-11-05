@@ -16,6 +16,7 @@ import (
 
 type fakeCutRepo struct {
 	cprepo.CuttingPlanRepository
+	stock2   *fakeStockRepo
 	plan     *entity.CuttingPlan
 	settings *entity.CuttingSettings
 	patterns []*entity.CuttingPattern
@@ -57,7 +58,20 @@ func (f *fakeCutRepo) ListAvailableLotsFIFO(context.Context, int64, int64) ([]*e
 func (f *fakeCutRepo) GetRemnant(_ context.Context, id int64) (*entity.StockRemnant, error) {
 	return f.remnants[id], nil
 }
-func (f *fakeCutRepo) CommitRelease(_ context.Context, _ int64, consumed []int64, newR []*entity.StockRemnant, cons []*entity.CuttingPlanConsumption) error {
+func (f *fakeCutRepo) CommitRelease(ctx context.Context, _ int64, baixas []cprepo.BaixaDoCorte, consumed []int64, newR []*entity.StockRemnant, cons []*entity.CuttingPlanConsumption, ratear func() []*entity.CuttingPlanOrderCost) error {
+	for _, b := range baixas {
+		if _, err := f.stock2.CreateMovement(ctx, b.Movimento); err != nil {
+			return err
+		}
+		id := b.Movimento.ID
+		b.Consumo.MovementID = &id
+		b.Consumo.UnitCost = b.Movimento.UnitPrice.InexactFloat64()
+		b.Consumo.TotalCost = b.Movimento.TotalPrice.InexactFloat64()
+		if b.Retalho != nil {
+			b.Retalho.UnitCost = b.Consumo.UnitCost
+		}
+	}
+	f.orderCosts = ratear()
 	f.committedConsumed = consumed
 	f.committedNew = newR
 	f.committedConsumptions = cons
@@ -108,6 +122,7 @@ func TestRelease_FullBarAutomatic_PostsBaixa(t *testing.T) {
 		stock:    []*entity.CuttingStockPiece{{LengthMM: 6000, Quantity: 1}},
 	}
 	sr := &fakeStockRepo{}
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -136,6 +151,7 @@ func TestRelease_GeneratesReusableRemnant(t *testing.T) {
 		stock:    []*entity.CuttingStockPiece{{LengthMM: 6000, Quantity: 1}},
 	}
 	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(12)}}
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -164,6 +180,7 @@ func TestRelease_ConvertsLengthToStockUoM_Meters(t *testing.T) {
 		stock:    []*entity.CuttingStockPiece{{LengthMM: 6000, Quantity: 1}},
 	}
 	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(10)}} // 10 per metre
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	if _, err := uc.ReleasePlan(context.Background(), 1); err != nil {
@@ -191,6 +208,7 @@ func TestRelease_ReusesInventoryRemnant_NoBaixa(t *testing.T) {
 		remnants: map[int64]*entity.StockRemnant{50: {ID: 50, LengthMM: 2000, UnitCost: 10}},
 	}
 	sr := &fakeStockRepo{}
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -222,6 +240,7 @@ func TestRelease_2DAreaBaixaAndRemnant(t *testing.T) {
 		stock: []*entity.CuttingStockPiece{{WidthMM: 1000, HeightMM: 1000, Quantity: 1}},
 	}
 	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(5)}} // 5 per m²
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	res, err := uc.ReleasePlan(context.Background(), 1)
@@ -258,6 +277,7 @@ func TestRelease_AllocatesCostPerOrder(t *testing.T) {
 		},
 	}
 	sr := &fakeStockRepo{balance: &stockentity.StockBalance{AvgCost: decimal.NewFromFloat(10)}} // 1 bar → total cost 10
+	cr.stock2 = sr
 	uc := NewCuttingPlanUseCase(cr, sr, nil)
 
 	if _, err := uc.ReleasePlan(context.Background(), 1); err != nil {

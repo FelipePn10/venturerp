@@ -1061,11 +1061,11 @@ func (r *FinancialRepositoryPG) GetSaldoConta(ctx context.Context, contaID int64
 		`SELECT COALESCE(SUM(CASE WHEN tipo = 'ENTRADA' THEN valor ELSE -valor END), 0)
 		 FROM fluxo_caixa WHERE conta_bancaria_id = $1 AND conciliado = true`, contaID,
 	).Scan(&movSum)
-	if err == nil {
-		saldo = saldo.Add(movSum)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("somando os movimentos da conta %d: %w", contaID, err)
 	}
 
-	return saldo, nil
+	return saldo.Add(movSum), nil
 }
 
 func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (decimal.Decimal, error) {
@@ -1922,13 +1922,15 @@ func (r *FinancialRepositoryPG) GetHistoricoCustos(ctx context.Context, startDat
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT sb.item_code, COALESCE(CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
-		        sb.avg_cost AS custo_medio_atual, sb.last_cost AS custo_ultima_compra,
+		`SELECT sb.item_code, COALESCE(NULLIF(i.business_code,''), CAST(i.code AS text),'') AS codigo, COALESCE(i.pdm_description_technique,'') AS descricao,
+		        sb.custo_medio AS custo_medio_atual, sb.ultimo_custo AS custo_ultima_compra,
 		        COALESCE((SELECT MIN(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.enterprise_id = $3 AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_minimo,
 		        COALESCE((SELECT MAX(unit_price) FROM stock_movements sm WHERE sm.item_code = sb.item_code AND sm.enterprise_id = $3 AND sm.created_at BETWEEN $1 AND $2 AND sm.movement_type='IN'),0) AS custo_maximo
-		 FROM stock_balances sb
+		 FROM (SELECT b.item_code, b.enterprise_id,
+		              COALESCE(SUM(b.total_cost) / NULLIF(SUM(b.quantity) FILTER (WHERE b.quantity > 0), 0), MAX(b.avg_cost)) AS custo_medio,
+		              MAX(b.last_cost) AS ultimo_custo
+		         FROM stock_balances b WHERE b.enterprise_id = $3 GROUP BY b.item_code, b.enterprise_id) sb
 		 LEFT JOIN items i ON i.code = sb.item_code AND i.enterprise_id = sb.enterprise_id
-		 WHERE sb.enterprise_id = $3
 		 ORDER BY sb.item_code`, startDate, endDate, empresa)
 	if err != nil {
 		return nil, fmt.Errorf("historico custos: %w", err)

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/service"
@@ -22,7 +24,7 @@ func (uc *CuttingPlanUseCase) ExportMap(ctx context.Context, planID int64, forma
 		return nil, "", err
 	}
 	if len(patterns) == 0 {
-		return nil, "", fmt.Errorf("plan has no patterns; optimise it first")
+		return nil, "", errorsuc.NewValidationError("otimize o plano antes de exportar")
 	}
 	// For true-shape plans, attach each placement's real contour so the map draws the
 	// actual shapes instead of their bounding boxes.
@@ -114,14 +116,14 @@ func (uc *CuttingPlanUseCase) GetProgram(ctx context.Context, planID int64) (*re
 // and an injected machine repository.
 func (uc *CuttingPlanUseCase) ScheduleOnMachine(ctx context.Context, planID int64) (*response.CutScheduleResponse, error) {
 	if uc.machines == nil {
-		return nil, fmt.Errorf("a programação de máquinas não está configurada")
+		return nil, errorsuc.NewValidationError("a programação de máquinas não está configurada")
 	}
 	plan, err := uc.repo.GetPlanByID(ctx, planID)
 	if err != nil {
 		return nil, err
 	}
 	if plan.MachineCode == nil {
-		return nil, fmt.Errorf("o plano não tem máquina definida")
+		return nil, errorsuc.NewValidationError("o plano não tem máquina definida")
 	}
 	patterns, err := uc.repo.ListPatterns(ctx, planID)
 	if err != nil {

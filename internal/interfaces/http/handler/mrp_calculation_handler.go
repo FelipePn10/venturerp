@@ -55,12 +55,12 @@ func (h *MRPCalculationHandler) ConsultProfile(w http.ResponseWriter, r *http.Re
 	}
 	from, err := parseDate(r.URL.Query().Get("from"))
 	if err != nil {
-		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "o campo 'from' deve estar no formato AAAA-MM-DD")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "a data inicial está inválida: use o formato AAAA-MM-DD")
 		return
 	}
 	to, err := parseDate(r.URL.Query().Get("to"))
 	if err != nil {
-		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "o campo 'to' deve estar no formato AAAA-MM-DD")
+		security.RespondErrorCode(w, http.StatusBadRequest, "MRP_PERIODO_INVALIDO", "a data final está inválida: use o formato AAAA-MM-DD")
 		return
 	}
 	result, err := h.getProfileUC.Consult(r.Context(), itemCode, planCode, r.URL.Query().Get("position"), from, to)

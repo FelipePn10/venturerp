@@ -74,7 +74,7 @@ func formatOptionalID(v *int64) string {
 func (h *APSHandler) UpsertResourceGroup(w http.ResponseWriter, r *http.Request) {
 	var dto request.ResourceGroupDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondErrorCode(w, http.StatusBadRequest, "PARADA_CORPO_INVALIDO", "corpo da requisição inválido")
+		security.RespondErrorCode(w, http.StatusBadRequest, "PARADA_CORPO_INVALIDO", "não foi possível ler os dados enviados")
 		return
 	}
 	v, err := h.uc.UpsertResourceGroup(r.Context(), dto)
@@ -202,13 +202,13 @@ func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request
 	}
 	machineID, machineErr := strconv.ParseInt(r.URL.Query().Get("machine_id"), 10, 64)
 	if machineErr != nil || machineID <= 0 {
-		jsonError(w, http.StatusBadRequest, "o campo 'machine_id' deve ser um identificador positivo")
+		jsonError(w, http.StatusBadRequest, "escolha a máquina para consultar as paradas")
 		return
 	}
-	from, err1 := time.Parse(time.RFC3339, r.URL.Query().Get("from"))
-	to, err2 := time.Parse(time.RFC3339, r.URL.Query().Get("to"))
+	from, err1 := instanteDoFiltro(r.URL.Query().Get("from"), false)
+	to, err2 := instanteDoFiltro(r.URL.Query().Get("to"), true)
 	if err1 != nil || err2 != nil {
-		jsonError(w, http.StatusBadRequest, "os campos 'de' e 'até' devem estar no formato RFC3339 (AAAA-MM-DDTHH:MM:SSZ)")
+		jsonError(w, http.StatusBadRequest, "informe o período da consulta: as datas de início e de fim")
 		return
 	}
 	v, err := h.uc.ListMachineDowntimes(r.Context(), machineID, from, to)
@@ -218,6 +218,20 @@ func (h *APSHandler) ListMachineDowntimes(w http.ResponseWriter, r *http.Request
 	}
 	jsonResponse(w, 200, paginate(w, r, v))
 }
+
+// instanteDoFiltro aceita o instante completo ou só a data, como vem do campo de
+// data da tela; a data final vale até o fim do dia.
+func instanteDoFiltro(valor string, fimDoDia bool) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, valor); err == nil {
+		return t, nil
+	}
+	t, err := time.Parse("2006-01-02", valor)
+	if err == nil && fimDoDia {
+		t = t.AddDate(0, 0, 1).Add(-time.Second)
+	}
+	return t, err
+}
+
 func (h *APSHandler) DeleteMachineDowntime(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -654,7 +668,7 @@ func (h *APSHandler) UpsertSetupTransition(w http.ResponseWriter, r *http.Reques
 	defer r.Body.Close()
 	var dto request.SetupTransitionDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return
 	}
 	id, err := h.uc.UpsertSetupTransition(r.Context(), dto)
@@ -710,7 +724,7 @@ func (h *APSHandler) AssignSetupFamily(w http.ResponseWriter, r *http.Request) {
 		ItemCodes []int64 `json:"item_codes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&corpo); err != nil {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("não foi possível ler os dados enviados"))
 		return
 	}
 	n, err := h.uc.DefinirFamiliaDeSetup(r.Context(), corpo.Family, corpo.ItemCodes)
@@ -734,7 +748,7 @@ func (h *APSHandler) OpenMachineStop(w http.ResponseWriter, r *http.Request) {
 		Reason       string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&corpo); err != nil {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("não foi possível ler os dados enviados"))
 		return
 	}
 	v, err := h.uc.AbrirParada(r.Context(), corpo.MachineID, corpo.DowntimeType, corpo.Reason)

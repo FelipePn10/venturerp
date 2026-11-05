@@ -914,7 +914,21 @@ func (app *application) mount() chi.Router {
 		&purchase_order_uc.CancelPurchaseOrderUseCase{Repo: poRepo, Auth: authService},
 		// Inspection gate wires FINS0212: material with an active inspection route is
 		// received into the inspection warehouse and an inspection order is opened.
-		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: loteUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade},
+		&purchase_order_uc.ReceivePurchaseOrderUseCase{Repo: poRepo, StockRepo: stockRepository, Auth: authService, Inspection: loteUC, Tolerances: purchaseToleranceUC, Unidade: poUnidade,
+			Transacao: func(ctx context.Context, fn func(purchase_order_uc.RecebimentoRepos) error) error {
+				tx, err := app.db.Pool.Begin(ctx)
+				if err != nil {
+					return err
+				}
+				defer tx.Rollback(ctx)
+				if err := fn(purchase_order_uc.RecebimentoRepos{
+					Pedidos: purchaseOrderRepo.NewPurchaseOrderRepositoryTx(tx),
+					Estoque: stockRepo.NewStockRepositoryTx(tx),
+				}); err != nil {
+					return err
+				}
+				return tx.Commit(ctx)
+			}},
 		// Alçada de valores: procurementUC resolves the approval limit rule.
 		poApproveUC,
 		&purchase_order_uc.ConsultPurchaseOrdersUseCase{Reader: poRepo, Auth: authService},
@@ -1102,6 +1116,20 @@ func (app *application) mount() chi.Router {
 
 	// Production consumption/completion post stock movements automatically.
 	prodOrderAddConsumptionUC.StockRepo = stockRepository
+	prodOrderAddConsumptionUC.Transacao = func(ctx context.Context, fn func(productionOrderUc.ApontamentoRepos) error) error {
+		tx, err := app.db.Pool.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback(ctx)
+		if err := fn(productionOrderUc.ApontamentoRepos{
+			Ordens:  productionOrderRepo.NewProductionOrderRepositoryPGX(tx),
+			Estoque: stockRepo.NewStockRepositoryTx(tx),
+		}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 	prodOrderCompleteUC.StockRepo = stockRepository
 	prodOrderOperationalUC.Stock = stockRepository
 	mrpGetProfileUC.Stock = stockRepository
@@ -1127,7 +1155,9 @@ func (app *application) mount() chi.Router {
 	}
 	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
 		Ops: stockRepository, Auth: authService,
-		Compras: purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
+		Compras:    purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
+		Planejadas: plannedCreateUC,
+		Aprovacoes: aprovacaoUC,
 	}}
 	createStockMovementUC := &stock_uc.CreateStockMovementUseCase{Repo: stockRepository, Auth: authService, Tipos: stockRepository}
 	demandaUC.Saida = createStockMovementUC
@@ -1155,7 +1185,9 @@ func (app *application) mount() chi.Router {
 	createInventoryUC := &stock_uc.CreateInventoryUseCase{Repo: stockRepository, Auth: authService}
 	countInventoryUC := &stock_uc.CountInventoryItemUseCase{Repo: stockRepository, Auth: authService}
 	adjustInventoryUC := &stock_uc.AdjustInventoryUseCase{Repo: stockRepository, Auth: authService}
-	closeInventoryUC := &stock_uc.CloseInventoryUseCase{Repo: stockRepository, Auth: authService}
+	closeInventoryUC := &stock_uc.CloseInventoryUseCase{Repo: stockRepository, Auth: authService, Aprovacoes: aprovacaoUC}
+	aprovacaoUC.Registrar(aprovacao.AjusteInventario, &stock_uc.AprovacaoDeInventario{Repo: stockRepository, Auth: authService})
+	aprovacaoUC.Registrar(aprovacao.RequisicaoMaterial, &estoque_uc.AprovacaoDeRequisicao{Ops: stockRepository})
 	getInventoryUC := &stock_uc.GetInventoryUseCase{Repo: stockRepository, Auth: authService}
 	listInventoriesUC := &stock_uc.ListInventoriesUseCase{Repo: stockRepository, Auth: authService}
 	// lot traceability (rastreabilidade de lote/corrida + genealogia)
@@ -1506,16 +1538,6 @@ func (app *application) mount() chi.Router {
 		NotasUC:          &purchase_order_uc.NotasDoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Auth: authService},
 		Previsao:         poPrevisaoUC,
 	}
-
-	// NF-e purchase import
-	importNFeUC := &fiscalUC.ImportNFePurchaseUseCase{
-		FiscalRepo:        fiscalRepository,
-		StockRepo:         stockRepository,
-		Auth:              authService,
-		SupplierDefaults:  supplierUC,
-		PurchaseOrderRepo: poRepo,
-	}
-	importNFeHandler := handler.NewImportNFePurchaseHandler(importNFeUC)
 
 	// fiscal: CT-e SEFAZ authorization
 	cteAuthorizeHandler := handler.NewCTeAuthorizeHandler(
@@ -2482,12 +2504,41 @@ func (app *application) mount() chi.Router {
 			// estorno, kardex, posição em data, reposição, análise e requisição
 			// ao almoxarifado.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transfers", estoqueHandler.Transferir)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/scan", estoqueHandler.ResolverLeitura)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/transit", estoqueHandler.Transitos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transit", estoqueHandler.EnviarParaTransito)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/transit/{id}/settle", estoqueHandler.BaixarTransito)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/kardex/{itemCode}", estoqueHandler.Kardex)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/position", estoqueHandler.Posicao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replenishment", estoqueHandler.Reposicao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/replenishment/purchase-requisition", estoqueHandler.ReposicaoParaRequisicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/replenishment/generate", estoqueHandler.GerarReposicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replenishment/policies", estoqueHandler.PoliticasDeReposicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/replenishment/policies", estoqueHandler.SalvarPoliticaDeReposicao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/replenishment/policies/{id}", estoqueHandler.ExcluirPoliticaDeReposicao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/analysis", estoqueHandler.Analise)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/accuracy", estoqueHandler.Acuracidade)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/aging", estoqueHandler.IdadeDoEstoque)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/aging/lots", estoqueHandler.IdadeDosLotes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/kanban", estoqueHandler.CartoesKanban)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/kanban", estoqueHandler.SalvarCartaoKanban)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/kanban/{id}/trigger", estoqueHandler.AcionarCartaoKanban)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/replenishment/suggest-levels", estoqueHandler.NiveisPeloConsumo)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lots/expiring", estoqueHandler.LotesAVencer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/closings", estoqueHandler.Fechamentos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/closings/simulate", estoqueHandler.SimularFechamento)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/closings", estoqueHandler.FecharMes)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/closings/{id}/reopen", estoqueHandler.ReabrirMes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lot-statuses", estoqueHandler.SituacoesLote)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/lot-statuses", estoqueHandler.SalvarSituacaoLote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/discrepancy-reasons", estoqueHandler.MotivosDeDivergencia)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/discrepancy-reasons", estoqueHandler.SalvarMotivoDeDivergencia)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters", estoqueHandler.Parametros)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/parameters", estoqueHandler.SalvarParametros)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item-control/{itemCode}", estoqueHandler.ControleDoItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/item-control/{itemCode}", estoqueHandler.SalvarControleDoItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/inconsistencies", estoqueHandler.Inconsistencias)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/inconsistencies/fix", estoqueHandler.AcertarInconsistencia)
 			r.Route("/material-requisitions", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", estoqueHandler.ListarRequisicoes)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", estoqueHandler.CriarRequisicao)
@@ -2516,6 +2567,9 @@ func (app *application) mount() chi.Router {
 			r.Route("/waves", func(r chi.Router) {
 				// Onda de separação: várias necessidades numa caminhada só, com
 				// reserva por endereço para duas ondas não prometerem a mesma peça.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", stockHandler.ListarOndas)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/order-lines/{orderCode}", stockHandler.LinhasDePedidoParaOnda)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/load-lines/{loadCode}", estoqueHandler.LinhasDeCargaParaOnda)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", stockHandler.CriarOnda)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/confirm", stockHandler.ConfirmarOnda)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cancel", stockHandler.CancelarOnda)
@@ -2536,6 +2590,8 @@ func (app *application) mount() chi.Router {
 			})
 			r.Route("/lots", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/register", stockHandler.RegisterLot)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/status", estoqueHandler.MudarSituacaoDoLote)
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/implant", estoqueHandler.ImplantarLote)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", stockHandler.ListLotBalances)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/genealogy/{itemCode}/{lot}", stockHandler.GetLotGenealogy)
 			})
@@ -2544,6 +2600,7 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{itemCode}", stockHandler.GetConsumptionAverage)
 			})
 			r.Route("/reservations", func(r chi.Router) {
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", stockHandler.ListReservations)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", stockHandler.ReserveStock)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{id}/release", stockHandler.ReleaseReservation)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{id}/consume", stockHandler.ConsumeReservation)
@@ -2565,6 +2622,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", stockHandler.GetInventory)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/items", stockHandler.ListInventoryItems)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/close", stockHandler.CloseInventory)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/finish-count", stockHandler.FinishCount)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/recount", stockHandler.RecountInventory)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/count", stockHandler.CountInventoryItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adjust", stockHandler.AdjustInventoryItem)
 		})
@@ -3382,7 +3441,11 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequirePermission(httpmw.PermPlanningRun)).Post("/{code}/handle", mrpExcHandler.Handle)
 		})
 		r.Route("/api/fiscal/entries/import-nfe", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", importNFeHandler.Import)
+			// Desativada: não convertia unidade, não passava pela inspeção e não era
+			// transacional. A entrada de nota é pelas telas de NF-e de entrada.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", func(w http.ResponseWriter, _ *http.Request) {
+				security.RespondErrorCode(w, http.StatusGone, "ROTA_DESATIVADA", "esta importação foi desativada: lance a nota pela tela de NF-e de entrada")
+			})
 		})
 		r.Route("/api/location", func(r chi.Router) {
 			r.Route("/countries", func(r chi.Router) {

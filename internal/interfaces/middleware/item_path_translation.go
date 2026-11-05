@@ -43,7 +43,7 @@ func ItemPathTranslation(pool *pgxpool.Pool, secret string) func(http.Handler) h
 			}
 			if !nativeItemBusinessCodePath(r) {
 				if err := translateKnownItemURLPath(r, pool, enterpriseID); err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					recusarCodigoDeItem(w, err)
 					return
 				}
 			}

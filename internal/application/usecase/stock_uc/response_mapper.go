@@ -22,7 +22,12 @@ func toStockMovementResponse(m *entity.StockMovement) *response.StockMovementRes
 	if m == nil {
 		return nil
 	}
+	dataDoMovimento := ""
+	if m.MovementDate != nil {
+		dataDoMovimento = m.MovementDate.Format("2006-01-02")
+	}
 	return &response.StockMovementResponse{
+		MovementDate:   dataDoMovimento,
 		ID:             m.ID,
 		ItemCode:       m.ItemCode,
 		Mask:           m.Mask,
@@ -132,6 +137,13 @@ func toPhysicalInventoryResponse(i *entity.PhysicalInventory) *response.Physical
 		CreatedBy:    i.CreatedBy,
 
 		AdjustmentValue: numPtr(i.AdjustmentValue),
+		BlocksMovements: i.BlocksMovements,
+		BlindCount:      i.BlindCount,
+		Partial:         i.Partial,
+		ApprovalMode:    i.ApprovalMode,
+		TolerancePct:    numPtr(i.TolerancePct),
+		ToleranceValue:  numPtr(i.ToleranceValue),
+		CloseReason:     i.CloseReason,
 	}
 }
 
@@ -167,6 +179,9 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		PreviousCountedQty:   numPtr(it.PreviousCountedQty),
 		AdjustmentMovementID: it.AdjustmentMovementID,
 		CreatedAt:            it.CreatedAt,
+		Address:              it.Address,
+		Lot:                  it.Lot,
+		NeedsRecount:         it.NeedsRecount,
 	}
 }
 

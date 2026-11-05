@@ -25,6 +25,17 @@ type coproductReader interface {
 	GetAllDirectChildren(ctx context.Context, parentCode int64) ([]*structentity.ItemStructure, error)
 }
 
+// baixasDaOrdemRepository diz o que a ordem já baixou, para não baixar de novo.
+type baixasDaOrdemRepository interface {
+	BaixasDaOrdem(ctx context.Context, ordem int64) (map[int64]decimal.Decimal, decimal.Decimal, decimal.Decimal, error)
+}
+
+// quantidadeAindaABaixar é o que falta sair do componente: o que a produção
+// acumulada exige menos o que já saiu para a ordem.
+func quantidadeAindaABaixar(exigido, baixado decimal.Decimal) decimal.Decimal {
+	return decimal.Max(exigido.Sub(baixado), decimal.Zero)
+}
+
 type atomicDeliveryRepository interface {
 	RegisterDeliveryWithMovements(context.Context, *entity.ProductionDelivery, []*stockentity.StockMovement) (*entity.ProductionOrder, error)
 }
@@ -47,6 +58,11 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 ) (*entity.ProductionOrder, error) {
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
+	}
+	// Quem responde pelo movimento é quem concluiu, não quem abriu a ordem.
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
 	}
 	if dto.ID == 0 {
 		return nil, errorsuc.NewValidationError("informe o identificador")
@@ -130,7 +146,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 	endDate := datetime.ParseDateOrDefault(dto.EndDate, time.Now())
 	delivery := &entity.ProductionDelivery{ProductionOrderID: dto.ID, Quantity: qty, IdempotencyKey: key,
 		MovementClass: movementClass, WarehouseID: *warehouseID, Lot: dto.Lot, IsFinal: dto.Final,
-		DeliveredAt: endDate, CreatedBy: order.CreatedBy, Lines: lines,
+		DeliveredAt: endDate, CreatedBy: ator, Lines: lines,
 		ItemCode: order.ItemCode, Mask: mascaraDaOrdem(order.Mask), NumerosSerie: dto.NumerosSerie}
 	var movements []*stockentity.StockMovement
 	if uc.StockRepo != nil {
@@ -153,18 +169,30 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			beneficiamento := structentity.TemMaterialDoCliente(children)
 			refType := stockentity.ReferenceTypeProductionOrder
 			refCode := order.ID
+			baixado := map[int64]decimal.Decimal{}
+			entregueAntes := decimal.Zero
+			conheceBaixas := false
+			if b, ok := uc.Repo.(baixasDaOrdemRepository); ok {
+				if baixado, entregueAntes, _, err = b.BaixasDaOrdem(ctx, order.ID); err != nil {
+					return nil, err
+				}
+				conheceBaixas = true
+			}
 			appendFinishedMovement := func(class string, movementQty decimal.Decimal) {
 				mov := &stockentity.StockMovement{
-					ItemCode:      order.ItemCode,
-					Mask:          order.Mask,
-					WarehouseID:   *warehouseID,
-					MovementType:  class,
-					Quantity:      movementQty,
-					ReferenceType: &refType,
-					ReferenceCode: &refCode,
-					Lot:           dto.Lot,
-					Notes:         stringPtr(class),
-					CreatedBy:     order.CreatedBy,
+					ItemCode:     order.ItemCode,
+					Mask:         order.Mask,
+					WarehouseID:  *warehouseID,
+					MovementType: class,
+					Quantity:     movementQty,
+					// O repositório põe o custo da ordem na transação da entrega; sem custo,
+					// entra pelo médio: a zero, diluía o saldo.
+					ValorizarPelaMedia: true,
+					ReferenceType:      &refType,
+					ReferenceCode:      &refCode,
+					Lot:                dto.Lot,
+					Notes:              stringPtr(class),
+					CreatedBy:          ator,
 				}
 				movements = append(movements, mov)
 			}
@@ -189,17 +217,30 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				}
 				if !child.IsCoproduct || !child.Quantity.IsPositive() {
 					automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
-					if infoErr != nil || !automatic || child.IsCoproduct {
+					if infoErr != nil {
+						return nil, fmt.Errorf("lendo a baixa automática do componente: %w", infoErr)
+					}
+					if !automatic || child.IsCoproduct {
 						continue
 					}
 					componentQty := child.Quantity
 					if !child.IsFixedQty {
 						componentQty = componentQty.Mul(qty)
+						if conheceBaixas {
+							componentQty = child.Quantity.Mul(entregueAntes.Add(qty))
+						}
 					}
 					componentQty = structentity.QuantidadeComPerdaDecimal(componentQty, child.LossPercentage, structentity.FormulaPerdaPadrao)
+					if conheceBaixas {
+						// Já saiu pelo apontamento ou por entrega anterior: não sai de novo.
+						componentQty = quantidadeAindaABaixar(componentQty, baixado[child.ChildCode])
+						if !componentQty.IsPositive() {
+							continue
+						}
+					}
 					rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
 						MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
-						ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: order.CreatedBy}
+						ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: ator}
 					movements = append(movements, rep)
 					continue
 				}
@@ -210,7 +251,10 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 					Quantity:      child.Quantity.Mul(qty),
 					ReferenceType: &refType,
 					ReferenceCode: &refCode,
-					CreatedBy:     order.CreatedBy,
+					CreatedBy:     ator,
+					// Co-produto não tem preço: entra pelo médio do item. A custo
+					// zero ele diluía o valor de todo o saldo.
+					ValorizarPelaMedia: true,
 				}
 				movements = append(movements, coMov)
 			}

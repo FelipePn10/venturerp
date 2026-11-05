@@ -126,7 +126,7 @@ func (r *IndustrialCalendarRepositorySQLC) GetNextWorkday(
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return time.Time{}, fmt.Errorf("nenhum próximo dia útil encontrado")
+			return time.Time{}, errorsuc.NewValidationError("nenhum próximo dia útil encontrado")
 		}
 		return time.Time{}, fmt.Errorf("fetching next workday: %w", err)
 	}

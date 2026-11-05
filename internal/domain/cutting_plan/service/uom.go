@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 )
@@ -22,7 +23,7 @@ import (
 // truth for how a cut translates into a stock baixa.
 func StockQtyForLength(uom types.TypeUnitOfMeasurementItem, lengthMM, factorPerMeter float64) (float64, error) {
 	if lengthMM < 0 {
-		return 0, fmt.Errorf("o comprimento não pode ser negativo")
+		return 0, domainerr.NewValidation("o comprimento não pode ser negativo")
 	}
 	meters := lengthMM / 1000.0
 
@@ -41,7 +42,7 @@ func StockQtyForLength(uom types.TypeUnitOfMeasurementItem, lengthMM, factorPerM
 		return lengthMM * 1000.0, nil
 	case types.KG, types.TONELADA, types.M2, types.M3:
 		if factorPerMeter <= 0 {
-			return 0, fmt.Errorf("stock UoM %s needs a conversion factor (stock qty per linear metre, e.g. kg/m, m²/m, m³/m)", uom)
+			return 0, domainerr.NewValidation(fmt.Sprintf("a unidade de estoque %s precisa do fator de conversão por metro linear (por exemplo, kg por metro)", uom))
 		}
 		return meters * factorPerMeter, nil
 	default:
@@ -63,7 +64,7 @@ func StockQtyForLength(uom types.TypeUnitOfMeasurementItem, lengthMM, factorPerM
 //   - Other units fall back to a piece unless an explicit factor is given.
 func StockQtyForArea(uom types.TypeUnitOfMeasurementItem, widthMM, heightMM, factorPerM2 float64) (float64, error) {
 	if widthMM < 0 || heightMM < 0 {
-		return 0, fmt.Errorf("as dimensões não podem ser negativas")
+		return 0, domainerr.NewValidation("as dimensões não podem ser negativas")
 	}
 	areaM2 := (widthMM / 1000.0) * (heightMM / 1000.0)
 
@@ -74,7 +75,7 @@ func StockQtyForArea(uom types.TypeUnitOfMeasurementItem, widthMM, heightMM, fac
 		return areaM2, nil
 	case types.M3, types.KG, types.TONELADA:
 		if factorPerM2 <= 0 {
-			return 0, fmt.Errorf("stock UoM %s needs a conversion factor (stock qty per m², e.g. thickness m³/m², weight kg/m²)", uom)
+			return 0, domainerr.NewValidation(fmt.Sprintf("a unidade de estoque %s precisa do fator de conversão por metro linear (por exemplo, kg por metro)", uom))
 		}
 		return areaM2 * factorPerM2, nil
 	default:

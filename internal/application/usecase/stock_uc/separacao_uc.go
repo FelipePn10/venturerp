@@ -60,7 +60,7 @@ func (uc *SeparacaoUseCase) TransferirEndereco(ctx context.Context, dto request.
 	movimento := &entity.StockMovement{
 		ItemCode: dto.ItemCode, Mask: dto.Mask, WarehouseID: dto.WarehouseID,
 		MovementType: entity.MovementTypeAddressTransfer, Quantity: dto.Quantity,
-		Lot: dto.Lot, Notes: dto.Notes, CreatedBy: usuario,
+		Lot: dto.Lot, Notes: dto.Notes, CreatedBy: usuario, Address: &origem, ExigirRastreio: true,
 	}
 	return uc.Repo.TransferirEntreEnderecos(ctx, movimento, origem, destino)
 }
@@ -94,9 +94,6 @@ func (uc *SeparacaoUseCase) CriarOnda(ctx context.Context, dto request.OndaDeSep
 	if !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if dto.Code <= 0 {
-		return nil, errorsuc.NewValidationError("informe o número da onda")
-	}
 	if dto.WarehouseID <= 0 {
 		return nil, errorsuc.NewValidationError("informe o almoxarifado da onda")
 	}
@@ -105,7 +102,7 @@ func (uc *SeparacaoUseCase) CriarOnda(ctx context.Context, dto request.OndaDeSep
 	}
 	necessidades := make([]entity.NecessidadeOnda, 0, len(dto.Lines))
 	for _, l := range dto.Lines {
-		if l.Quantity <= 0 {
+		if !l.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError("toda necessidade da onda precisa de quantidade maior que zero")
 		}
 		necessidades = append(necessidades, entity.NecessidadeOnda{
@@ -120,8 +117,27 @@ func (uc *SeparacaoUseCase) CriarOnda(ctx context.Context, dto request.OndaDeSep
 	return uc.Repo.CriarOndaDeSeparacao(ctx, dto.Code, dto.WarehouseID, dto.Rule, necessidades, ator)
 }
 
+// ListarOndas devolve as ondas da empresa.
+func (uc *SeparacaoUseCase) ListarOndas(ctx context.Context, status string) ([]*entity.OndaDeSeparacao, error) {
+	if !uc.Auth.CanGetStockBalance(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	return uc.Repo.ListarOndas(ctx, status)
+}
+
+// LinhasDePedidoParaOnda diz o que falta separar do pedido no almoxarifado.
+func (uc *SeparacaoUseCase) LinhasDePedidoParaOnda(ctx context.Context, pedido, almox int64) ([]entity.LinhaPedidoOnda, error) {
+	if !uc.Auth.CanGetStockBalance(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if pedido <= 0 || almox <= 0 {
+		return nil, errorsuc.NewValidationError("informe o pedido e o almoxarifado")
+	}
+	return uc.Repo.LinhasDePedidoParaOnda(ctx, pedido, almox)
+}
+
 // ConfirmarOnda baixa o estoque separado e libera as reservas.
-func (uc *SeparacaoUseCase) ConfirmarOnda(ctx context.Context, codigo int64) (*entity.OndaDeSeparacao, error) {
+func (uc *SeparacaoUseCase) ConfirmarOnda(ctx context.Context, codigo int64, dto request.ConfirmarOndaDTO) (*entity.OndaDeSeparacao, error) {
 	if !uc.Auth.CanCreateStockMovement(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
@@ -129,7 +145,11 @@ func (uc *SeparacaoUseCase) ConfirmarOnda(ctx context.Context, codigo int64) (*e
 	if err != nil {
 		return nil, err
 	}
-	return uc.Repo.ConfirmarOndaDeSeparacao(ctx, codigo, ator)
+	separado := make(map[int64]decimal.Decimal, len(dto.Lines))
+	for _, l := range dto.Lines {
+		separado[l.ID] = l.PickedQty
+	}
+	return uc.Repo.ConfirmarOndaDeSeparacao(ctx, codigo, separado, ator)
 }
 
 // CancelarOnda devolve o reservado sem mexer no estoque físico.

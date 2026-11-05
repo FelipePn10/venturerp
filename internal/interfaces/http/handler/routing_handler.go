@@ -181,7 +181,7 @@ func (h *RoutingHandler) RouteReadiness(w http.ResponseWriter, r *http.Request) 
 func (h *RoutingHandler) ListRoutesByItem(w http.ResponseWriter, r *http.Request) {
 	itemCode := request.TextCode(r.URL.Query().Get("item_code"))
 	if itemCode.String() == "" {
-		jsonError(w, http.StatusBadRequest, "item_code é obrigatório")
+		jsonError(w, http.StatusBadRequest, "informe o item")
 		return
 	}
 	listar := h.routeUC.ListByItem

@@ -33,6 +33,12 @@ func novoAmbienteEstoque(t *testing.T) ambienteEstoque {
 	ator := testutil.Actor(t, pool)
 	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
 		for _, q := range []string{
+			`DELETE FROM stock_transit_shipments WHERE enterprise_id=$1`,
+			`DELETE FROM stock_replenishment_policies WHERE enterprise_id=$1`,
+			`DELETE FROM kanban_cards WHERE enterprise_id=$1`,
+			`DELETE FROM stock_parameters WHERE enterprise_id=$1`,
+			`DELETE FROM stock_reservations WHERE enterprise_id=$1`,
+			`DELETE FROM item_governanca WHERE enterprise_id=$1`,
 			`DELETE FROM material_requisition_items WHERE requisition_id IN (SELECT id FROM material_requisitions WHERE enterprise_id=$1)`,
 			`DELETE FROM material_requisitions WHERE enterprise_id=$1`,
 			`DELETE FROM item_unit_conversions WHERE item_code IN (SELECT code FROM items WHERE enterprise_id=$1)`,
@@ -233,7 +239,7 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 			t.Fatalf("item fora da foto: diferença 4: %+v", it)
 		}
 	}
-	res, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false)
+	res, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +258,7 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 		e.empresa, inv.Code).Scan(&refs); err != nil || refs != 2 {
 		t.Fatalf("os dois ajustes têm de referenciar o inventário: %d %v", refs, err)
 	}
-	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false); !ehValidacao(err) {
+	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false, ""); !ehValidacao(err) {
 		t.Fatalf("fechar de novo deveria ser recusado: %v", err)
 	}
 }
@@ -273,10 +279,10 @@ func TestIntegration_InventarioZeraNaoContados(t *testing.T) {
 	if len(itens) != 1 || itens[0].ItemCode != e.item {
 		t.Fatalf("inventário parcial só com o item pedido: %+v", itens)
 	}
-	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false); !ehValidacao(err) || !strings.Contains(err.Error(), "sem contagem") {
+	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false, ""); !ehValidacao(err) || !strings.Contains(err.Error(), "sem contagem") {
 		t.Fatalf("item sem contagem deveria impedir o fechamento: %v", err)
 	}
-	res, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, true)
+	res, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, true, "")
 	if err != nil || res.NaoContadosZerados != 1 {
 		t.Fatalf("zerando os não contados: %+v %v", res, err)
 	}

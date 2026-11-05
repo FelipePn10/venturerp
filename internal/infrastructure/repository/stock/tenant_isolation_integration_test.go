@@ -34,29 +34,44 @@ func TestStockMovementAndBalanceAreTenantIsolated(t *testing.T) {
 	ctx1 := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: first})
 	ctx2 := context.WithValue(base, contextkey.UserKey, &security.AuthUser{EnterpriseID: second})
 	repo := stockrepo.NewStockRepositorySQLC(pool)
-	item := testutil.UniqueCode()
-	uid := uuid.New()
-	for _, entry := range []struct {
-		ctx context.Context
-		qty string
-	}{{ctx1, "1.123456"}, {ctx2, "9.654321"}} {
-		q := decimal.RequireFromString(entry.qty)
-		_, err := repo.CreateMovement(entry.ctx, &stockentity.StockMovement{ItemCode: item, WarehouseID: 1, MovementType: "IN", Quantity: q, CreatedBy: uid})
-		if err != nil {
+	ator := testutil.Actor(t, pool)
+	type dono struct {
+		ctx         context.Context
+		empresa     int64
+		item, almox int64
+		qty         string
+	}
+	donos := []*dono{{ctx: ctx1, empresa: first, qty: "1.123456"}, {ctx: ctx2, empresa: second, qty: "9.654321"}}
+	for _, d := range donos {
+		d.item = testutil.UniqueCode()
+		if err := pool.QueryRow(base,
+			`INSERT INTO warehouse(code,description,created_by,location,type,disposition,reservations_allowed,enterprise_id)
+			 VALUES($1,$1,$2,'INTERNO','NORMAL',true,true,$3) RETURNING id`, "TEN-"+uuid.NewString()[:8], ator, d.empresa).Scan(&d.almox); err != nil {
+			t.Fatal(err)
+		}
+		testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$2,$3,$4)`, d.item, d.almox, ator, d.empresa)
+		defer testutil.Exec(t, pool, "DELETE FROM warehouse WHERE id=$1", d.almox)
+		defer testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", d.item)
+		defer testutil.Exec(t, pool, "DELETE FROM stock_balances WHERE item_code=$1", d.item)
+		defer testutil.Exec(t, pool, "DELETE FROM stock_movements WHERE item_code=$1", d.item)
+		if _, err := repo.CreateMovement(d.ctx, &stockentity.StockMovement{ItemCode: d.item, WarehouseID: d.almox, MovementType: "IN", Quantity: decimal.RequireFromString(d.qty), CreatedBy: ator}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	defer testutil.Exec(t, pool, "DELETE FROM stock_movements WHERE item_code=$1", item)
-	defer testutil.Exec(t, pool, "DELETE FROM stock_balances WHERE item_code=$1", item)
-	b1, err := repo.GetBalance(ctx1, item, "", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b2, err := repo.GetBalance(ctx2, item, "", 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b1.Quantity.StringFixed(6) != "1.123456" || b2.Quantity.StringFixed(6) != "9.654321" {
-		t.Fatalf("tenant balances leaked or lost precision: %v / %v", b1.Quantity, b2.Quantity)
+	for i, d := range donos {
+		b, err := repo.GetBalance(d.ctx, d.item, "", d.almox)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if b.Quantity.StringFixed(6) != d.qty {
+			t.Fatalf("saldo perdeu precisão: %v", b.Quantity)
+		}
+		outra := donos[1-i]
+		if _, err := repo.GetBalance(d.ctx, outra.item, "", outra.almox); err == nil {
+			t.Fatal("empresa leu o saldo da outra")
+		}
+		if _, err := repo.CreateMovement(d.ctx, &stockentity.StockMovement{ItemCode: d.item, WarehouseID: outra.almox, MovementType: "IN", Quantity: decimal.NewFromInt(1), CreatedBy: ator}); err == nil {
+			t.Fatal("movimento entrou no almoxarifado da outra empresa")
+		}
 	}
 }

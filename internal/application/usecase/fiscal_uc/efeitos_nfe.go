@@ -207,6 +207,34 @@ func (e *EfeitosNFe) depositos(ctx context.Context, exit *entity.FiscalExit, ite
 	return porItem, nil
 }
 
+// mascaraDaLinha: a da própria linha; nota antiga vai pela do pedido.
+func mascaraDaLinha(it *entity.FiscalExitItem, mascaras map[int64]string) string {
+	if it.Mask != "" {
+		return it.Mask
+	}
+	return mascaras[*it.ItemCode]
+}
+
+// mascarasDoPedido: a máscara de cada item, que só o pedido guarda — a linha da
+// nota não tem. Sem ela o item configurado baixava de um saldo sem máscara que
+// não existe, e a nota parava em "saldo insuficiente" com o produto na prateleira.
+func (e *EfeitosNFe) mascarasDoPedido(ctx context.Context, exit *entity.FiscalExit) (map[int64]string, error) {
+	out := map[int64]string{}
+	if e.Orders == nil || exit.SalesOrderCode == nil {
+		return out, nil
+	}
+	linhas, err := e.Orders.ListItems(ctx, *exit.SalesOrderCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os itens do pedido da nota: %w", err)
+	}
+	for _, l := range linhas {
+		if l.Mask != "" {
+			out[l.ItemCode] = l.Mask
+		}
+	}
+	return out, nil
+}
+
 func descricaoItem(it *entity.FiscalExitItem) string {
 	if it.Description != nil && *it.Description != "" {
 		return *it.Description
@@ -235,11 +263,15 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 	// Tipo de nota que não mexe no estoque não pede depósito nem conversão de unidade.
 	var depositos map[int64]int64
 	var quantidades map[int64]decimal.Decimal
+	var mascaras map[int64]string
 	if efeitos.MovimentaEstoque {
 		if depositos, err = e.depositos(ctx, exit, items); err != nil {
 			return err
 		}
 		if quantidades, err = e.quantidadesEmEstoque(ctx, items); err != nil {
+			return err
+		}
+		if mascaras, err = e.mascarasDoPedido(ctx, exit); err != nil {
 			return err
 		}
 	}
@@ -266,7 +298,7 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 			}
 		}
 		if efeitos.MovimentaEstoque {
-			if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, userID); err != nil {
+			if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, mascaras, userID); err != nil {
 				return err
 			}
 		}
@@ -420,12 +452,57 @@ func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.F
 	return out, nil
 }
 
+// saidasDaSeparacao reparte a saída pelo que a onda do pedido separou: a nota leva
+// o lote e o endereço pegos, não os que a baixa automática escolheria. Linha com lote
+// ou endereço digitado na nota fica como está.
+func saidasDaSeparacao(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, it *entity.FiscalExitItem, base stockentity.StockMovement) ([]stockentity.StockMovement, error) {
+	leitor, ok := estoque.(interface {
+		SeparadoParaFaturar(ctx context.Context, pedido, item int64, mask string, almox int64) ([]stockentity.SeparadoDaOnda, error)
+	})
+	if !ok || exit.SalesOrderCode == nil || it.Lot != nil || it.Address != nil {
+		return []stockentity.StockMovement{base}, nil
+	}
+	separado, err := leitor.SeparadoParaFaturar(ctx, *exit.SalesOrderCode, base.ItemCode, base.Mask, base.WarehouseID)
+	if err != nil {
+		return nil, err
+	}
+	saidas := []stockentity.StockMovement{}
+	resta := base.Quantity
+	for _, s := range separado {
+		if !resta.IsPositive() {
+			break
+		}
+		q := decimal.Min(resta, s.Quantidade)
+		m := base
+		m.Quantity = q
+		linha := s.Linha
+		m.LinhaDaOnda = &linha
+		if s.Lote != "" {
+			lote := s.Lote
+			m.Lot = &lote
+		}
+		if s.Endereco != "" {
+			endereco := s.Endereco
+			m.Address = &endereco
+		}
+		saidas = append(saidas, m)
+		resta = resta.Sub(q)
+	}
+	if resta.IsPositive() {
+		m := base
+		m.Quantity = resta
+		saidas = append(saidas, m)
+	}
+	return saidas, nil
+}
+
 // baixarEstoque lança a saída de cada item no depósito resolvido e consome as
 // reservas do pedido.
-func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, quantidades map[int64]decimal.Decimal, userID uuid.UUID) error {
+func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, items []*entity.FiscalExitItem, depositos map[int64]int64, quantidades map[int64]decimal.Decimal, mascaras map[int64]string, userID uuid.UUID) error {
 	if estoque == nil {
 		return nil
 	}
+	faturado := map[int64]decimal.Decimal{}
 	for _, it := range items {
 		if it.ItemCode == nil {
 			continue
@@ -436,19 +513,29 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 		if q, ok := quantidades[it.ID]; ok {
 			qtd = q
 		}
-		mov := &stockentity.StockMovement{
+		faturado[*it.ItemCode] = faturado[*it.ItemCode].Add(qtd)
+		base := stockentity.StockMovement{
 			ItemCode:     *it.ItemCode,
+			Mask:         mascaraDaLinha(it, mascaras),
 			WarehouseID:  depositos[*it.ItemCode],
 			MovementType: stockentity.MovementTypeOut,
 			Quantity:     qtd,
+			Lot:          it.Lot,
+			Address:      it.Address,
 			// Sem preço: a saída é valorizada pelo custo médio (é o custo que sai
 			// do estoque e o CMV da venda).
 			ReferenceType: &refType,
 			ReferenceCode: &refCode,
 			CreatedBy:     userID,
 		}
-		if _, err := estoque.CreateMovement(ctx, mov); err != nil {
-			return fmt.Errorf("baixando o estoque do item %s: %w", descricaoItem(it), err)
+		saidas, err := saidasDaSeparacao(ctx, estoque, exit, it, base)
+		if err != nil {
+			return err
+		}
+		for i := range saidas {
+			if _, err := estoque.CreateMovement(ctx, &saidas[i]); err != nil {
+				return fmt.Errorf("baixando o estoque do item %s: %w", descricaoItem(it), err)
+			}
 		}
 	}
 	if exit.SalesOrderCode != nil {
@@ -457,11 +544,16 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 			return fmt.Errorf("lendo as reservas do pedido: %w", err)
 		}
 		for _, r := range reservas {
-			if r.ReferenceType == stockentity.ReferenceTypeSalesOrder && r.ReferenceCode == *exit.SalesOrderCode {
-				if err := estoque.ConsumeReservation(ctx, r.ID); err != nil {
-					return fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
-				}
+			if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != *exit.SalesOrderCode {
+				continue
 			}
+			// Consome só o que esta nota faturou: a nota parcial soltava a reserva
+			// inteira, e o saldo do pedido ficava livre para outro cliente.
+			consumido, err := estoque.ConsumirReservaParcial(ctx, r.ID, faturado[r.ItemCode])
+			if err != nil {
+				return fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
+			}
+			faturado[r.ItemCode] = faturado[r.ItemCode].Sub(consumido)
 		}
 	}
 	return nil

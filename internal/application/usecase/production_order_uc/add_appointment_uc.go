@@ -163,6 +163,15 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 
 	refType := stockentity.ReferenceTypeProductionOrder
 	refCode := dto.ProductionOrderID
+	baixado := map[int64]decimal.Decimal{}
+	apontadoAntes := decimal.Zero
+	conheceBaixas := false
+	if b, ok := uc.Repo.(baixasDaOrdemRepository); ok {
+		if baixado, _, apontadoAntes, err = b.BaixasDaOrdem(ctx, dto.ProductionOrderID); err != nil {
+			return nil, err
+		}
+		conheceBaixas = true
+	}
 	for _, c := range children {
 		// A fórmula de perdas é a mesma do MRP (structentity.QuantidadeComPerda);
 		// aqui usávamos (1 + perda/100) e o consumo divergia do planejado.
@@ -171,6 +180,14 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 			base = decimal.NewFromInt(1)
 		}
 		consumed := structentity.QuantidadeComPerdaDecimal(base.Mul(c.qty), c.loss, structentity.FormulaPerdaPadrao)
+		if conheceBaixas {
+			acumulado := apontadoAntes.Add(dto.ProducedQty)
+			if c.fixed {
+				acumulado = decimal.NewFromInt(1)
+			}
+			exigido := structentity.QuantidadeComPerdaDecimal(acumulado.Mul(c.qty), c.loss, structentity.FormulaPerdaPadrao)
+			consumed = decimal.Min(consumed, quantidadeAindaABaixar(exigido, baixado[c.code]))
+		}
 		if !consumed.IsPositive() {
 			continue
 		}

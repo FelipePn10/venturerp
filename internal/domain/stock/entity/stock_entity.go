@@ -43,9 +43,12 @@ const (
 	ReferenceTypeTransfer        = "TRANSFERENCIA"
 	ReferenceTypeReversal        = "ESTORNO"
 	ReferenceTypeRequisition     = "REQUISICAO_MATERIAL"
+	ReferenceTypeTransit         = "TRANSITO"
 	ReferenceTypeManual          = "MANUAL"
 	// Saída para a finalidade de uma demanda independente (VPLA0102).
 	ReferenceTypeIndependentDemand = "DEMANDA_INDEPENDENTE"
+	// Saldo que entrou sem lote e recebeu um depois.
+	ReferenceTypeLotImplant = "IMPLANTACAO_LOTE"
 )
 
 // SignedQuantity returns the delta that a movement of the given type applies to
@@ -127,6 +130,18 @@ type StockMovement struct {
 	// valor do próprio movimento, não o custo médio. Sem isto, cancelar uma nota
 	// deixava o custo médio inflado pelo preço da nota que deixou de existir.
 	SaidaPeloPreco bool
+	// ExigirRastreio (não é gravado): lançamento digitado por alguém, que precisa
+	// informar o lote e o endereço do item que controla. Os processos automáticos
+	// (NF-e, apontamento) seguem pela baixa automática.
+	// LinhaDaOnda é a linha da separação que esta saída da nota fiscal leva.
+	LinhaDaOnda    *int64
+	ExigirRastreio bool
+	// MovementDate é a data do documento; nil = hoje. Só vale em período aberto.
+	MovementDate *time.Time
+	// DataAjustavel (não é gravado): com a data num período fechado, o movimento
+	// entra hoje em vez de ser recusado. É para documento que já existe, como a
+	// nota de entrada do mês passado (o SAP faz o mesmo no período corrente).
+	DataAjustavel bool
 }
 
 type StockReservation struct {
@@ -184,6 +199,19 @@ type PhysicalInventory struct {
 	ItemCodes       []int64
 	ClosedBy        *uuid.UUID
 	AdjustmentValue *decimal.Decimal
+	// BlocksMovements: nenhuma movimentação dos itens até o inventário terminar.
+	BlocksMovements bool
+	// BlindCount: quem conta não vê o saldo do sistema enquanto a contagem durar.
+	BlindCount bool
+	// Partial: só os itens escolhidos, e não o almoxarifado inteiro.
+	Partial bool
+	// ApprovalMode, ToleranceValue e TolerancePct decidem quando o ajuste passa
+	// pela alçada (motor de aprovação, tipo AJUSTE_INVENTARIO).
+	ApprovalMode   string
+	TolerancePct   *decimal.Decimal
+	ToleranceValue *decimal.Decimal
+	CloseReason    *string
+	ZeroUncounted  bool
 }
 
 // ResultadoFechamentoInventario é o que o fechamento lançou.
@@ -193,6 +221,8 @@ type ResultadoFechamentoInventario struct {
 	Faltas             decimal.Decimal // quantidade somada das diferenças negativas (em módulo)
 	ValorAjustado      decimal.Decimal // valor líquido dos ajustes (sobra − falta, ao custo médio)
 	NaoContadosZerados int
+	// AguardandoAprovacao: nada foi lançado, o ajuste foi para a alçada.
+	AguardandoAprovacao bool
 }
 
 type PhysicalInventoryItem struct {
@@ -216,4 +246,17 @@ type PhysicalInventoryItem struct {
 	CountNumber          int
 	PreviousCountedQty   *decimal.Decimal
 	AdjustmentMovementID *int64
+	// Address e Lot: a linha é item + endereço + lote. Vazio = sem endereço/lote.
+	Address      string
+	Lot          string
+	NeedsRecount bool
+}
+
+// FiltroMovimentos é a consulta paginada de movimentos, dos mais recentes aos
+// mais antigos. Limite zero usa o padrão do repositório.
+type FiltroMovimentos struct {
+	Almoxarifado *int64
+	De, Ate      *time.Time
+	Limite       int
+	Deslocamento int
 }
