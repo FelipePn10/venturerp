@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.10.11] — 2026-11-05
+
+- fix(item): linha de documento deixa de ser traduzida como item (`a952f1f0`)
+- fix(item): código lido pela query ou pelo caminho não troca mais o item (`04265b7f`)
+
 ## [v1.10.10] — 2026-11-04
 
 - refactor(fiscal): SPED, financeiro e contabilidade em decimal (etapa 5) (`72f52f8a`)
