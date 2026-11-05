@@ -23,11 +23,17 @@ import (
 var itemReferenceKeys = map[string]struct{}{
 	"item_code": {}, "parent_item_code": {}, "child_item_code": {}, "root_item_code": {},
 	"material_item_code": {}, "band_item_code": {}, "scrap_item_code": {}, "service_item_code": {},
-	"reference_item_code": {}, "order_item_code": {}, "packaging_item_code": {}, "substituted_item_code": {},
+	"packaging_item_code": {}, "substituted_item_code": {},
 	"item_base_cod": {}, "item_codes": {}, "item_from": {}, "item_to": {},
 	// Matriz de setup do APS (VMAQ0200): transição de um item para outro.
 	"from_item_code": {}, "to_item_code": {},
 }
+
+// Fora da lista de propósito: `reference_item_code` (reserva de estoque) e
+// `order_item_code` (plano de produção) são o código da LINHA do documento —
+// linha do pedido de venda ou da OP —, não do cadastro de item. Traduzidos, a
+// linha 37 aparecia na tela como o código comercial do item de chave 37, e o
+// plano regravado perdia a linha. Ver TestLinhaDeDocumentoNaoEhItem.
 
 func isItemReferenceKey(r *http.Request, key string) bool {
 	if key != "parent_code" && key != "child_code" {
