@@ -44,7 +44,11 @@ func Resolve(ctx context.Context, repository any, raw request.TextCode) (*itemen
 	// "5". O lançamento respondia 201 gravando no item errado — um orçamento de
 	// RN-01001 virava CHAPA AÇO CARBONO 3MM. Com a marca, a chave interna vem
 	// primeiro e o comercial fica como alternativa.
-	if traduzido, _ := ctx.Value(contextkey.ItemCodeTranslatedKey).(bool); traduzido {
+	//
+	// A marca é por VALOR (contextkey.IsTranslatedItemCode): só o código que o
+	// middleware produziu — no corpo, na query ou no caminho — é chave interna.
+	// Um campo que ele deixou de propósito sem tradução segue sendo comercial.
+	if contextkey.IsTranslatedItemCode(ctx, code) {
 		if item, err := resolvePelaChaveInterna(ctx, repository, code); err == nil {
 			return item, nil
 		} else if !errors.Is(err, itemrepo.ErrNotFound) {

@@ -19,6 +19,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/entity"
 	rsrepo "github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/repository"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
 )
 
@@ -146,9 +147,15 @@ func (uc *UseCase) GenerateSalesOrder(ctx context.Context, code int64, dto reque
 	if err != nil {
 		return nil, err
 	}
+	// A recorrência guarda a CHAVE INTERNA do item. Repassada como texto sem
+	// registro, o item do pedido a relia como código comercial — na Tecnofer, a
+	// chave 5 (RN-01001) virava o comercial "5" (CHAPA AÇO CARBONO 3MM) e o
+	// pedido gerado saía com o item errado.
+	chaveItem := fmt.Sprintf("%d", rec.ItemCode)
+	ctxItem := contextkey.WithTranslatedItemCodes(ctx, chaveItem)
 	for _, line := range lines {
-		_, err := uc.SalesOrderItems.Execute(ctx, request.CreateSalesOrderItemDTO{
-			SalesOrderCode: order.Code, Sequence: line.sequence, ItemCode: request.TextCode(fmt.Sprintf("%d", rec.ItemCode)), Mask: stringValue(rec.ItemMask),
+		_, err := uc.SalesOrderItems.Execute(ctxItem, request.CreateSalesOrderItemDTO{
+			SalesOrderCode: order.Code, Sequence: line.sequence, ItemCode: request.TextCode(chaveItem), Mask: stringValue(rec.ItemMask),
 			DigitDate: order.EmissionDate.Format("2006-01-02"), SalesUOM: dto.SalesUOM, WarehouseCode: dto.WarehouseCode,
 			PriceTableCode: dto.PriceTableCode, RequestedQty: line.quantity, UnitPrice: line.unitValue,
 			DeliveryDate: &line.deliveryDate, DeliveryDateFirm: true, Notes: &line.notes,
