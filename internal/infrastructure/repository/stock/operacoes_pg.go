@@ -245,7 +245,7 @@ func nomeDoDocumento(ref string) string {
 		entity.ReferenceTypeSalesOrder: "pedido de venda", entity.ReferenceTypeNFEntry: "nota de entrada", entity.ReferenceTypeNFExit: "nota de saída",
 		entity.ReferenceTypeInventory: "inventário", entity.ReferenceTypeCycleCount: "contagem cíclica", entity.ReferenceTypeReversal: "estorno",
 		entity.ReferenceTypeRequisition: "requisição ao almoxarifado", entity.ReferenceTypeTransit: "envio em trânsito",
-		entity.ReferenceTypeLotImplant: "implantação de lote", "ONDA_SEPARACAO": "onda de separação", "QUALITY_LOT": "lote de inspeção",
+		entity.ReferenceTypeLotImplant: "implantação de lote", entity.ReferenceTypeConsignment: "consignação", entity.ReferenceTypeCNPJTransfer: "transferência entre CNPJs", "ONDA_SEPARACAO": "onda de separação", "QUALITY_LOT": "lote de inspeção",
 	}
 	if n, ok := nomes[ref]; ok {
 		return n
