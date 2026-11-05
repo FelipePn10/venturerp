@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.11.0] — 2026-11-05
+
+- feat(estoque): reforma de estoque e suprimentos, com custo real e revisão geral (`e028fa26`)
+
 ## [v1.10.11] — 2026-11-05
 
 - fix(item): linha de documento deixa de ser traduzida como item (`a952f1f0`)
