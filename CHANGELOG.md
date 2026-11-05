@@ -6,6 +6,13 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.12.0] — 2026-11-05
+
+- fix(estoque): nome dos documentos de consignação e transferência entre CNPJs (`3a731471`)
+- feat(estoque): consignação nas duas direções e transferência entre CNPJs da mesma raiz (`201b0776`)
+- feat(estoque): tolerância por perfil, cadernos de contagem e política de reposição por máscara (`bf916251`)
+- feat(contabilidade): fechamento lança produção em processo e provisão de obsoletos (`e5b90039`)
+
 ## [v1.11.0] — 2026-11-05
 
 - feat(estoque): reforma de estoque e suprimentos, com custo real e revisão geral (`e028fa26`)
