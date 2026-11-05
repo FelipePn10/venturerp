@@ -128,7 +128,7 @@ func (h *MachineHandler) ListItemTimes(w http.ResponseWriter, r *http.Request) {
 	if machineCodeStr != "" {
 		machineCode, parseErr := strconv.ParseInt(machineCodeStr, 10, 64)
 		if parseErr != nil || machineCode <= 0 {
-			security.RespondError(w, http.StatusBadRequest, "machine_code deve ser um código inteiro positivo")
+			security.RespondError(w, http.StatusBadRequest, "o código da máquina deve ser um número inteiro positivo")
 			return
 		}
 		filtered := results[:0]

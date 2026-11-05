@@ -81,7 +81,7 @@ func (h *MarginHandler) SaveParameters(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var dto parametrosDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondError(w, http.StatusBadRequest, "corpo da requisição inválido")
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler os dados enviados")
 		return
 	}
 	p := dto.paraEntidade()
@@ -197,7 +197,7 @@ func (h *MarginHandler) Report(w http.ResponseWriter, r *http.Request) {
 func (h *MarginHandler) Simulate(w http.ResponseWriter, r *http.Request) {
 	var in margin_uc.SimulacaoEntrada
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("não foi possível ler os dados enviados"))
 		return
 	}
 	out, err := h.uc.Simular(r.Context(), in)

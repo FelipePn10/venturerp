@@ -53,7 +53,7 @@ func decode(w http.ResponseWriter, r *http.Request, dst any, estrito, opcional b
 	}
 	if msg := err.Error(); estrito && strings.HasPrefix(msg, "json: unknown field ") {
 		RespondErrorCode(w, http.StatusBadRequest, "CAMPO_DESCONHECIDO",
-			"o campo "+strings.TrimPrefix(msg, "json: unknown field ")+" não é aceito nesta operação")
+			"o campo "+RotuloDoCampo(strings.Trim(strings.TrimPrefix(msg, "json: unknown field "), `"`))+" não é aceito nesta operação")
 		return false
 	}
 
@@ -70,7 +70,7 @@ func decode(w http.ResponseWriter, r *http.Request, dst any, estrito, opcional b
 			campo = "um dos campos"
 		}
 		RespondErrorCode(w, http.StatusUnprocessableEntity, "TIPO_INVALIDO",
-			"o campo "+campo+" recebeu um valor de tipo incompatível")
+			"o campo "+RotuloDoCampo(campo)+" recebeu um valor em formato que não é aceito")
 		return false
 	}
 
@@ -100,4 +100,20 @@ func decode(w http.ResponseWriter, r *http.Request, dst any, estrito, opcional b
 	RespondErrorCode(w, http.StatusBadRequest, "CORPO_INVALIDO",
 		"não foi possível ler os dados enviados")
 	return false
+}
+
+// rotulosDeCampo: nome dos campos mais comuns como a tela os chama.
+var rotulosDeCampo = map[string]string{
+	"quantity": "quantidade", "warehouse_id": "almoxarifado", "item_code": "item", "address": "endereço", "lot": "lote",
+	"unit_price": "preço unitário", "from_warehouse_id": "almoxarifado de origem", "to_warehouse_id": "almoxarifado de destino",
+	"movement_type": "tipo de movimento", "notes": "observação", "reason": "motivo", "from": "data inicial", "to": "data final",
+	"customer_code": "cliente", "supplier_code": "fornecedor", "limit": "limite", "offset": "posição", "months": "meses", "year": "ano", "month": "mês", "mask": "máscara",
+}
+
+// RotuloDoCampo traduz o nome técnico para a mensagem do usuário.
+func RotuloDoCampo(nome string) string {
+	if r, ok := rotulosDeCampo[nome]; ok {
+		return r
+	}
+	return strings.ReplaceAll(nome, "_", " ")
 }

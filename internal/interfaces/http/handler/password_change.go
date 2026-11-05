@@ -28,7 +28,7 @@ func (h *PasswordChangeHandler) Request(w http.ResponseWriter, r *http.Request) 
 	}
 	if r.Body != nil && r.ContentLength != 0 {
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
-			h.BadRequest(w, "corpo da requisição inválido")
+			h.BadRequest(w, "não foi possível ler os dados enviados")
 			return
 		}
 	}
@@ -88,7 +88,7 @@ func (h *PasswordChangeHandler) Reject(w http.ResponseWriter, r *http.Request) {
 		Reason string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.BadRequest(w, "corpo da requisição inválido")
+		h.BadRequest(w, "não foi possível ler os dados enviados")
 		return
 	}
 	id, err := passwordRequestID(r)
@@ -109,7 +109,7 @@ func (h *PasswordChangeHandler) Complete(w http.ResponseWriter, r *http.Request)
 		ConfirmPassword string `json:"confirm_password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		h.BadRequest(w, "corpo da requisição inválido")
+		h.BadRequest(w, "não foi possível ler os dados enviados")
 		return
 	}
 	if body.NewPassword != body.ConfirmPassword {

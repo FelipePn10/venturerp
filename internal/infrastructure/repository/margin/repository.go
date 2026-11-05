@@ -148,7 +148,7 @@ func (r *Repository) ListarVendasDoPeriodo(ctx context.Context, de, ate, base st
 		JOIN fiscal_exit_items fei ON fei.fiscal_exit_id = fe.id
 		LEFT JOIN item_standard_costs sc ON sc.item_code = fei.item_code
 		LEFT JOIN LATERAL (
-		    SELECT AVG(NULLIF(b.avg_cost,0)) AS average_cost
+		    SELECT COALESCE(SUM(b.total_cost) / NULLIF(SUM(b.quantity) FILTER (WHERE b.quantity > 0), 0), AVG(NULLIF(b.avg_cost,0))) AS average_cost
 		    FROM stock_balances b
 		    WHERE b.item_code = fei.item_code AND b.enterprise_id = fe.enterprise_id
 		) sb ON TRUE

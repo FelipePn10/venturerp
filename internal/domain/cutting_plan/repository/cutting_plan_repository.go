@@ -4,7 +4,16 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 )
+
+// BaixaDoCorte é a saída de uma peça inteira do estoque. O consumo e o retalho
+// gerado valem o que o estoque baixou, que só se sabe ao lançar o movimento.
+type BaixaDoCorte struct {
+	Movimento *stockentity.StockMovement
+	Consumo   *entity.CuttingPlanConsumption
+	Retalho   *entity.StockRemnant
+}
 
 // CuttingPlanRepository persists the cutting-plan aggregate. Patterns are
 // replaced wholesale on each optimisation run (they are a derived result), while
@@ -56,15 +65,17 @@ type CuttingPlanRepository interface {
 	ReplaceOrderCosts(ctx context.Context, planID int64, costs []*entity.CuttingPlanOrderCost) error
 	ListOrderCosts(ctx context.Context, planID int64) ([]*entity.CuttingPlanOrderCost, error)
 
-	// CommitRelease atomically marks the firming of a plan: marks consumed
-	// remnants, inserts the newly generated remnants and consumption records, and
-	// flips the plan to FIRMADO — all in one transaction. The stock OUT movements
-	// are posted by the use case beforehand (their ids land in the consumptions).
+	// CommitRelease firma o plano numa transação só: lança as baixas, marca os
+	// retalhos consumidos, grava os novos, o consumo, o rateio por ordem (ratear
+	// roda depois das baixas, com o custo real) e muda a situação. Falhou em
+	// qualquer ponto, nada fica: nem baixa de estoque sem plano firmado.
 	CommitRelease(
 		ctx context.Context,
 		planID int64,
+		baixas []BaixaDoCorte,
 		consumedRemnantIDs []int64,
 		newRemnants []*entity.StockRemnant,
 		consumptions []*entity.CuttingPlanConsumption,
+		ratear func() []*entity.CuttingPlanOrderCost,
 	) error
 }

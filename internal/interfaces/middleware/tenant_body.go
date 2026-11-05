@@ -24,12 +24,12 @@ func TenantBodyGuard(next http.Handler) http.Handler {
 		}
 		user, ok := r.Context().Value(contextkey.UserKey).(*security.AuthUser)
 		if !ok || user.EnterpriseCode <= 0 {
-			http.Error(w, `{"error":"invalid tenant context"}`, http.StatusUnauthorized)
+			http.Error(w, `{"error":"empresa não identificada: entre novamente"}`, http.StatusUnauthorized)
 			return
 		}
 		raw, err := io.ReadAll(r.Body)
 		if err != nil {
-			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"não foi possível ler os dados enviados"}`, http.StatusBadRequest)
 			return
 		}
 		if len(bytes.TrimSpace(raw)) == 0 || !strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "json") {
@@ -48,7 +48,7 @@ func TenantBodyGuard(next http.Handler) http.Handler {
 		if rewriteTenantCodes(payload, user.EnterpriseCode) {
 			raw, err = json.Marshal(payload)
 			if err != nil {
-				http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+				http.Error(w, `{"error":"não foi possível ler os dados enviados"}`, http.StatusBadRequest)
 				return
 			}
 			r.ContentLength = int64(len(raw))

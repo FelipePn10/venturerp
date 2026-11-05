@@ -1,8 +1,8 @@
 package service
 
 import (
-	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"sort"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
@@ -70,7 +70,7 @@ func (optimizer1D) Optimize(demand []DemandPiece, stock []StockPiece, p CutParam
 // agree on placement geometry, kerf accounting and remnant preference.
 func nest1D(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*bin, []DemandPiece, error) {
 	if p.Kerf < 0 || p.Trim < 0 || p.MinRemnant < 0 {
-		return nil, nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
+		return nil, nil, domainerr.NewValidation("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 
 	// Expand demand into individual units, then sort by length descending.
@@ -82,7 +82,7 @@ func nest1D(demand []DemandPiece, stock []StockPiece, p CutParams) ([]*bin, []De
 	var units []unit
 	for _, d := range demand {
 		if d.Length <= 0 {
-			return nil, nil, fmt.Errorf("demand %q has non-positive length", d.Label)
+			return nil, nil, domainerr.NewValidation(fmt.Sprintf("a demanda %q precisa de comprimento maior que zero", d.Label))
 		}
 		if d.Qty <= 0 {
 			continue

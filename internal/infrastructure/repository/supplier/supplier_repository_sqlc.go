@@ -388,7 +388,7 @@ func (r *SupplierRepositorySQLC) DeleteSupplier(ctx context.Context, code int64)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
-			return fmt.Errorf("não é possível excluir o fornecedor: há pedidos de compra ou processos de importação vinculados — inative-o ou desvincule-o primeiro")
+			return errorsuc.NewValidationError("não é possível excluir o fornecedor: há pedidos de compra ou processos de importação vinculados — inative-o ou desvincule-o primeiro")
 		}
 		return fmt.Errorf("deleting supplier: %w", err)
 	}
@@ -830,6 +830,11 @@ func (r *SupplierRepositorySQLC) DeleteEnterprise(ctx context.Context, id int64)
 
 func (r *SupplierRepositorySQLC) GetParameters(ctx context.Context, enterpriseCode int64) (*entity.SupplierParameters, error) {
 	row, err := r.q.GetSupplierParameters(ctx, enterpriseCode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Empresa que ainda não salvou parâmetros vê os padrões. Responder "não
+		// encontrado" fazia a tela abrir com erro antes de a pessoa fazer qualquer coisa.
+		return &entity.SupplierParameters{EnterpriseCode: enterpriseCode, DefaultDueBaseDate: entity.BaseDateEmissao}, nil
+	}
 	if err != nil {
 		return nil, err
 	}

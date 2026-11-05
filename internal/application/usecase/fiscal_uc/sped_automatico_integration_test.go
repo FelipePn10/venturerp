@@ -86,12 +86,12 @@ func TestIntegration_SpedAutomatico(t *testing.T) {
 	terceiro := u + 72
 	testutil.Exec(t, pool, `INSERT INTO items(code,business_code,created_by,enterprise_id,name,warehouse_unit_of_measurement,engineering_type,warehouse_code)
 		VALUES($1,($1::bigint)::text,$2,$3,'MOLDE DO CLIENTE','UN',2,$4)`, terceiro, actor, empresa, almox)
-	testutil.Exec(t, pool, `INSERT INTO stock_movements(item_code,warehouse_id,movement_type,quantity,unit_price,total_price,created_at,created_by,enterprise_id) VALUES
-		($1,$3,'IN',100,10,1000,'2026-08-05 10:00:00-03',$4,$5),
-		($1,$3,'OUT',30,10,300,'2026-08-10 10:00:00-03',$4,$5),
-		($1,$3,'AJUSTE_CUSTO',0,0,50,'2026-08-12 10:00:00-03',$4,$5),
-		($1,$3,'IN',10,11,110,'2026-09-02 10:00:00-03',$4,$5),
-		($2,$3,'IN',5,0,0,'2026-08-05 10:00:00-03',$4,$5)`, chapa, terceiro, almox, actor, empresa)
+	testutil.Exec(t, pool, `INSERT INTO stock_movements(item_code,warehouse_id,movement_type,quantity,unit_price,total_price,created_at,movement_date,created_by,enterprise_id) VALUES
+		($1,$3,'IN',100,10,1000,'2026-08-05 10:00:00-03','2026-08-05',$4,$5),
+		($1,$3,'OUT',30,10,300,'2026-08-10 10:00:00-03','2026-08-10',$4,$5),
+		($1,$3,'AJUSTE_CUSTO',0,0,50,'2026-08-12 10:00:00-03','2026-08-12',$4,$5),
+		($1,$3,'IN',10,11,110,'2026-09-02 10:00:00-03','2026-09-02',$4,$5),
+		($2,$3,'IN',5,0,0,'2026-08-05 10:00:00-03','2026-08-05',$4,$5)`, chapa, terceiro, almox, actor, empresa)
 
 	xmlNFe := `<nfeProc><NFe><infNFe><emit><CNPJ>11222333000181</CNPJ><IE>1234567</IE><enderEmit><xLgr>RUA A</xLgr><nro>10</nro><xBairro>CENTRO</xBairro><cMun>4106902</cMun></enderEmit></emit></infNFe></NFe></nfeProc>`
 	insEntrada := func(e int64, numero int64, dataEntrada, status string) int64 {

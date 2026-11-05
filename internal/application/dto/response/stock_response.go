@@ -8,6 +8,8 @@ import (
 
 // StockMovementResponse is the API representation of a stock movement.
 type StockMovementResponse struct {
+	// MovementDate: data do documento (AAAA-MM-DD), a que vale para o saldo.
+	MovementDate   string     `json:"movement_date,omitempty"`
 	ID             int64      `json:"id"`
 	ItemCode       int64      `json:"item_code"`
 	Mask           string     `json:"mask"`
@@ -109,6 +111,13 @@ type PhysicalInventoryResponse struct {
 	CreatedBy    uuid.UUID  `json:"created_by"`
 	// Valor líquido dos ajustes lançados no fechamento.
 	AdjustmentValue *float64 `json:"adjustment_value,omitempty"`
+	BlocksMovements bool     `json:"blocks_movements"`
+	BlindCount      bool     `json:"blind_count"`
+	Partial         bool     `json:"partial"`
+	ApprovalMode    string   `json:"approval_mode"`
+	TolerancePct    *float64 `json:"tolerance_pct,omitempty"`
+	ToleranceValue  *float64 `json:"tolerance_value,omitempty"`
+	CloseReason     *string  `json:"close_reason,omitempty"`
 }
 
 // InventoryCloseResponse resume o que o fechamento lançou no estoque.
@@ -118,6 +127,8 @@ type InventoryCloseResponse struct {
 	ShortageQty     float64 `json:"shortage_qty"`
 	AdjustedValue   float64 `json:"adjusted_value"`
 	UncountedZeroed int     `json:"uncounted_zeroed"`
+	// PendingApproval: nada foi lançado; o ajuste foi para a alçada.
+	PendingApproval bool `json:"pending_approval"`
 }
 
 // PhysicalInventoryItemResponse is the API representation of an inventory line.
@@ -140,4 +151,7 @@ type PhysicalInventoryItemResponse struct {
 	CountNumber          int        `json:"count_number"`
 	PreviousCountedQty   *float64   `json:"previous_counted_qty,omitempty"`
 	AdjustmentMovementID *int64     `json:"adjustment_movement_id,omitempty"`
+	Address              string     `json:"address"`
+	Lot                  string     `json:"lot"`
+	NeedsRecount         bool       `json:"needs_recount"`
 }

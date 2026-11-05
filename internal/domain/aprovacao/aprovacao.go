@@ -23,6 +23,10 @@ const (
 	// PedidoPoliticaComercial: pedido de venda com política comercial que
 	// exige aprovação ou desconto acima da alçada (Fase 5.3).
 	PedidoPoliticaComercial Tipo = "PEDIDO_POLITICA_COMERCIAL"
+	// AjusteInventario: ajuste do inventário físico que exige aprovação.
+	AjusteInventario Tipo = "AJUSTE_INVENTARIO"
+	// RequisicaoMaterial: requisição ao almoxarifado, antes de reservar o material.
+	RequisicaoMaterial Tipo = "REQUISICAO_MATERIAL"
 )
 
 // Tipos disponíveis, com o nome para a tela.
@@ -33,6 +37,8 @@ var Tipos = []struct {
 	{LiberacaoCredito, "Liberação de crédito do pedido de venda"},
 	{OrcamentoPoliticaComercial, "Orçamento bloqueado por política comercial"},
 	{PedidoPoliticaComercial, "Pedido bloqueado por política comercial ou desconto acima da alçada"},
+	{AjusteInventario, "Ajuste de inventário físico"},
+	{RequisicaoMaterial, "Requisição ao almoxarifado"},
 }
 
 // TipoValido diz se o tipo existe.

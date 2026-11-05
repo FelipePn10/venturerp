@@ -18,7 +18,7 @@ func (h *ItemQueryStructureHandler) ConsultStructure(w http.ResponseWriter, r *h
 
 	itemCode := request.TextCode(q.Get("item_code"))
 	if itemCode.String() == "" {
-		jsonError(w, http.StatusBadRequest, "item_code é obrigatório")
+		jsonError(w, http.StatusBadRequest, "informe o item")
 		return
 	}
 

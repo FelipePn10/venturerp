@@ -20,6 +20,8 @@ type AddConsumptionUseCase struct {
 	// StockRepo is optional. When set, registering a consumption also posts an
 	// OUT stock movement (which updates the balance) for the consumed item.
 	StockRepo stockrepo.StockRepository
+	// Transacao é opcional na montagem: sem ela cada gravação vale sozinha.
+	Transacao EmTransacaoApontamento
 }
 
 func (uc *AddConsumptionUseCase) Execute(
@@ -49,17 +51,28 @@ func (uc *AddConsumptionUseCase) Execute(
 		CreatedBy:         dto.CreatedBy,
 	}
 
-	saved, err := uc.Repo.AddConsumption(ctx, consumption)
-	if err != nil {
-		return nil, err
+	// O consumo e a saída valem juntos. Antes a saída barrada por falta de saldo
+	// deixava o consumo gravado: a pessoa repetia e a OF ficava com consumo em dobro.
+	emTransacao := uc.Transacao
+	if emTransacao == nil {
+		emTransacao = func(ctx context.Context, fn func(ApontamentoRepos) error) error {
+			return fn(ApontamentoRepos{Ordens: uc.Repo, Estoque: uc.StockRepo})
+		}
 	}
-
-	// Post the OUT movement for the consumed input so the warehouse balance is
-	// reduced automatically. Requires a target warehouse on the consumption.
-	if uc.StockRepo != nil && saved.WarehouseID != nil {
+	var saved *entity.ProductionConsumption
+	err = emTransacao(ctx, func(r ApontamentoRepos) error {
+		var err error
+		if saved, err = r.Ordens.AddConsumption(ctx, consumption); err != nil {
+			return err
+		}
+		// Post the OUT movement for the consumed input so the warehouse balance is
+		// reduced automatically. Requires a target warehouse on the consumption.
+		if r.Estoque == nil || saved.WarehouseID == nil {
+			return nil
+		}
 		refType := stockentity.ReferenceTypeProductionOrder
 		refCode := saved.ProductionOrderID
-		mov := &stockentity.StockMovement{
+		_, err = r.Estoque.CreateMovement(ctx, &stockentity.StockMovement{
 			ItemCode:      saved.ItemCode,
 			WarehouseID:   *saved.WarehouseID,
 			MovementType:  stockentity.MovementTypeOut,
@@ -69,11 +82,11 @@ func (uc *AddConsumptionUseCase) Execute(
 			Lot:           saved.Lot,
 			Notes:         saved.Notes,
 			CreatedBy:     saved.CreatedBy,
-		}
-		if _, moveErr := uc.StockRepo.CreateMovement(ctx, mov); moveErr != nil {
-			return nil, moveErr
-		}
+		})
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-
 	return saved, nil
 }

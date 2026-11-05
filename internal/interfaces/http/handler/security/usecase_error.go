@@ -77,6 +77,11 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
+		case "40P01", "40001": // deadlock_detected, serialization_failure
+			// Duas operações disputaram o mesmo registro e o banco desfez esta. Nada
+			// foi gravado; repetir resolve.
+			RespondErrorCode(w, http.StatusConflict, "CONFLITO_DE_DOMINIO", "outro lançamento estava alterando os mesmos dados agora: nada foi gravado, tente de novo")
+			return
 		case "23505": // unique_violation
 			RespondError(w, http.StatusConflict, "já existe um registro com os dados informados")
 			return

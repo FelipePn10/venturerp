@@ -8,8 +8,17 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/mrp_report_uc"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
+
+// saldoDaLinha: o livre da linha `balance`, sem o que está em lote retido. É o
+// saldo que o cálculo do MRP usa: relatório com outro número não fecha com a
+// sugestão de compra.
+const saldoDaLinha = `balance.quantity-balance.reserved_qty-COALESCE((SELECT SUM(b.quantity) FROM stock_lot_balances b
+	WHERE b.enterprise_id=balance.enterprise_id AND b.item_code=balance.item_code AND b.mask=balance.mask
+	  AND b.warehouse_id=balance.warehouse_id AND b.address=balance.address AND b.quantity>0
+	  AND ` + stockrepo.LoteForaDoDisponivelSQL + `),0)`
 
 type Repository struct{ pool *pgxpool.Pool }
 
@@ -29,7 +38,7 @@ func (r *Repository) Profile(ctx context.Context, filter mrp_report_uc.Filter) (
 			FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE
 			WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code
-		LEFT JOIN LATERAL(SELECT SUM(quantity-reserved_qty) quantity FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code)current_stock ON TRUE
+		LEFT JOIN LATERAL(SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code)current_stock ON TRUE
 		WHERE profile.enterprise_id=$1
 		AND ($2::bigint IS NULL OR profile.plan_code=$2) AND ($3::bigint IS NULL OR profile.item_code=$3)
 		AND ($4::date IS NULL OR profile.need_date >= $4) AND ($5::date IS NULL OR profile.need_date <= $5)
@@ -112,7 +121,7 @@ func (r *Repository) Availability(ctx context.Context, filter mrp_report_uc.Filt
 	), grouped AS (
 		SELECT item_code,MAX(mask) mask,SUM(quantity) demand,array_agg(DISTINCT sales_order) FILTER(WHERE sales_order IS NOT NULL) sales_orders,level FROM needs GROUP BY item_code,level
 	), stock AS (
-		SELECT item_code,SUM(quantity-reserved_qty) stock FROM stock_balances WHERE enterprise_id=$1 AND ($5::bigint IS NULL OR warehouse_id=$5) GROUP BY item_code
+		SELECT balance.item_code,SUM(`+saldoDaLinha+`) stock FROM stock_balances balance WHERE balance.enterprise_id=$1 AND ($5::bigint IS NULL OR balance.warehouse_id=$5) GROUP BY balance.item_code
 	), supply AS (
 		SELECT item_code,SUM(orders_planned) planned,SUM(orders_firm) firm FROM mrp_item_profiles WHERE enterprise_id=$1 AND ($6::bigint IS NULL OR plan_code=$6) GROUP BY item_code)
 		SELECT grouped.item_code,grouped.mask,grouped.demand,COALESCE(supply.planned,0),COALESCE(supply.firm,0),COALESCE(stock.stock,0),COALESCE(grouped.sales_orders,'{}'::bigint[]),grouped.level
@@ -204,7 +213,7 @@ func (r *Repository) GroupedNeeds(ctx context.Context, filter mrp_report_uc.Filt
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx, `SELECT profile.item_code,profile.need_date,SUM(profile.demand),SUM(profile.orders_planned),SUM(profile.orders_firm),
-		COALESCE((SELECT SUM(balance.quantity-balance.reserved_qty) FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code),0),item.planner_employee_code,
+		COALESCE((SELECT SUM(`+saldoDaLinha+`) FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code),0),item.planner_employee_code,
 		COALESCE((SELECT classification.code FROM item_classification_assignments assignment JOIN item_classifications classification ON classification.id=assignment.classification_id WHERE assignment.enterprise_id=$1 AND assignment.item_code=profile.item_code ORDER BY classification.level DESC,classification.code LIMIT 1),''),
 		CASE WHEN $10 THEN COALESCE((SELECT array_agg(DISTINCT demand.sales_order_code) FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code WHERE profile.enterprise_id=$1 AND ($2::bigint IS NULL OR profile.plan_code=$2)
@@ -271,7 +280,7 @@ func (r *Repository) Explosion(ctx context.Context, itemCode int64, quantity dec
 		SELECT explosion.parent_code,explosion.child_code,explosion.level,SUM(explosion.quantity),
 		COALESCE(stock.quantity,0),COALESCE(purchase.quantity,0),CASE WHEN $13='RESUMIDA' THEN COALESCE(item.complement,'') ELSE item.pdm_description_technique END,item.warehouse_unit_of_measurement::text,COALESCE(cost.total_cost,0)
 		FROM explosion JOIN items item ON item.code=explosion.child_code
-		LEFT JOIN LATERAL (SELECT SUM(balance.quantity-balance.reserved_qty) quantity FROM stock_balances balance WHERE balance.enterprise_id=$4 AND balance.item_code=explosion.child_code AND ($5::bigint IS NULL OR balance.warehouse_id=$5) AND (NOT $12 OR balance.warehouse_id=item.warehouse_code)) stock ON TRUE
+		LEFT JOIN LATERAL (SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$4 AND balance.item_code=explosion.child_code AND ($5::bigint IS NULL OR balance.warehouse_id=$5) AND (NOT $12 OR balance.warehouse_id=item.warehouse_code)) stock ON TRUE
 		LEFT JOIN LATERAL (SELECT SUM(line.requested_qty-line.received_qty-line.cancelled_qty) quantity FROM purchase_order_items line JOIN purchase_orders header ON header.code=line.purchase_order_code JOIN enterprise company ON company.code=header.enterprise_code WHERE company.id=$4 AND line.item_code=explosion.child_code AND line.is_active AND line.status IN ('OPEN','PARTIAL')) purchase ON TRUE
 		LEFT JOIN item_standard_costs cost ON cost.item_code=explosion.child_code AND cost.mask=''
 		WHERE ($6='' OR ($6='FABRICADO' AND item.engineering_type=0) OR ($6='COMPRADO' AND item.engineering_type=1) OR ($6 IN ('DE_TERCEIRO','TERCEIRIZADO') AND item.engineering_type=2))
@@ -319,7 +328,7 @@ func (r *Repository) ReorderPoint(ctx context.Context, filter mrp_report_uc.Filt
 		UNION ALL SELECT structure.child_code,needs.quantity*structure.quantity*(1+structure.loss_percentage/100),needs.path||structure.child_code
 		FROM sales_needs needs JOIN item_structures structure ON structure.parent_code=needs.item_code AND structure.is_active AND NOT structure.customer_supplied WHERE NOT structure.child_code=ANY(needs.path)
 	)
-	SELECT balance.item_code,COALESCE(SUM(CASE WHEN $8 THEN balance.quantity-balance.reserved_qty ELSE balance.quantity END),0),
+	SELECT balance.item_code,COALESCE(SUM(CASE WHEN $8 THEN `+saldoDaLinha+` ELSE balance.quantity END),0),
 		COALESCE(MAX(balance.safety_stock),0),COALESCE(MAX(balance.maximum_stock),0),COALESCE(avg.avg_monthly_consumption,0),
 		COALESCE((SELECT SUM(material.quantity-material.attended_quantity) FROM production_order_materials material JOIN production_orders production ON production.id=material.production_order_id WHERE material.enterprise_id=$1 AND material.item_code=balance.item_code AND material.material_kind='DEMAND' AND production.status IN ('OPEN','IN_PROGRESS') AND ($9::date IS NULL OR production.end_date >= $9) AND ($10::date IS NULL OR production.end_date <= $10)),0)
 		+COALESCE((SELECT SUM(need.quantity) FROM sales_needs need WHERE need.item_code=balance.item_code),0),

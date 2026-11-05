@@ -53,6 +53,7 @@ type genLine struct {
 	acct      *string
 	utiliz    *string
 	delivery  *time.Time
+	warehouse *int64
 	suggested decimal.Decimal
 }
 
@@ -127,6 +128,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 			acct:      reqItem.AccountingAccount,
 			utiliz:    reqItem.UtilizationType,
 			delivery:  reqItem.DeliveryDate,
+			warehouse: reqItem.WarehouseID,
 			suggested: reqItem.SuggestedPrice,
 		})
 	}
@@ -206,6 +208,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 				Status:                    poentity.PurchaseOrderItemStatusOPEN,
 				PurchaseUOM:               ln.uom,
 				DeliveryDate:              ln.delivery,
+				WarehouseID:               ln.warehouse,
 				AccountingAccount:         ln.acct,
 				CostCenterCode:            ln.costCtr,
 				UtilizationType:           ln.utiliz,

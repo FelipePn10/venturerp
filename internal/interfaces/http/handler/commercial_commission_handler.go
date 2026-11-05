@@ -21,7 +21,7 @@ func NewCommercialCommissionHandler(uc *commercial_commission_uc.UseCase) *Comme
 func (h *CommercialCommissionHandler) UpsertSettings(w http.ResponseWriter, r *http.Request) {
 	var d commercial_commission_uc.SettingsDTO
 	if err := json.NewDecoder(r.Body).Decode(&d); err != nil {
-		security.RespondError(w, 400, "corpo da requisição inválido")
+		security.RespondError(w, 400, "não foi possível ler os dados enviados")
 		return
 	}
 	v, err := h.uc.UpsertSettings(r.Context(), d)
@@ -39,7 +39,7 @@ func (h *CommercialCommissionHandler) List(w http.ResponseWriter, r *http.Reques
 	if raw := r.URL.Query().Get("representative_code"); raw != "" {
 		v, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {
-			security.RespondError(w, 422, "representative_code inválido")
+			security.RespondError(w, 422, "representante inválido")
 			return
 		}
 		f.RepresentativeCode = &v
@@ -71,7 +71,7 @@ func (h *CommercialCommissionHandler) Transition(w http.ResponseWriter, r *http.
 	}
 	var d commercial_commission_uc.TransitionDTO
 	if err = json.NewDecoder(r.Body).Decode(&d); err != nil {
-		security.RespondError(w, 400, "corpo da requisição inválido")
+		security.RespondError(w, 400, "não foi possível ler os dados enviados")
 		return
 	}
 	v, err := h.uc.Transition(r.Context(), code, chi.URLParam(r, "action"), r.Header.Get("Idempotency-Key"), d)

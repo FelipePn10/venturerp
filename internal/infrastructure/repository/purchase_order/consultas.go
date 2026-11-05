@@ -133,7 +133,7 @@ func (c *ConsultasPG) RegistrarFollowup(ctx context.Context, f purchase_order_uc
 		RETURNING id, registrado_em`, code, f.PurchaseOrderCode, f.LineCode, data, vazio(f.Contato), vazio(f.Observacao), por).
 		Scan(&f.ID, &f.RegistradoEm)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, fmt.Errorf("a linha %d não pertence ao pedido %d", f.LineCode, f.PurchaseOrderCode)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d não pertence ao pedido %d", f.LineCode, f.PurchaseOrderCode))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("gravando acompanhamento: %w", err)
@@ -419,7 +419,7 @@ func (c *ConsultasPG) DadosDocumento(ctx context.Context, orderCode int64) (*pur
 	if err := c.db.QueryRow(ctx, `SELECT supplier_code, carrier_code, payment_term_code, created_by FROM purchase_orders WHERE code = $1 AND enterprise_code = $2`,
 		orderCode, code).Scan(&supplierCode, &carrierCode, &termCode, &createdBy); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("pedido de compra %d não encontrado", orderCode)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado", orderCode))
 		}
 		return nil, err
 	}

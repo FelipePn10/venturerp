@@ -199,7 +199,7 @@ func (uc *UseCase) GerarNF(ctx context.Context, id int64) (*dom.Devolucao, error
 	for i, it := range d.Itens {
 		o := porID[it.FiscalExitItemID]
 		if o == nil {
-			return nil, fmt.Errorf("linha %d da NF de venda não encontrada", it.FiscalExitItemID)
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("linha %d da NF de venda não encontrada", it.FiscalExitItemID))
 		}
 		origem := it.FiscalExitItemID
 		cfop := it.CFOP

@@ -49,7 +49,7 @@ func decodeNotification(w http.ResponseWriter, r *http.Request, dst any) bool {
 	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	d.DisallowUnknownFields()
 	if err := d.Decode(dst); err != nil {
-		jsonError(w, http.StatusBadRequest, "JSON inválido")
+		jsonError(w, http.StatusBadRequest, "os dados enviados estão incompletos ou em formato inválido")
 		return false
 	}
 	return true

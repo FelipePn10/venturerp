@@ -2,9 +2,10 @@ package cutting_plan_uc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -69,10 +70,10 @@ type matGroup struct {
 // GenerateFromOrders builds one cutting plan per raw material from the given orders.
 func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.GenerateCuttingFromOrdersDTO) (*response.GenerateCuttingDemandResponse, error) {
 	if len(dto.ProductionOrderCodes) == 0 && len(dto.PlannedOrderCodes) == 0 {
-		return nil, errors.New("informe ao menos uma ordem de produção ou ordem planejada")
+		return nil, errorsuc.NewValidationError("informe ao menos uma ordem de produção ou ordem planejada")
 	}
 	if dto.MinRemnantMM < 0 || dto.KerfMM < 0 || dto.TrimMM < 0 {
-		return nil, errors.New("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
+		return nil, errorsuc.NewValidationError("a espessura de corte, a refila e a sobra mínima não podem ser negativas")
 	}
 
 	// Resolve the orders to explode.
@@ -332,7 +333,7 @@ func buildAutoPart(child *itementity.Item, label string, qty int, sourceRef stri
 	if is2D {
 		w, h := float64(d.Length), float64(d.Width)
 		if w <= 0 || h <= 0 {
-			return nil, errors.New("o componente de chapa precisa das dimensões de comprimento e largura")
+			return nil, errorsuc.NewValidationError("o componente de chapa precisa das dimensões de comprimento e largura")
 		}
 		return entity.NewPart2D(0, &itemCode, label, w, h, entity.GrainNone, allowRotation, qty, &ref)
 	}
@@ -341,7 +342,7 @@ func buildAutoPart(child *itementity.Item, label string, qty int, sourceRef stri
 		length = float64(d.Width)
 	}
 	if length <= 0 {
-		return nil, errors.New("bar component needs a Length dimension")
+		return nil, errorsuc.NewValidationError("o componente em barra precisa da dimensão de comprimento")
 	}
 	return entity.NewPart(0, &itemCode, label, length, qty, &ref)
 }

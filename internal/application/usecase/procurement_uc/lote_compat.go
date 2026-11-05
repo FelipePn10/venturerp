@@ -252,7 +252,7 @@ func (uc *UseCase) RecordReceivingInspectionResult(ctx context.Context, orderID 
 			}, nil
 		}
 	}
-	return nil, fmt.Errorf("resultado gravado não encontrado no lote %d", orderID)
+	return nil, errorsuc.NewNotFoundError(fmt.Sprintf("resultado gravado não encontrado no lote %d", orderID))
 }
 
 var tratamentoLegado = map[string]string{

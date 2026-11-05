@@ -65,7 +65,7 @@ func RequirePermission(perm string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := r.Context().Value(contextkey.UserKey).(*security.AuthUser)
 			if !ok {
-				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				http.Error(w, `{"error": "sua sessão expirou: entre novamente"}`, http.StatusUnauthorized)
 				return
 			}
 			if !RoleHasPermission(user.Role, perm) {

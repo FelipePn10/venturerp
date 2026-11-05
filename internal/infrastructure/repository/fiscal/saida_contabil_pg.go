@@ -98,6 +98,16 @@ func (r *FiscalRepositoryPG) EstornarEstoqueDaSaida(ctx context.Context, exitID 
 		movs = append(movs, &m)
 	}
 	rows.Close()
+	// A separação da onda volta a ficar para faturar: a nova nota sai no mesmo lote.
+	if _, err := tx.Exec(ctx,
+		`UPDATE stock_picking_wave_lines l SET invoiced_qty = GREATEST(l.invoiced_qty - x.q, 0)
+		   FROM (SELECT wave_line_id, SUM(quantity) q FROM stock_movements
+		          WHERE enterprise_id=$1 AND reference_type=$2 AND reference_code=$3 AND movement_type=$4 AND wave_line_id IS NOT NULL
+		          GROUP BY wave_line_id) x
+		  WHERE l.id = x.wave_line_id AND l.enterprise_id = $1`,
+		empresa, stockentity.ReferenceTypeNFExit, exitID, stockentity.MovementTypeOut); err != nil {
+		return 0, fmt.Errorf("devolvendo a separação da nota: %w", err)
+	}
 	ref := ReferenciaSaidaCancelada
 	nota := "volta ao estoque: NF-e de saída cancelada"
 	for _, m := range movs {

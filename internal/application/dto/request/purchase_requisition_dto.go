@@ -7,6 +7,7 @@ import (
 
 type RequisitionItemInput struct {
 	ItemCode          int64           `json:"item_code"`
+	WarehouseID       *int64          `json:"warehouse_id,omitempty"`
 	Quantity          decimal.Decimal `json:"quantity"`
 	UOM               *string         `json:"uom,omitempty"`
 	CostCenterCode    *int64          `json:"cost_center_code,omitempty"`

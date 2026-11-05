@@ -28,7 +28,7 @@ type ConclusaoDoDesbloqueio struct {
 
 func (c *ConclusaoDoDesbloqueio) Concluir(ctx context.Context, code int64) error {
 	if c.Transacao == nil {
-		return fmt.Errorf("desbloqueio do pedido sem transação configurada")
+		return errorsuc.NewValidationError("desbloqueio do pedido sem transação configurada")
 	}
 	return c.Transacao(ctx, func(r ConfirmacaoRepos) error {
 		order, err := r.Pedidos.GetByCode(ctx, code)

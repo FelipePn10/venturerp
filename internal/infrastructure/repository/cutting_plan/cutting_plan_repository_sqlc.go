@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"time"
 
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/repository"
@@ -508,9 +510,11 @@ func (r *CuttingPlanRepositorySQLC) ListConsumptions(ctx context.Context, planID
 func (r *CuttingPlanRepositorySQLC) CommitRelease(
 	ctx context.Context,
 	planID int64,
+	baixas []domainrepo.BaixaDoCorte,
 	consumedRemnantIDs []int64,
 	newRemnants []*entity.StockRemnant,
 	consumptions []*entity.CuttingPlanConsumption,
+	ratear func() []*entity.CuttingPlanOrderCost,
 ) error {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -522,6 +526,27 @@ func (r *CuttingPlanRepositorySQLC) CommitRelease(
 	}
 	defer tx.Rollback(ctx)
 	qtx := r.q.WithTx(tx)
+
+	// Dois cliques em "firmar" não podem baixar o estoque duas vezes.
+	var situacao string
+	if err := tx.QueryRow(ctx, `SELECT status FROM cutting_plans WHERE id=$1 AND enterprise_id=$2 FOR UPDATE`, planID, enterpriseID).Scan(&situacao); err != nil {
+		return fmt.Errorf("locking plan: %w", err)
+	}
+	if situacao == string(entity.PlanStatusReleased) {
+		return errorsuc.NewValidationError("este plano já foi firmado")
+	}
+	for _, b := range baixas {
+		if err := stockrepo.CreateMovementTx(ctx, tx, enterpriseID, b.Movimento); err != nil {
+			return err
+		}
+		id := b.Movimento.ID
+		b.Consumo.MovementID = &id
+		b.Consumo.UnitCost = b.Movimento.UnitPrice.InexactFloat64()
+		b.Consumo.TotalCost = b.Movimento.TotalPrice.InexactFloat64()
+		if b.Retalho != nil {
+			b.Retalho.UnitCost = b.Consumo.UnitCost
+		}
+	}
 
 	for _, id := range consumedRemnantIDs {
 		pid := planID
@@ -565,6 +590,20 @@ func (r *CuttingPlanRepositorySQLC) CommitRelease(
 			EnterpriseID: enterpriseID,
 		}); err != nil {
 			return fmt.Errorf("recording consumption: %w", err)
+		}
+	}
+
+	if err := qtx.DeleteOrderCostsByPlan(ctx, planID); err != nil {
+		return fmt.Errorf("clearing order costs: %w", err)
+	}
+	for _, c := range ratear() {
+		if _, err := qtx.AddCuttingPlanOrderCost(ctx, sqlc.AddCuttingPlanOrderCostParams{
+			PlanID:        planID,
+			OrderRef:      c.OrderRef,
+			DemandMeasure: pgutil.ToPgNumericFromFloat64(c.DemandMeasure),
+			AllocatedCost: pgutil.ToPgNumericFromFloat64(c.AllocatedCost),
+		}); err != nil {
+			return fmt.Errorf("inserting order cost: %w", err)
 		}
 	}
 

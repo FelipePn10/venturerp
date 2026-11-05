@@ -1,7 +1,7 @@
 package service
 
 import (
-	"errors"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 )
@@ -33,7 +33,7 @@ func (trueShapeBBox) Optimize(demand []DemandPiece, stock []StockPiece, p CutPar
 
 	g, err := Optimizer(entity.CutTypeGuillotine2D)
 	if err != nil {
-		return nil, errors.New("o cálculo por contorno real exige o otimizador guilhotina 2D")
+		return nil, domainerr.NewValidation("o cálculo por contorno real exige o otimizador guilhotina 2D")
 	}
 	sol, err := g.Optimize(bb, stock, p)
 	if err != nil {

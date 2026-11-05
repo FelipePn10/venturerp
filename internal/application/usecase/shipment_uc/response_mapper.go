@@ -399,6 +399,8 @@ func toSeparationMonitorResponses(rows []*repository.SeparationMonitorRow) []*re
 			DivergentItems:   r.DivergentItems,
 			TotalVolumes:     r.TotalVolumes,
 			TotalGrossWeight: r.TotalGrossWeight.InexactFloat64(),
+			WaveLinesOpen:    r.WaveLinesOpen,
+			WaveLinesPicked:  r.WaveLinesPicked,
 		})
 	}
 	return out

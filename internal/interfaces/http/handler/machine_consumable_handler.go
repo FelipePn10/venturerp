@@ -22,7 +22,7 @@ func NewMachineConsumableHandler(uc *machine_uc.ConsumableUseCase) *MachineConsu
 func (h *MachineConsumableHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var dto request.MachineConsumableDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondUseCaseError(w, errorsuc.NewValidationError("corpo da requisição inválido"))
+		security.RespondUseCaseError(w, errorsuc.NewValidationError("não foi possível ler os dados enviados"))
 		return
 	}
 	result, err := h.uc.Upsert(r.Context(), dto)

@@ -2,6 +2,7 @@ package stock_uc
 
 import (
 	"context"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -29,7 +30,7 @@ func (uc *CountInventoryItemUseCase) Execute(ctx context.Context, dto request.Co
 		return err
 	}
 	if inv.Status != "OPEN" {
-		return errorsuc.NewValidationError("somente inventário aberto pode receber contagem")
+		return errorsuc.NewValidationError("a contagem deste inventário já foi encerrada")
 	}
 	if dto.ItemCode <= 0 || dto.WarehouseID != inv.WarehouseID || dto.CountedQty.IsNegative() {
 		return errorsuc.NewValidationError("item, almoxarifado do inventário e quantidade contada válida são obrigatórios")
@@ -40,6 +41,8 @@ func (uc *CountInventoryItemUseCase) Execute(ctx context.Context, dto request.Co
 		ItemCode:         dto.ItemCode,
 		Mask:             dto.Mask,
 		WarehouseID:      dto.WarehouseID,
+		Address:          strings.TrimSpace(dto.Address),
+		Lot:              strings.TrimSpace(dto.Lot),
 		CountedQty:       &dto.CountedQty,
 		UnitCost:         dto.UnitCost,
 		AdjustmentType:   dto.AdjustmentType,

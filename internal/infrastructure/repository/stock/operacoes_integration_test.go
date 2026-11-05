@@ -111,7 +111,7 @@ func TestIntegration_KardexEPosicaoEmData(t *testing.T) {
 	_ = e.mover(t, e.item, e.almox, "OUT", 3, 0, "")
 	_ = e.mover(t, e.item, e.almox, "IN", 5, 4, "")
 	// O primeiro movimento vai para 40 dias atrás: fica no saldo anterior.
-	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = NOW() - INTERVAL '40 days'
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = NOW() - INTERVAL '40 days', movement_date = CURRENT_DATE - 40
 		WHERE id = (SELECT MIN(id) FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2)`, e.empresa, e.item)
 	hoje := time.Now()
 	k, err := e.repo.Kardex(e.ctx, e.item, nil, hoje.AddDate(0, 0, -10), hoje)
@@ -195,7 +195,7 @@ func TestIntegration_AnaliseDeEstoque(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = e.mover(t, e.outro, e.almox, "IN", 3, 5, "")
-	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = NOW() - INTERVAL '200 days' WHERE enterprise_id=$1 AND item_code=$2`, e.empresa, e.outro)
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = NOW() - INTERVAL '200 days', movement_date = CURRENT_DATE - 200 WHERE enterprise_id=$1 AND item_code=$2`, e.empresa, e.outro)
 	an, err := e.repo.AnaliseDeEstoque(e.ctx, 6, 90)
 	if err != nil {
 		t.Fatal(err)
@@ -265,9 +265,9 @@ func TestIntegration_KardexDiaNoFusoDaEmpresa(t *testing.T) {
 	_ = e.mover(t, e.item, e.almox, "IN", 10, 2, "")
 	_ = e.mover(t, e.item, e.almox, "IN", 5, 2, "")
 	dia := time.Date(2026, 3, 10, 0, 0, 0, 0, time.UTC) // só o calendário importa
-	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + TIME '21:30') AT TIME ZONE 'America/Sao_Paulo'
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + TIME '21:30') AT TIME ZONE 'America/Sao_Paulo', movement_date = $3::date
 		WHERE id = (SELECT MIN(id) FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2)`, e.empresa, e.item, dia)
-	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + 1 + TIME '00:30') AT TIME ZONE 'America/Sao_Paulo'
+	testutil.Exec(t, pool, `UPDATE stock_movements SET created_at = ($3::date + 1 + TIME '00:30') AT TIME ZONE 'America/Sao_Paulo', movement_date = $3::date + 1
 		WHERE id = (SELECT MAX(id) FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2)`, e.empresa, e.item, dia)
 	k, err := e.repo.Kardex(e.ctx, e.item, nil, dia, dia)
 	if err != nil {

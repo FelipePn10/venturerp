@@ -145,12 +145,12 @@ func (h *MaintenanceHandler) ListOrdersByWorkCenter(w http.ResponseWriter, r *ht
 	toStr := r.URL.Query().Get("to")
 	from, fromErr := time.Parse("2006-01-02", fromStr)
 	if fromErr != nil {
-		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "o campo 'from' deve estar no formato AAAA-MM-DD")
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "a data inicial está inválida: use o formato AAAA-MM-DD")
 		return
 	}
 	to, toErr := time.Parse("2006-01-02", toStr)
 	if toStr != "" && toErr != nil {
-		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "o campo 'to' deve estar no formato AAAA-MM-DD")
+		security.RespondErrorCode(w, http.StatusUnprocessableEntity, "PERIODO_INVALIDO", "a data final está inválida: use o formato AAAA-MM-DD")
 		return
 	}
 	if to.IsZero() {

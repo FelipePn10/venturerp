@@ -29,7 +29,7 @@ func (h *ItemCalendarPromiseHandler) UpsertDay(w http.ResponseWriter, r *http.Re
 	var dto request.CreateItemCalendarDayDTO
 
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
-		security.RespondErrorCode(w, http.StatusBadRequest, "CALENDARIO_CORPO_INVALIDO", "corpo da requisição inválido")
+		security.RespondErrorCode(w, http.StatusBadRequest, "CALENDARIO_CORPO_INVALIDO", "não foi possível ler os dados enviados")
 		return
 	}
 

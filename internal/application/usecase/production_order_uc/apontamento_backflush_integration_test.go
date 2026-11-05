@@ -64,6 +64,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	}
 	ctx := context.WithValue(bg, contextkey.UserKey, &appsecurity.AuthUser{ID: actor.String(), Role: "ADMIN", EnterpriseID: empresaID, EnterpriseCode: empresaCode})
 	pai, filhoA, filhoB := u, u+1, u+2
+	deposito := testutil.NovoAlmoxarifado(t, pool, empresaID)
 	for _, c := range []int64{pai, filhoA, filhoB} {
 		testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,3,$2,$3)`, c, actor, empresaID)
 	}
@@ -78,7 +79,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	// negativo bloqueado), e o teste é sobre a SEGUNDA falhar.
 	for _, c := range []int64{filhoA, filhoB} {
 		if _, err := stockpg.NewStockRepositorySQLC(pool).CreateMovement(ctx, &stockentity.StockMovement{
-			ItemCode: c, WarehouseID: 3, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(100), UnitPrice: decimal.NewFromFloat(1), CreatedBy: actor,
+			ItemCode: c, WarehouseID: deposito, MovementType: stockentity.MovementTypeIn, Quantity: decimal.NewFromFloat(100), UnitPrice: decimal.NewFromFloat(1), CreatedBy: actor,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -95,7 +96,6 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 
 	chamadas := 0
 	falhar := true
-	deposito := int64(3)
 	uc := &production_order_uc.AddAppointmentUseCase{
 		Repo: productionpg.NewProductionOrderRepositoryPGX(pool),
 		Auth: &auth.AuthService{},

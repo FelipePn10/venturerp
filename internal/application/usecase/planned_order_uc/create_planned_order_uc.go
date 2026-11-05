@@ -71,6 +71,7 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		CostCenterCode: dto.CostCenterCode,
 		EmployeeCode:   dto.EmployeeCode,
 		MachineCode:    dto.MachineCode,
+		WarehouseCode:  dto.WarehouseCode,
 		ProductionTime: dto.ProductionTime,
 		Notes:          dto.Notes,
 		CreatedBy:      dto.CreatedBy,

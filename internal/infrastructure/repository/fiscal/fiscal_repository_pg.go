@@ -331,9 +331,9 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 			 unidade_comercial, codigo_produto, sales_order_item_code, fiscal_entry_item_id, codigo_beneficio_fiscal, regra_icms_ipi_id,
 			 icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
 			 icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor, fcp_uf_dest_pct, fcp_uf_dest_valor,
-			 icms_st_reducao_base_pct, fiscal_exit_item_origem_id)
+			 icms_st_reducao_base_pct, fiscal_exit_item_origem_id, mask, lot, address)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,
-		         $36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47)
+		         $36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50)
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
@@ -343,7 +343,7 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 		item.UnidadeComercial, item.CodigoProduto, item.SalesOrderItemCode, item.FiscalEntryItemID, item.CodigoBeneficioFiscal, item.RegraICMSIPIID,
 		item.ICMSReducaoBasePct, item.ICMSDiferimentoPct, item.AliqCreditoSimples, item.ValorCreditoSimples,
 		item.ICMSUFDestBase, item.ICMSUFDestAliqInterna, item.ICMSAliqInterestadual, item.ICMSUFDestValor, item.FCPUFDestPct, item.FCPUFDestValor,
-		item.ICMSSTReducaoBasePct, item.FiscalExitItemOrigemID,
+		item.ICMSSTReducaoBasePct, item.FiscalExitItemOrigemID, item.Mask, item.Lot, item.Address,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit item: %w", err)
@@ -408,7 +408,7 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
 		        icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor,
 		        fcp_uf_dest_pct, fcp_uf_dest_valor, icms_st_reducao_base_pct,
-		        fiscal_exit_item_origem_id
+		        fiscal_exit_item_origem_id, mask, lot, address
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
@@ -612,7 +612,7 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 			&it.ICMSReducaoBasePct, &it.ICMSDiferimentoPct, &it.AliqCreditoSimples, &it.ValorCreditoSimples,
 			&it.ICMSUFDestBase, &it.ICMSUFDestAliqInterna, &it.ICMSAliqInterestadual, &it.ICMSUFDestValor,
 			&it.FCPUFDestPct, &it.FCPUFDestValor, &it.ICMSSTReducaoBasePct,
-			&it.FiscalExitItemOrigemID,
+			&it.FiscalExitItemOrigemID, &it.Mask, &it.Lot, &it.Address,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)
 		}

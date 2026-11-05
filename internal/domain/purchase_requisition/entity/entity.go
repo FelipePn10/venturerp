@@ -66,6 +66,7 @@ type PurchaseRequisitionItem struct {
 	AccountingAccount *string
 	SuggestedPrice    decimal.Decimal
 	DeliveryDate      *time.Time
+	WarehouseID       *int64
 	Application       *string
 	UtilizationType   *string
 	Status            RequisitionStatus

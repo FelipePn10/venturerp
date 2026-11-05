@@ -156,10 +156,10 @@ func (r *SalesDivisionRepositorySQLC) HasReferences(ctx context.Context, code in
 WITH division AS (SELECT id,code FROM sales_divisions WHERE code=$1 AND enterprise_id=$2)
 SELECT EXISTS (
   SELECT 1 FROM sales_divisions child JOIN division d ON child.parent_division_id=d.id
-  UNION ALL SELECT 1 FROM restrictions linked JOIN division d ON linked.division_code=d.id
-  UNION ALL SELECT 1 FROM sales_order_demands linked JOIN division d ON linked.division_id=d.id
-  UNION ALL SELECT 1 FROM sales_orders linked JOIN division d ON linked.sales_division_code=d.id
-  UNION ALL SELECT 1 FROM sales_quotation_headers linked JOIN division d ON linked.sales_division_code=d.code
+  UNION ALL SELECT 1 FROM restrictions linked JOIN division d ON linked.division_id=d.id
+  UNION ALL SELECT 1 FROM sales_order_demands linked JOIN division d ON linked.division_code=d.code
+  UNION ALL SELECT 1 FROM sales_orders linked JOIN division d ON linked.sales_division_code=d.code
+  UNION ALL SELECT 1 FROM sales_quotations linked JOIN division d ON linked.sales_division_code=d.code
 )`, code, enterpriseID).Scan(&linked)
 	if err != nil {
 		return false, fmt.Errorf("verificar vínculos da divisão de vendas: %w", err)

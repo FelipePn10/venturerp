@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	stockrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -22,7 +23,12 @@ func (r *ProductionOrderRepositoryPGX) MaterialAvailability(ctx context.Context,
 		       COALESCE((SELECT SUM(b.quantity - b.reserved_qty) FROM stock_balances b
 		                  WHERE b.enterprise_id = $1 AND b.item_code = m.item_code
 		                    AND COALESCE(b.mask, '') = COALESCE(m.mask, '')
-		                    AND (m.warehouse_id IS NULL OR b.warehouse_id = m.warehouse_id)), 0),
+		                    AND (m.warehouse_id IS NULL OR b.warehouse_id = m.warehouse_id)), 0)
+		       - COALESCE((SELECT SUM(b.quantity) FROM stock_lot_balances b
+		                  WHERE b.enterprise_id = $1 AND b.item_code = m.item_code AND b.quantity > 0
+		                    AND COALESCE(b.mask, '') = COALESCE(m.mask, '')
+		                    AND (m.warehouse_id IS NULL OR b.warehouse_id = m.warehouse_id)
+		                    AND `+stockrepository.LoteForaDoDisponivelSQL+`), 0),
 		       COALESCE((SELECT SUM(GREATEST(o.quantity - o.attended_quantity, 0))
 		                   FROM production_order_materials o
 		                   JOIN production_orders op ON op.id = o.production_order_id AND op.enterprise_id = $1

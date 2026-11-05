@@ -438,8 +438,20 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 	if err != nil {
 		return nil, "", err
 	}
+	// Mês fechado: a foto é o valor oficial, com o recálculo do fechamento. Sem
+	// foto da data, soma os movimentos.
+	var foto *int64
+	if err := r.db.QueryRow(ctx,
+		`SELECT id FROM stock_closings WHERE enterprise_id=$1 AND status='FECHADO'
+		  AND (date_trunc('month', competence) + INTERVAL '1 month - 1 day')::date = $2::date ORDER BY id DESC LIMIT 1`,
+		empresa, data.Format("2006-01-02")).Scan(&foto); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", fmt.Errorf("procurando o fechamento da data: %w", err)
+	}
 	rows, err := r.db.Query(ctx,
 		`WITH mov AS (
+		    SELECT f.item_code, 1 AS sinal, f.quantity AS qtd, f.total_value AS valor, 'FOTO'::text AS movement_type, f.total_value AS total_price
+		      FROM stock_closing_balances f WHERE f.closing_id = $3
+		    UNION ALL
 		    SELECT m.item_code,
 		           CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP','EPP','EPE','ENTRADA') THEN 1
 		                WHEN m.movement_type IN ('OUT','TRANSFER_OUT','REP','SAIDA') THEN -1
@@ -447,7 +459,7 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 		                ELSE 0 END AS sinal,
 		           abs(m.quantity) AS qtd, abs(m.total_price) AS valor, m.movement_type, m.total_price
 		      FROM stock_movements m
-		     WHERE m.enterprise_id = $1 AND m.created_at < ($2::date + 1))
+		     WHERE m.enterprise_id = $1 AND m.movement_date <= $2::date AND $3::bigint IS NULL)
 		 SELECT x.item_code, x.qtd, x.valor, COALESCE(i.name,''), COALESCE(i.warehouse_unit_of_measurement::text,''),
 		        i.engineering_type, i.supplies_type_of_use, COALESCE(i.commercial_sale_type,'') = 'REVENDA', COALESCE(i.commercial_is_packaging,false),
 		        COALESCE((SELECT fi.ncm FROM fiscal_entry_items fi JOIN fiscal_entries fe ON fe.id = fi.fiscal_entry_id
@@ -462,7 +474,7 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 		           FROM mov GROUP BY item_code) x
 		   LEFT JOIN items i ON i.code = x.item_code
 		  WHERE x.qtd > 0 AND COALESCE(i.engineering_type, 1) <> 2
-		  ORDER BY x.item_code`, empresa, data.Format("2006-01-02"))
+		  ORDER BY x.item_code`, empresa, data.Format("2006-01-02"), foto)
 	if err != nil {
 		return nil, "", fmt.Errorf("inventário para o bloco H: %w", err)
 	}

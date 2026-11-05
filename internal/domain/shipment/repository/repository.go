@@ -104,6 +104,9 @@ type SeparationMonitorRow struct {
 	DivergentItems   int
 	TotalVolumes     int
 	TotalGrossWeight decimal.Decimal
+	// Situação da separação do pedido nas ondas de estoque.
+	WaveLinesOpen   int
+	WaveLinesPicked int
 }
 
 type LogisticPanelSummary struct {

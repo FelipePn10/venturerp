@@ -18,7 +18,7 @@ func TestFiltroValido(t *testing.T) {
 		{"", true, ""},
 		{"from=31/02/2026", false, "data inicial"},
 		{"to=amanha", false, "data final"},
-		{"customer_code=abc", false, "customer_code"},
+		{"customer_code=abc", false, "cliente"},
 	} {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest(http.MethodGet, "/x?"+c.query, nil)

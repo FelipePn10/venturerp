@@ -36,8 +36,10 @@ type ResultadoTransferencia struct {
 
 // LinhaKardex é uma linha do extrato do item com o saldo acumulado.
 type LinhaKardex struct {
-	MovementID       int64           `json:"movement_id"`
-	Data             time.Time       `json:"date"`
+	MovementID int64     `json:"movement_id"`
+	Data       time.Time `json:"date"`
+	// DataDocumento é a que vale para o saldo; Data é quando foi gravado.
+	DataDocumento    string          `json:"movement_date"`
 	Tipo             string          `json:"movement_type"`
 	TipoCodigo       *string         `json:"movement_type_code,omitempty"`
 	Referencia       *string         `json:"reference_type,omitempty"`
@@ -91,24 +93,31 @@ type PosicaoItem struct {
 	QuantidadeAlt      *decimal.Decimal `json:"alt_quantity,omitempty"`
 }
 
-// SugestaoReposicao: item abaixo do ponto de pedido (ou do estoque mínimo),
-// com o quanto comprar respeitando lote mínimo e múltiplo.
+// SugestaoReposicao: item no ponto de pedido ou abaixo dele, com o quanto repor e
+// de onde. WarehouseID nil é o item sem política, calculado sobre o saldo somado.
 type SugestaoReposicao struct {
 	ItemCode         int64           `json:"item_code"`
 	Codigo           string          `json:"business_code"`
 	Nome             string          `json:"name"`
 	Unidade          string          `json:"uom"`
+	WarehouseID      *int64          `json:"warehouse_id,omitempty"`
+	Origem           string          `json:"source_type"`
+	AlmoxOrigem      *int64          `json:"source_warehouse_id,omitempty"`
 	Disponivel       decimal.Decimal `json:"on_hand"`
 	Reservado        decimal.Decimal `json:"reserved"`
+	Retido           decimal.Decimal `json:"retained"`
+	Requisitado      decimal.Decimal `json:"requested"`
 	EmPedido         decimal.Decimal `json:"on_order"`
 	Projetado        decimal.Decimal `json:"projected"`
 	PontoPedido      decimal.Decimal `json:"reorder_point"`
 	EstoqueSeguranca decimal.Decimal `json:"safety_stock"`
+	Maximo           decimal.Decimal `json:"maximum"`
 	LoteMinimo       decimal.Decimal `json:"minimum_lot"`
 	LoteMultiplo     decimal.Decimal `json:"multiple_lot"`
 	ConsumoMedio     decimal.Decimal `json:"avg_monthly_consumption"`
 	Sugerido         decimal.Decimal `json:"suggested_qty"`
 	Motivo           string          `json:"reason"`
+	Aviso            string          `json:"warning,omitempty"`
 }
 
 // AnaliseItem junta giro, cobertura, valor e tempo parado de um item.
@@ -128,6 +137,71 @@ type AnaliseItem struct {
 	DiasSemMovimento   *int            `json:"idle_days,omitempty"`
 	Parado             bool            `json:"idle"`
 	ClasseABC          *string         `json:"abc_class,omitempty"`
+	// DemandaAberta soma pedido de venda, ordem de produção e demanda independente.
+	DemandaAberta decimal.Decimal `json:"open_demand"`
+	Falta         decimal.Decimal `json:"shortage"`
+	// Provisao é o valor em risco pela regra de obsolescência da empresa.
+	Provisao decimal.Decimal `json:"provision_value"`
+}
+
+// SeparadoDaOnda é o que uma linha da onda separou e ainda não foi faturado.
+type SeparadoDaOnda struct {
+	Linha      int64
+	Lote       string
+	Endereco   string
+	Quantidade decimal.Decimal
+}
+
+// CartaoKanban é o circuito de reposição de um item num almoxarifado.
+type CartaoKanban struct {
+	ID              int64           `json:"id"`
+	ItemCode        int64           `json:"item_code"`
+	Nome            string          `json:"name"`
+	WarehouseID     *int64          `json:"warehouse_id"`
+	CardCount       int             `json:"card_count"`
+	QuantityPerCard decimal.Decimal `json:"quantity_per_card"`
+	ReorderPoint    decimal.Decimal `json:"reorder_point"`
+	ContainerType   *string         `json:"container_type"`
+	Status          string          `json:"status"`
+	Saldo           decimal.Decimal `json:"available_qty"`
+	Fabricado       bool            `json:"manufactured"`
+}
+
+// IdadeDoLote é o tempo do lote no estoque, desde o recebimento.
+type IdadeDoLote struct {
+	ItemCode    int64           `json:"item_code"`
+	Codigo      string          `json:"business_code"`
+	Nome        string          `json:"name"`
+	Lote        string          `json:"lot"`
+	WarehouseID int64           `json:"warehouse_id"`
+	Quantidade  decimal.Decimal `json:"quantity"`
+	Valor       decimal.Decimal `json:"value"`
+	Recebido    *time.Time      `json:"received_at,omitempty"`
+	Dias        *int            `json:"age_days,omitempty"`
+}
+
+// NiveisSugeridos é o mínimo, a segurança e o máximo calculados pelo consumo.
+type NiveisSugeridos struct {
+	ConsumoDiario decimal.Decimal `json:"daily_consumption"`
+	PrazoDias     int             `json:"lead_time_days"`
+	DiasSeguranca int             `json:"safety_days"`
+	Seguranca     decimal.Decimal `json:"safety_qty"`
+	Minimo        decimal.Decimal `json:"minimum_qty"`
+	Maximo        decimal.Decimal `json:"maximum_qty"`
+}
+
+// SugerirNiveis: segurança são os dias de folga pelo consumo; mínimo cobre o prazo
+// de entrega e a segurança; máximo soma um mês de consumo.
+func SugerirNiveis(consumo decimal.Decimal, dias, prazo, diasSeguranca int) NiveisSugeridos {
+	n := NiveisSugeridos{PrazoDias: prazo, DiasSeguranca: diasSeguranca}
+	if dias <= 0 || !consumo.IsPositive() {
+		return n
+	}
+	n.ConsumoDiario = consumo.DivRound(decimal.NewFromInt(int64(dias)), 6)
+	n.Seguranca = n.ConsumoDiario.Mul(decimal.NewFromInt(int64(diasSeguranca))).Round(4)
+	n.Minimo = n.ConsumoDiario.Mul(decimal.NewFromInt(int64(prazo))).Add(n.Seguranca).Round(4)
+	n.Maximo = n.Minimo.Add(n.ConsumoDiario.Mul(decimal.NewFromInt(30))).Round(4)
+	return n
 }
 
 // LoteAVencer: saldo em lote vencido ou perto de vencer.

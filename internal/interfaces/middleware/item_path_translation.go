@@ -45,7 +45,7 @@ func ItemPathTranslation(pool *pgxpool.Pool, secret string) func(http.Handler) h
 			if !nativeItemBusinessCodePath(r) {
 				interno, err := translateKnownItemURLPath(r, pool, enterpriseID)
 				if err != nil {
-					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+					recusarCodigoDeItem(w, err)
 					return
 				}
 				// Registra a chave produzida: sem isso o caso de uso relia a

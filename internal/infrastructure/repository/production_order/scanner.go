@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"log/slog"
 	"time"
 
@@ -25,7 +26,7 @@ func (r *ProductionOrderRepositoryPGX) CreateScanToken(ctx context.Context, toke
 		return fmt.Errorf("criar token de apontamento: %w", err)
 	}
 	if command.RowsAffected() != 1 {
-		return fmt.Errorf("ordem ou operação não encontrada na empresa autenticada")
+		return errorsuc.NewNotFoundError("ordem ou operação não encontrada na empresa autenticada")
 	}
 	return nil
 }
@@ -54,13 +55,13 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	err := r.pool.QueryRow(ctx, `SELECT request_fingerprint,response,message,result FROM production_scan_events WHERE enterprise_id=$1 AND user_id=$2 AND action=$3 AND idempotency_key=$4`, command.EnterpriseID, command.UserID, string(command.Action), command.IdempotencyKey).Scan(&priorFingerprint, &priorResponse, &priorMessage, &priorResult)
 	if err == nil {
 		if !bytes.Equal(priorFingerprint, command.Fingerprint) {
-			return nil, fmt.Errorf("chave de idempotencia reutilizada com conteudo diferente")
+			return nil, errorsuc.NewValidationError("esta leitura já foi usada com outro conteúdo: leia o código de novo")
 		}
 		if priorResult != "SUCESSO" {
 			if priorMessage != nil {
-				return nil, fmt.Errorf("%s", *priorMessage)
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("%s", *priorMessage))
 			}
-			return nil, fmt.Errorf("leitura rejeitada anteriormente")
+			return nil, errorsuc.NewValidationError("leitura rejeitada anteriormente")
 		}
 		var replay entity.ScanResult
 		if e := json.Unmarshal(priorResponse, &replay); e != nil {
@@ -87,7 +88,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	var status string
 	err = tx.QueryRow(ctx, `SELECT t.id,t.production_order_id,t.operation_id,o.order_number,o.status FROM production_scan_tokens t JOIN production_orders o ON o.id=t.production_order_id AND o.enterprise_id=t.enterprise_id WHERE t.enterprise_id=$1 AND t.token_hash=$2 AND t.active AND t.valid_from<=NOW() AND (t.valid_until IS NULL OR t.valid_until>=NOW()) FOR UPDATE OF t,o`, command.EnterpriseID, command.TokenHash).Scan(&tokenID, &orderID, &operationID, &orderNumber, &status)
 	if err != nil {
-		return nil, fmt.Errorf("token inválido, expirado ou de outra empresa")
+		return nil, errorsuc.NewValidationError("código de apontamento inválido ou expirado")
 	}
 	operationStatus := (*string)(nil)
 	nextAction, message := "", ""
@@ -95,7 +96,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	case entity.ScanResolve:
 	case entity.ScanStart:
 		if status != "OPEN" {
-			return nil, fmt.Errorf("OF deve estar ABERTA para iniciar")
+			return nil, errorsuc.NewValidationError("a ordem de produção precisa estar aberta para iniciar")
 		}
 		if _, err = tx.Exec(ctx, `UPDATE production_orders SET status='IN_PROGRESS',start_date=COALESCE(start_date,CURRENT_DATE),updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, orderID, command.EnterpriseID); err != nil {
 			return nil, err
@@ -103,7 +104,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		status = "EM_ANDAMENTO"
 	case entity.ScanAppoint:
 		if status != "IN_PROGRESS" {
-			return nil, fmt.Errorf("OF deve estar EM_ANDAMENTO para apontar")
+			return nil, errorsuc.NewValidationError("a ordem de produção precisa estar em andamento para apontar")
 		}
 		q := sqlc.New(tx)
 		if operationID != nil {
@@ -112,14 +113,14 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 				return nil, err
 			}
 			if current.Status != "PENDING" && current.Status != "IN_PROGRESS" {
-				return nil, fmt.Errorf("retome a etapa pausada ou interrompida antes de apontar; etapas concluídas não aceitam novos apontamentos")
+				return nil, errorsuc.NewValidationError("retome a etapa pausada ou interrompida antes de apontar; etapas concluídas não aceitam novos apontamentos")
 			}
 			blocked, err := q.OperationPredecessorsPending(ctx, *operationID)
 			if err != nil {
 				return nil, err
 			}
 			if blocked {
-				return nil, fmt.Errorf("conclua as etapas predecessoras antes de apontar")
+				return nil, errorsuc.NewValidationError("conclua as etapas predecessoras antes de apontar")
 			}
 		}
 
@@ -157,7 +158,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		status = "EM_ANDAMENTO"
 	case entity.ScanComplete:
 		if status != "IN_PROGRESS" {
-			return nil, fmt.Errorf("OF deve estar EM_ANDAMENTO para concluir")
+			return nil, errorsuc.NewValidationError("a ordem de produção precisa estar em andamento para concluir")
 		}
 		var pending bool
 		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM production_order_operations WHERE production_order_id=$1 AND enterprise_id=$2 AND status NOT IN ('DONE','SKIPPED'))`, orderID, command.EnterpriseID).Scan(&pending)
@@ -165,7 +166,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 			return nil, err
 		}
 		if pending {
-			return nil, fmt.Errorf("existem operacoes pendentes")
+			return nil, errorsuc.NewValidationError("ainda há operações pendentes nesta ordem")
 		}
 		operations, err := sqlc.New(tx).ListProductionOrderOperations(ctx, orderID)
 		if err != nil {

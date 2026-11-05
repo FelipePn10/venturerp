@@ -1026,6 +1026,14 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 	return totalItems, totalOrders
 }
 
+// tipoDoKanban: cartão de item fabricado pede produção, não compra.
+func tipoDoKanban(engineeringType int) string {
+	if engineeringType == 0 {
+		return "FABRICACAO"
+	}
+	return "COMPRA"
+}
+
 // calculateKanban implementa lógica de cartões kanban.
 func (s *MRPServiceImpl) calculateKanban(
 	ctx context.Context,
@@ -1045,6 +1053,7 @@ func (s *MRPServiceImpl) calculateKanban(
 	totalOrders := 0
 
 	kanbanCards, err := s.MRPRepo.ListKanbanCards(ctx)
+	registrarErro(errs, "kanban", err)
 	if err != nil || len(kanbanCards) == 0 {
 		return 0, 0
 	}
@@ -1109,7 +1118,7 @@ func (s *MRPServiceImpl) calculateKanban(
 				StartDate:    &startDate,
 				InicioPedido: inicioPedido,
 				Necessidade:  necessidade,
-				OrderType:    "COMPRA",
+				OrderType:    tipoDoKanban(cached.engineeringType),
 				DemandType:   "KANBAN",
 				LLC:          llc,
 			}
@@ -1165,6 +1174,7 @@ func (s *MRPServiceImpl) calculateMPS(
 	errs map[string]interface{},
 ) (int, int) {
 	mpsItems, err := s.MRPRepo.ListMPSItems(ctx, planCode)
+	registrarErro(errs, "mps", err)
 	if err != nil || len(mpsItems) == 0 {
 		return 0, 0
 	}
@@ -1683,27 +1693,6 @@ func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int6
 }
 
 // salesDivisionRef é uma versão leve de SalesDivision para uso no MRP.
-type salesDivisionRef struct {
-	code                  int64
-	isTechnicalAssistance bool
-}
-
-// loadDivisionMap carrega divisões de vendas para os itens fornecidos.
-func (s *MRPServiceImpl) loadDivisionMap(ctx context.Context, itemCodes []int64) map[int64]*salesDivisionRef {
-	sdMap, err := s.MRPRepo.ListItemSalesDivisions(ctx, itemCodes)
-	if err != nil || sdMap == nil {
-		return nil
-	}
-	result := make(map[int64]*salesDivisionRef, len(sdMap))
-	for code, sd := range sdMap {
-		result[code] = &salesDivisionRef{
-			code:                  code,
-			isTechnicalAssistance: sd.IsTechnicalAssistance,
-		}
-	}
-	return result
-}
-
 // =============================================================================
 // Pure in-memory helpers (no DB calls)
 // =============================================================================

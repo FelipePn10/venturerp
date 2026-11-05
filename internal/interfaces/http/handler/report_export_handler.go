@@ -49,7 +49,7 @@ type exportRequest struct {
 func (h *ReportExportHandler) Export(w http.ResponseWriter, r *http.Request) {
 	var req exportRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.BadRequest(w, "corpo da requisição inválido")
+		h.BadRequest(w, "não foi possível ler os dados enviados")
 		return
 	}
 	if len(req.Columns) == 0 {

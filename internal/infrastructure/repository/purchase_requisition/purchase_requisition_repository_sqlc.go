@@ -95,6 +95,7 @@ func (r *PurchaseRequisitionRepositorySQLC) AddItem(ctx context.Context, item *e
 		DeliveryDate:      pgutil.ToPgDateFromPtr(item.DeliveryDate),
 		Application:       pgutil.ToPgTextFromPtr(item.Application),
 		UtilizationType:   pgutil.ToPgTextFromPtr(item.UtilizationType),
+		WarehouseID:       item.WarehouseID,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("requisição %d não encontrada", item.RequisitionCode))
@@ -207,6 +208,7 @@ func itemToEntity(row sqlc.PurchaseRequisitionItem) *entity.PurchaseRequisitionI
 		AccountingAccount: pgutil.FromPgTextPtr(row.AccountingAccount),
 		SuggestedPrice:    pgutil.FromPgNumericToDecimal(row.SuggestedPrice),
 		DeliveryDate:      pgutil.FromPgDateToPtr(row.DeliveryDate),
+		WarehouseID:       row.WarehouseID,
 		Application:       pgutil.FromPgTextPtr(row.Application),
 		UtilizationType:   pgutil.FromPgTextPtr(row.UtilizationType),
 		Status:            entity.RequisitionStatus(row.Status),

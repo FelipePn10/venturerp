@@ -222,7 +222,7 @@ func (r *FinancialRepositoryPG) AplicarAdiantamentoAtomico(ctx context.Context, 
 		}
 
 	default:
-		return nil, fmt.Errorf("tipo de conta inválido: %s", contaTipo)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de conta inválido: %s", contaTipo))
 	}
 
 	// Update the advance usage / status.

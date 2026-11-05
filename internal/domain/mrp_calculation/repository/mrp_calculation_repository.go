@@ -7,7 +7,6 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	orderpriority "github.com/FelipePn10/panossoerp/internal/domain/order_priority/entity"
-	salesdivision "github.com/FelipePn10/panossoerp/internal/domain/sales_division/entity"
 )
 
 var ErrCalculationInProgress = domainerr.NewConflict("já existe um cálculo de planejamento de materiais em andamento")
@@ -80,10 +79,6 @@ type MRPCalculationRepository interface {
 
 	// CreateMachineSchedule persists a machine allocation record.
 	CreateMachineSchedule(ctx context.Context, schedule *entity.MachineScheduleInfo) error
-
-	// ListItemSalesDivisions returns the sales divisions associated with each item,
-	// used for technical-assistance order classification.
-	ListItemSalesDivisions(ctx context.Context, itemCodes []int64) (map[int64]*salesdivision.SalesDivision, error)
 
 	// UpdatePlannedOrderPriority sets the priority field on a planned order suggestion.
 	UpdatePlannedOrderPriority(ctx context.Context, suggestionCode int64, priority string) error

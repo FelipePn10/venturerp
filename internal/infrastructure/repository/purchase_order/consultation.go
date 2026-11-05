@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
@@ -132,7 +133,7 @@ func (r *PurchaseOrderRepositorySQLC) Consult(ctx context.Context, f purchase_or
 			return nil, fmt.Errorf("scan purchase order consultation: %w", err)
 		}
 		if factor == nil {
-			return nil, fmt.Errorf("falta a taxa de câmbio da ordem %d em %s", x.OrderNumber, f.BaseDate.Format("2006-01-02"))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("falta a taxa de câmbio da ordem %d em %s", x.OrderNumber, f.BaseDate.Format("2006-01-02")))
 		}
 		x.ConversionRate = *factor
 		x.DisplayCurrency = x.CurrencyCode

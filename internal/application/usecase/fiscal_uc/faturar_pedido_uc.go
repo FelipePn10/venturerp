@@ -296,6 +296,7 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 		itens = append(itens, request.CreateFiscalExitItemDTO{
 			Sequence:           i + 1,
 			ItemCode:           &itemCode,
+			Mask:               e.linha.item.Mask,
 			Ncm:                strPtr(e.linha.cadastro.NCM),
 			Cfop:               e.cfop,
 			Quantity:           e.qtd,

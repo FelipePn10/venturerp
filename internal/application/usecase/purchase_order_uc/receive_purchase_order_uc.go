@@ -31,9 +31,21 @@ type ReceivingInspectionGate interface {
 		fornecedor, pedido, linha *int64, lote *string, notaEntrada *int64) (int64, int64, error)
 }
 
+// RecebimentoRepos são os repositórios ligados à transação do recebimento.
+type RecebimentoRepos struct {
+	Pedidos porepo.PurchaseOrderRepository
+	Estoque stockrepo.StockRepository
+}
+
+// EmTransacaoRecebimento abre a transação do recebimento: as entradas e a baixa
+// nas linhas do pedido valem juntas, ou nada vale.
+type EmTransacaoRecebimento func(ctx context.Context, fn func(RecebimentoRepos) error) error
+
 type ReceivePurchaseOrderUseCase struct {
 	Repo      porepo.PurchaseOrderRepository
 	StockRepo stockrepo.StockRepository
+	// Transacao é opcional na montagem: sem ela cada gravação vale sozinha.
+	Transacao EmTransacaoRecebimento
 	Auth      ports.AuthService
 	// Inspection is optional; nil disables auto-inspection on receipt.
 	Inspection ReceivingInspectionGate
@@ -81,6 +93,15 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 	movements := make([]response.StockMovementResponse, 0, len(dto.Items))
 	inspectionOrders := make([]response.ReceiptInspectionOrder, 0)
 	warnings := make([]string, 0)
+	entradas := make([]*stockentity.StockMovement, 0, len(dto.Items))
+	type loteAbrir struct {
+		linha    *poentity.PurchaseOrderItem
+		item     request.ReceivePurchaseOrderItemDTO
+		qtd      decimal.Decimal
+		almox    int64
+		qtdFloat float64
+	}
+	var lotesAbrir []loteAbrir
 	refType := stockentity.ReferenceTypePurchaseOrder
 	refCode := dto.PurchaseOrderCode
 
@@ -110,7 +131,7 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 				toleranceHandled = true
 			}
 			if exceeded && action == "BLOCK" {
-				return nil, errorsuc.NewValidationError(fmt.Sprintf("purchase tolerance blocked item %d: %s", item.PurchaseOrderItemCode, message))
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d passou da tolerância de recebimento: %s", item.PurchaseOrderItemCode, message))
 			}
 			if exceeded && action == "WARN" {
 				warnings = append(warnings, fmt.Sprintf("item %d: %s", item.PurchaseOrderItemCode, message))
@@ -179,27 +200,9 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			Notes:          notes,
 			CreatedBy:      actor,
 		}
-		created, err := uc.StockRepo.CreateMovement(ctx, mov)
-		if err != nil {
-			return nil, err
-		}
-		movements = append(movements, stockMovementReceiptResponse(created))
-
+		entradas = append(entradas, mov)
 		if underInspection {
-			orderID, orderNumber, err := uc.Inspection.AbrirDoRecebimento(
-				ctx, line.ItemCode, line.Mask, stockQtyExata, targetWarehouse,
-				order.SupplierCode, &dto.PurchaseOrderCode, &line.Code, item.Lot, nil)
-			if err != nil {
-				return nil, err
-			}
-			inspectionOrders = append(inspectionOrders, response.ReceiptInspectionOrder{
-				InspectionOrderID:     orderID,
-				OrderNumber:           orderNumber,
-				PurchaseOrderItemCode: line.Code,
-				ItemCode:              line.ItemCode,
-				WarehouseID:           targetWarehouse,
-				Quantity:              stockQty,
-			})
+			lotesAbrir = append(lotesAbrir, loteAbrir{linha: line, item: item, qtd: stockQtyExata, almox: targetWarehouse, qtdFloat: stockQty})
 		}
 
 		receivedByLine[line.Code] = receivedByLine[line.Code].Add(item.Quantity)
@@ -215,12 +218,54 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		})
 	}
 
-	matched, err := uc.Repo.RegisterItemReceipts(ctx, dto.PurchaseOrderCode, receivedByLine)
+	// Tudo valido antes de gravar: a falha na terceira linha não deixa as duas
+	// primeiras no estoque com o pedido ainda em aberto — o que, ao repetir o
+	// recebimento, entrava em dobro.
+	emTransacao := uc.Transacao
+	if emTransacao == nil {
+		emTransacao = func(ctx context.Context, fn func(RecebimentoRepos) error) error {
+			return fn(RecebimentoRepos{Pedidos: uc.Repo, Estoque: uc.StockRepo})
+		}
+	}
+	err = emTransacao(ctx, func(r RecebimentoRepos) error {
+		for _, mov := range entradas {
+			created, err := r.Estoque.CreateMovement(ctx, mov)
+			if err != nil {
+				return err
+			}
+			movements = append(movements, stockMovementReceiptResponse(created))
+		}
+		matched, err := r.Pedidos.RegisterItemReceipts(ctx, dto.PurchaseOrderCode, receivedByLine)
+		if err != nil {
+			return err
+		}
+		if matched != len(receivedByLine) {
+			return errorsuc.NewValidationError(fmt.Sprintf("foram gravadas %d linhas de recebimento, mas eram esperadas %d", matched, len(receivedByLine)))
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if matched != len(receivedByLine) {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("foram gravadas %d linhas de recebimento, mas eram esperadas %d", matched, len(receivedByLine)))
+
+	// O lote de inspeção nasce depois: o material já está retido no almoxarifado
+	// de inspeção, então um erro aqui vira aviso, não desfaz o recebimento.
+	for _, l := range lotesAbrir {
+		orderID, orderNumber, err := uc.Inspection.AbrirDoRecebimento(
+			ctx, l.linha.ItemCode, l.linha.Mask, l.qtd, l.almox,
+			order.SupplierCode, &dto.PurchaseOrderCode, &l.linha.Code, l.item.Lot, nil)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("item %d: o material entrou no almoxarifado de inspeção, mas o lote de inspeção não foi aberto — abra-o na tela de inspeção", l.linha.ItemCode))
+			continue
+		}
+		inspectionOrders = append(inspectionOrders, response.ReceiptInspectionOrder{
+			InspectionOrderID:     orderID,
+			OrderNumber:           orderNumber,
+			PurchaseOrderItemCode: l.linha.Code,
+			ItemCode:              l.linha.ItemCode,
+			WarehouseID:           l.almox,
+			Quantity:              l.qtdFloat,
+		})
 	}
 	updated, err := uc.Repo.GetByCode(ctx, dto.PurchaseOrderCode)
 	if err != nil {
@@ -245,7 +290,7 @@ func parseReceiptDate(s *string) (*time.Time, error) {
 	}
 	t, err := time.Parse("2006-01-02", *s)
 	if err != nil {
-		return nil, fmt.Errorf("data de validade %q inválida: %w", *s, err)
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("data de validade %q inválida: use o formato AAAA-MM-DD", *s))
 	}
 	return &t, nil
 }

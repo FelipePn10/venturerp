@@ -37,9 +37,9 @@ func (r *Repository) Coverage(ctx context.Context, filter mrp_report_uc.Filter) 
 		    -- Saldo real mais a entrada/baixa simulada, quando o plano é de um
 		    -- cenário (plano real não tem ajuste e a segunda parte vem vazia).
 		    SELECT item_code, SUM(saldo) saldo FROM (
-		        SELECT b.item_code, b.quantity - b.reserved_qty AS saldo
-		          FROM stock_balances b
-		         WHERE b.enterprise_id = $1 AND ($5::bigint IS NULL OR b.warehouse_id = $5)
+		        SELECT balance.item_code, `+saldoDaLinha+` AS saldo
+		          FROM stock_balances balance
+		         WHERE balance.enterprise_id = $1 AND ($5::bigint IS NULL OR balance.warehouse_id = $5)
 		        UNION ALL
 		        SELECT c.item_code, c.quantity
 		          FROM planning_scenario_changes c

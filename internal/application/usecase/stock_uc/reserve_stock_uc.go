@@ -18,6 +18,35 @@ type ReserveStockUseCase struct {
 	Auth ports.AuthService
 }
 
+// Listar devolve as reservas da empresa: do item, quando informado, e só as
+// ativas, quando pedido. Sem isto a tela só agia sobre um número digitado.
+func (uc *ReserveStockUseCase) Listar(ctx context.Context, itemCode int64, soAtivas bool) ([]*response.StockReservationResponse, error) {
+	if !uc.Auth.CanGetStockBalance(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	var lista []*entity.StockReservation
+	var err error
+	switch {
+	case itemCode > 0:
+		lista, err = uc.Repo.ListReservationsByItem(ctx, itemCode)
+	case soAtivas:
+		lista, err = uc.Repo.ListActiveReservations(ctx)
+	default:
+		lista, err = uc.Repo.ListReservations(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.StockReservationResponse, 0, len(lista))
+	for _, r := range lista {
+		if soAtivas && r.Status != "ACTIVE" {
+			continue
+		}
+		out = append(out, toStockReservationResponse(r))
+	}
+	return out, nil
+}
+
 func (uc *ReserveStockUseCase) Execute(ctx context.Context, dto request.CreateReservationDTO) (*response.StockReservationResponse, error) {
 	if !uc.Auth.CanReserveStock(ctx) {
 		return nil, errorsuc.ErrUnauthorized

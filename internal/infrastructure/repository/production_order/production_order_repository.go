@@ -2,6 +2,7 @@ package production_order
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"time"
@@ -197,7 +198,36 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 			return nil, fmt.Errorf("registering production delivery line: %w", err)
 		}
 	}
+	// O produto entra por último: o valor dele inclui o que esta entrega baixou.
+	ehProduto := func(m *stockentity.StockMovement) bool {
+		return m.MovementType == stockentity.MovementTypeProductionEntry || m.MovementType == stockentity.MovementTypePlannedProductionEntry ||
+			m.MovementType == stockentity.MovementTypeProductionExcess
+	}
 	for _, movement := range movements {
+		if ehProduto(movement) {
+			continue
+		}
+		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
+			return nil, err
+		}
+	}
+	var planejado, entregue decimal.Decimal
+	if err := tx.QueryRow(ctx,
+		`SELECT o.planned_qty, COALESCE((SELECT SUM(x.quantity) FROM production_deliveries x WHERE x.production_order_id=o.id AND x.enterprise_id=o.enterprise_id), 0)
+		   FROM production_orders o WHERE o.id=$1 AND o.enterprise_id=$2`, d.ProductionOrderID, enterpriseID).Scan(&planejado, &entregue); err != nil {
+		return nil, fmt.Errorf("lendo o saldo a produzir da ordem: %w", err)
+	}
+	unitario, err := custoUnitarioDaEntrega(ctx, tx, enterpriseID, d.ProductionOrderID, locked.ItemCode, locked.Mask,
+		planejado.Sub(entregue).Add(d.Quantity), d.Quantity, d.IsFinal)
+	if err != nil {
+		return nil, err
+	}
+	for _, movement := range movements {
+		if !ehProduto(movement) {
+			continue
+		}
+		movement.UnitPrice = unitario
+		movement.ValorizarPelaMedia = !unitario.IsPositive()
 		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
 			return nil, err
 		}
@@ -319,7 +349,7 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		return err
 	}
 	if reporting == "ORDER" && issue == "REGISTRATION_RELEASE" {
-		return fmt.Errorf("o parâmetro 45 impede a liberação: a ordem aponta com baixa no cadastro ou na liberação")
+		return errorsuc.NewValidationError("a ordem não pode ser liberada: ela aponta com baixa no cadastro ou na liberação")
 	}
 	rows, err := r.pool.Query(ctx, `SELECT operation.origin::text,
 		COALESCE(route_operation.third_party_remittance,operation.third_party_remittance)
@@ -348,10 +378,10 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		return err
 	}
 	if external > 0 && total > external {
-		return fmt.Errorf("o parâmetro 45 impede a liberação: operações de terceiros não podem conviver com outras operações")
+		return errorsuc.NewValidationError("a ordem não pode ser liberada: operações de terceiros não podem conviver com outras operações")
 	}
 	if invalidRemittance {
-		return fmt.Errorf("o parâmetro 45 impede a liberação: a remessa a terceiros deve usar itens de demanda")
+		return errorsuc.NewValidationError("a ordem não pode ser liberada: a remessa a terceiros deve usar itens de demanda")
 	}
 	return nil
 }
@@ -552,7 +582,7 @@ func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *en
 		return nil, err
 	}
 	if order.Status != entity.StatusInProgress {
-		return nil, fmt.Errorf("apontamento permitido somente para OF EM_ANDAMENTO")
+		return nil, errorsuc.NewValidationError("a ordem de produção precisa estar em andamento para receber apontamento")
 	}
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO public.production_appointments
@@ -804,36 +834,53 @@ func (r *ProductionOrderRepositoryPGX) GetConsumptions(ctx context.Context, prod
 }
 
 // ComputeActualCostInputs aggregates the actual material and labor cost incurred
-// by an order. Material is the sum of each consumption valued at the item's
-// weighted-average cost (preferring the consumption warehouse, falling back to
-// the most recently updated balance for the item). Labor is the sum of appointed
+// by an order. Material é o que o estoque baixou para a ordem (o valor do movimento,
+// no custo da data do consumo), menos o que voltou; consumo sem almoxarifado não
+// gera movimento e entra pelo custo médio atual. Labor is the sum of appointed
 // durations × the cost/hour of the work center the appointment's machine belongs
 // to (a work center is a machine_type, which is what work_center_costs keys on).
 func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (decimal.Decimal, decimal.Decimal, error) {
+	return custoRealDaOrdem(ctx, r.pool, productionOrderID)
+}
+
+// leitorDeLinha aceita o pool ou a transação de quem chamou.
+type leitorDeLinha interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func custoRealDaOrdem(ctx context.Context, q leitorDeLinha, productionOrderID int64) (decimal.Decimal, decimal.Decimal, error) {
 	var materialReal decimal.Decimal
-	err := r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(c.consumed_qty * COALESCE(sb.avg_cost, 0)), 0)
-		 FROM public.production_consumptions c
-		 LEFT JOIN LATERAL (
-		     SELECT b.avg_cost FROM public.stock_balances b
-		     WHERE b.item_code = c.item_code
-		     ORDER BY CASE WHEN b.warehouse_id = c.warehouse_id THEN 0 ELSE 1 END, b.updated_at DESC
-		     LIMIT 1
-		 ) sb ON TRUE
-		 WHERE c.production_order_id = $1`, productionOrderID).Scan(&materialReal)
+	err := q.QueryRow(ctx,
+		`SELECT COALESCE((SELECT SUM(m.total_price) FROM public.stock_movements m
+		                   JOIN public.production_orders o ON o.id = m.reference_code AND o.enterprise_id = m.enterprise_id
+		                  WHERE m.reference_type = 'PRODUCTION_ORDER' AND m.reference_code = $1
+		                    AND m.movement_type IN ('OUT','REP') AND m.reversed_by_movement_id IS NULL), 0)
+		      - COALESCE((SELECT SUM(m.total_price) FROM public.stock_movements m
+		                   JOIN public.production_orders o ON o.id = m.reference_code AND o.enterprise_id = m.enterprise_id
+		                  WHERE m.reference_type = 'PRODUCTION_ORDER' AND m.reference_code = $1
+		                    AND m.movement_type = 'IN' AND m.item_code <> o.item_code AND m.reversed_by_movement_id IS NULL), 0)
+		      + COALESCE((SELECT SUM(c.consumed_qty * COALESCE(sb.avg_cost, 0))
+		                    FROM public.production_consumptions c
+		                    LEFT JOIN LATERAL (
+		                        SELECT b.avg_cost FROM public.stock_balances b
+		                         WHERE b.item_code = c.item_code
+		                         ORDER BY b.updated_at DESC LIMIT 1
+		                    ) sb ON TRUE
+		                   WHERE c.production_order_id = $1 AND c.warehouse_id IS NULL), 0)`, productionOrderID).Scan(&materialReal)
 	if err != nil {
 		return decimal.Zero, decimal.Zero, fmt.Errorf("computing actual material cost: %w", err)
 	}
 
 	var laborReal decimal.Decimal
-	err = r.pool.QueryRow(ctx,
+	err = q.QueryRow(ctx,
 		`SELECT COALESCE(SUM(
 		     EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * wcc.cost_per_hour
 		 ), 0)
 		 FROM public.production_appointments a
 		 JOIN public.machines m ON m.id = a.machine_id
 		 JOIN public.machine_types mt ON mt.code = m.machine_type_code
-		 JOIN public.work_center_costs wcc ON wcc.work_center_id = mt.id
+		 JOIN public.production_orders o ON o.id = a.production_order_id
+		 JOIN public.work_center_costs wcc ON wcc.work_center_id = mt.id AND wcc.enterprise_id = o.enterprise_id
 		 WHERE a.production_order_id = $1
 		   AND a.start_time IS NOT NULL AND a.end_time IS NOT NULL`, productionOrderID).Scan(&laborReal)
 	if err != nil {
@@ -1032,4 +1079,91 @@ func (r *ProductionOrderRepositoryPGX) CustoPendente(ctx context.Context, id int
 		return nil, fmt.Errorf("lendo o custo pendente da OF %d: %w", id, err)
 	}
 	return motivo, nil
+}
+
+// CustoUnitarioDaEntrega é o valor da entrega fora de transação, para consulta.
+func (r *ProductionOrderRepositoryPGX) CustoUnitarioDaEntrega(ctx context.Context, order *entity.ProductionOrder, qty decimal.Decimal, final bool) (decimal.Decimal, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	return custoUnitarioDaEntrega(ctx, r.pool, enterpriseID, order.ID, order.ItemCode, order.Mask, order.PlannedQty.Sub(order.ProducedQty), qty, final)
+}
+
+// custoUnitarioDaEntrega diz por quanto a peça entra no estoque. O que a ordem já
+// gastou (material baixado e mão de obra apontada) menos o que as entregas anteriores
+// levaram é o custo a entregar: a entrega final leva tudo, a parcial, a sua parte do
+// que falta produzir. Sem custo apurado vale o custo-padrão; sem padrão, zero, e o
+// movimento entra pelo médio do item. Antes a entrada era sempre a custo zero: o
+// produto acabado diluía o médio e saía na venda sem custo.
+func custoUnitarioDaEntrega(ctx context.Context, q leitorDeLinha, enterpriseID, ordem, item int64, mask string, falta, qty decimal.Decimal, final bool) (decimal.Decimal, error) {
+	if !qty.IsPositive() {
+		return decimal.Zero, nil
+	}
+	material, mao, err := custoRealDaOrdem(ctx, q, ordem)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	var entregue decimal.Decimal
+	if err := q.QueryRow(ctx,
+		`SELECT COALESCE(SUM(total_price), 0) FROM public.stock_movements
+		  WHERE enterprise_id=$1 AND reference_type='PRODUCTION_ORDER' AND reference_code=$2
+		    AND movement_type IN ('EP','EPP','EPE') AND reversed_by_movement_id IS NULL`, enterpriseID, ordem).Scan(&entregue); err != nil {
+		return decimal.Zero, fmt.Errorf("lendo o valor já entregue da ordem: %w", err)
+	}
+	if restante := material.Add(mao).Sub(entregue); restante.IsPositive() {
+		base := qty
+		if !final && falta.GreaterThan(qty) {
+			base = falta
+		}
+		return restante.DivRound(base, stockentity.CasasCusto), nil
+	}
+	var padrao decimal.Decimal
+	err = q.QueryRow(ctx,
+		`SELECT COALESCE(total_cost, 0) FROM public.item_standard_costs WHERE item_code=$1 AND mask=$2 ORDER BY calculated_at DESC LIMIT 1`,
+		item, mask).Scan(&padrao)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return decimal.Zero, fmt.Errorf("lendo o custo-padrão do item: %w", err)
+	}
+	return padrao, nil
+}
+
+// BaixasDaOrdem diz quanto de cada componente a ordem já baixou (menos o que voltou),
+// quanto já entregou e quanto apontou. A baixa automática da entrega e o backflush do
+// apontamento descontam isso: sem o desconto, a mesma peça saía duas vezes.
+func (r *ProductionOrderRepositoryPGX) BaixasDaOrdem(ctx context.Context, ordem int64) (map[int64]decimal.Decimal, decimal.Decimal, decimal.Decimal, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, decimal.Zero, decimal.Zero, err
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.item_code, SUM(CASE WHEN m.movement_type = 'IN' THEN -m.quantity ELSE m.quantity END)
+		   FROM public.stock_movements m
+		   JOIN public.production_orders o ON o.id = m.reference_code AND o.enterprise_id = m.enterprise_id
+		  WHERE m.enterprise_id=$1 AND m.reference_type='PRODUCTION_ORDER' AND m.reference_code=$2
+		    AND m.movement_type IN ('OUT','REP','IN') AND m.item_code <> o.item_code AND m.reversed_by_movement_id IS NULL
+		  GROUP BY m.item_code`, enterpriseID, ordem)
+	if err != nil {
+		return nil, decimal.Zero, decimal.Zero, fmt.Errorf("lendo as baixas da ordem: %w", err)
+	}
+	defer rows.Close()
+	baixado := map[int64]decimal.Decimal{}
+	for rows.Next() {
+		var item int64
+		var q decimal.Decimal
+		if err := rows.Scan(&item, &q); err != nil {
+			return nil, decimal.Zero, decimal.Zero, fmt.Errorf("lendo as baixas da ordem: %w", err)
+		}
+		baixado[item] = q
+	}
+	if err := rows.Err(); err != nil {
+		return nil, decimal.Zero, decimal.Zero, err
+	}
+	var entregue, apontado decimal.Decimal
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE((SELECT SUM(quantity) FROM production_deliveries WHERE production_order_id=$1 AND enterprise_id=$2), 0),
+		        COALESCE((SELECT SUM(produced_qty) FROM production_appointments WHERE production_order_id=$1), 0)`, ordem, enterpriseID).Scan(&entregue, &apontado); err != nil {
+		return nil, decimal.Zero, decimal.Zero, fmt.Errorf("lendo o produzido da ordem: %w", err)
+	}
+	return baixado, entregue, apontado, nil
 }

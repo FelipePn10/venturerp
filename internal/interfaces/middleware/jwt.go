@@ -34,13 +34,13 @@ func JWTForEnvironment(secret, environment string, log *applogger.Logger, valida
 
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, `{"error": "Authorization header missing"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error": "sua sessão expirou: entre novamente"}`, http.StatusUnauthorized)
 				return
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, `{"error": "Invalid auth header format"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error": "sua sessão expirou: entre novamente"}`, http.StatusUnauthorized)
 				return
 			}
 
@@ -76,7 +76,7 @@ func JWTForEnvironment(secret, environment string, log *applogger.Logger, valida
 					"error", err,
 					"ip", realIP(r),
 				)
-				http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
+				http.Error(w, `{"error": "sua sessão expirou: entre novamente"}`, http.StatusUnauthorized)
 				return
 			}
 
@@ -87,7 +87,7 @@ func JWTForEnvironment(secret, environment string, log *applogger.Logger, valida
 				if validationErr != nil || current.EnterpriseID != claims.EnterpriseID ||
 					current.AuthVersion != claims.AuthVersion || currentRole != role {
 					applogger.FromContext(r.Context()).Warn("revoked token attempt", "user_id", claims.UserID, "ip", realIP(r))
-					http.Error(w, `{"error": "Invalid token"}`, http.StatusUnauthorized)
+					http.Error(w, `{"error": "sua sessão expirou: entre novamente"}`, http.StatusUnauthorized)
 					return
 				}
 				role = currentRole

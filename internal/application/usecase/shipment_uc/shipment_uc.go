@@ -2,6 +2,7 @@ package shipment_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	stockrepository "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/google/uuid"
 )
 
@@ -390,6 +392,10 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 			Status:            "ACTIVE",
 			CreatedBy:         actor,
 		}); err != nil {
+			// Depósito que não aceita reservas: o romaneio segue sem reservar.
+			if errors.Is(err, stockrepository.ErrAlmoxSemReserva) {
+				continue
+			}
 			return fmt.Errorf("reservando o item %d do romaneio: %w", it.ItemCode, err)
 		}
 	}

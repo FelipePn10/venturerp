@@ -40,7 +40,7 @@ func (h *ItemStructureHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if dto.ParentCode.String() == "" || dto.ChildCode.String() == "" {
-		jsonError(w, http.StatusBadRequest, "parent_code e child_code são obrigatórios")
+		jsonError(w, http.StatusBadRequest, "informe o item pai e o componente")
 		return
 	}
 
@@ -134,7 +134,7 @@ func jsonResponse(w http.ResponseWriter, status int, body any) {
 
 func jsonError(w http.ResponseWriter, status int, msg string) {
 	msg = strings.NewReplacer(
-		"conteúdo da requisição inválido", "corpo da requisição inválido",
+		"conteúdo da requisição inválido", "não foi possível ler os dados enviados",
 		"invalid shipment code", "código do romaneio inválido",
 		"invalid load code", "código da carga inválido",
 		"invalid volume id", "identificador do volume inválido",
