@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,21 @@ import (
 // itemLiberadoSQL: só item liberado (ou sem governança) é reposto.
 const itemLiberadoSQL = `COALESCE((SELECT g.status FROM item_governanca g
 	  WHERE g.enterprise_id = i.enterprise_id AND g.item_code = i.code), 'LIBERADO') = 'LIBERADO'`
+
+// itensPorMascara é o conjunto do cálculo: o item e, ao lado, cada máscara com
+// política própria. Saldo e chegada de máscara com política vão só para ela; os
+// demais ficam no item, então nada conta duas vezes.
+type itensPorMascara struct {
+	itens    map[int64]*entity.ItemReposicao
+	mascaras map[int64]map[string]*entity.ItemReposicao
+}
+
+func (m itensPorMascara) de(item int64, mask string) *entity.ItemReposicao {
+	if it := m.mascaras[item][mask]; it != nil {
+		return it
+	}
+	return m.itens[item]
+}
 
 // SugestoesDeReposicao lê a situação de cada item e deixa o cálculo para o
 // domínio. Item bloqueado, descontinuado, em cadastro, fantasma ou fora do
@@ -37,17 +53,26 @@ func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entit
 	if len(itens) == 0 {
 		return out, nil
 	}
-	if err := r.politicasDosItens(ctx, empresa, itens); err != nil {
+	conjunto := itensPorMascara{itens: itens, mascaras: map[int64]map[string]*entity.ItemReposicao{}}
+	if err := r.politicasDosItens(ctx, empresa, conjunto); err != nil {
 		return nil, err
 	}
-	if err := r.saldosDeReposicao(ctx, empresa, itens); err != nil {
+	if err := r.saldosDeReposicao(ctx, empresa, conjunto); err != nil {
 		return nil, err
 	}
-	if err := r.chegadasDeReposicao(ctx, empresa, itens); err != nil {
+	if err := r.chegadasDeReposicao(ctx, empresa, conjunto); err != nil {
 		return nil, err
 	}
 	for _, code := range ordem {
 		out = append(out, itens[code].Sugestoes()...)
+		mascaras := make([]string, 0, len(conjunto.mascaras[code]))
+		for m := range conjunto.mascaras[code] {
+			mascaras = append(mascaras, m)
+		}
+		sort.Strings(mascaras)
+		for _, m := range mascaras {
+			out = append(out, conjunto.mascaras[code][m].Sugestoes()...)
+		}
 	}
 	return out, nil
 }
@@ -91,42 +116,53 @@ func (r *StockRepositorySQLC) itensDeReposicao(ctx context.Context, empresa int6
 	return itens, ordem, rows.Err()
 }
 
-func (r *StockRepositorySQLC) politicasDosItens(ctx context.Context, empresa int64, itens map[int64]*entity.ItemReposicao) error {
+func (r *StockRepositorySQLC) politicasDosItens(ctx context.Context, empresa int64, c itensPorMascara) error {
 	lista, err := r.lerPoliticas(ctx, empresa, true)
 	if err != nil {
 		return err
 	}
 	for _, p := range lista {
-		if it := itens[p.ItemCode]; it != nil {
-			it.Politicas = append(it.Politicas, p)
+		it := c.itens[p.ItemCode]
+		if it == nil {
+			continue
 		}
+		if p.Mask != "" {
+			if c.mascaras[p.ItemCode] == nil {
+				c.mascaras[p.ItemCode] = map[string]*entity.ItemReposicao{}
+			}
+			if c.mascaras[p.ItemCode][p.Mask] == nil {
+				c.mascaras[p.ItemCode][p.Mask] = it.DaMascara(p.Mask)
+			}
+			it = c.mascaras[p.ItemCode][p.Mask]
+		}
+		it.Politicas = append(it.Politicas, p)
 	}
 	return nil
 }
 
 // saldosDeReposicao: saldo por almoxarifado, retido em lote e requisição aberta
 // além do que conseguiu reservar. Total só soma o que conta para promessa.
-func (r *StockRepositorySQLC) saldosDeReposicao(ctx context.Context, empresa int64, itens map[int64]*entity.ItemReposicao) error {
+func (r *StockRepositorySQLC) saldosDeReposicao(ctx context.Context, empresa int64, c itensPorMascara) error {
 	rows, err := r.pool.Query(ctx,
 		`WITH saldo AS (
-		   SELECT b.item_code, b.warehouse_id, SUM(b.quantity) fisico, SUM(b.reserved_qty) reservado
-		     FROM stock_balances b WHERE b.enterprise_id=$1 GROUP BY 1, 2),
+		   SELECT b.item_code, b.mask, b.warehouse_id, SUM(b.quantity) fisico, SUM(b.reserved_qty) reservado
+		     FROM stock_balances b WHERE b.enterprise_id=$1 GROUP BY 1, 2, 3),
 		 retido AS (
-		   SELECT b.item_code, b.warehouse_id, SUM(b.quantity) qtd
-		     FROM stock_lot_balances b WHERE b.enterprise_id=$1 AND b.quantity > 0 AND `+loteSemSaidaSQL+` GROUP BY 1, 2),
+		   SELECT b.item_code, b.mask, b.warehouse_id, SUM(b.quantity) qtd
+		     FROM stock_lot_balances b WHERE b.enterprise_id=$1 AND b.quantity > 0 AND `+loteSemSaidaSQL+` GROUP BY 1, 2, 3),
 		 requisitado AS (
-		   SELECT l.item_code, q.warehouse_id,
+		   SELECT l.item_code, COALESCE(l.mask,'') mask, q.warehouse_id,
 		          SUM(GREATEST(l.quantity - l.issued_qty
 		              - COALESCE((SELECT SUM(s.quantity) FROM stock_reservations s
 		                           WHERE s.reference_type=$2 AND s.reference_item_code=l.id AND s.status='ACTIVE'), 0), 0)) qtd
 		     FROM material_requisitions q JOIN material_requisition_items l ON l.requisition_id=q.id
-		    WHERE q.enterprise_id=$1 AND q.status IN ('PENDENTE_APROVACAO','ABERTA','PARCIAL') GROUP BY 1, 2)
-		 SELECT w.id, `+almoxPrometivelSQL+`, x.item_code, COALESCE(s.fisico,0), COALESCE(s.reservado,0), COALESCE(t.qtd,0), COALESCE(q.qtd,0)
-		   FROM (SELECT item_code, warehouse_id FROM saldo UNION SELECT item_code, warehouse_id FROM requisitado) x
+		    WHERE q.enterprise_id=$1 AND q.status IN ('PENDENTE_APROVACAO','ABERTA','PARCIAL') GROUP BY 1, 2, 3)
+		 SELECT w.id, `+almoxPrometivelSQL+`, x.item_code, x.mask, COALESCE(s.fisico,0), COALESCE(s.reservado,0), COALESCE(t.qtd,0), COALESCE(q.qtd,0)
+		   FROM (SELECT item_code, mask, warehouse_id FROM saldo UNION SELECT item_code, mask, warehouse_id FROM requisitado) x
 		   JOIN warehouse w ON w.id=x.warehouse_id AND w.enterprise_id=$1
-		   LEFT JOIN saldo s ON s.item_code=x.item_code AND s.warehouse_id=x.warehouse_id
-		   LEFT JOIN retido t ON t.item_code=x.item_code AND t.warehouse_id=x.warehouse_id
-		   LEFT JOIN requisitado q ON q.item_code=x.item_code AND q.warehouse_id=x.warehouse_id`,
+		   LEFT JOIN saldo s ON s.item_code=x.item_code AND s.mask=x.mask AND s.warehouse_id=x.warehouse_id
+		   LEFT JOIN retido t ON t.item_code=x.item_code AND t.mask=x.mask AND t.warehouse_id=x.warehouse_id
+		   LEFT JOIN requisitado q ON q.item_code=x.item_code AND q.mask=x.mask AND q.warehouse_id=x.warehouse_id`,
 		empresa, entity.ReferenceTypeRequisition)
 	if err != nil {
 		return fmt.Errorf("reading replenishment balances: %w", err)
@@ -134,21 +170,19 @@ func (r *StockRepositorySQLC) saldosDeReposicao(ctx context.Context, empresa int
 	defer rows.Close()
 	for rows.Next() {
 		var almox, item int64
+		var mask string
 		var conta bool
 		var s entity.SaldoReposicao
-		if err := rows.Scan(&almox, &conta, &item, &s.Fisico, &s.Reservado, &s.Retido, &s.Requisitado); err != nil {
+		if err := rows.Scan(&almox, &conta, &item, &mask, &s.Fisico, &s.Reservado, &s.Retido, &s.Requisitado); err != nil {
 			return fmt.Errorf("scanning replenishment balance: %w", err)
 		}
-		it := itens[item]
+		it := c.de(item, mask)
 		if it == nil {
 			continue
 		}
-		it.PorAlmox[almox] = s
+		it.PorAlmox[almox] = it.PorAlmox[almox].Somar(s)
 		if conta {
-			it.Total.Fisico = it.Total.Fisico.Add(s.Fisico)
-			it.Total.Reservado = it.Total.Reservado.Add(s.Reservado)
-			it.Total.Retido = it.Total.Retido.Add(s.Retido)
-			it.Total.Requisitado = it.Total.Requisitado.Add(s.Requisitado)
+			it.Total = it.Total.Somar(s)
 		}
 	}
 	return rows.Err()
@@ -158,53 +192,54 @@ func (r *StockRepositorySQLC) saldosDeReposicao(ctx context.Context, empresa int
 // de compra e pedido sem destino) fica em SemDestino, e o cálculo decide quem
 // aproveita. Envio em trânsito conta no destino. Ordem planejada ainda não firme conta: firmada, ela vira a ordem de
 // produção ou a requisição de compra que entra aqui pelo outro lado.
-func (r *StockRepositorySQLC) chegadasDeReposicao(ctx context.Context, empresa int64, itens map[int64]*entity.ItemReposicao) error {
+func (r *StockRepositorySQLC) chegadasDeReposicao(ctx context.Context, empresa int64, c itensPorMascara) error {
 	rows, err := r.pool.Query(ctx,
-		`SELECT p.item_code, p.warehouse_id,
+		`SELECT p.item_code, COALESCE(p.mask,''), p.warehouse_id,
 		        SUM(GREATEST(p.requested_qty - p.received_qty - p.cancelled_qty, 0)
 		            * CASE WHEN p.internal_qty > 0 AND p.requested_qty > 0 THEN p.internal_qty / p.requested_qty ELSE 1 END)
 		   FROM purchase_order_items p JOIN purchase_orders o ON o.code = p.purchase_order_code
 		   JOIN enterprise e ON e.code = o.enterprise_code
 		  WHERE e.id=$1 AND p.is_active AND o.is_active AND p.status IN ('OPEN','PARTIAL') AND o.status IN ('REQUESTED','APPROVED','PARTIAL')
-		  GROUP BY 1, 2
+		  GROUP BY 1, 2, 3
 		 UNION ALL
-		 SELECT ri.item_code, ri.warehouse_id, SUM(GREATEST(ri.quantity - ri.attended_qty - ri.cancelled_qty, 0))
+		 SELECT ri.item_code, ri.mask, ri.warehouse_id, SUM(GREATEST(ri.quantity - ri.attended_qty - ri.cancelled_qty, 0))
 		   FROM purchase_requisition_items ri JOIN purchase_requisitions rq ON rq.code = ri.requisition_code
 		   JOIN enterprise e ON e.code = rq.enterprise_code
 		  WHERE e.id=$1 AND ri.is_active AND rq.is_active AND rq.status IN ('OPEN','PARTIAL')
-		  GROUP BY 1, 2
+		  GROUP BY 1, 2, 3
 		 UNION ALL
-		 SELECT o.item_code, o.warehouse_id, SUM(GREATEST(o.planned_qty - o.produced_qty - o.scrapped_qty, 0))
+		 SELECT o.item_code, COALESCE(o.mask,''), o.warehouse_id, SUM(GREATEST(o.planned_qty - o.produced_qty - o.scrapped_qty, 0))
 		   FROM production_orders o
 		  WHERE o.enterprise_id=$1 AND o.status::text IN ('OPEN','PLANNED','RELEASED','IN_PROGRESS')
-		  GROUP BY 1, 2
+		  GROUP BY 1, 2, 3
 		 UNION ALL
-		 SELECT o.item_code, o.warehouse_code, SUM(o.quantity)
+		 SELECT o.item_code, COALESCE(o.mask,''), o.warehouse_code, SUM(o.quantity)
 		   FROM planned_orders o
 		  WHERE o.enterprise_id=$1 AND o.is_active AND NOT o.is_firm AND o.status::text='PLANNED'
-		  GROUP BY 1, 2
+		  GROUP BY 1, 2, 3
 		 UNION ALL
-		 SELECT l.item_code, q.destination_warehouse_id, SUM(GREATEST(l.quantity - l.issued_qty, 0))
+		 SELECT l.item_code, COALESCE(l.mask,''), q.destination_warehouse_id, SUM(GREATEST(l.quantity - l.issued_qty, 0))
 		   FROM material_requisitions q JOIN material_requisition_items l ON l.requisition_id=q.id
 		  WHERE q.enterprise_id=$1 AND q.kind='TRANSFERENCIA' AND q.status IN ('PENDENTE_APROVACAO','ABERTA','PARCIAL')
-		  GROUP BY 1, 2
+		  GROUP BY 1, 2, 3
 		 UNION ALL
-		 SELECT t.item_code, t.to_warehouse_id, SUM(t.quantity - t.received_qty - t.returned_qty - t.lost_qty)
+		 SELECT t.item_code, COALESCE(t.mask,''), t.to_warehouse_id, SUM(t.quantity - t.received_qty - t.returned_qty - t.lost_qty)
 		   FROM stock_transit_shipments t
 		  WHERE t.enterprise_id=$1 AND t.status='EM_TRANSITO'
-		  GROUP BY 1, 2`, empresa)
+		  GROUP BY 1, 2, 3`, empresa)
 	if err != nil {
 		return fmt.Errorf("reading replenishment receipts: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var item int64
+		var mask string
 		var almox *int64
 		var q decimal.Decimal
-		if err := rows.Scan(&item, &almox, &q); err != nil {
+		if err := rows.Scan(&item, &mask, &almox, &q); err != nil {
 			return fmt.Errorf("scanning replenishment receipt: %w", err)
 		}
-		it := itens[item]
+		it := c.de(item, mask)
 		if it == nil {
 			continue
 		}
@@ -263,9 +298,9 @@ func (r *StockRepositorySQLC) HojeDaEmpresa(ctx context.Context) (time.Time, err
 
 func (r *StockRepositorySQLC) lerPoliticas(ctx context.Context, empresa int64, soAtivas bool) ([]entity.PoliticaReposicao, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, item_code, warehouse_id, minimum_qty, maximum_qty, safety_qty, source_type, source_warehouse_id, is_active
+		`SELECT id, item_code, mask, warehouse_id, minimum_qty, maximum_qty, safety_qty, source_type, source_warehouse_id, is_active
 		   FROM stock_replenishment_policies
-		  WHERE enterprise_id=$1 AND (NOT $2 OR is_active) ORDER BY item_code, warehouse_id`, empresa, soAtivas)
+		  WHERE enterprise_id=$1 AND (NOT $2 OR is_active) ORDER BY item_code, mask, warehouse_id`, empresa, soAtivas)
 	if err != nil {
 		return nil, fmt.Errorf("listing replenishment policies: %w", err)
 	}
@@ -273,7 +308,7 @@ func (r *StockRepositorySQLC) lerPoliticas(ctx context.Context, empresa int64, s
 	out := []entity.PoliticaReposicao{}
 	for rows.Next() {
 		var p entity.PoliticaReposicao
-		if err := rows.Scan(&p.ID, &p.ItemCode, &p.WarehouseID, &p.Minimo, &p.Maximo, &p.Seguranca, &p.Origem, &p.AlmoxOrigem, &p.Ativa); err != nil {
+		if err := rows.Scan(&p.ID, &p.ItemCode, &p.Mask, &p.WarehouseID, &p.Minimo, &p.Maximo, &p.Seguranca, &p.Origem, &p.AlmoxOrigem, &p.Ativa); err != nil {
 			return nil, fmt.Errorf("scanning replenishment policy: %w", err)
 		}
 		out = append(out, p)
@@ -329,14 +364,14 @@ func (r *StockRepositorySQLC) SalvarPoliticaDeReposicao(ctx context.Context, p e
 	}
 	err = r.pool.QueryRow(ctx,
 		`INSERT INTO stock_replenishment_policies (enterprise_id, item_code, warehouse_id, minimum_qty, maximum_qty, safety_qty,
-		     source_type, source_warehouse_id, is_active, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-		 ON CONFLICT (enterprise_id, item_code, warehouse_id) DO UPDATE
+		     source_type, source_warehouse_id, is_active, created_by, mask)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		 ON CONFLICT (enterprise_id, item_code, mask, warehouse_id) DO UPDATE
 		   SET minimum_qty=EXCLUDED.minimum_qty, maximum_qty=EXCLUDED.maximum_qty, safety_qty=EXCLUDED.safety_qty,
 		       source_type=EXCLUDED.source_type, source_warehouse_id=EXCLUDED.source_warehouse_id,
 		       is_active=EXCLUDED.is_active, updated_at=NOW()
 		 RETURNING id`,
-		empresa, p.ItemCode, p.WarehouseID, p.Minimo, p.Maximo, p.Seguranca, p.Origem, p.AlmoxOrigem, p.Ativa, p.CreatedBy).Scan(&p.ID)
+		empresa, p.ItemCode, p.WarehouseID, p.Minimo, p.Maximo, p.Seguranca, p.Origem, p.AlmoxOrigem, p.Ativa, p.CreatedBy, p.Mask).Scan(&p.ID)
 	if err != nil {
 		var pg *pgconn.PgError
 		if errors.As(err, &pg) && pg.Code == "23514" {

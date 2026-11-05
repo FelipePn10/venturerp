@@ -97,6 +97,7 @@ type PosicaoItem struct {
 // de onde. WarehouseID nil é o item sem política, calculado sobre o saldo somado.
 type SugestaoReposicao struct {
 	ItemCode         int64           `json:"item_code"`
+	Mask             string          `json:"mask"`
 	Codigo           string          `json:"business_code"`
 	Nome             string          `json:"name"`
 	Unidade          string          `json:"uom"`

@@ -58,6 +58,7 @@ type PurchaseRequisitionItem struct {
 	RequisitionCode   int64
 	Sequence          int32
 	ItemCode          int64
+	Mask              string
 	Quantity          decimal.Decimal
 	AttendedQty       decimal.Decimal
 	CancelledQty      decimal.Decimal

@@ -83,6 +83,9 @@ type StockRepository interface {
 	// FecharInventario lança o ajuste de cada diferença (contado − foto da
 	// abertura) e fecha o inventário, numa transação.
 	FecharInventario(ctx context.Context, id int64, ator uuid.UUID, zerarNaoContados bool, motivo string) (*entity.ResultadoFechamentoInventario, error)
+	// LimiteDeAjusteDoUsuario soma os perfis ativos: vale o maior limite. Nil: nenhum
+	// perfil do usuário tem limite.
+	LimiteDeAjusteDoUsuario(ctx context.Context, usuario uuid.UUID) (*entity.LimiteDeAjuste, error)
 	// ResumoDoFechamento diz o que o inventário ajustaria se fechasse agora.
 	ResumoDoFechamento(ctx context.Context, inv *entity.PhysicalInventory, zerarNaoContados bool) (entity.ResumoFechamento, error)
 	// EncerrarContagem leva o inventário à conferência; sem isso a contagem cega

@@ -42,7 +42,7 @@ func (uc *UseCase) SalvarPoliticaDeReposicao(ctx context.Context, dto request.Po
 		return nil, err
 	}
 	p := entity.PoliticaReposicao{
-		ItemCode: dto.ItemCode, WarehouseID: dto.WarehouseID, Origem: strings.ToUpper(strings.TrimSpace(dto.SourceType)),
+		ItemCode: dto.ItemCode, Mask: strings.TrimSpace(dto.Mask), WarehouseID: dto.WarehouseID, Origem: strings.ToUpper(strings.TrimSpace(dto.SourceType)),
 		AlmoxOrigem: dto.SourceWarehouseID, Ativa: dto.IsActive == nil || *dto.IsActive, CreatedBy: ator,
 	}
 	if p.Minimo, err = quantidadeOpcional("mínimo", dto.MinimumQty); err != nil {
@@ -117,7 +117,7 @@ func (uc *UseCase) GerarReposicao(ctx context.Context, dto request.GerarReposica
 	for _, par := range paresDeTransferencia(linhas) {
 		req := &entity.RequisicaoMaterial{WarehouseID: par.origem, DestinoID: &par.destino, Notes: &nota, CreatedBy: ator}
 		for _, l := range par.linhas {
-			req.Itens = append(req.Itens, entity.RequisicaoMaterialItem{ItemCode: l.ItemCode, Quantity: l.Quantidade})
+			req.Itens = append(req.Itens, entity.RequisicaoMaterialItem{ItemCode: l.ItemCode, Mask: l.Mask, Quantity: l.Quantidade})
 		}
 		criada, err := uc.Ops.CriarRequisicaoMaterial(ctx, req)
 		if err != nil {
@@ -129,7 +129,7 @@ func (uc *UseCase) GerarReposicao(ctx context.Context, dto request.GerarReposica
 		itens := []request.RequisitionItemInput{}
 		for _, l := range linhas {
 			if l.Origem == entity.OrigemCompra {
-				itens = append(itens, request.RequisitionItemInput{ItemCode: l.ItemCode, WarehouseID: l.WarehouseID, Quantity: l.Quantidade})
+				itens = append(itens, request.RequisitionItemInput{ItemCode: l.ItemCode, Mask: l.Mask, WarehouseID: l.WarehouseID, Quantity: l.Quantidade})
 			}
 		}
 		criada, err := uc.Compras.Create(ctx, request.CreatePurchaseRequisitionDTO{Notes: &nota, Items: itens})
@@ -146,8 +146,12 @@ func (uc *UseCase) GerarReposicao(ctx context.Context, dto request.GerarReposica
 		if l.Origem != entity.OrigemProducao {
 			continue
 		}
+		var mascara *string
+		if l.Mask != "" {
+			mascara = &l.Mask
+		}
 		ordem, err := uc.Planejadas.Execute(ctx, request.CreatePlannedOrderDTO{
-			ItemCode: l.ItemCode, Quantity: l.Quantidade, OrderType: string(types.OrderProduction),
+			ItemCode: l.ItemCode, Mask: mascara, Quantity: l.Quantidade, OrderType: string(types.OrderProduction),
 			DemandType: string(types.DemandReplenishment), NeedDate: hoje.Format("2006-01-02"), WarehouseCode: l.WarehouseID, Notes: &nota, CreatedBy: ator,
 		})
 		if err != nil {
@@ -179,7 +183,7 @@ func linhasDeGeracao(dto request.GerarReposicaoDTO) ([]entity.LinhaGeracaoReposi
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("linha %d: escolha a origem da reposição", i+1))
 		}
 		linhas = append(linhas, entity.LinhaGeracaoReposicao{
-			ItemCode: l.ItemCode, WarehouseID: l.WarehouseID, Origem: origem, AlmoxOrigem: l.SourceWarehouseID, Quantidade: q,
+			ItemCode: l.ItemCode, Mask: strings.TrimSpace(l.Mask), WarehouseID: l.WarehouseID, Origem: origem, AlmoxOrigem: l.SourceWarehouseID, Quantidade: q,
 		})
 	}
 	if len(linhas) == 0 {

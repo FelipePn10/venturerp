@@ -46,7 +46,9 @@ func (r *StockRepositorySQLC) ResumoDoFechamento(ctx context.Context, inv *entit
 			custo = *it.UnitCost
 		}
 		resumo.ComDiferenca++
-		resumo.ValorAbsoluto = resumo.ValorAbsoluto.Add(dif.Abs().Mul(custo))
+		valor := dif.Abs().Mul(custo)
+		resumo.ValorAbsoluto = resumo.ValorAbsoluto.Add(valor)
+		resumo.MaiorLinha = decimal.Max(resumo.MaiorLinha, valor)
 		if entity.ForaDaTolerancia(it.SystemQty, dif, custo, tolerancia(it.ItemCode), inv.ToleranceValue) {
 			resumo.ForaTolerancia++
 		}

@@ -182,6 +182,7 @@ func toPhysicalInventoryItemResponse(it *entity.PhysicalInventoryItem) *response
 		Address:              it.Address,
 		Lot:                  it.Lot,
 		NeedsRecount:         it.NeedsRecount,
+		NotebookNumber:       it.Notebook,
 	}
 }
 
