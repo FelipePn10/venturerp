@@ -23,11 +23,17 @@ import (
 var itemReferenceKeys = map[string]struct{}{
 	"item_code": {}, "parent_item_code": {}, "child_item_code": {}, "root_item_code": {},
 	"material_item_code": {}, "band_item_code": {}, "scrap_item_code": {}, "service_item_code": {},
-	"reference_item_code": {}, "order_item_code": {}, "packaging_item_code": {}, "substituted_item_code": {},
+	"packaging_item_code": {}, "substituted_item_code": {},
 	"item_base_cod": {}, "item_codes": {}, "item_from": {}, "item_to": {},
 	// Matriz de setup do APS (VMAQ0200): transição de um item para outro.
 	"from_item_code": {}, "to_item_code": {},
 }
+
+// Fora da lista de propósito: `reference_item_code` (reserva de estoque) e
+// `order_item_code` (plano de produção) são o código da LINHA do documento —
+// linha do pedido de venda ou da OP —, não do cadastro de item. Traduzidos, a
+// linha 37 aparecia na tela como o código comercial do item de chave 37, e o
+// plano regravado perdia a linha. Ver TestLinhaDeDocumentoNaoEhItem.
 
 func isItemReferenceKey(r *http.Request, key string) bool {
 	if key != "parent_code" && key != "child_code" {
@@ -76,21 +82,23 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 			// middleware de raiz e roda antes do roteamento. Aqui ela chegaria
 			// tarde demais (e traduzir de novo converteria o código errado).
 			if !nativeItemBusinessCodeRequest(r) {
-				if err = translateItemQuery(r, pool, enterpriseID); err != nil {
-					recusarCodigoDeItem(w, err)
+				// Cada chave interna produzida aqui é registrada no contexto
+				// para o caso de uso NÃO resolver de novo pelo código comercial
+				// (contextkey.IsTranslatedItemCode). A query string ficava sem
+				// registro — e a lista de roteiros da VENT0202 lia o item errado.
+				daQuery, errQuery := translateItemQuery(r, pool, enterpriseID)
+				if errQuery != nil {
+					recusarCodigoDeItem(w, errQuery)
 					return
 				}
+				r = r.WithContext(contextkey.WithTranslatedItemCodes(r.Context(), daQuery...))
 				if requestHasJSON(r) && r.Body != nil {
-					traduziu, errBody := translateItemBody(r, pool, enterpriseID)
+					doCorpo, errBody := translateItemBody(r, pool, enterpriseID)
 					if errBody != nil {
 						recusarCodigoDeItem(w, errBody)
 						return
 					}
-					if traduziu {
-						// Marca para o caso de uso NÃO resolver de novo pelo
-						// código comercial: o valor já é a chave interna.
-						r = r.WithContext(context.WithValue(r.Context(), contextkey.ItemCodeTranslatedKey, true))
-					}
+					r = r.WithContext(contextkey.WithTranslatedItemCodes(r.Context(), doCorpo...))
 				}
 			}
 			if bypassItemResponseTranslation(r) {
@@ -242,16 +250,18 @@ var itemPathPatterns = []struct {
 	{[]string{"api", "stock", "kardex"}, 3},
 }
 
-func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) error {
+// translateKnownItemURLPath troca o código público do item no caminho pela chave
+// interna e devolve essa chave ("" quando a rota não tem item no caminho).
+func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) (string, error) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	index := itemPathSegmentIndex(parts)
 	if index < 0 {
-		return nil
+		return "", nil
 	}
 	publicCode := parts[index]
 	id, err := resolveBusinessCode(r.Context(), pool, enterpriseID, publicCode)
 	if err != nil {
-		return err
+		return "", err
 	}
 	parts[index] = strconv.FormatInt(id, 10)
 	r.URL.Path = "/" + strings.Join(parts, "/")
@@ -284,7 +294,7 @@ func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID
 			rc.RoutePath = trocaSegmento(rc.RoutePath, publicCode, interno)
 		}
 	}
-	return nil
+	return interno, nil
 }
 
 // trocaSegmento troca o segmento de caminho igual a `de` por `para`, comparando
@@ -329,9 +339,12 @@ func requestHasJSON(r *http.Request) bool {
 // interno produzido na primeira era reinterpretado como código comercial na
 // segunda e o registro ia parar em OUTRO item, respondendo 201.
 
-func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
+// translateItemQuery traduz as referências de item da query string e devolve as
+// chaves internas que produziu.
+func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) ([]string, error) {
 	query := r.URL.Query()
 	changed := false
+	var produzidos []string
 	for key, values := range query {
 		if !isItemInputReferenceKey(r, key) {
 			continue
@@ -345,9 +358,10 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 			for j, part := range parts {
 				id, err := resolveBusinessCode(r.Context(), pool, e, part)
 				if err != nil {
-					return fmt.Errorf("%s: %w", key, err)
+					return nil, fmt.Errorf("%s: %w", key, err)
 				}
 				translated[j] = strconv.FormatInt(id, 10)
+				produzidos = append(produzidos, translated[j])
 			}
 			values[i] = strings.Join(translated, ",")
 			changed = true
@@ -357,53 +371,56 @@ func translateItemQuery(r *http.Request, pool *pgxpool.Pool, e int64) error {
 	if changed {
 		r.URL.RawQuery = query.Encode()
 	}
-	return nil
+	return produzidos, nil
 }
 
-func translateItemBody(r *http.Request, pool *pgxpool.Pool, e int64) (bool, error) {
+// translateItemBody traduz as referências de item do corpo JSON e devolve as
+// chaves internas que ficaram no corpo.
+func translateItemBody(r *http.Request, pool *pgxpool.Pool, e int64) ([]string, error) {
 	const maximumJSONBody = 16 << 20
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maximumJSONBody+1))
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	_ = r.Body.Close()
 	if len(raw) > maximumJSONBody {
-		return false, fmt.Errorf("corpo JSON excede o limite de 16 MiB")
+		return nil, fmt.Errorf("corpo JSON excede o limite de 16 MiB")
 	}
 	if len(bytes.TrimSpace(raw)) == 0 {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
-		return false, nil
+		return nil, nil
 	}
 	var payload any
 	if err = json.Unmarshal(raw, &payload); err != nil {
 		r.Body = io.NopCloser(bytes.NewReader(raw))
-		return false, nil
+		return nil, nil
 	}
-	traduziu, err := walkInput(r, pool, e, payload)
-	if err != nil {
-		return false, err
+	var produzidos []string
+	if err = walkInput(r, pool, e, payload, &produzidos); err != nil {
+		return nil, err
 	}
 	translated, err := json.Marshal(payload)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	r.Body = io.NopCloser(bytes.NewReader(translated))
 	r.ContentLength = int64(len(translated))
-	return traduziu, nil
+	return produzidos, nil
 }
 
-// walkInput devolve se ALGUMA referência de item foi traduzida. Quem chama usa
-// isso para marcar a requisição — ver contextkey.ItemCodeTranslatedKey.
-func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) (bool, error) {
-	traduziu := false
+// walkInput traduz as referências de item do corpo e acumula em `produzidos` as
+// chaves internas que ficaram em cada uma — ver contextkey.IsTranslatedItemCode.
+//
+// Um número JSON numa referência de item é o contrato legado (já é a chave
+// interna, e não é traduzido); ele também entra no registro, senão o caso de uso
+// o releria como código comercial.
+func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any, produzidos *[]string) error {
 	switch node := value.(type) {
 	case []any:
 		for _, v := range node {
-			t, err := walkInput(r, pool, e, v)
-			if err != nil {
-				return traduziu, err
+			if err := walkInput(r, pool, e, v, produzidos); err != nil {
+				return err
 			}
-			traduziu = traduziu || t
 		}
 	case map[string]any:
 		for key, v := range node {
@@ -413,19 +430,41 @@ func walkInput(r *http.Request, pool *pgxpool.Pool, e int64, value any) (bool, e
 				}
 				translated, err := translateInputReference(r, pool, e, v)
 				if err != nil {
-					return traduziu, fmt.Errorf("%s: %w", key, err)
+					return fmt.Errorf("%s: %w", key, err)
 				}
 				node[key] = translated
-				traduziu = true
+				*produzidos = append(*produzidos, chavesProduzidas(translated)...)
 			}
-			t, err := walkInput(r, pool, e, v)
-			if err != nil {
-				return traduziu, err
+			if err := walkInput(r, pool, e, v, produzidos); err != nil {
+				return err
 			}
-			traduziu = traduziu || t
 		}
 	}
-	return traduziu, nil
+	return nil
+}
+
+// chavesProduzidas devolve, em texto, as chaves internas contidas no valor já
+// traduzido de uma referência de item (número, texto numérico ou lista deles).
+func chavesProduzidas(value any) []string {
+	switch typed := value.(type) {
+	case int64:
+		return []string{strconv.FormatInt(typed, 10)}
+	case float64:
+		if typed > 0 && math.Trunc(typed) == typed && typed <= math.MaxInt64 {
+			return []string{strconv.FormatInt(int64(typed), 10)}
+		}
+	case string:
+		if n, err := strconv.ParseInt(strings.TrimSpace(typed), 10, 64); err == nil && n > 0 {
+			return []string{strconv.FormatInt(n, 10)}
+		}
+	case []any:
+		var out []string
+		for _, v := range typed {
+			out = append(out, chavesProduzidas(v)...)
+		}
+		return out
+	}
+	return nil
 }
 
 func translateInputReference(r *http.Request, pool *pgxpool.Pool, e int64, value any) (any, error) {

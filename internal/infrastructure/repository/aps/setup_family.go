@@ -3,7 +3,6 @@ package aps
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
@@ -79,12 +78,12 @@ func (r *APSRepositorySQLC) DefinirFamiliaDeSetup(ctx context.Context, familia s
 	if familia != "" {
 		valor = familia
 	}
-	textos := make([]string, 0, len(itens))
-	for _, c := range itens {
-		textos = append(textos, strconv.FormatInt(c, 10))
-	}
-	tag, err := r.pool.Exec(ctx, `UPDATE items SET setup_family=$4
-		WHERE enterprise_id=$1 AND (code = ANY($2) OR business_code = ANY($3))`, e, itens, textos, valor)
+	// Só pela chave interna: o middleware já traduziu `item_codes`. Comparar
+	// também com business_code atingia OUTRO item onde há comercial numérico —
+	// na Tecnofer, agrupar a RN-01001 (chave 5) gravava a família também na
+	// CHAPA AÇO CARBONO 3MM (comercial "5").
+	tag, err := r.pool.Exec(ctx, `UPDATE items SET setup_family=$3
+		WHERE enterprise_id=$1 AND code = ANY($2)`, e, itens, valor)
 	if err != nil {
 		return 0, fmt.Errorf("gravando família de preparação: %w", err)
 	}
