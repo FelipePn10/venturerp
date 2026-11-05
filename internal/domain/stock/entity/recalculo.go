@@ -142,6 +142,14 @@ type ResultadoFechamento struct {
 	DiferencaRecalculo  decimal.Decimal `json:"recalc_variance"`
 	DiferencaSaldoNeg   decimal.Decimal `json:"negative_stock_variance"`
 	Contabilizado       bool            `json:"journal_posted"`
+	// O que a produção levou à contabilidade no mês.
+	ProducaoConsumo   decimal.Decimal `json:"production_consumption"`
+	ProducaoEntrega   decimal.Decimal `json:"production_delivery"`
+	ProducaoAbsorvida decimal.Decimal `json:"production_absorbed"`
+	ProducaoVariacao  decimal.Decimal `json:"production_variance"`
+	// Saldo da provisão de obsoletos e quanto ela mudou no mês.
+	ProvisaoObsoletos decimal.Decimal `json:"obsolete_provision"`
+	ProvisaoVariacao  decimal.Decimal `json:"obsolete_provision_change"`
 	// Pendencias impedem fechar. Avisos não.
 	Pendencias []string `json:"blocking"`
 	Avisos     []string `json:"warnings"`

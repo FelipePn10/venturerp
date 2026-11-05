@@ -393,3 +393,113 @@ func NotaDevolucao(d Devolucao) ([]Lancamento, []string) {
 	}
 	return out, nil
 }
+
+// OrdemNoMes é o que a ordem de produção movimentou no mês e o que ela já tinha
+// levado à contabilidade nos fechamentos anteriores. Valores de consumo e entrega
+// são líquidos de devolução e estorno; o consumo do mês pode ser negativo.
+type OrdemNoMes struct {
+	Consumo        decimal.Decimal
+	Entrega        decimal.Decimal
+	ConsumoAntes   decimal.Decimal
+	EntregaAntes   decimal.Decimal
+	AbsorvidoAntes decimal.Decimal
+	VariacaoAntes  decimal.Decimal
+	Encerrada      bool
+}
+
+// ApuracaoOrdem é o que o fechamento lança da ordem no mês.
+type ApuracaoOrdem struct {
+	Consumo   decimal.Decimal
+	Entrega   decimal.Decimal
+	Absorvido decimal.Decimal
+	Variacao  decimal.Decimal
+}
+
+// ApurarOrdem acha a mão de obra e os indiretos da ordem sem depender de tabela de
+// custo: é o que entrou no estoque acima do material consumido. Ordem encerrada
+// não pode deixar saldo em processo: a sobra vai para o resultado como variação.
+func ApurarOrdem(o OrdemNoMes) ApuracaoOrdem {
+	a := ApuracaoOrdem{Consumo: o.Consumo.Round(2), Entrega: o.Entrega.Round(2)}
+	consumo := o.ConsumoAntes.Add(a.Consumo)
+	entrega := o.EntregaAntes.Add(a.Entrega)
+	absorvido := decimal.Max(entrega.Sub(consumo), decimal.Zero)
+	a.Absorvido = absorvido.Sub(o.AbsorvidoAntes)
+	if o.Encerrada {
+		saldo := consumo.Add(absorvido).Sub(entrega).Sub(o.VariacaoAntes)
+		a.Variacao = saldo
+	}
+	return a
+}
+
+// ContasProducao são as contas do lançamento mensal da produção.
+type ContasProducao struct {
+	Estoque   *int64
+	Processo  *int64
+	Absorvido *int64
+	Variacao  *int64
+}
+
+// par lança o valor no sentido indicado; negativo inverte a partida.
+func par(debito, credito int64, valor decimal.Decimal, historico string) []Lancamento {
+	if valor.IsZero() {
+		return nil
+	}
+	if valor.IsNegative() {
+		debito, credito, valor = credito, debito, valor.Neg()
+	}
+	return []Lancamento{{DebitoID: debito, CreditoID: credito, Valor: valor, Historico: historico}}
+}
+
+// Producao monta o lançamento do mês: o material sai do estoque para o processo, o
+// produto volta do processo ao estoque, a mão de obra e os indiretos entram no
+// processo pela conta de custos absorvidos, e a sobra da ordem encerrada vai ao CMV.
+func Producao(t ApuracaoOrdem, c ContasProducao, competencia string) ([]Lancamento, []string) {
+	var faltando []string
+	falta := func(conta *int64, valor decimal.Decimal, nome string) {
+		if conta == nil && !valor.IsZero() {
+			faltando = append(faltando, "falta a conta de "+nome)
+		}
+	}
+	movimenta := t.Consumo.Abs().Add(t.Entrega.Abs()).Add(t.Absorvido.Abs()).Add(t.Variacao.Abs())
+	falta(c.Estoque, t.Consumo.Abs().Add(t.Entrega.Abs()), "estoque")
+	falta(c.Processo, movimenta, "produção em processo")
+	falta(c.Absorvido, t.Absorvido, "custos absorvidos pela produção")
+	falta(c.Variacao, t.Variacao, "CMV")
+	if len(faltando) > 0 {
+		return nil, faltando
+	}
+	var out []Lancamento
+	if !t.Consumo.IsZero() {
+		out = append(out, par(*c.Processo, *c.Estoque, t.Consumo, "Consumo da produção "+competencia)...)
+	}
+	if !t.Absorvido.IsZero() {
+		out = append(out, par(*c.Processo, *c.Absorvido, t.Absorvido, "Mão de obra e indiretos absorvidos "+competencia)...)
+	}
+	if !t.Entrega.IsZero() {
+		out = append(out, par(*c.Estoque, *c.Processo, t.Entrega, "Entrada da produção "+competencia)...)
+	}
+	if !t.Variacao.IsZero() {
+		out = append(out, par(*c.Variacao, *c.Processo, t.Variacao, "Variação de ordens encerradas "+competencia)...)
+	}
+	return out, nil
+}
+
+// ProvisaoObsoletos ajusta a provisão ao saldo calculado no mês: lança só a
+// variação sobre o saldo do fechamento anterior.
+func ProvisaoObsoletos(saldo, anterior decimal.Decimal, despesa, provisao *int64, competencia string) ([]Lancamento, []string) {
+	variacao := saldo.Round(2).Sub(anterior.Round(2))
+	if variacao.IsZero() {
+		return nil, nil
+	}
+	var faltando []string
+	if despesa == nil {
+		faltando = append(faltando, "falta a conta de despesa com provisão de obsoletos")
+	}
+	if provisao == nil {
+		faltando = append(faltando, "falta a conta de provisão de obsoletos")
+	}
+	if len(faltando) > 0 {
+		return nil, faltando
+	}
+	return par(*despesa, *provisao, variacao, "Provisão para obsolescência de estoque "+competencia), nil
+}
