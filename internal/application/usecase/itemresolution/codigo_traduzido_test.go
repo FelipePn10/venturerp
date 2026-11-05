@@ -95,3 +95,26 @@ func TestComMarcaCaiNoComercialQuandoAChaveNaoExiste(t *testing.T) {
 		t.Fatalf("esperava cair no comercial, veio %d", int64(item.Code))
 	}
 }
+
+// O registro é por VALOR: só o código que o middleware produziu é chave
+// interna. Outro campo da mesma requisição, deixado sem tradução, segue
+// comercial — a marca única para a requisição inteira trocava os dois.
+func TestRegistroPorValorSoValeParaOCodigoRegistrado(t *testing.T) {
+	ctx := contextkey.WithTranslatedItemCodes(context.Background(), "5")
+	item, err := Resolve(ctx, baseComCodigosAmbiguos{}, request.TextCode("5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int64(item.Code) != 5 {
+		t.Fatalf("5 registrado é a chave interna (RN-01001); veio chave %d", int64(item.Code))
+	}
+
+	outro := contextkey.WithTranslatedItemCodes(context.Background(), "9")
+	item, err = Resolve(outro, baseComCodigosAmbiguos{}, request.TextCode("5"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if int64(item.Code) != 2 {
+		t.Fatalf("5 sem registro é o comercial \"5\" (chapa, chave 2); veio chave %d", int64(item.Code))
+	}
+}

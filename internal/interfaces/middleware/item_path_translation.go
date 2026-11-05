@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -42,10 +43,14 @@ func ItemPathTranslation(pool *pgxpool.Pool, secret string) func(http.Handler) h
 				return
 			}
 			if !nativeItemBusinessCodePath(r) {
-				if err := translateKnownItemURLPath(r, pool, enterpriseID); err != nil {
+				interno, err := translateKnownItemURLPath(r, pool, enterpriseID)
+				if err != nil {
 					http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 					return
 				}
+				// Registra a chave produzida: sem isso o caso de uso relia a
+				// chave interna 5 como o código comercial "5" (outro item).
+				r = r.WithContext(contextkey.WithTranslatedItemCodes(r.Context(), interno))
 			}
 			next.ServeHTTP(w, r)
 		})

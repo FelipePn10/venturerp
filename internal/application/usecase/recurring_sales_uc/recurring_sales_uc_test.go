@@ -14,6 +14,7 @@ import (
 	rsrepo "github.com/FelipePn10/panossoerp/internal/domain/recurring_sales/repository"
 	representativeentity "github.com/FelipePn10/panossoerp/internal/domain/representative/entity"
 	representativerepo "github.com/FelipePn10/panossoerp/internal/domain/representative/repository"
+	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
 )
 
@@ -253,5 +254,46 @@ func TestActiveRecurringSaleCanBeCancelledBeforeFirstOrder(t *testing.T) {
 	got := toRecurringSaleResponse(&entity.RecurringSale{IsActive: true, LifecycleStatus: entity.LifecycleActive})
 	if !got.CanCancel {
 		t.Fatal("recorrência ativa deve permitir cancelamento antes do primeiro pedido")
+	}
+}
+
+// registraChave guarda, para cada item de pedido, se o código chegou registrado
+// como chave interna — é o que impede o pedido de ler a chave como comercial.
+type registraChave struct {
+	fakeOrderItemCreator
+	registrado []bool
+}
+
+func (f *registraChave) Execute(ctx context.Context, dto request.CreateSalesOrderItemDTO) (*response.SalesOrderItemResponse, error) {
+	f.registrado = append(f.registrado, contextkey.IsTranslatedItemCode(ctx, dto.ItemCode.String()))
+	return f.fakeOrderItemCreator.Execute(ctx, dto)
+}
+
+// A recorrência guarda a chave interna do item. Repassada sem registro, o item
+// do pedido a relia como código comercial — na Tecnofer a chave 5 (RN-01001)
+// virava o comercial "5" (CHAPA AÇO CARBONO 3MM).
+func TestPedidoDaRecorrenciaLevaOItemPelaChaveInterna(t *testing.T) {
+	next := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	itemCreator := &registraChave{}
+	repo := &fakeRSRepo{
+		params: &entity.Parameters{CurrentMonthBillingLimitDay: 10, IndefiniteDeliveryDay: 31, FixedTermDeliveryDay: 15, GroupOrderItemTotal: true},
+		rows: []*entity.RecurringSale{{
+			Code: 7, EnterpriseCode: 1, CustomerCode: 2, ItemCode: 5, MovementType: entity.MovementSale,
+			TermType: entity.TermIndefinite, SaleDate: time.Date(2026, 7, 5, 0, 0, 0, 0, time.UTC),
+			NextAdjustmentDate: &next, Quantity: decimal.NewFromInt(2), UnitValue: decimal.NewFromInt(50), CreatedBy: uuid.Nil, IsActive: true,
+			Representatives: []*entity.Representative{{RepresentativeCode: 9, IsPrimary: true, CommissionPercent: decimal.NewFromInt(5)}},
+		}},
+	}
+	uc := &UseCase{Repo: repo, Auth: rsAllowAuth{}, SalesOrders: &fakeOrderCreator{}, SalesOrderItems: itemCreator, Representatives: activeRepresentativeRepo{}}
+	if _, err := uc.GenerateSalesOrder(context.Background(), 7, request.MarkRecurringSaleOrderDTO{IdempotencyKey: "chave-interna-2026-07", Competence: "2026-07"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(itemCreator.dtos) == 0 {
+		t.Fatal("nenhum item de pedido gerado")
+	}
+	for i, dto := range itemCreator.dtos {
+		if dto.ItemCode.String() != "5" || !itemCreator.registrado[i] {
+			t.Fatalf("linha %d: item %q registrado como chave interna=%v", i, dto.ItemCode, itemCreator.registrado[i])
+		}
 	}
 }
