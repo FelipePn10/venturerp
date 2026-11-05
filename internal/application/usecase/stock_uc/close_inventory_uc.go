@@ -71,7 +71,11 @@ func (uc *CloseInventoryUseCase) Execute(ctx context.Context, id int64, dto requ
 	if resumo.NaoContados > 0 {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("%d item(ns) ainda sem contagem: conte-os ou feche zerando os não contados", resumo.NaoContados))
 	}
-	if inv.ExigeAprovacao(resumo) {
+	limite, err := uc.Repo.LimiteDeAjusteDoUsuario(ctx, ator)
+	if err != nil {
+		return nil, err
+	}
+	if inv.ExigeAprovacao(resumo, limite) {
 		return uc.enviarParaAprovacao(ctx, inv, resumo, dto.ZerarNaoContados, motivo)
 	}
 	res, err := uc.Repo.FecharInventario(ctx, id, ator, dto.ZerarNaoContados, motivo)

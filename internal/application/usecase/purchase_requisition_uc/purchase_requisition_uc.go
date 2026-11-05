@@ -105,6 +105,7 @@ func buildItem(reqCode int64, seq int32, in request.RequisitionItemInput) *entit
 		RequisitionCode:   reqCode,
 		Sequence:          seq,
 		ItemCode:          in.ItemCode,
+		Mask:              in.Mask,
 		Quantity:          in.Quantity,
 		UOM:               in.UOM,
 		CostCenterCode:    in.CostCenterCode,

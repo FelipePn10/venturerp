@@ -168,3 +168,19 @@ func TestValidarPolitica(t *testing.T) {
 		t.Fatal("regra de origem por tipo do item")
 	}
 }
+
+// A máscara com política calcula só com o que é dela e devolve a máscara na sugestão.
+func TestReposicaoDaMascaraHerdaOCadastroESaiComAMascara(t *testing.T) {
+	base := itemComprado1()
+	m := base.DaMascara("AZUL")
+	if m.Total.Fisico.IsPositive() || len(m.PorAlmox) != 0 || !m.LoteMinimo.Equal(base.LoteMinimo) {
+		t.Fatalf("a máscara começa sem saldo e herda o cadastro: %+v", m)
+	}
+	minimo := dd("10")
+	m.Politicas = []PoliticaReposicao{{Mask: "AZUL", WarehouseID: 1, Minimo: &minimo, Origem: OrigemCompra, Ativa: true}}
+	m.PorAlmox[1] = SaldoReposicao{Fisico: dd("2")}
+	s := m.Sugestoes()
+	if len(s) != 1 || s[0].Mask != "AZUL" {
+		t.Fatalf("%+v", s)
+	}
+}

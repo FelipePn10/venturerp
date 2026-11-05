@@ -12,6 +12,14 @@ import (
 // OperacoesEstoque são as operações de estoque que vão além do lançamento
 // simples: transferência, estorno, consultas analíticas e requisição interna.
 type OperacoesEstoque interface {
+	ConsignacaoEstoque
+	ToleranciasPorPerfil(ctx context.Context) ([]entity.ToleranciaDoPerfil, error)
+	SalvarToleranciaDoPerfil(ctx context.Context, t entity.ToleranciaDoPerfil, ator uuid.UUID) error
+	ExcluirToleranciaDoPerfil(ctx context.Context, perfil int64) error
+	// Cadernos de contagem do inventário.
+	Cadernos(ctx context.Context, inventario int64) ([]entity.CadernoInventario, error)
+	GerarCadernos(ctx context.Context, inventario int64, linhasPorCaderno int) ([]entity.CadernoInventario, error)
+	MarcarCadernoImpresso(ctx context.Context, inventario int64, numero int, ator uuid.UUID) error
 	TransferirEntreAlmoxarifados(ctx context.Context, t entity.TransferenciaEstoque) (*entity.ResultadoTransferencia, error)
 	EstornarMovimento(ctx context.Context, id int64, ator uuid.UUID, motivo string) ([]*entity.StockMovement, error)
 	// Kardex e PosicaoEmData recebem dias do calendário (vale o ano/mês/dia de

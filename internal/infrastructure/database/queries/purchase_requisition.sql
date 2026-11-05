@@ -28,10 +28,10 @@ WHERE code = $1 AND enterprise_code = sqlc.arg(enterprise_code);
 -- name: CreatePurchaseRequisitionItem :one
 INSERT INTO purchase_requisition_items (
     requisition_code, sequence, item_code, quantity, uom, cost_center_code,
-    accounting_account, suggested_price, delivery_date, application, utilization_type, warehouse_id
+    accounting_account, suggested_price, delivery_date, application, utilization_type, warehouse_id, mask
 )
 -- Itens seguem a empresa da requisição (enterprise_code).
-SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg(warehouse_id)
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg(warehouse_id), sqlc.arg(mask)
  WHERE EXISTS (SELECT 1 FROM purchase_requisitions r
                 WHERE r.code = $1 AND r.enterprise_code = sqlc.arg(enterprise_code))
 RETURNING *;

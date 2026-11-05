@@ -3463,6 +3463,11 @@ type AccountingPostingParam struct {
 	CbsRecolherAccountID              *int64
 	AdiantamentoFornecedoresAccountID *int64
 	AdiantamentoClientesAccountID     *int64
+	ContabilizarProducao              bool
+	ProducaoProcessoAccountID         *int64
+	CustosAbsorvidosAccountID         *int64
+	ProvisaoObsoletosAccountID        *int64
+	DespesaProvisaoAccountID          *int64
 }
 
 type AccountingReferenceAccount struct {
@@ -8223,6 +8228,17 @@ type PhysicalInventoryItem struct {
 	Address              string
 	Lot                  string
 	NeedsRecount         bool
+	NotebookNumber       *int32
+}
+
+type PhysicalInventoryNotebook struct {
+	InventoryID int64
+	Number      int32
+	WarehouseID int64
+	PrintCount  int32
+	PrintedAt   pgtype.Timestamptz
+	PrintedBy   pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
 }
 
 type PlannedOrder struct {
@@ -9099,6 +9115,7 @@ type PurchaseRequisitionItem struct {
 	IsActive          bool
 	CreatedAt         pgtype.Timestamptz
 	WarehouseID       *int64
+	Mask              string
 }
 
 type QualityCalibration struct {
@@ -11080,6 +11097,7 @@ type StockClosing struct {
 	ReopenedBy        pgtype.UUID
 	ReopenedAt        pgtype.Timestamptz
 	ReopenReason      pgtype.Text
+	ObsoleteProvision pgtype.Numeric
 }
 
 type StockClosingBalance struct {
@@ -11090,6 +11108,15 @@ type StockClosingBalance struct {
 	Quantity    pgtype.Numeric
 	AvgCost     pgtype.Numeric
 	TotalValue  pgtype.Numeric
+}
+
+type StockClosingProduction struct {
+	ClosingID         int64
+	ProductionOrderID int64
+	ConsumedValue     pgtype.Numeric
+	DeliveredValue    pgtype.Numeric
+	AbsorbedValue     pgtype.Numeric
+	VarianceValue     pgtype.Numeric
 }
 
 type StockCostRecalcLog struct {
@@ -11366,6 +11393,7 @@ type StockReplenishmentPolicy struct {
 	CreatedBy         pgtype.UUID
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Mask              string
 }
 
 type StockReservation struct {
@@ -11402,6 +11430,15 @@ type StockSnapshot struct {
 	MaximumStock  pgtype.Numeric
 	MinMaxActive  bool
 	EnterpriseID  *int64
+}
+
+type StockToleranceProfile struct {
+	EnterpriseID     int64
+	PerfilID         int64
+	MaxDocumentValue pgtype.Numeric
+	MaxLineValue     pgtype.Numeric
+	UpdatedBy        pgtype.UUID
+	UpdatedAt        pgtype.Timestamptz
 }
 
 type StockTransitShipment struct {

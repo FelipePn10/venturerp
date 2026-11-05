@@ -24,6 +24,12 @@ const sinalSQL = `(CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP','EPP','
 
 // qtdSQL e valorSQL: quantidade e valor com sinal. O ajuste de custo não mexe na
 // quantidade e guarda o valor já com sinal.
+// movimentoQueGiraSQL: o que conta como giro do item. Contar, transferir e estornar
+// não tira o item da prateleira.
+const movimentoQueGiraSQL = `reverses_movement_id IS NULL AND reversed_by_movement_id IS NULL
+		        AND movement_type NOT IN ('TRANSFER_OUT','TRANSFER_IN','TRANSF_ENDERECO','AJUSTE_CUSTO','ADJUSTMENT')
+		        AND COALESCE(reference_type,'') NOT IN ('INVENTORY','CONTAGEM_CICLICA','TRANSFERENCIA','TRANSITO','ESTORNO')`
+
 const qtdSQL = `(` + sinalSQL + ` * ABS(m.quantity))`
 const valorSQL = `(CASE WHEN m.movement_type = 'AJUSTE_CUSTO' THEN m.total_price ELSE ` + sinalSQL + ` * ABS(m.total_price) END)`
 
@@ -239,7 +245,7 @@ func nomeDoDocumento(ref string) string {
 		entity.ReferenceTypeSalesOrder: "pedido de venda", entity.ReferenceTypeNFEntry: "nota de entrada", entity.ReferenceTypeNFExit: "nota de saída",
 		entity.ReferenceTypeInventory: "inventário", entity.ReferenceTypeCycleCount: "contagem cíclica", entity.ReferenceTypeReversal: "estorno",
 		entity.ReferenceTypeRequisition: "requisição ao almoxarifado", entity.ReferenceTypeTransit: "envio em trânsito",
-		entity.ReferenceTypeLotImplant: "implantação de lote", "ONDA_SEPARACAO": "onda de separação", "QUALITY_LOT": "lote de inspeção",
+		entity.ReferenceTypeLotImplant: "implantação de lote", entity.ReferenceTypeConsignment: "consignação", entity.ReferenceTypeCNPJTransfer: "transferência entre CNPJs", "ONDA_SEPARACAO": "onda de separação", "QUALITY_LOT": "lote de inspeção",
 	}
 	if n, ok := nomes[ref]; ok {
 		return n
@@ -550,9 +556,7 @@ func (r *StockRepositorySQLC) AnaliseDeEstoque(ctx context.Context, meses int, d
 		     -- Contar, transferir e estornar não tira o item da prateleira: se
 		     -- contassem, o ajuste de inventário escondia o estoque parado.
 		     SELECT item_code, MAX(movement_date) quando FROM stock_movements
-		      WHERE enterprise_id=$1 AND reverses_movement_id IS NULL AND reversed_by_movement_id IS NULL
-		        AND movement_type NOT IN ('TRANSFER_OUT','TRANSFER_IN','TRANSF_ENDERECO','AJUSTE_CUSTO','ADJUSTMENT')
-		        AND COALESCE(reference_type,'') NOT IN ('INVENTORY','CONTAGEM_CICLICA','TRANSFERENCIA','TRANSITO','ESTORNO')
+		      WHERE enterprise_id=$1 AND `+movimentoQueGiraSQL+`
 		      GROUP BY item_code),
 		  demanda AS (
 		     SELECT item_code, SUM(q) q FROM (

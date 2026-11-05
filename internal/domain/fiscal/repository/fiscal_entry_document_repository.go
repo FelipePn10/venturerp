@@ -377,7 +377,13 @@ type AccountingPostingParams struct {
 	CBSVendasAccountID           *int64 `json:"cbs_vendas_account_id,omitempty"`
 	CBSRecolherAccountID         *int64 `json:"cbs_recolher_account_id,omitempty"`
 	// Adiantamentos (VFIN0600): pago a fornecedor (ativo) e recebido de cliente (passivo).
-	AdiantamentoFornecedoresAccountID *int64     `json:"adiantamento_fornecedores_account_id,omitempty"`
-	AdiantamentoClientesAccountID     *int64     `json:"adiantamento_clientes_account_id,omitempty"`
-	UpdatedBy                         *uuid.UUID `json:"-"`
+	AdiantamentoFornecedoresAccountID *int64 `json:"adiantamento_fornecedores_account_id,omitempty"`
+	AdiantamentoClientesAccountID     *int64 `json:"adiantamento_clientes_account_id,omitempty"`
+	// Fechamento de estoque: produção em processo e provisão de obsoletos.
+	ContabilizarProducao       bool       `json:"contabilizar_producao"`
+	ProducaoProcessoAccountID  *int64     `json:"producao_processo_account_id,omitempty"`
+	CustosAbsorvidosAccountID  *int64     `json:"custos_absorvidos_account_id,omitempty"`
+	ProvisaoObsoletosAccountID *int64     `json:"provisao_obsoletos_account_id,omitempty"`
+	DespesaProvisaoAccountID   *int64     `json:"despesa_provisao_account_id,omitempty"`
+	UpdatedBy                  *uuid.UUID `json:"-"`
 }

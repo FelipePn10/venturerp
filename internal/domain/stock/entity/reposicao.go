@@ -30,6 +30,7 @@ const (
 type PoliticaReposicao struct {
 	ID          int64            `json:"id"`
 	ItemCode    int64            `json:"item_code"`
+	Mask        string           `json:"mask"`
 	WarehouseID int64            `json:"warehouse_id"`
 	Minimo      *decimal.Decimal `json:"minimum_qty,omitempty"`
 	Maximo      *decimal.Decimal `json:"maximum_qty,omitempty"`
@@ -44,6 +45,9 @@ type PoliticaReposicao struct {
 func (p PoliticaReposicao) Validar() error {
 	if p.ItemCode <= 0 {
 		return domainerr.NewValidation("escolha o item da política")
+	}
+	if len(p.Mask) > 200 {
+		return domainerr.NewValidation("a máscara passa de 200 caracteres")
 	}
 	if p.WarehouseID <= 0 {
 		return domainerr.NewValidation("escolha o almoxarifado da política")
@@ -108,6 +112,16 @@ type SaldoReposicao struct {
 	Chegando    decimal.Decimal // pedido, ordem e transferência com este destino
 }
 
+// Somar junta o saldo de outra máscara do mesmo item no almoxarifado.
+func (s SaldoReposicao) Somar(o SaldoReposicao) SaldoReposicao {
+	s.Fisico = s.Fisico.Add(o.Fisico)
+	s.Reservado = s.Reservado.Add(o.Reservado)
+	s.Retido = s.Retido.Add(o.Retido)
+	s.Requisitado = s.Requisitado.Add(o.Requisitado)
+	s.Chegando = s.Chegando.Add(o.Chegando)
+	return s
+}
+
 // Livre é o que dá para usar agora.
 func (s SaldoReposicao) Livre() decimal.Decimal {
 	return s.Fisico.Sub(s.Reservado).Sub(s.Retido).Sub(s.Requisitado)
@@ -115,7 +129,9 @@ func (s SaldoReposicao) Livre() decimal.Decimal {
 
 // ItemReposicao reúne o que o cálculo precisa de um item.
 type ItemReposicao struct {
-	ItemCode     int64
+	ItemCode int64
+	// Mask: vazia é o item com todas as máscaras sem política própria.
+	Mask         string
 	Codigo       string
 	Nome         string
 	Unidade      string
@@ -132,6 +148,14 @@ type ItemReposicao struct {
 	Total      SaldoReposicao
 	PorAlmox   map[int64]SaldoReposicao
 	SemDestino decimal.Decimal // pedido e requisição de compra sem almoxarifado
+}
+
+// DaMascara devolve o item só com a máscara: herda o cadastro e começa sem saldo.
+func (it ItemReposicao) DaMascara(mask string) *ItemReposicao {
+	c := it
+	c.Mask, c.Politicas, c.Total, c.SemDestino = mask, nil, SaldoReposicao{}, decimal.Zero
+	c.PorAlmox = map[int64]SaldoReposicao{}
+	return &c
 }
 
 // QuantidadeDeReposicao leva a projeção até o alvo, no mínimo o lote mínimo,
@@ -275,7 +299,7 @@ func (it ItemReposicao) transferencia(p PoliticaReposicao, falta decimal.Decimal
 
 func (it ItemReposicao) base(saldo SaldoReposicao, projetado, ponto, seguranca, maximo decimal.Decimal) SugestaoReposicao {
 	return SugestaoReposicao{
-		ItemCode: it.ItemCode, Codigo: it.Codigo, Nome: it.Nome, Unidade: it.Unidade,
+		ItemCode: it.ItemCode, Mask: it.Mask, Codigo: it.Codigo, Nome: it.Nome, Unidade: it.Unidade,
 		Disponivel: saldo.Fisico, Reservado: saldo.Reservado, Retido: saldo.Retido, Requisitado: saldo.Requisitado,
 		Projetado: projetado, PontoPedido: ponto, EstoqueSeguranca: seguranca, Maximo: maximo,
 		LoteMinimo: it.LoteMinimo, LoteMultiplo: it.LoteMultiplo, ConsumoMedio: it.ConsumoMedio,
@@ -285,6 +309,7 @@ func (it ItemReposicao) base(saldo SaldoReposicao, projetado, ponto, seguranca, 
 // LinhaGeracaoReposicao é uma sugestão aceita pelo usuário.
 type LinhaGeracaoReposicao struct {
 	ItemCode    int64
+	Mask        string
 	WarehouseID *int64
 	Origem      string
 	AlmoxOrigem *int64

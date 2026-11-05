@@ -510,3 +510,119 @@ func (h *EstoqueHandler) CancelarRequisicao(w http.ResponseWriter, r *http.Reque
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// GET /api/stock/inventory-tolerances
+func (h *EstoqueHandler) ToleranciasPorPerfil(w http.ResponseWriter, r *http.Request) {
+	out, err := h.UC.ToleranciasPorPerfil(r.Context())
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// PUT /api/stock/inventory-tolerances
+func (h *EstoqueHandler) SalvarToleranciaDoPerfil(w http.ResponseWriter, r *http.Request) {
+	var dto entity.ToleranciaDoPerfil
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	err := h.UC.SalvarToleranciaDoPerfil(r.Context(), dto)
+	h.responder(w, http.StatusOK, dto, err)
+}
+
+// DELETE /api/stock/inventory-tolerances/{id}
+func (h *EstoqueHandler) ExcluirToleranciaDoPerfil(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "perfil")
+	if !ok {
+		return
+	}
+	err := h.UC.ExcluirToleranciaDoPerfil(r.Context(), id)
+	h.responder(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
+}
+
+// GET /api/inventory/{id}/notebooks
+func (h *EstoqueHandler) Cadernos(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "inventário")
+	if !ok {
+		return
+	}
+	out, err := h.UC.Cadernos(r.Context(), id)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/inventory/{id}/notebooks
+func (h *EstoqueHandler) GerarCadernos(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "inventário")
+	if !ok {
+		return
+	}
+	var dto struct {
+		LinesPerNotebook int `json:"lines_per_notebook"`
+	}
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.GerarCadernos(r.Context(), id, dto.LinesPerNotebook)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/inventory/{id}/notebooks/{number}/printed
+func (h *EstoqueHandler) MarcarCadernoImpresso(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "inventário")
+	if !ok {
+		return
+	}
+	numero, ok := inteiroDaRota(w, r, "number", "caderno")
+	if !ok {
+		return
+	}
+	err := h.UC.MarcarCadernoImpresso(r.Context(), id, int(numero))
+	h.responder(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
+}
+
+// GET /api/stock/consignments?direction=&open=
+func (h *EstoqueHandler) Consignacoes(w http.ResponseWriter, r *http.Request) {
+	out, err := h.UC.Consignacoes(r.Context(), r.URL.Query().Get("direction"), r.URL.Query().Get("open") != "false")
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/stock/consignments
+func (h *EstoqueHandler) ReceberConsignacao(w http.ResponseWriter, r *http.Request) {
+	var dto request.ReceberConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.ReceberConsignacao(r.Context(), dto)
+	h.responder(w, http.StatusCreated, out, err)
+}
+
+// POST /api/stock/consignments/{id}/return
+func (h *EstoqueHandler) DevolverConsignacao(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "consignação")
+	if !ok {
+		return
+	}
+	var dto request.BaixaConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.DevolverConsignacao(r.Context(), id, dto)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/stock/consignments/{id}/consume
+func (h *EstoqueHandler) ConsumirConsignacao(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "consignação")
+	if !ok {
+		return
+	}
+	var dto request.BaixaConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.ConsumirConsignacao(r.Context(), id, dto)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// GET /api/stock/cnpj-transfers
+func (h *EstoqueHandler) TransferenciasEntreCNPJs(w http.ResponseWriter, r *http.Request) {
+	out, err := h.UC.TransferenciasEntreCNPJs(r.Context())
+	h.responder(w, http.StatusOK, out, err)
+}

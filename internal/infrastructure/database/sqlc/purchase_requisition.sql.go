@@ -61,12 +61,12 @@ const createPurchaseRequisitionItem = `-- name: CreatePurchaseRequisitionItem :o
 
 INSERT INTO purchase_requisition_items (
     requisition_code, sequence, item_code, quantity, uom, cost_center_code,
-    accounting_account, suggested_price, delivery_date, application, utilization_type, warehouse_id
+    accounting_account, suggested_price, delivery_date, application, utilization_type, warehouse_id, mask
 )
-SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
  WHERE EXISTS (SELECT 1 FROM purchase_requisitions r
-                WHERE r.code = $1 AND r.enterprise_code = $13)
-RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at, warehouse_id
+                WHERE r.code = $1 AND r.enterprise_code = $14)
+RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at, warehouse_id, mask
 `
 
 type CreatePurchaseRequisitionItemParams struct {
@@ -82,6 +82,7 @@ type CreatePurchaseRequisitionItemParams struct {
 	Application       pgtype.Text
 	UtilizationType   pgtype.Text
 	WarehouseID       *int64
+	Mask              string
 	EnterpriseCode    int64
 }
 
@@ -101,6 +102,7 @@ func (q *Queries) CreatePurchaseRequisitionItem(ctx context.Context, arg CreateP
 		arg.Application,
 		arg.UtilizationType,
 		arg.WarehouseID,
+		arg.Mask,
 		arg.EnterpriseCode,
 	)
 	var i PurchaseRequisitionItem
@@ -123,6 +125,7 @@ func (q *Queries) CreatePurchaseRequisitionItem(ctx context.Context, arg CreateP
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.WarehouseID,
+		&i.Mask,
 	)
 	return i, err
 }
@@ -158,7 +161,7 @@ func (q *Queries) GetPurchaseRequisitionByCode(ctx context.Context, arg GetPurch
 }
 
 const getPurchaseRequisitionItem = `-- name: GetPurchaseRequisitionItem :one
-SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at, i.warehouse_id FROM purchase_requisition_items i
+SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at, i.warehouse_id, i.mask FROM purchase_requisition_items i
 JOIN purchase_requisitions r ON r.code = i.requisition_code
 WHERE i.id = $1 AND r.enterprise_code = $2
 `
@@ -190,12 +193,13 @@ func (q *Queries) GetPurchaseRequisitionItem(ctx context.Context, arg GetPurchas
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.WarehouseID,
+		&i.Mask,
 	)
 	return i, err
 }
 
 const listPurchaseRequisitionItems = `-- name: ListPurchaseRequisitionItems :many
-SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at, i.warehouse_id FROM purchase_requisition_items i
+SELECT i.id, i.requisition_code, i.sequence, i.item_code, i.quantity, i.attended_qty, i.cancelled_qty, i.uom, i.cost_center_code, i.accounting_account, i.suggested_price, i.delivery_date, i.application, i.utilization_type, i.status, i.is_active, i.created_at, i.warehouse_id, i.mask FROM purchase_requisition_items i
 JOIN purchase_requisitions r ON r.code = i.requisition_code
 WHERE i.requisition_code = $1 AND i.is_active = TRUE AND r.enterprise_code = $2
 ORDER BY i.sequence
@@ -234,6 +238,7 @@ func (q *Queries) ListPurchaseRequisitionItems(ctx context.Context, arg ListPurc
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.WarehouseID,
+			&i.Mask,
 		); err != nil {
 			return nil, err
 		}
@@ -314,7 +319,7 @@ WHERE purchase_requisition_items.id = $1
   AND EXISTS (SELECT 1 FROM purchase_requisitions r
                WHERE r.code = purchase_requisition_items.requisition_code
                  AND r.enterprise_code = $3)
-RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at, warehouse_id
+RETURNING id, requisition_code, sequence, item_code, quantity, attended_qty, cancelled_qty, uom, cost_center_code, accounting_account, suggested_price, delivery_date, application, utilization_type, status, is_active, created_at, warehouse_id, mask
 `
 
 type RegisterRequisitionItemAttendanceParams struct {
@@ -345,6 +350,7 @@ func (q *Queries) RegisterRequisitionItemAttendance(ctx context.Context, arg Reg
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.WarehouseID,
+		&i.Mask,
 	)
 	return i, err
 }

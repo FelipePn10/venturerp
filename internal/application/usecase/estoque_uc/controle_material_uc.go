@@ -63,6 +63,14 @@ func (uc *UseCase) SalvarParametros(ctx context.Context, p entity.ParametrosEsto
 	if p.ObsoleteProvisionPct != nil && (p.ObsoleteProvisionPct.IsNegative() || p.ObsoleteProvisionPct.GreaterThan(decimal.NewFromInt(100))) {
 		return errorsuc.NewValidationError("o percentual da provisão deve ficar entre 0 e 100%")
 	}
+	if p.ConsignmentDays != nil && *p.ConsignmentDays <= 0 {
+		return errorsuc.NewValidationError("o prazo da consignação deve ser maior que zero")
+	}
+	if p.ConsignmentWarehouseID != nil {
+		if err := uc.Ops.ConferirAlmoxDeConsignacao(ctx, *p.ConsignmentWarehouseID); err != nil {
+			return err
+		}
+	}
 	ator, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return err
@@ -251,4 +259,72 @@ func (uc *UseCase) ImplantarLote(ctx context.Context, i entity.ImplantacaoLote) 
 		return err
 	}
 	return uc.Ops.ImplantarLote(ctx, i, ator)
+}
+
+// ToleranciasPorPerfil lista os perfis da empresa com o limite de ajuste de cada um.
+func (uc *UseCase) ToleranciasPorPerfil(ctx context.Context) ([]entity.ToleranciaDoPerfil, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	return uc.Ops.ToleranciasPorPerfil(ctx)
+}
+
+// SalvarToleranciaDoPerfil grava até quanto o perfil fecha inventário sem alçada.
+func (uc *UseCase) SalvarToleranciaDoPerfil(ctx context.Context, t entity.ToleranciaDoPerfil) error {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return err
+	}
+	if t.PerfilID <= 0 {
+		return errorsuc.NewValidationError("escolha o perfil")
+	}
+	if t.ValorDocumento == nil && t.ValorLinha == nil {
+		return errorsuc.NewValidationError("informe o limite por inventário ou por linha")
+	}
+	for _, v := range []*decimal.Decimal{t.ValorDocumento, t.ValorLinha} {
+		if v != nil && v.IsNegative() {
+			return errorsuc.NewValidationError("o limite de ajuste não pode ser negativo")
+		}
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Ops.SalvarToleranciaDoPerfil(ctx, t, ator)
+}
+
+func (uc *UseCase) ExcluirToleranciaDoPerfil(ctx context.Context, perfil int64) error {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return err
+	}
+	return uc.Ops.ExcluirToleranciaDoPerfil(ctx, perfil)
+}
+
+// Cadernos lista os cadernos de contagem do inventário.
+func (uc *UseCase) Cadernos(ctx context.Context, inventario int64) ([]entity.CadernoInventario, error) {
+	if err := uc.podeConsultar(ctx); err != nil {
+		return nil, err
+	}
+	return uc.Ops.Cadernos(ctx, inventario)
+}
+
+// GerarCadernos divide o inventário em cadernos de até `linhas` linhas.
+func (uc *UseCase) GerarCadernos(ctx context.Context, inventario int64, linhas int) ([]entity.CadernoInventario, error) {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return nil, err
+	}
+	if linhas <= 0 || linhas > 500 {
+		return nil, errorsuc.NewValidationError("informe de 1 a 500 linhas por caderno")
+	}
+	return uc.Ops.GerarCadernos(ctx, inventario, linhas)
+}
+
+func (uc *UseCase) MarcarCadernoImpresso(ctx context.Context, inventario int64, numero int) error {
+	if err := uc.podeMovimentar(ctx); err != nil {
+		return err
+	}
+	ator, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return err
+	}
+	return uc.Ops.MarcarCadernoImpresso(ctx, inventario, numero, ator)
 }

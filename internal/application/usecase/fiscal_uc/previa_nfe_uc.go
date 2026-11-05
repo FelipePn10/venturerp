@@ -249,7 +249,7 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 				ComoResolver: "gere a nota a partir do pedido de venda ou informe o cliente do cadastro"})
 		}
 	}
-	if uc.Efeitos != nil && uc.Saldos != nil && efeitosTipo.MovimentaEstoque {
+	if uc.Efeitos != nil && uc.Saldos != nil && efeitosTipo.MovimentaEstoque && efeitosTipo.Tipo != entity.TipoNotaVendaConsignacao {
 		faltas, err := uc.faltasDeEstoque(ctx, exit, items)
 		if err != nil {
 			return nil, err

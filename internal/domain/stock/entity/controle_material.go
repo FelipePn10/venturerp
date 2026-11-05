@@ -27,6 +27,11 @@ type SituacaoLote struct {
 // ParametrosEstoque são as regras de estoque da empresa.
 type ParametrosEstoque struct {
 	ExpiredLotAction string `json:"expired_lot_action"`
+	// ConsignmentWarehouseID guarda a mercadoria consignada a clientes; sem
+	// disponibilidade, ela não entra na promessa nem na reposição.
+	ConsignmentWarehouseID *int64 `json:"consignment_warehouse_id"`
+	// ConsignmentDays: prazo da remessa, em dias. Vazio não controla vencimento.
+	ConsignmentDays *int `json:"consignment_days"`
 	// RetroactiveMonths: quantos meses antes do atual o lançamento pode ser datado.
 	// Vazio não limita; 0 só aceita o mês corrente.
 	RetroactiveMonths *int `json:"retroactive_months"`

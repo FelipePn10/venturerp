@@ -1971,7 +1971,7 @@ func (r *StockRepositorySQLC) ListInventoryItems(ctx context.Context, inventoryI
 		`SELECT id, inventory_id, item_code, mask, warehouse_id, system_qty, counted_qty,
 		        difference_qty, unit_cost, adjustment_type, adjustment_reason, counted_by,
 		        counted_at, is_adjusted, created_at, count_number, previous_counted_qty, adjustment_movement_id,
-		        address, lot, needs_recount
+		        address, lot, needs_recount, notebook_number
 		 FROM public.physical_inventory_items item WHERE inventory_id=$1 AND EXISTS
 		 (SELECT 1 FROM physical_inventories inventory WHERE inventory.id=item.inventory_id AND inventory.enterprise_id=$2)
 		 ORDER BY address, item_code, lot`, inventoryID, enterpriseID)
@@ -2076,7 +2076,7 @@ func scanInventoryItems(rows pgx.Rows) ([]*entity.PhysicalInventoryItem, error) 
 			&item.CountedQty, &item.DifferenceQty, &item.UnitCost, &item.AdjustmentType, &item.AdjustmentReason,
 			&item.CountedBy, &item.CountedAt, &item.IsAdjusted, &item.CreatedAt,
 			&item.CountNumber, &item.PreviousCountedQty, &item.AdjustmentMovementID,
-			&item.Address, &item.Lot, &item.NeedsRecount,
+			&item.Address, &item.Lot, &item.NeedsRecount, &item.Notebook,
 		); err != nil {
 			return nil, fmt.Errorf("scanning inventory item: %w", err)
 		}

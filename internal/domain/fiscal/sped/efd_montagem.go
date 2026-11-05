@@ -116,6 +116,10 @@ type ItemInventario struct {
 	Item       ItemCadastro
 	Quantidade decimal.Decimal
 	Valor      decimal.Decimal
+	// IndProp: vazio é estoque próprio em nosso poder; "1", nosso em poder de
+	// terceiro; "2", de terceiro em nosso poder. Os dois últimos pedem o participante.
+	IndProp string
+	Parte   *Participante
 }
 
 // AjusteApuracao é um lançamento de ajuste da apuração do ICMS próprio, com o
@@ -390,8 +394,8 @@ func Montar(d DadosEFD) EFDParams {
 		cad.item(inv.Item, unid, decimal.NewFromInt(1))
 		valor := inv.Valor.Round(2)
 		p.Inventario = append(p.Inventario, EFDInventarioItem{DtInv: d.DataInventario, CodItem: inv.Item.Cod, Unid: unid,
-			Qtd: vn(inv.Quantidade), VlUnit: valor.Div(inv.Quantidade).Round(6), VlItem: v2(valor), IndProp: "0",
-			CodCta: d.ContaEstoque})
+			Qtd: vn(inv.Quantidade), VlUnit: valor.Div(inv.Quantidade).Round(6), VlItem: v2(valor), IndProp: firstNonBlank(inv.IndProp, "0"),
+			CodPart: codigoDaParte(cad, inv.Parte), CodCta: d.ContaEstoque})
 	}
 	if len(p.Inventario) > 0 && p.MotivoInventario == "" {
 		p.MotivoInventario = "01"
@@ -505,6 +509,13 @@ func (a *apuracaoIPI) fechar(saldoAnt decimal.Decimal) *EFDApuracaoIPI {
 		out.Linhas = append(out.Linhas, l)
 	}
 	return out
+}
+
+func codigoDaParte(c *cadastros, p *Participante) string {
+	if p == nil {
+		return ""
+	}
+	return c.participante(*p)
 }
 
 // cadastros reúne o que os documentos referenciam (0150, 0190, 0200, 0220).

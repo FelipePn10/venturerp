@@ -83,6 +83,7 @@ type BaixaTransitoDTO struct {
 // herda do cadastro do item.
 type PoliticaReposicaoDTO struct {
 	ItemCode          int64   `json:"item_code"`
+	Mask              string  `json:"mask,omitempty"`
 	WarehouseID       int64   `json:"warehouse_id"`
 	MinimumQty        *string `json:"minimum_qty,omitempty"`
 	MaximumQty        *string `json:"maximum_qty,omitempty"`
@@ -101,6 +102,7 @@ type GerarReposicaoDTO struct {
 
 type LinhaReposicaoDTO struct {
 	ItemCode          int64  `json:"item_code"`
+	Mask              string `json:"mask,omitempty"`
 	WarehouseID       *int64 `json:"warehouse_id,omitempty"`
 	SourceType        string `json:"source_type"`
 	SourceWarehouseID *int64 `json:"source_warehouse_id,omitempty"`
@@ -116,4 +118,25 @@ type ReposicaoParaRequisicaoDTO struct {
 type ReposicaoItemRequisicaoDTO struct {
 	ItemCode int64   `json:"item_code"`
 	Quantity float64 `json:"quantity"`
+}
+
+// ReceberConsignacaoDTO: material do fornecedor recebido em consignação.
+type ReceberConsignacaoDTO struct {
+	SupplierCode int64   `json:"supplier_code"`
+	ItemCode     int64   `json:"item_code"`
+	Mask         string  `json:"mask,omitempty"`
+	Lot          *string `json:"lot,omitempty"`
+	Quantity     string  `json:"quantity"`
+	UnitValue    string  `json:"unit_value"`
+	Document     *string `json:"document,omitempty"`
+	IssueDate    string  `json:"issue_date"`
+	DueDate      *string `json:"due_date,omitempty"`
+	Notes        *string `json:"notes,omitempty"`
+}
+
+// BaixaConsignacaoDTO: devolução ou consumo do que está em consignação.
+type BaixaConsignacaoDTO struct {
+	Quantity    string  `json:"quantity"`
+	WarehouseID *int64  `json:"warehouse_id,omitempty"`
+	Document    *string `json:"document,omitempty"`
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
-	"github.com/FelipePn10/panossoerp/internal/domain/accounting/contabilizacao"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/journal"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
@@ -112,7 +111,7 @@ func (r *StockRepositorySQLC) FecharMes(ctx context.Context, competencia time.Ti
 	if err != nil {
 		return nil, err
 	}
-	if err := contabilizarFechamento(ctx, tx, empresa, id, fim, liquida, res); err != nil {
+	if err := contabilizarFechamento(ctx, tx, empresa, id, janela, fim, liquida, simular, res); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec(ctx,
@@ -430,35 +429,6 @@ func apurarDiferencas(ctx context.Context, tx pgx.Tx, empresa, closing int64, fi
 		return decimal.Zero, fmt.Errorf("somando as diferenças de custo: %w", err)
 	}
 	return res.DiferencaRecalculo.Add(res.DiferencaSaldoNeg).Round(2), nil
-}
-
-// contabilizarFechamento leva a diferença líquida ao resultado: débito no CMV e
-// crédito no estoque, ou o contrário. Sem as contas configuradas, avisa.
-func contabilizarFechamento(ctx context.Context, tx pgx.Tx, empresa, closing int64, fim time.Time, liquida decimal.Decimal, res *entity.ResultadoFechamento) error {
-	if liquida.IsZero() {
-		return nil
-	}
-	var plano, cmv, estoque *int64
-	err := tx.QueryRow(ctx, `SELECT plan_id, cmv_account_id, estoque_account_id FROM accounting_posting_params WHERE enterprise_id=$1`, empresa).Scan(&plano, &cmv, &estoque)
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("lendo as contas do fechamento: %w", err)
-	}
-	if plano == nil || cmv == nil || estoque == nil {
-		res.Avisos = append(res.Avisos, "A diferença de custo não foi contabilizada: configure as contas de CMV e Estoque nos parâmetros contábeis.")
-		return nil
-	}
-	debito, credito := *cmv, *estoque
-	if liquida.IsNegative() {
-		debito, credito = credito, debito
-	}
-	lote := contabilizacao.Lote{PlanID: *plano, Data: fim, Prefixo: "EST", SourceType: origemFechamento, SourceID: closing,
-		Lancamentos: []contabilizacao.Lancamento{{DebitoID: debito, CreditoID: credito, Valor: liquida.Abs(),
-			Historico: "Diferença de custo do fechamento de estoque " + fim.Format("01/2006")}}}
-	if err := journal.Gravar(ctx, tx, empresa, lote); err != nil {
-		return fmt.Errorf("contabilizando o fechamento: %w", err)
-	}
-	res.Contabilizado = true
-	return nil
 }
 
 // ReabrirMes reabre o último mês fechado. É exceção: desfaz o período e o

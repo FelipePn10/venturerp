@@ -250,6 +250,8 @@ type PhysicalInventoryItem struct {
 	Address      string
 	Lot          string
 	NeedsRecount bool
+	// Notebook: caderno impresso em que a linha foi parar.
+	Notebook *int
 }
 
 // FiltroMovimentos é a consulta paginada de movimentos, dos mais recentes aos

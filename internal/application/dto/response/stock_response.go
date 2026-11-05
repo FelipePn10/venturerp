@@ -154,4 +154,5 @@ type PhysicalInventoryItemResponse struct {
 	Address              string     `json:"address"`
 	Lot                  string     `json:"lot"`
 	NeedsRecount         bool       `json:"needs_recount"`
+	NotebookNumber       *int       `json:"notebook_number,omitempty"`
 }

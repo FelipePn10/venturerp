@@ -1446,6 +1446,7 @@ func (app *application) mount() chi.Router {
 				Faturamento: fiscalRepo.NewFiscalRepositoryTx(tx),
 				Pendencias:  fiscalRepo.NewPendenciasTx(tx),
 				Series:      serieRepo.NewTx(tx),
+				Consignacao: stockRepo.NewStockRepositoryTx(tx),
 			}); err != nil {
 				return err
 			}
@@ -1453,6 +1454,7 @@ func (app *application) mount() chi.Router {
 		},
 	}
 	// A prévia confere a conversão de unidade que a baixa de estoque vai precisar.
+	efeitosNFe.Consignacao = stockRepository
 	previaNFeUC.Efeitos = efeitosNFe
 	previaNFeUC.Saldos = stockRepository
 	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
@@ -1476,7 +1478,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.AuthorizeFiscalExitUseCase{TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
-		&fiscalUC.CancelFiscalExitUseCase{Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
+		&fiscalUC.CancelFiscalExitUseCase{EstoqueDaNota: stockRepository, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
 		&fiscalUC.ListFiscalExitsUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalExitUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalConfigUseCase{Repo: fiscalRepository, Auth: authService},
@@ -2531,6 +2533,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Post("/closings/{id}/reopen", estoqueHandler.ReabrirMes)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/lot-statuses", estoqueHandler.SituacoesLote)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/lot-statuses", estoqueHandler.SalvarSituacaoLote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/consignments", estoqueHandler.Consignacoes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consignments", estoqueHandler.ReceberConsignacao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consignments/{id}/return", estoqueHandler.DevolverConsignacao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/consignments/{id}/consume", estoqueHandler.ConsumirConsignacao)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cnpj-transfers", estoqueHandler.TransferenciasEntreCNPJs)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/inventory-tolerances", estoqueHandler.ToleranciasPorPerfil)
+			r.With(httpmw.RequireRole("ADMIN")).Put("/inventory-tolerances", estoqueHandler.SalvarToleranciaDoPerfil)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/inventory-tolerances/{id}", estoqueHandler.ExcluirToleranciaDoPerfil)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/discrepancy-reasons", estoqueHandler.MotivosDeDivergencia)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/discrepancy-reasons", estoqueHandler.SalvarMotivoDeDivergencia)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/parameters", estoqueHandler.Parametros)
@@ -2624,6 +2634,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/close", stockHandler.CloseInventory)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/finish-count", stockHandler.FinishCount)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/recount", stockHandler.RecountInventory)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/notebooks", estoqueHandler.Cadernos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/notebooks", estoqueHandler.GerarCadernos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/notebooks/{number}/printed", estoqueHandler.MarcarCadernoImpresso)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/count", stockHandler.CountInventoryItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/adjust", stockHandler.AdjustInventoryItem)
 		})
