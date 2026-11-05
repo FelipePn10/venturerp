@@ -397,3 +397,41 @@ A entrega de consumo se desfaz pelo estorno do movimento: o material volta, a li
 Armazém (`/api/warehouse`; `PUT /{code}` altera — só ADMIN — inclusive `allow_negative_stock`) e Localização (`/api/location` — países/UFs não; ver
 [`cadastros-apoio.md`](cadastros-apoio.md) para armazém/localização física). Tipos de
 armazém/localização: ver enums `WarehouseType`/`LocationType`.
+
+## Consignação
+
+Migração 466. `SAIDA` é mercadoria nossa com o cliente; `ENTRADA` é material do fornecedor conosco. O almoxarifado de consignação fica em `stock_parameters.consignment_warehouse_id`, sem disponibilidade, para não entrar na promessa. O prazo opcional é `consignment_days`.
+
+| Fato | Como acontece | Estoque |
+|---|---|---|
+| Remessa ao cliente | NF-e com tipo de nota `REMESSA_CONSIGNACAO` | Transfere ao almoxarifado de consignação. Sem CMV |
+| Venda do consignado | NF-e com tipo `VENDA_CONSIGNACAO` | Sai do almoxarifado de consignação, da remessa mais antiga. O CMV nasce aqui. Sem saldo do cliente, a nota não transmite |
+| Devolução do cliente | `POST /api/stock/consignments/{id}/return` | Volta à origem. A nota de devolução é emitida à parte; o número fica em `document` |
+| Recebido do fornecedor | `POST /api/stock/consignments` | Nada: só o controle |
+| Consumo | `POST /api/stock/consignments/{id}/consume` | Entra no almoxarifado escolhido, pelo valor combinado |
+| Devolução ao fornecedor | `POST /api/stock/consignments/{id}/return` | Nada: só o controle |
+
+`GET /api/stock/consignments?direction=&open=false` lista. Cancelar a remessa com venda ou devolução é recusado antes da SEFAZ. Cancelar a venda devolve o saldo às remessas. No Bloco H, o consignado ao cliente sai com `IND_PROP` 1 e o do fornecedor com 2, ambos com `COD_PART`. CFOP, CST e tributos vêm do tipo de nota do cliente: nada é fixado no código.
+
+## Transferência entre CNPJs
+
+Migração 466. Vale entre empresas do ERP com a mesma raiz de CNPJ: é a mesma pessoa jurídica. Raiz diferente é outra empresa, e a nota baixa como qualquer saída.
+
+A NF-e com tipo `TRANSFERENCIA` para o CNPJ de um estabelecimento nosso leva o material ao almoxarifado `TRANSITO` da origem, que segue no estoque dela. A aprovação da nota de entrada no destino, pela chave, dá a entrada normal e baixa o trânsito da origem na mesma transação. É o único ponto em que uma empresa grava na outra. Cancelar a entrada devolve ao trânsito; cancelar a nota antes da entrada devolve ao almoxarifado de origem; depois da entrada, é recusado. `GET /api/stock/cnpj-transfers` lista enviadas e a receber.
+
+## Fechamento: produção e provisão
+
+Migração 464. O fechamento mensal lança, num lote só, que a reabertura estorna:
+
+- **Produção** (com `contabilizar_producao`): D Produção em processo / C Estoque pelo consumo; D Estoque / C Produção em processo pela entrada; D Produção em processo / C Custos absorvidos pelo que a entrada tem acima do material; ordem encerrada com sobra vai ao CMV. Ligada e sem conta, o mês não fecha: ele não volta, e a produção ficaria sem lançamento.
+- **Provisão de obsoletos**: recalcula pela foto do mês e lança só a variação. Sem conta, avisa e lança a variação acumulada no mês seguinte.
+
+## Inventário: cadernos e limite por perfil
+
+Migração 465. `POST /api/inventory/{id}/notebooks` com `lines_per_notebook` divide as linhas sem misturar almoxarifados; só antes da primeira contagem. A situação vem das linhas: gerado, impresso, em digitação, digitado. A impressão é da tela; a contagem cega não leva o saldo.
+
+`PUT /api/stock/inventory-tolerances` grava por perfil de acesso o valor máximo por inventário e por linha. Com mais de um perfil vale o maior, e perfil sem aquele limite libera a dimensão. Acima do limite vai à alçada mesmo no modo `NUNCA`; dentro dele dispensa `FORA_TOLERANCIA`; `SEMPRE` não abre exceção. A contagem cíclica não usa esse limite.
+
+## Reposição por máscara
+
+Migração 465. `stock_replenishment_policies.mask`: vazia é o item. Máscara com política calcula só com o saldo e as chegadas dela; as demais seguem no item. A sugestão leva a máscara à requisição de compra, ao pedido, à transferência e à ordem planejada.

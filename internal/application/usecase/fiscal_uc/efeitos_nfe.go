@@ -35,6 +35,8 @@ type EfeitosRepos struct {
 	Pendencias  repository.PendenciasNFeRepository
 	// Series: a série que sai na nota vai para o cliente (e volta no cancelamento).
 	Series SeriesNaNota
+	// Consignacao: remessa, venda consignada e transferência entre CNPJs.
+	Consignacao stockrepo.ConsignacaoEstoque
 }
 
 // SeriesNaNota: o efeito da nota sobre o número de série (pós-venda 3.1).
@@ -71,6 +73,8 @@ type EfeitosNFe struct {
 	// Conversor leva a quantidade da nota (unidade comercial) para a unidade de
 	// estoque do item antes da baixa.
 	Conversor ports.UOMConverter
+	// Consignacao confere, antes de transmitir, o saldo do cliente na venda consignada.
+	Consignacao stockrepo.ConsignacaoEstoque
 }
 
 // Registrar abre a pendência da etapa (antes de tentar aplicar os efeitos).
@@ -159,8 +163,141 @@ func (e *EfeitosNFe) PreConferirDepositos(ctx context.Context, exit *entity.Fisc
 	if !efeitos.MovimentaEstoque {
 		return nil
 	}
+	if efeitos.Tipo == entity.TipoNotaVendaConsignacao || efeitos.Tipo == entity.TipoNotaRemessaConsignacao {
+		if err := e.conferirConsignacao(ctx, exit, items, efeitos); err != nil {
+			return err
+		}
+	}
+	if efeitos.Tipo == entity.TipoNotaVendaConsignacao {
+		return nil // sai do almoxarifado de consignação, não do depósito do item
+	}
 	_, err = e.depositos(ctx, exit, items)
 	return err
+}
+
+// conferirConsignacao barra antes da SEFAZ o que a baixa recusaria depois: nota
+// autorizada não volta.
+func (e *EfeitosNFe) conferirConsignacao(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem, efeitos entity.EfeitosDoTipoNota) error {
+	if e.Consignacao == nil {
+		return errorsuc.NewValidationError("consignação indisponível nesta instalação")
+	}
+	if exit.CustomerCode == nil {
+		return errorsuc.NewValidationError("a nota de consignação precisa de um cliente cadastrado")
+	}
+	if _, err := e.Consignacao.AlmoxDeConsignacao(ctx); err != nil {
+		return err
+	}
+	if efeitos.Tipo != entity.TipoNotaVendaConsignacao {
+		return nil
+	}
+	quantidades, err := e.quantidadesEmEstoque(ctx, items)
+	if err != nil {
+		return err
+	}
+	mascaras, err := e.mascarasDoPedido(ctx, exit)
+	if err != nil {
+		return err
+	}
+	pedido := map[[2]string]decimal.Decimal{}
+	for _, it := range items {
+		if it.ItemCode == nil {
+			continue
+		}
+		q := it.Quantity
+		if v, ok := quantidades[it.ID]; ok {
+			q = v
+		}
+		mask := mascaraDaLinha(it, mascaras)
+		k := [2]string{fmt.Sprint(*it.ItemCode), mask}
+		pedido[k] = pedido[k].Add(q)
+		saldo, err := e.Consignacao.SaldoConsignado(ctx, *exit.CustomerCode, *it.ItemCode, mask)
+		if err != nil {
+			return err
+		}
+		if pedido[k].GreaterThan(saldo) {
+			return errorsuc.NewValidationError(fmt.Sprintf("o item %s tem só %s em consignação com este cliente", descricaoItem(it), saldo.String()))
+		}
+	}
+	return nil
+}
+
+// aplicarEstoque escolhe o caminho do estoque pelo tipo de nota. A remessa e a
+// transferência a outro estabelecimento não saem do estoque: o material continua nosso.
+func aplicarEstoque(ctx context.Context, r EfeitosRepos, exit *entity.FiscalExit, items []*entity.FiscalExitItem, efeitos entity.EfeitosDoTipoNota, depositos map[int64]int64, quantidades map[int64]decimal.Decimal, mascaras map[int64]string, userID uuid.UUID) error {
+	qtd := func(it *entity.FiscalExitItem) decimal.Decimal {
+		if q, ok := quantidades[it.ID]; ok {
+			return q
+		}
+		return it.Quantity
+	}
+	documento := fmt.Sprintf("%d/%s", exit.NumeroNF, exit.Serie)
+	switch efeitos.Tipo {
+	case entity.TipoNotaRemessaConsignacao:
+		if r.Consignacao == nil || exit.CustomerCode == nil {
+			return errorsuc.NewValidationError("a remessa em consignação precisa de um cliente cadastrado")
+		}
+		for _, it := range items {
+			if it.ItemCode == nil {
+				continue
+			}
+			valor := decimal.Zero
+			if q := qtd(it); q.IsPositive() {
+				valor = it.TotalPrice.DivRound(q, stockentity.CasasCusto)
+			}
+			if err := r.Consignacao.RegistrarRemessa(ctx, stockentity.RemessaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
+				Mask: mascaraDaLinha(it, mascaras), Lote: it.Lot, Endereco: it.Address, AlmoxOrigem: depositos[*it.ItemCode], Quantidade: qtd(it),
+				ValorUnitario: valor, Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
+				return fmt.Errorf("enviando o item %s à consignação: %w", descricaoItem(it), err)
+			}
+		}
+		return nil
+	case entity.TipoNotaVendaConsignacao:
+		if r.Consignacao == nil || exit.CustomerCode == nil {
+			return errorsuc.NewValidationError("a venda em consignação precisa de um cliente cadastrado")
+		}
+		almox, err := r.Consignacao.AlmoxDeConsignacao(ctx)
+		if err != nil {
+			return err
+		}
+		daConsignacao := map[int64]int64{}
+		for _, it := range items {
+			if it.ItemCode != nil {
+				daConsignacao[*it.ItemCode] = almox
+			}
+		}
+		if err := baixarEstoque(ctx, r.Estoque, exit, items, daConsignacao, quantidades, mascaras, userID); err != nil {
+			return err
+		}
+		for _, it := range items {
+			if it.ItemCode == nil {
+				continue
+			}
+			if err := r.Consignacao.RegistrarVendaConsignada(ctx, stockentity.VendaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
+				Mask: mascaraDaLinha(it, mascaras), Quantidade: qtd(it), Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
+				return err
+			}
+		}
+		return nil
+	case entity.TipoNotaTransferencia:
+		if r.Consignacao != nil && exit.CnpjDestinatario != nil && exit.ChaveAcesso != nil {
+			irma, err := r.Consignacao.EmpresaIrma(ctx, *exit.CnpjDestinatario)
+			if err != nil {
+				return err
+			}
+			if irma > 0 {
+				envio := stockentity.EnvioEntreCNPJs{NotaSaida: exit.ID, Destino: irma, Chave: *exit.ChaveAcesso, Ator: userID}
+				for _, it := range items {
+					if it.ItemCode == nil {
+						continue
+					}
+					envio.Linhas = append(envio.Linhas, stockentity.LinhaEntreCNPJs{ItemCode: *it.ItemCode, Mask: mascaraDaLinha(it, mascaras),
+						Lote: it.Lot, Endereco: it.Address, AlmoxDe: depositos[*it.ItemCode], Quantidade: qtd(it)})
+				}
+				return r.Consignacao.EnviarEntreCNPJs(ctx, envio)
+			}
+		}
+	}
+	return baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, mascaras, userID)
 }
 
 func (e *EfeitosNFe) depositos(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem) (map[int64]int64, error) {
@@ -265,8 +402,10 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 	var quantidades map[int64]decimal.Decimal
 	var mascaras map[int64]string
 	if efeitos.MovimentaEstoque {
-		if depositos, err = e.depositos(ctx, exit, items); err != nil {
-			return err
+		if efeitos.Tipo != entity.TipoNotaVendaConsignacao {
+			if depositos, err = e.depositos(ctx, exit, items); err != nil {
+				return err
+			}
 		}
 		if quantidades, err = e.quantidadesEmEstoque(ctx, items); err != nil {
 			return err
@@ -298,7 +437,7 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 			}
 		}
 		if efeitos.MovimentaEstoque {
-			if err := baixarEstoque(ctx, r.Estoque, exit, items, depositos, quantidades, mascaras, userID); err != nil {
+			if err := aplicarEstoque(ctx, r, exit, items, efeitos, depositos, quantidades, mascaras, userID); err != nil {
 				return err
 			}
 		}

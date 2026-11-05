@@ -33,6 +33,11 @@ type CancelFiscalExitUseCase struct {
 	Pedidos     salesrepo.SalesOrderRepository
 	// Contabil devolve o estoque baixado e estorna a contabilização da venda.
 	Contabil SaidaContabil
+	// EstoqueDaNota recusa cancelar a nota cujo estoque já seguiu adiante: remessa
+	// consignada com venda ou transferência recebida no destino.
+	EstoqueDaNota interface {
+		PodeCancelarNotaDeEstoque(ctx context.Context, nota int64) error
+	}
 	// Devolucao desfaz a devolução de compra cancelada.
 	Devolucao *DevolucaoCompraUseCase
 	// DevolucaoVenda recusa cancelar a NF-e de entrada de devolução de venda já
@@ -95,6 +100,11 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 	}
 	if uc.DevolucaoVenda != nil {
 		if err := uc.DevolucaoVenda.PodeCancelarNF(ctx, exit); err != nil {
+			return nil, err
+		}
+	}
+	if uc.EstoqueDaNota != nil {
+		if err := uc.EstoqueDaNota.PodeCancelarNotaDeEstoque(ctx, exit.ID); err != nil {
 			return nil, err
 		}
 	}

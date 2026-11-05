@@ -576,3 +576,53 @@ func (h *EstoqueHandler) MarcarCadernoImpresso(w http.ResponseWriter, r *http.Re
 	err := h.UC.MarcarCadernoImpresso(r.Context(), id, int(numero))
 	h.responder(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
 }
+
+// GET /api/stock/consignments?direction=&open=
+func (h *EstoqueHandler) Consignacoes(w http.ResponseWriter, r *http.Request) {
+	out, err := h.UC.Consignacoes(r.Context(), r.URL.Query().Get("direction"), r.URL.Query().Get("open") != "false")
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/stock/consignments
+func (h *EstoqueHandler) ReceberConsignacao(w http.ResponseWriter, r *http.Request) {
+	var dto request.ReceberConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.ReceberConsignacao(r.Context(), dto)
+	h.responder(w, http.StatusCreated, out, err)
+}
+
+// POST /api/stock/consignments/{id}/return
+func (h *EstoqueHandler) DevolverConsignacao(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "consignação")
+	if !ok {
+		return
+	}
+	var dto request.BaixaConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.DevolverConsignacao(r.Context(), id, dto)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// POST /api/stock/consignments/{id}/consume
+func (h *EstoqueHandler) ConsumirConsignacao(w http.ResponseWriter, r *http.Request) {
+	id, ok := inteiroDaRota(w, r, "id", "consignação")
+	if !ok {
+		return
+	}
+	var dto request.BaixaConsignacaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.UC.ConsumirConsignacao(r.Context(), id, dto)
+	h.responder(w, http.StatusOK, out, err)
+}
+
+// GET /api/stock/cnpj-transfers
+func (h *EstoqueHandler) TransferenciasEntreCNPJs(w http.ResponseWriter, r *http.Request) {
+	out, err := h.UC.TransferenciasEntreCNPJs(r.Context())
+	h.responder(w, http.StatusOK, out, err)
+}

@@ -79,8 +79,8 @@ func (r *CadastroTributarioPG) EfeitosDoTipoNota(ctx context.Context, id int64) 
 	}
 	var e entity.EfeitosDoTipoNota
 	err = r.pool.QueryRow(ctx, `
-		SELECT generates_financial_title, updates_inventory AND stock_movement <> 'NAO_ATUALIZA', baixa_pedido, generates_revenue
-		  FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&e.GeraTitulo, &e.MovimentaEstoque, &e.BaixaPedido, &e.GeraReceita)
+		SELECT generates_financial_title, updates_inventory AND stock_movement <> 'NAO_ATUALIZA', baixa_pedido, generates_revenue, type::text
+		  FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&e.GeraTitulo, &e.MovimentaEstoque, &e.BaixaPedido, &e.GeraReceita, &e.Tipo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return padrao, nil
 	}

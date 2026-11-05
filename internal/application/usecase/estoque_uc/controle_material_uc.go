@@ -63,6 +63,14 @@ func (uc *UseCase) SalvarParametros(ctx context.Context, p entity.ParametrosEsto
 	if p.ObsoleteProvisionPct != nil && (p.ObsoleteProvisionPct.IsNegative() || p.ObsoleteProvisionPct.GreaterThan(decimal.NewFromInt(100))) {
 		return errorsuc.NewValidationError("o percentual da provisão deve ficar entre 0 e 100%")
 	}
+	if p.ConsignmentDays != nil && *p.ConsignmentDays <= 0 {
+		return errorsuc.NewValidationError("o prazo da consignação deve ser maior que zero")
+	}
+	if p.ConsignmentWarehouseID != nil {
+		if err := uc.Ops.ConferirAlmoxDeConsignacao(ctx, *p.ConsignmentWarehouseID); err != nil {
+			return err
+		}
+	}
 	ator, err := uc.Auth.UserID(ctx)
 	if err != nil {
 		return err

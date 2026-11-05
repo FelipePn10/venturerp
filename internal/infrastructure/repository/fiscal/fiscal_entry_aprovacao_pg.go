@@ -275,6 +275,15 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 		res.LancamentosGerados++
 	}
 
+	// Nota de transferência de outro estabelecimento: a entrada acima é o recebimento.
+	var chave string
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(chave_acesso,'') FROM fiscal_entries WHERE id=$1 AND enterprise_id=$2`, a.EntryID, empresa).Scan(&chave); err != nil {
+		return nil, err
+	}
+	if err = stockrepo.ReceberEntreCNPJsTx(ctx, tx, empresa, chave, a.EntryID, a.UserID); err != nil {
+		return nil, err
+	}
+
 	stockStatus := entity.StockStatusNaoAplica
 	if algumEstoque {
 		stockStatus = entity.StockStatusConcluido
@@ -313,6 +322,9 @@ func (r *FiscalRepositoryPG) CancelarEntrada(ctx context.Context, c repository.C
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de entrada %d não encontrada", c.EntryID))
 		}
+		return nil, err
+	}
+	if err = stockrepo.DesfazerRecebimentoEntreCNPJsTx(ctx, tx, empresa, c.EntryID, c.UserID); err != nil {
 		return nil, err
 	}
 	// Frete e devolução apoiados na nota precisam sair antes dela: o frete

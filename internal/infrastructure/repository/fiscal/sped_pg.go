@@ -14,6 +14,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/sped"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -117,6 +118,127 @@ func lerEnderecoEmitente(conteudo string) enderecoXML {
 		}
 	}
 	return e
+}
+
+// inventarioConsignado separa no Bloco H o que está em consignação: o nosso em poder do
+// cliente sai do estoque em nosso poder, e o do fornecedor entra como de terceiro.
+func (r *FiscalRepositoryPG) inventarioConsignado(ctx context.Context, empresa int64, data time.Time, itens []sped.ItemInventario) ([]sped.ItemInventario, error) {
+	rows, err := r.db.Query(ctx,
+		`WITH saldo AS (
+		     SELECT c.direction, c.partner_code, c.item_code, c.unit_value, c.fiscal_exit_id,
+		            c.quantity - COALESCE((SELECT SUM(s.quantity) FROM stock_consignment_settlements s
+		                                    WHERE s.consignment_id=c.id AND NOT s.reversed AND s.settled_on <= $2::date),0) q
+		       FROM stock_consignments c
+		      WHERE c.enterprise_id=$1 AND c.status<>'CANCELADA' AND c.issue_date <= $2::date)
+		 SELECT direction, partner_code, item_code, SUM(q), SUM(q*unit_value), MAX(fiscal_exit_id)
+		   FROM saldo WHERE q > 0 GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`, empresa, data.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("consignação para o bloco H: %w", err)
+	}
+	type linha struct {
+		direcao    string
+		parte, cod int64
+		q, valor   decimal.Decimal
+		nota       *int64
+	}
+	var linhas []linha
+	for rows.Next() {
+		var l linha
+		if err := rows.Scan(&l.direcao, &l.parte, &l.cod, &l.q, &l.valor, &l.nota); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		linhas = append(linhas, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, l := range linhas {
+		cod := fmt.Sprint(l.cod)
+		pos := -1
+		for i := range itens {
+			if itens[i].Item.Cod == cod && itens[i].IndProp == "" {
+				pos = i
+				break
+			}
+		}
+		if l.direcao == stockentity.ConsignacaoSaida {
+			if pos < 0 || l.nota == nil {
+				continue
+			}
+			parte, err := r.parteDaRemessa(ctx, empresa, *l.nota)
+			if err != nil {
+				return nil, err
+			}
+			q := decimal.Min(l.q, itens[pos].Quantidade)
+			valor := itens[pos].Valor.Mul(q).Div(itens[pos].Quantidade)
+			itens[pos].Quantidade = itens[pos].Quantidade.Sub(q)
+			itens[pos].Valor = itens[pos].Valor.Sub(valor)
+			itens = append(itens, sped.ItemInventario{Item: itens[pos].Item, Quantidade: q, Valor: valor, IndProp: "1", Parte: &parte})
+			continue
+		}
+		parte, err := r.parteDoFornecedor(ctx, empresa, l.parte)
+		if err != nil {
+			return nil, err
+		}
+		item := sped.ItemCadastro{Cod: cod}
+		if pos >= 0 {
+			item = itens[pos].Item
+		} else if item, err = r.itemDoInventario(ctx, empresa, l.cod); err != nil {
+			return nil, err
+		}
+		itens = append(itens, sped.ItemInventario{Item: item, Quantidade: l.q, Valor: l.valor, IndProp: "2", Parte: &parte})
+	}
+	return itens, nil
+}
+
+func (r *FiscalRepositoryPG) parteDaRemessa(ctx context.Context, empresa, nota int64) (sped.Participante, error) {
+	var doc, nome, ie string
+	var e enderecoXML
+	err := r.db.QueryRow(ctx,
+		`SELECT COALESCE(cnpj_destinatario,''), COALESCE(razao_social_destinatario,''), COALESCE(ie_destinatario,''), COALESCE(dest_codigo_municipio,''),
+		        COALESCE(dest_logradouro,''), COALESCE(dest_numero,''), COALESCE(dest_complemento,''), COALESCE(dest_bairro,'')
+		   FROM fiscal_exits WHERE id=$1 AND enterprise_id=$2`, nota, empresa).Scan(&doc, &nome, &ie, &e.CMun, &e.Lgr, &e.Nro, &e.Cpl, &e.Bairro)
+	if err != nil {
+		return sped.Participante{}, fmt.Errorf("lendo o destinatário da remessa %d: %w", nota, err)
+	}
+	return participanteEFD(doc, nome, ie, e), nil
+}
+
+// parteDoFornecedor: o endereço vem da última nota dele, como nas entradas.
+func (r *FiscalRepositoryPG) parteDoFornecedor(ctx context.Context, empresa, fornecedor int64) (sped.Participante, error) {
+	var doc, nome, ie string
+	err := r.db.QueryRow(ctx,
+		`SELECT COALESCE(document_number,''), COALESCE(name,''), COALESCE(state_registration,'') FROM suppliers WHERE code=$1 AND enterprise_id=$2`,
+		fornecedor, empresa).Scan(&doc, &nome, &ie)
+	if err != nil {
+		return sped.Participante{}, fmt.Errorf("lendo o fornecedor %d da consignação: %w", fornecedor, err)
+	}
+	var xmlNota string
+	err = r.db.QueryRow(ctx,
+		`SELECT COALESCE(xml_content,'') FROM fiscal_entries WHERE enterprise_id=$1 AND regexp_replace(cnpj_emitente,'\D','','g')=$2 ORDER BY data_entrada DESC, id DESC LIMIT 1`,
+		empresa, soDigitosRepo(doc)).Scan(&xmlNota)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return sped.Participante{}, fmt.Errorf("lendo a nota do fornecedor %d: %w", fornecedor, err)
+	}
+	return participanteEFD(doc, nome, ie, lerEnderecoEmitente(xmlNota)), nil
+}
+
+// itemDoInventario monta o 0200 do item que só existe como material de terceiro.
+func (r *FiscalRepositoryPG) itemDoInventario(ctx context.Context, empresa, code int64) (sped.ItemCadastro, error) {
+	var nome, unid string
+	var engType, tipoUso *int16
+	var revenda, embalagem bool
+	err := r.db.QueryRow(ctx,
+		`SELECT COALESCE(name,''), COALESCE(warehouse_unit_of_measurement::text,''), engineering_type, supplies_type_of_use,
+		        COALESCE(commercial_sale_type,'') = 'REVENDA', COALESCE(commercial_is_packaging,false)
+		   FROM items WHERE code=$1 AND enterprise_id=$2`, code, empresa).Scan(&nome, &unid, &engType, &tipoUso, &revenda, &embalagem)
+	if err != nil {
+		return sped.ItemCadastro{}, fmt.Errorf("lendo o item %d da consignação: %w", code, err)
+	}
+	cod := fmt.Sprint(code)
+	return sped.ItemCadastro{Cod: cod, Desc: firstNonEmptyStr(nome, cod), UnidInv: unid, Tipo: sped.TipoItem(cadastroDoItem(engType, tipoUso, revenda, embalagem), "")}, nil
 }
 
 func participanteEFD(cnpj, nome, ie string, end enderecoXML) sped.Participante {
@@ -501,6 +623,10 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 		out = append(out, it)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	rows.Close()
+	if out, err = r.inventarioConsignado(ctx, empresa, data, out); err != nil {
 		return nil, "", err
 	}
 	var conta string

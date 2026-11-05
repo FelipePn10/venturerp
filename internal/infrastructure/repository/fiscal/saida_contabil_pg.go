@@ -64,13 +64,20 @@ func (r *FiscalRepositoryPG) EstornarEstoqueDaSaida(ctx context.Context, exitID 
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, fmt.Sprintf("saida-estoque:%d:%d", empresa, exitID)); err != nil {
 		return 0, err
 	}
+	// Consignação e transferência entre CNPJs desfazem sozinhas e não repetem.
+	if err = stockrepo.DesfazerConsignacaoDaNotaTx(ctx, tx, empresa, exitID, userID); err != nil {
+		return 0, err
+	}
+	if err = stockrepo.DesfazerEnvioEntreCNPJsTx(ctx, tx, empresa, exitID, userID); err != nil {
+		return 0, err
+	}
 	var ja bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM stock_movements WHERE enterprise_id=$1 AND reference_type=$2 AND reference_code=$3)`,
 		empresa, ReferenciaSaidaCancelada, exitID).Scan(&ja); err != nil {
 		return 0, err
 	}
 	if ja {
-		return 0, nil
+		return 0, tx.Commit(ctx)
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT item_code, mask, warehouse_id, quantity, total_price, lot, address FROM stock_movements

@@ -227,9 +227,9 @@ func lerParametrosDeEstoque(ctx context.Context, q interface {
 }, empresa int64) (entity.ParametrosEstoque, error) {
 	p := entity.ParametrosEstoque{ExpiredLotAction: entity.LoteVencidoBloqueia}
 	err := q.QueryRow(ctx,
-		`SELECT expired_lot_action, retroactive_months, tolerance_a, tolerance_b, tolerance_c, obsolete_days, obsolete_provision_pct
+		`SELECT expired_lot_action, retroactive_months, tolerance_a, tolerance_b, tolerance_c, obsolete_days, obsolete_provision_pct, consignment_warehouse_id, consignment_days
 		   FROM stock_parameters WHERE enterprise_id=$1`, empresa).
-		Scan(&p.ExpiredLotAction, &p.RetroactiveMonths, &p.ToleranceA, &p.ToleranceB, &p.ToleranceC, &p.ObsoleteDays, &p.ObsoleteProvisionPct)
+		Scan(&p.ExpiredLotAction, &p.RetroactiveMonths, &p.ToleranceA, &p.ToleranceB, &p.ToleranceC, &p.ObsoleteDays, &p.ObsoleteProvisionPct, &p.ConsignmentWarehouseID, &p.ConsignmentDays)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return p, fmt.Errorf("lendo os parâmetros de estoque: %w", err)
 	}
@@ -281,12 +281,13 @@ func (r *StockRepositorySQLC) SalvarParametrosDeEstoque(ctx context.Context, p e
 		return err
 	}
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO stock_parameters(enterprise_id,expired_lot_action,updated_by,retroactive_months,tolerance_a,tolerance_b,tolerance_c,obsolete_days,obsolete_provision_pct)
-		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		`INSERT INTO stock_parameters(enterprise_id,expired_lot_action,updated_by,retroactive_months,tolerance_a,tolerance_b,tolerance_c,obsolete_days,obsolete_provision_pct,consignment_warehouse_id,consignment_days)
+		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		 ON CONFLICT (enterprise_id) DO UPDATE SET expired_lot_action=EXCLUDED.expired_lot_action, updated_by=EXCLUDED.updated_by,
 		     retroactive_months=EXCLUDED.retroactive_months, tolerance_a=EXCLUDED.tolerance_a, tolerance_b=EXCLUDED.tolerance_b, tolerance_c=EXCLUDED.tolerance_c,
-		     obsolete_days=EXCLUDED.obsolete_days, obsolete_provision_pct=EXCLUDED.obsolete_provision_pct, updated_at=NOW()`,
-		empresa, p.ExpiredLotAction, ator, p.RetroactiveMonths, p.ToleranceA, p.ToleranceB, p.ToleranceC, p.ObsoleteDays, p.ObsoleteProvisionPct)
+		     obsolete_days=EXCLUDED.obsolete_days, obsolete_provision_pct=EXCLUDED.obsolete_provision_pct,
+		     consignment_warehouse_id=EXCLUDED.consignment_warehouse_id, consignment_days=EXCLUDED.consignment_days, updated_at=NOW()`,
+		empresa, p.ExpiredLotAction, ator, p.RetroactiveMonths, p.ToleranceA, p.ToleranceB, p.ToleranceC, p.ObsoleteDays, p.ObsoleteProvisionPct, p.ConsignmentWarehouseID, p.ConsignmentDays)
 	if err != nil {
 		return fmt.Errorf("gravando os parâmetros de estoque: %w", err)
 	}

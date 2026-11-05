@@ -12,6 +12,7 @@ import (
 // OperacoesEstoque são as operações de estoque que vão além do lançamento
 // simples: transferência, estorno, consultas analíticas e requisição interna.
 type OperacoesEstoque interface {
+	ConsignacaoEstoque
 	ToleranciasPorPerfil(ctx context.Context) ([]entity.ToleranciaDoPerfil, error)
 	SalvarToleranciaDoPerfil(ctx context.Context, t entity.ToleranciaDoPerfil, ator uuid.UUID) error
 	ExcluirToleranciaDoPerfil(ctx context.Context, perfil int64) error

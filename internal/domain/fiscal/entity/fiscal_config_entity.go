@@ -80,9 +80,19 @@ type EfeitosDoTipoNota struct {
 	MovimentaEstoque bool
 	BaixaPedido      bool
 	GeraReceita      bool
+	// Tipo é a natureza do cadastro: remessa e venda em consignação e transferência
+	// não baixam o estoque como a venda comum.
+	Tipo string
 }
+
+// Tipos de nota que mudam o caminho do estoque.
+const (
+	TipoNotaRemessaConsignacao = "REMESSA_CONSIGNACAO"
+	TipoNotaVendaConsignacao   = "VENDA_CONSIGNACAO"
+	TipoNotaTransferencia      = "TRANSFERENCIA"
+)
 
 // EfeitosPadraoDaNota: sem tipo de nota, a nota é uma venda comum.
 func EfeitosPadraoDaNota() EfeitosDoTipoNota {
-	return EfeitosDoTipoNota{GeraTitulo: true, MovimentaEstoque: true, BaixaPedido: true, GeraReceita: true}
+	return EfeitosDoTipoNota{GeraTitulo: true, MovimentaEstoque: true, BaixaPedido: true, GeraReceita: true, Tipo: "VENDA"}
 }
