@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.12.1] — 2026-11-06
+
+- fix(planejamento): numeração simultânea, referência do corte e saldo do MRP (`519c81d2`)
+- fix(compras): a máscara acompanha a reposição até o estoque (`9ba15cef`)
+- fix(estoque): consignação e transferência entre CNPJs na revisão da 1.12 (`9d0996f3`)
+
 ## [v1.12.0] — 2026-11-05
 
 - fix(estoque): nome dos documentos de consignação e transferência entre CNPJs (`3a731471`)
