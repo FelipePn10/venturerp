@@ -50,6 +50,15 @@ func TestCoberturaLePerfilEstoqueEPlanejadasDaEmpresa(t *testing.T) {
 	testutil.Exec(t, pool, `INSERT INTO planned_orders(order_number,item_code,quantity,order_type,status,demand_type,demand_code,need_date,created_by,enterprise_id,is_active,mrp_suggestion_code)
 		VALUES($1,$2,25,'PRODUCTION','PLANNED','INDEPENDENT',0,$3::date,$4,$5,true,$6)`, testutil.UniqueCode(), item, d2, actor, a.ID, firmada)
 
+	// A mercadoria com o cliente não abastece o plano: o cálculo do MRP não a conta.
+	comCliente := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	if _, err := pool.Exec(base, `UPDATE warehouse SET disposition=FALSE, location='EXTERNO' WHERE id=$1`, comCliente); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(base, `INSERT INTO stock_balances(item_code,warehouse_id,quantity,reserved_qty,enterprise_id) VALUES($1,$2,40,0,$3)`, item, comCliente, a.ID); err != nil {
+		t.Fatal(err)
+	}
+
 	repo := mrp_report.New(pool)
 	lido, err := repo.Coverage(a.Ctx, mrp_report_uc.Filter{PlanCode: &plano})
 	if err != nil {

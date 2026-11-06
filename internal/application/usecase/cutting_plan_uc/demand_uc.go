@@ -53,7 +53,7 @@ func NewDemandUseCase(
 type orderSource struct {
 	ref    string // human reference (OP/planned number)
 	isOP   bool
-	opCode int64 // production_order code, for tying the baixa to a single OP
+	opCode int64 // production_orders.id, for tying the baixa to a single OP
 	item   int64
 	mask   string
 	qty    float64
@@ -86,7 +86,9 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			continue
 		}
 		sources = append(sources, orderSource{
-			ref: fmt.Sprintf("OP-%d", op.OrderNumber), isOP: true, opCode: op.OrderNumber,
+			// opCode é o id: a baixa do plano referencia a ordem por ele, como todo
+			// movimento da produção. O número fica só no rótulo.
+			ref: fmt.Sprintf("OP-%d", op.OrderNumber), isOP: true, opCode: op.ID,
 			item: op.ItemCode, mask: op.Mask, qty: op.PlannedQty.InexactFloat64(),
 		})
 	}

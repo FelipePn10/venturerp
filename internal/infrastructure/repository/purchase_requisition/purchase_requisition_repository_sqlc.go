@@ -26,7 +26,25 @@ func New(q *sqlc.Queries, pool *pgxpool.Pool) domainrepo.PurchaseRequisitionRepo
 }
 
 func (r *PurchaseRequisitionRepositorySQLC) Create(ctx context.Context, req *entity.PurchaseRequisition) (*entity.PurchaseRequisition, error) {
-	row, err := r.q.CreatePurchaseRequisition(ctx, sqlc.CreatePurchaseRequisitionParams{
+	// O código é MAX+1 do banco inteiro: duas requisições juntas pegavam o mesmo número
+	// e a segunda caía em erro de duplicidade. Quem grava confirma o número sob a trava.
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("abrindo a numeração da requisição: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('purchase_requisitions.code', 0))`); err != nil {
+		return nil, fmt.Errorf("travando a numeração da requisição: %w", err)
+	}
+	q := r.q.WithTx(tx)
+	proximo, err := q.NextPurchaseRequisitionCode(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lendo a numeração da requisição: %w", err)
+	}
+	if int64(proximo) > req.Code {
+		req.Code = int64(proximo)
+	}
+	row, err := q.CreatePurchaseRequisition(ctx, sqlc.CreatePurchaseRequisitionParams{
 		Code:                  req.Code,
 		EnterpriseCode:        req.EnterpriseCode,
 		RequestTypeCode:       req.RequestTypeCode,
@@ -37,6 +55,9 @@ func (r *PurchaseRequisitionRepositorySQLC) Create(ctx context.Context, req *ent
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase requisition: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("gravando a requisição: %w", err)
 	}
 	return reqToEntity(row), nil
 }

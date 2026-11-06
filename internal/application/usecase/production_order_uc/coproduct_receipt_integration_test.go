@@ -5,6 +5,7 @@ package production_order_uc_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -209,5 +210,76 @@ func TestIntegration_EntregaNaoBaixaDeNovoOQueOApontamentoBaixou(t *testing.T) {
 	}
 	if !unit.Equal(decimal.NewFromInt(7)) {
 		t.Fatalf("o produto vale o material que a ordem gastou, incluindo a baixa desta entrega: %s", unit)
+	}
+}
+
+// O fechamento lê a ordem pela referência que a entrega real grava: se a referência
+// não for a do id, o consumo some da contabilização sem erro nenhum.
+func TestIntegration_FechamentoApuraAOrdemEntregueDeVerdade(t *testing.T) {
+	_, pool := testutil.Queries(t)
+	bg := context.Background()
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		pool.Exec(bg, `DELETE FROM accounting_posting_params WHERE enterprise_id=$1`, a.ID)
+	})
+	ctx := a.Ctx
+	ator := testutil.Actor(t, pool)
+	produto, material := testutil.UniqueCode(), testutil.UniqueCode()
+	testutil.NovosItens(t, pool, a.ID, ator, produto, material)
+	almox := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	if _, err := pool.Exec(bg, "INSERT INTO item_structures (parent_code, child_code, quantity, sequence, created_by) VALUES ($1,$2,1,1,$3)", produto, material, ator); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(bg, "DELETE FROM item_structures WHERE parent_code=$1", produto) })
+	if _, err := pool.Exec(bg, `UPDATE items SET warehouse_automatic_low=TRUE, warehouse_code=$2 WHERE code=$1`, material, almox); err != nil {
+		t.Fatal(err)
+	}
+	var ordem int64
+	if err := pool.QueryRow(bg, "INSERT INTO production_orders (order_number,item_code,planned_qty,produced_qty,status,created_by,enterprise_id,warehouse_id) VALUES ($1,$2,2,0,'RELEASED',$3,$4,$5) RETURNING id",
+		900_000+testutil.UniqueCode()%90_000, produto, ator, a.ID, almox).Scan(&ordem); err != nil {
+		t.Fatal(err)
+	}
+	stock := stockrepo.NewStockRepositorySQLC(pool)
+	if _, err := stock.CreateMovement(ctx, &stockentity.StockMovement{ItemCode: material, WarehouseID: almox, MovementType: "IN", Quantity: decimal.NewFromInt(10), UnitPrice: decimal.NewFromInt(7), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	q2, _ := testutil.Queries(t)
+	uc := &production_order_uc.CompleteProductionOrderUseCase{
+		Repo: prodrepo.NewProductionOrderRepositoryPGX(pool), Auth: fakeCompleteAuth{ator: ator},
+		StockRepo: stock, Structure: structrepo.NewItemStructureRepository(q2),
+	}
+	dois := decimal.NewFromInt(2)
+	if _, err := uc.Execute(ctx, request.CompleteProductionOrderDTO{ID: ordem, WarehouseID: &almox, Quantity: &dois}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	inicio := time.Date(time.Now().Year(), time.Now().Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	if _, err := pool.Exec(bg, `UPDATE stock_movements SET movement_date=$2::date, backdated=FALSE WHERE enterprise_id=$1`, a.ID, inicio.AddDate(0, 0, 9)); err != nil {
+		t.Fatal(err)
+	}
+	var plano int64
+	if err := pool.QueryRow(bg, `INSERT INTO accounting_plans(plan_number,description,valid_from,status,enterprise_id) VALUES($1,'Fech','2020-01-01','A',$2) RETURNING id`, testutil.UniqueCode()%1_000_000+500_000, a.ID).Scan(&plano); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(bg, `DELETE FROM accounting_posting_params WHERE enterprise_id=$1`, a.ID)
+		pool.Exec(bg, `DELETE FROM accounting_accounts WHERE plan_id=$1`, plano)
+		pool.Exec(bg, `DELETE FROM accounting_plans WHERE id=$1`, plano)
+	})
+	conta := func(n string) int64 {
+		var id int64
+		if err := pool.QueryRow(bg, `INSERT INTO accounting_accounts(plan_id,account_number,description,nature_code,valid_from,is_analytic) VALUES($1,$2,$2,'D','2020-01-01',TRUE) RETURNING id`, plano, n).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	if _, err := pool.Exec(bg, `INSERT INTO accounting_posting_params(enterprise_id,plan_id,fornecedores_account_id,estoque_account_id,cmv_account_id,producao_processo_account_id,custos_absorvidos_account_id,contabilizar_producao)
+		VALUES($1,$2,$3,$4,$5,$6,$7,TRUE)`, a.ID, plano, conta("1"), conta("2"), conta("3"), conta("4"), conta("5")); err != nil {
+		t.Fatal(err)
+	}
+	res, err := stock.FecharMes(ctx, inicio, ator, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.ProducaoConsumo.Equal(decimal.NewFromInt(14)) || !res.ProducaoEntrega.Equal(decimal.NewFromInt(14)) {
+		t.Fatalf("consumo %s, entrega %s; quero 14 e 14: %+v", res.ProducaoConsumo, res.ProducaoEntrega, res)
 	}
 }

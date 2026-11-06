@@ -413,7 +413,13 @@ Migração 466. `SAIDA` é mercadoria nossa com o cliente; `ENTRADA` é material
 
 `GET /api/stock/consignments?direction=&open=false` lista. Cancelar a remessa com venda ou devolução é recusado antes da SEFAZ. Cancelar a venda devolve o saldo às remessas. No Bloco H, o consignado ao cliente sai com `IND_PROP` 1 e o do fornecedor com 2, ambos com `COD_PART`. CFOP, CST e tributos vêm do tipo de nota do cliente: nada é fixado no código.
 
+A venda sem lote na nota sai dos lotes das remessas daquele cliente, da mais antiga à mais nova: o almoxarifado de consignação guarda a mercadoria de todos os clientes. Com lote na nota, só vale o saldo daquele lote ou o de remessa sem lote. A remessa de pedido consome a reserva do pedido na origem. O almoxarifado de consignação não pode ser de inspeção, rejeição ou trânsito, e a devolução precisa ir para outro almoxarifado. Item com política só de máscara não usa o mínimo do cadastro: quem quiser controlar as outras máscaras cria a política delas. A remessa e a transferência de pedido já separado saem de onde a onda pôs e fecham a separação; cancelar a nota devolve a separação. O almoxarifado de consignação não pode ser trocado com remessa aberta, porque a venda sai dele.
+
+A nota de entrada ligada a pedido entra na máscara da linha do pedido: a nota não guarda máscara. Cancelamento, frete e devolução ao fornecedor seguem a mesma máscara. O pedido gerado pela cotação herda da requisição a máscara, o almoxarifado, a conta, o centro de custo e o uso; da ordem planejada, a máscara. O alerta de estoque mínimo compara cada política com o saldo da máscara dela, e a sugestão de níveis pelo consumo aceita a máscara. A numeração de requisição, cotação e ordem planejada é maior + 1: as duas primeiras confirmam o número sob trava, e a ordem planejada toma o próximo se perder a corrida. Os relatórios do MRP usam o mesmo corte do cálculo: almoxarifado sem disponibilidade e rejeição só aparecem quando o filtro escolhe o almoxarifado.
+
 ## Transferência entre CNPJs
+
+A conferência antes da SEFAZ recusa a nota à irmã sem almoxarifado de trânsito único e a nota cujo CNPJ de destino aparece em mais de uma empresa. A baixa do trânsito não conta como consumo nem como giro. Cancelar a entrada devolve ao trânsito só a última baixa: entrada refeita baixa de novo.
 
 Migração 466. Vale entre empresas do ERP com a mesma raiz de CNPJ: é a mesma pessoa jurídica. Raiz diferente é outra empresa, e a nota baixa como qualquer saída.
 

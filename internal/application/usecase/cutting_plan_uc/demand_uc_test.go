@@ -85,7 +85,7 @@ func itemWithDims(code int64, l, w, h int, llc int, uom types.TypeUnitOfMeasurem
 
 func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 	// Product 1000 → 4× component 2000 (a 720mm leg) → raw material 5000 (a bar).
-	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("2")}}
+	prod := &fakeProd{op: &poent.ProductionOrder{ID: 501, OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("2")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
 		1000: {{ParentCode: 1000, ChildCode: 2000, ChildDescription: "Perna 720", Quantity: decimal.NewFromFloat(4)}},
 		2000: {{ParentCode: 2000, ChildCode: 5000, Quantity: decimal.NewFromFloat(1)}}, // component's raw material
@@ -122,8 +122,8 @@ func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 		t.Fatalf("part wrong: %+v", cut.parts)
 	}
 	// Single OP fed the material → baixa tied to it; stock UoM snapshotted from item.
-	if cut.created[0].ProductionOrderCode == nil || *cut.created[0].ProductionOrderCode != 77 {
-		t.Fatalf("production_order_code not set to 77: %+v", cut.created[0].ProductionOrderCode)
+	if cut.created[0].ProductionOrderCode == nil || *cut.created[0].ProductionOrderCode != 501 {
+		t.Fatalf("a baixa referencia a ordem pelo id, não pelo número: %+v", cut.created[0].ProductionOrderCode)
 	}
 	if cut.created[0].StockUoM != types.M {
 		t.Fatalf("stock UoM = %v, want M", cut.created[0].StockUoM)
@@ -131,7 +131,7 @@ func TestGenerateFromOrders_1D_AggregatesAndResolvesMaterial(t *testing.T) {
 }
 
 func TestGenerateFromOrders_SelectsPrimarySubstituteForCutDemand(t *testing.T) {
-	prod := &fakeProd{op: &poent.ProductionOrder{OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("1")}}
+	prod := &fakeProd{op: &poent.ProductionOrder{ID: 501, OrderNumber: 77, ItemCode: 1000, Mask: "", PlannedQty: decimal.RequireFromString("1")}}
 	str := &fakeStruct{children: map[int64][]*strent.ItemStructure{
 		1000: {
 			{ParentCode: 1000, ChildCode: 2100, ChildDescription: "Alternativa B", Quantity: decimal.NewFromFloat(99), SubstituteGroup: 1, SubstitutePriority: 2},
