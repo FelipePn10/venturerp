@@ -90,6 +90,7 @@ type RemessaConsignada struct {
 	Mask          string
 	Lote          *string
 	Endereco      *string
+	LinhaDaOnda   *int64
 	AlmoxOrigem   int64
 	Quantidade    decimal.Decimal
 	ValorUnitario decimal.Decimal
@@ -104,10 +105,17 @@ type VendaConsignada struct {
 	Cliente    int64
 	ItemCode   int64
 	Mask       string
+	Lote       *string
 	Quantidade decimal.Decimal
 	Documento  string
 	Emissao    time.Time
 	Ator       uuid.UUID
+}
+
+// LoteConsignado é a parte da venda que sai de um lote das remessas do cliente.
+type LoteConsignado struct {
+	Lote       *string
+	Quantidade decimal.Decimal
 }
 
 // BaixaConsignacao é a devolução ou o consumo pedido na tela.
@@ -121,12 +129,14 @@ type BaixaConsignacao struct {
 
 // LinhaEntreCNPJs é uma linha da NF-e de transferência a outro estabelecimento.
 type LinhaEntreCNPJs struct {
-	ItemCode   int64
-	Mask       string
-	Lote       *string
-	Endereco   *string
-	AlmoxDe    int64
-	Quantidade decimal.Decimal
+	ItemCode int64
+	Mask     string
+	Lote     *string
+	Endereco *string
+	// LinhaDaOnda: a linha da separação do pedido que sai nesta transferência.
+	LinhaDaOnda *int64
+	AlmoxDe     int64
+	Quantidade  decimal.Decimal
 }
 
 // EnvioEntreCNPJs é a NF-e de transferência autorizada.

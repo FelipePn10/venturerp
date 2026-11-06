@@ -52,7 +52,7 @@ type OperacoesEstoque interface {
 	ObterCartaoKanban(ctx context.Context, id int64) (*entity.CartaoKanban, error)
 	SalvarCartaoKanban(ctx context.Context, c entity.CartaoKanban, ator uuid.UUID) (*entity.CartaoKanban, error)
 	IdadeDosLotes(ctx context.Context, almox *int64) ([]entity.IdadeDoLote, error)
-	NiveisPeloConsumo(ctx context.Context, item int64, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error)
+	NiveisPeloConsumo(ctx context.Context, item int64, mask string, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error)
 	ListarMotivosDivergencia(ctx context.Context) ([]entity.MotivoDivergencia, error)
 	SalvarMotivoDivergencia(ctx context.Context, m entity.MotivoDivergencia) error
 	SalvarParametrosDeEstoque(ctx context.Context, p entity.ParametrosEstoque, ator uuid.UUID) error

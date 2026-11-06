@@ -203,7 +203,7 @@ func (uc *UseCase) GerarRequisicaoDeCompra(ctx context.Context, dto request.Repo
 		if it.ItemCode <= 0 || it.Quantity <= 0 {
 			continue
 		}
-		itens = append(itens, request.RequisitionItemInput{ItemCode: it.ItemCode, Quantity: decimal.NewFromFloat(it.Quantity)})
+		itens = append(itens, request.RequisitionItemInput{ItemCode: it.ItemCode, Mask: strings.TrimSpace(it.Mask), Quantity: decimal.NewFromFloat(it.Quantity)})
 	}
 	if len(itens) == 0 {
 		return nil, errorsuc.NewValidationError("escolha ao menos um item com quantidade para a requisição de compra")

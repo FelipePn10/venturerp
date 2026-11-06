@@ -153,7 +153,7 @@ func TestConsignacaoRemessaVendaDevolucaoECancelamento(t *testing.T) {
 	custo, err = contabil(c).CustoDaSaida(c.ctx, n3)
 	exige(t, err)
 	igualQ(t, "o CMV nasce na venda", custo, "40")
-	s, err := repo.SaldoConsignado(c.ctx, cliente, c.item, "")
+	s, err := repo.SaldoConsignado(c.ctx, cliente, c.item, "", nil)
 	exige(t, err)
 	igualQ(t, "saldo do cliente", s, "4")
 
@@ -166,12 +166,12 @@ func TestConsignacaoRemessaVendaDevolucaoECancelamento(t *testing.T) {
 	_, err = contabil(c).EstornarEstoqueDaSaida(c.ctx, n3, c.ator)
 	exige(t, err)
 	igualQ(t, "consignação depois do cancelamento", saldo(t, c, consig), "6")
-	s, err = repo.SaldoConsignado(c.ctx, cliente, c.item, "")
+	s, err = repo.SaldoConsignado(c.ctx, cliente, c.item, "", nil)
 	exige(t, err)
 	igualQ(t, "saldo volta", s, "6")
 	_, err = contabil(c).EstornarEstoqueDaSaida(c.ctx, n3, c.ator)
 	exige(t, err)
-	s, _ = repo.SaldoConsignado(c.ctx, cliente, c.item, "")
+	s, _ = repo.SaldoConsignado(c.ctx, cliente, c.item, "", nil)
 	igualQ(t, "cancelar de novo não soma", s, "6")
 
 	lista, err := repo.ListarConsignacoes(c.ctx, "SAIDA", true)

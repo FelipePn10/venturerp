@@ -14,7 +14,8 @@ type ConsignacaoEstoque interface {
 	AlmoxDeConsignacao(ctx context.Context) (int64, error)
 	ConferirAlmoxDeConsignacao(ctx context.Context, almox int64) error
 	RegistrarRemessa(ctx context.Context, m entity.RemessaConsignada) error
-	SaldoConsignado(ctx context.Context, cliente, item int64, mask string) (decimal.Decimal, error)
+	SaldoConsignado(ctx context.Context, cliente, item int64, mask string, lote *string) (decimal.Decimal, error)
+	LotesConsignados(ctx context.Context, cliente, item int64, mask string, quantidade decimal.Decimal) ([]entity.LoteConsignado, error)
 	RegistrarVendaConsignada(ctx context.Context, v entity.VendaConsignada) error
 	DevolverConsignacao(ctx context.Context, b entity.BaixaConsignacao) (*entity.Consignacao, error)
 	ConsumirConsignacao(ctx context.Context, b entity.BaixaConsignacao) (*entity.Consignacao, error)
@@ -22,6 +23,7 @@ type ConsignacaoEstoque interface {
 	ListarConsignacoes(ctx context.Context, direcao string, soAbertas bool) ([]entity.Consignacao, error)
 	PodeCancelarNotaDeEstoque(ctx context.Context, nota int64) error
 	EmpresaIrma(ctx context.Context, cnpj string) (int64, error)
+	ConferirTransitoEntreCNPJs(ctx context.Context) error
 	EnviarEntreCNPJs(ctx context.Context, e entity.EnvioEntreCNPJs) error
 	TransferenciasEntreCNPJs(ctx context.Context) ([]entity.TransferenciaEntreCNPJs, error)
 }

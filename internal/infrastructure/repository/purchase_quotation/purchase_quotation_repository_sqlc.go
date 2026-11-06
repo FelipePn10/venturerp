@@ -44,6 +44,18 @@ func (r *PurchaseQuotationRepositorySQLC) CreateWithChildren(ctx context.Context
 	}
 	defer tx.Rollback(ctx)
 	txRepo := &PurchaseQuotationRepositorySQLC{q: r.q.WithTx(tx), pool: r.pool}
+	// Código MAX+1 do banco inteiro: confirmado sob a trava, duas cotações juntas não
+	// disputam o mesmo número.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('purchase_quotations.code', 0))`); err != nil {
+		return nil, fmt.Errorf("travando a numeração da cotação: %w", err)
+	}
+	proximo, err := txRepo.NextCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if proximo > qt.Code {
+		qt.Code = proximo
+	}
 	created, err := txRepo.Create(ctx, qt)
 	if err != nil {
 		return nil, err

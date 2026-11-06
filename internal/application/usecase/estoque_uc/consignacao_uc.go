@@ -38,8 +38,14 @@ func (uc *UseCase) ReceberConsignacao(ctx context.Context, dto request.ReceberCo
 	if err != nil {
 		return nil, err
 	}
-	if v == nil || v.IsNegative() {
+	if v == nil || !v.IsPositive() {
 		return nil, errorsuc.NewValidationError("informe o valor unitário combinado com o fornecedor")
+	}
+	if dto.Lot != nil && len([]rune(*dto.Lot)) > 50 {
+		return nil, errorsuc.NewValidationError("o lote passa de 50 caracteres")
+	}
+	if documentoLongo(dto.Document) {
+		return nil, errorsuc.NewValidationError("o documento passa de 60 caracteres")
 	}
 	emissao, err := time.Parse("2006-01-02", dto.IssueDate)
 	if err != nil {
@@ -57,6 +63,10 @@ func (uc *UseCase) ReceberConsignacao(ctx context.Context, dto request.ReceberCo
 	return uc.Ops.ReceberConsignacao(ctx, c)
 }
 
+func documentoLongo(d *string) bool {
+	return d != nil && len([]rune(*d)) > 60
+}
+
 func (uc *UseCase) baixaDeConsignacao(ctx context.Context, id int64, dto request.BaixaConsignacaoDTO) (entity.BaixaConsignacao, error) {
 	var b entity.BaixaConsignacao
 	if err := uc.podeMovimentar(ctx); err != nil {
@@ -69,6 +79,9 @@ func (uc *UseCase) baixaDeConsignacao(ctx context.Context, id int64, dto request
 	q, err := quantidade("quantidade", dto.Quantity)
 	if err != nil {
 		return b, err
+	}
+	if documentoLongo(dto.Document) {
+		return b, errorsuc.NewValidationError("o documento passa de 60 caracteres")
 	}
 	b = entity.BaixaConsignacao{ID: id, Quantidade: q, Documento: vazioNil(dto.Document), Ator: ator}
 	if dto.WarehouseID != nil {

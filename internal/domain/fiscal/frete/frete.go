@@ -23,6 +23,7 @@ const (
 type Item struct {
 	ItemID, EntryID  int64
 	ItemCode         *int64
+	Mask             string
 	WarehouseID      *int64
 	PlanoContasID    *int64
 	CentroCustoID    *int64

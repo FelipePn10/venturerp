@@ -319,7 +319,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		        NULLIF(`+nomeDoItemSQL+`, ''), it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.description,
 		        w.code || ' — ' || w.description, op.description,
 		        CASE WHEN it.code IS NULL THEN NULL ELSE `+ncmDoItemSQL+` END,
-		        po.order_number, poi.sequence
+		        po.order_number, poi.sequence, `+mascaraDaEntradaSQL+`
 		   FROM fiscal_entry_items i
 		   LEFT JOIN items it ON it.code = i.item_code AND it.enterprise_id = $2
 		   LEFT JOIN plano_contas pc ON pc.id = i.plano_contas_id AND pc.enterprise_id = $2
@@ -350,7 +350,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 			&it.ValorIBS, &it.AliqCBS, &it.ValorCBS, &it.ValorIS, &it.GeraCreditoIBSCBS,
 			&it.ItemName, &it.ItemUOM, &it.PlanoContasCodigo, &it.PlanoContasNome, &it.CentroCustoNome,
 			&it.WarehouseName, &it.EntryOperationName, &it.ItemNCM,
-			&it.PurchaseOrderNumber, &it.PurchaseOrderSequence,
+			&it.PurchaseOrderNumber, &it.PurchaseOrderSequence, &it.Mask,
 		); err != nil {
 			return nil, fmt.Errorf("lendo item da nota de entrada: %w", err)
 		}

@@ -220,6 +220,7 @@ type ResultadoAprovacao struct {
 type MovimentoGerado struct {
 	ItemID                int64
 	ItemCode              int64
+	Mask                  string
 	WarehouseID           int64
 	Quantidade            decimal.Decimal
 	PurchaseOrderCode     *int64

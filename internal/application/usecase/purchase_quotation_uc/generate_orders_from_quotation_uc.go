@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
+	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 	qentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_quotation/entity"
@@ -21,8 +22,12 @@ import (
 // purchase orders (one per supplier), registering attendance back on the source
 // requisition items and closing the quotation.
 type GenerateOrdersFromQuotationUseCase struct {
-	Quotations       qrepo.PurchaseQuotationRepository
-	Reqs             reqrepo.PurchaseRequisitionRepository
+	Quotations qrepo.PurchaseQuotationRepository
+	Reqs       reqrepo.PurchaseRequisitionRepository
+	// Planejadas lê a máscara da ordem planejada que originou a linha.
+	Planejadas interface {
+		GetByCode(ctx context.Context, code int64) (*plannedentity.PlannedOrder, error)
+	}
 	POs              porepo.PurchaseOrderRepository
 	Auth             ports.AuthService
 	SupplierDefaults ports.SupplierPurchasingDefaultsProvider
@@ -171,6 +176,27 @@ func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto r
 			if qi.SourceType == qentity.SourceRequisition && qi.SourceItemID != nil {
 				reqItem := *qi.SourceItemID
 				linha.PurchaseRequisitionItemID = &reqItem
+				// A cotação guarda só o item: o resto do que foi pedido vem da requisição.
+				// Sem a máscara e o almoxarifado, a compra chegava como outra variante e
+				// em outro lugar, e a reposição seguia pedindo.
+				origem, gerr := uc.Reqs.GetItem(ctx, reqItem)
+				if gerr != nil {
+					return nil, fmt.Errorf("lendo a linha %d da requisição: %w", reqItem, gerr)
+				}
+				linha.Mask = origem.Mask
+				linha.WarehouseID = origem.WarehouseID
+				linha.AccountingAccount = origem.AccountingAccount
+				linha.CostCenterCode = origem.CostCenterCode
+				linha.UtilizationType = origem.UtilizationType
+			}
+			if qi.SourceType == qentity.SourcePlannedOrder && qi.SourceCode != nil && uc.Planejadas != nil {
+				planejada, gerr := uc.Planejadas.GetByCode(ctx, *qi.SourceCode)
+				if gerr != nil {
+					return nil, fmt.Errorf("lendo a ordem planejada %d: %w", *qi.SourceCode, gerr)
+				}
+				if planejada.Mask != nil {
+					linha.Mask = *planejada.Mask
+				}
 			}
 			poItems = append(poItems, linha)
 		}

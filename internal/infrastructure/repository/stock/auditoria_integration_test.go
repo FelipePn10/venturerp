@@ -1611,7 +1611,7 @@ func TestPendencias_IdadeDoLoteENiveis(t *testing.T) {
 	if len(lotes) != 1 || !lotes[0].Quantidade.Equal(dec("70")) || lotes[0].Dias == nil {
 		t.Fatalf("lotes: %+v", lotes)
 	}
-	n, err := e.repo.NiveisPeloConsumo(e.ctx, e.item, nil, 1, 10, 5)
+	n, err := e.repo.NiveisPeloConsumo(e.ctx, e.item, "", nil, 1, 10, 5)
 	exigir(t, err)
 	if !n.ConsumoDiario.IsPositive() || !n.Minimo.GreaterThan(n.Seguranca) || !n.Maximo.GreaterThan(n.Minimo) {
 		t.Fatalf("níveis: %+v", n)

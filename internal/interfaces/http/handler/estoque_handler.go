@@ -451,7 +451,7 @@ func (h *EstoqueHandler) NiveisPeloConsumo(w http.ResponseWriter, r *http.Reques
 		security.RespondUseCaseError(w, errorsuc.NewValidationError("escolha o item"))
 		return
 	}
-	out, err := h.UC.NiveisPeloConsumo(r.Context(), *item, inteiroDaQuery(q, "warehouse_id"), inteiroQuery(r, "months"), inteiroQuery(r, "lead_time_days"), inteiroQuery(r, "safety_days"))
+	out, err := h.UC.NiveisPeloConsumo(r.Context(), *item, q.Get("mask"), inteiroDaQuery(q, "warehouse_id"), inteiroQuery(r, "months"), inteiroQuery(r, "lead_time_days"), inteiroQuery(r, "safety_days"))
 	h.responder(w, http.StatusOK, out, err)
 }
 

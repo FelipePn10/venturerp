@@ -40,6 +40,7 @@ func (r *Repository) Coverage(ctx context.Context, filter mrp_report_uc.Filter) 
 		        SELECT balance.item_code, `+saldoDaLinha+` AS saldo
 		          FROM stock_balances balance
 		         WHERE balance.enterprise_id = $1 AND ($5::bigint IS NULL OR balance.warehouse_id = $5)
+		           AND ($5::bigint IS NOT NULL OR `+saldoPlanejavelDaLinha+`)
 		        UNION ALL
 		        SELECT c.item_code, c.quantity
 		          FROM planning_scenario_changes c

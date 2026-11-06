@@ -275,13 +275,17 @@ func (r *FiscalRepositoryPG) EntriesByChaves(ctx context.Context, chaves []strin
 	return out, rows.Err()
 }
 
+// mascaraDaEntradaSQL: a variante que a linha da nota pôs no estoque. A nota não
+// guarda máscara: vale a do movimento e, sem ele, a do pedido.
+const mascaraDaEntradaSQL = `COALESCE((SELECT m.mask FROM stock_movements m WHERE m.id=i.stock_movement_id), (SELECT p.mask FROM purchase_order_items p WHERE p.code=i.purchase_order_item_code), '')`
+
 // itensFreteSQL: os itens das notas, com o peso do cadastro e o saldo atual do
-// item no almoxarifado da nota.
-const itensFreteSQL = `SELECT i.id, i.fiscal_entry_id, i.item_code, i.warehouse_id, i.plano_contas_id, i.centro_custo_id,
+// item, naquela máscara, no almoxarifado da nota.
+const itensFreteSQL = `SELECT i.id, i.fiscal_entry_id, i.item_code, ` + mascaraDaEntradaSQL + `, i.warehouse_id, i.plano_contas_id, i.centro_custo_id,
 	        COALESCE(i.description,''), i.valor_contabil, COALESCE(i.quantidade_estoque, i.quantity), i.movimenta_estoque,
 	        it.engineering_weight->>'gross', COALESCE(it.engineering_weight->>'unit','KG'),
 	        COALESCE((SELECT SUM(sb.quantity) FROM stock_balances sb
-	                   WHERE sb.enterprise_id=$1 AND sb.item_code=i.item_code AND sb.mask='' AND sb.warehouse_id=i.warehouse_id),0)
+	                   WHERE sb.enterprise_id=$1 AND sb.item_code=i.item_code AND sb.mask=` + mascaraDaEntradaSQL + ` AND sb.warehouse_id=i.warehouse_id),0)
 	   FROM fiscal_entry_items i
 	   JOIN fiscal_entries e ON e.id = i.fiscal_entry_id AND e.enterprise_id = $1
 	   LEFT JOIN items it ON it.code = i.item_code AND it.enterprise_id = $1
@@ -299,7 +303,7 @@ func lerItensFrete(ctx context.Context, q journal.Executor, empresa int64, entry
 		var it frete.Item
 		var peso *string
 		var unidade string
-		if err := rows.Scan(&it.ItemID, &it.EntryID, &it.ItemCode, &it.WarehouseID, &it.PlanoContasID, &it.CentroCustoID,
+		if err := rows.Scan(&it.ItemID, &it.EntryID, &it.ItemCode, &it.Mask, &it.WarehouseID, &it.PlanoContasID, &it.CentroCustoID,
 			&it.Descricao, &it.ValorContabil, &it.Quantidade, &it.MovimentaEstoque, &peso, &unidade, &it.EmEstoque); err != nil {
 			return nil, err
 		}
@@ -383,7 +387,7 @@ func (r *FiscalRepositoryPG) LancarFrete(ctx context.Context, l repository.Lanca
 	// saldo do momento do lançamento.
 	if _, err = tx.Exec(ctx,
 		`SELECT sb.id FROM stock_balances sb
-		  WHERE sb.enterprise_id=$1 AND sb.mask='' AND EXISTS (
+		  WHERE sb.enterprise_id=$1 AND EXISTS (
 		        SELECT 1 FROM fiscal_entry_items i WHERE i.fiscal_entry_id = ANY($2) AND i.item_code = sb.item_code AND i.warehouse_id = sb.warehouse_id)
 		  FOR UPDATE`, empresa, entryIDs); err != nil {
 		return err
@@ -405,7 +409,7 @@ func (r *FiscalRepositoryPG) LancarFrete(ctx context.Context, l repository.Lanca
 	for _, p := range partes {
 		var movID *int64
 		if p.ValorEstoque.IsPositive() {
-			id, aplicado, err := stockrepo.AjustarCustoTx(ctx, tx, empresa, *p.Item.ItemCode, "", *p.Item.WarehouseID, p.ValorEstoque,
+			id, aplicado, err := stockrepo.AjustarCustoTx(ctx, tx, empresa, *p.Item.ItemCode, p.Item.Mask, *p.Item.WarehouseID, p.ValorEstoque,
 				repository.OrigemFrete, l.FreightID, notaCusto, l.UserID)
 			if err != nil {
 				return err
@@ -501,19 +505,22 @@ func (r *FiscalRepositoryPG) CancelarFrete(ctx context.Context, c repository.Can
 				return err
 			}
 		}
-		rows, err := tx.Query(ctx, `SELECT item_code, warehouse_id, valor_estoque FROM fiscal_freight_allocations
-		                            WHERE freight_id=$1 AND enterprise_id=$2 AND valor_estoque > 0 ORDER BY id`, c.FreightID, empresa)
+		rows, err := tx.Query(ctx, `SELECT a.item_code, a.warehouse_id, a.valor_estoque,
+		                                   COALESCE((SELECT m.mask FROM stock_movements m WHERE m.id=a.stock_movement_id),'')
+		                              FROM fiscal_freight_allocations a
+		                            WHERE a.freight_id=$1 AND a.enterprise_id=$2 AND a.valor_estoque > 0 ORDER BY a.id`, c.FreightID, empresa)
 		if err != nil {
 			return err
 		}
 		type ajuste struct {
 			item, wh int64
+			mask     string
 			valor    decimal.Decimal
 		}
 		var ajustes []ajuste
 		for rows.Next() {
 			var a ajuste
-			if err := rows.Scan(&a.item, &a.wh, &a.valor); err != nil {
+			if err := rows.Scan(&a.item, &a.wh, &a.valor, &a.mask); err != nil {
 				rows.Close()
 				return err
 			}
@@ -522,7 +529,7 @@ func (r *FiscalRepositoryPG) CancelarFrete(ctx context.Context, c repository.Can
 		rows.Close()
 		nota := "estorno do frete: " + c.Motivo
 		for _, a := range ajustes {
-			if _, _, err := stockrepo.AjustarCustoTx(ctx, tx, empresa, a.item, "", a.wh, a.valor.Neg(), repository.OrigemFreteEstorno, c.FreightID, nota, c.UserID); err != nil {
+			if _, _, err := stockrepo.AjustarCustoTx(ctx, tx, empresa, a.item, a.mask, a.wh, a.valor.Neg(), repository.OrigemFreteEstorno, c.FreightID, nota, c.UserID); err != nil {
 				return err
 			}
 		}

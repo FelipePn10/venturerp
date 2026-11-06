@@ -989,6 +989,7 @@ func (app *application) mount() chi.Router {
 			Geracao:          poGeracao,
 			Quotations:       purchaseQuotationRepository,
 			Reqs:             purchaseReqRepository,
+			Planejadas:       plannedRepo,
 			POs:              poRepo,
 			Auth:             authService,
 			SupplierDefaults: supplierUC,

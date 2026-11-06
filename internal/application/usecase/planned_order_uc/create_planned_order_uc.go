@@ -2,6 +2,7 @@ package planned_order_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
@@ -76,9 +77,25 @@ func (uc *CreatePlannedOrderUseCase) Execute(
 		Notes:          dto.Notes,
 		CreatedBy:      dto.CreatedBy,
 	}
-	created, err := uc.Repo.Create(ctx, order)
-	if err != nil {
-		return nil, err
+	// O número é o maior + 1: duas ordens juntas pegam o mesmo, e a segunda toma o próximo.
+	for tentativa := 1; ; tentativa++ {
+		created, err := uc.Repo.Create(ctx, order)
+		if err == nil {
+			return toPlannedOrderResponse(created), nil
+		}
+		if !numeroRepetido(err) || tentativa >= tentativasDeNumeracao {
+			return nil, err
+		}
+		if order.OrderNumber, err = uc.Repo.GetNextOrderNumber(ctx); err != nil {
+			return nil, fmt.Errorf("numerando a ordem planejada: %w", err)
+		}
 	}
-	return toPlannedOrderResponse(created), nil
+}
+
+const tentativasDeNumeracao = 8
+
+// numeroRepetido reconhece a chave única pelo código do banco, sem depender do driver.
+func numeroRepetido(err error) bool {
+	var banco interface{ SQLState() string }
+	return errors.As(err, &banco) && banco.SQLState() == "23505"
 }

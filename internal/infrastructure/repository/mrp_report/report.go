@@ -20,6 +20,12 @@ const saldoDaLinha = `balance.quantity-balance.reserved_qty-COALESCE((SELECT SUM
 	  AND b.warehouse_id=balance.warehouse_id AND b.address=balance.address AND b.quantity>0
 	  AND ` + stockrepo.LoteForaDoDisponivelSQL + `),0)`
 
+// saldoPlanejavelDaLinha: o mesmo corte do cálculo do MRP. Sem ele o relatório contava
+// a mercadoria com o cliente, a sucata e a rejeição, e mostrava um estoque que o
+// cálculo não usou. Quem escolhe o almoxarifado vê o saldo dele.
+const saldoPlanejavelDaLinha = `NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id=balance.warehouse_id AND w.enterprise_id=balance.enterprise_id
+	AND (NOT w.disposition AND w.location::text<>'INSPECAO' OR w.location::text='REJEICAO'))`
+
 type Repository struct{ pool *pgxpool.Pool }
 
 func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
@@ -38,7 +44,7 @@ func (r *Repository) Profile(ctx context.Context, filter mrp_report_uc.Filter) (
 			FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE
 			WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code
-		LEFT JOIN LATERAL(SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code)current_stock ON TRUE
+		LEFT JOIN LATERAL(SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code AND `+saldoPlanejavelDaLinha+`)current_stock ON TRUE
 		WHERE profile.enterprise_id=$1
 		AND ($2::bigint IS NULL OR profile.plan_code=$2) AND ($3::bigint IS NULL OR profile.item_code=$3)
 		AND ($4::date IS NULL OR profile.need_date >= $4) AND ($5::date IS NULL OR profile.need_date <= $5)
@@ -121,7 +127,7 @@ func (r *Repository) Availability(ctx context.Context, filter mrp_report_uc.Filt
 	), grouped AS (
 		SELECT item_code,MAX(mask) mask,SUM(quantity) demand,array_agg(DISTINCT sales_order) FILTER(WHERE sales_order IS NOT NULL) sales_orders,level FROM needs GROUP BY item_code,level
 	), stock AS (
-		SELECT balance.item_code,SUM(`+saldoDaLinha+`) stock FROM stock_balances balance WHERE balance.enterprise_id=$1 AND ($5::bigint IS NULL OR balance.warehouse_id=$5) GROUP BY balance.item_code
+		SELECT balance.item_code,SUM(`+saldoDaLinha+`) stock FROM stock_balances balance WHERE balance.enterprise_id=$1 AND ($5::bigint IS NOT NULL OR `+saldoPlanejavelDaLinha+`) AND ($5::bigint IS NULL OR balance.warehouse_id=$5) GROUP BY balance.item_code
 	), supply AS (
 		SELECT item_code,SUM(orders_planned) planned,SUM(orders_firm) firm FROM mrp_item_profiles WHERE enterprise_id=$1 AND ($6::bigint IS NULL OR plan_code=$6) GROUP BY item_code)
 		SELECT grouped.item_code,grouped.mask,grouped.demand,COALESCE(supply.planned,0),COALESCE(supply.firm,0),COALESCE(stock.stock,0),COALESCE(grouped.sales_orders,'{}'::bigint[]),grouped.level
@@ -213,7 +219,7 @@ func (r *Repository) GroupedNeeds(ctx context.Context, filter mrp_report_uc.Filt
 		return nil, err
 	}
 	rows, err := r.pool.Query(ctx, `SELECT profile.item_code,profile.need_date,SUM(profile.demand),SUM(profile.orders_planned),SUM(profile.orders_firm),
-		COALESCE((SELECT SUM(`+saldoDaLinha+`) FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code),0),item.planner_employee_code,
+		COALESCE((SELECT SUM(`+saldoDaLinha+`) FROM stock_balances balance WHERE balance.enterprise_id=$1 AND balance.item_code=profile.item_code AND `+saldoPlanejavelDaLinha+`),0),item.planner_employee_code,
 		COALESCE((SELECT classification.code FROM item_classification_assignments assignment JOIN item_classifications classification ON classification.id=assignment.classification_id WHERE assignment.enterprise_id=$1 AND assignment.item_code=profile.item_code ORDER BY classification.level DESC,classification.code LIMIT 1),''),
 		CASE WHEN $10 THEN COALESCE((SELECT array_agg(DISTINCT demand.sales_order_code) FROM planned_orders planned JOIN LATERAL (SELECT origem.sales_order_code FROM sales_order_demands origem WHERE origem.code=planned.sales_order_code UNION SELECT soi.sales_order_code FROM sales_order_planned_orders vinculo JOIN sales_order_items soi ON soi.code=vinculo.sales_order_item_code WHERE vinculo.planned_order_id=planned.id) demand ON TRUE WHERE planned.enterprise_id=$1 AND planned.plan_code=profile.plan_code AND planned.item_code=profile.item_code),'{}'::bigint[]) ELSE '{}'::bigint[] END
 		FROM mrp_item_profiles profile JOIN items item ON item.code=profile.item_code WHERE profile.enterprise_id=$1 AND ($2::bigint IS NULL OR profile.plan_code=$2)
@@ -280,7 +286,7 @@ func (r *Repository) Explosion(ctx context.Context, itemCode int64, quantity dec
 		SELECT explosion.parent_code,explosion.child_code,explosion.level,SUM(explosion.quantity),
 		COALESCE(stock.quantity,0),COALESCE(purchase.quantity,0),CASE WHEN $13='RESUMIDA' THEN COALESCE(item.complement,'') ELSE item.pdm_description_technique END,item.warehouse_unit_of_measurement::text,COALESCE(cost.total_cost,0)
 		FROM explosion JOIN items item ON item.code=explosion.child_code
-		LEFT JOIN LATERAL (SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$4 AND balance.item_code=explosion.child_code AND ($5::bigint IS NULL OR balance.warehouse_id=$5) AND (NOT $12 OR balance.warehouse_id=item.warehouse_code)) stock ON TRUE
+		LEFT JOIN LATERAL (SELECT SUM(`+saldoDaLinha+`) quantity FROM stock_balances balance WHERE balance.enterprise_id=$4 AND balance.item_code=explosion.child_code AND ($5::bigint IS NOT NULL OR `+saldoPlanejavelDaLinha+`) AND ($5::bigint IS NULL OR balance.warehouse_id=$5) AND (NOT $12 OR balance.warehouse_id=item.warehouse_code)) stock ON TRUE
 		LEFT JOIN LATERAL (SELECT SUM(line.requested_qty-line.received_qty-line.cancelled_qty) quantity FROM purchase_order_items line JOIN purchase_orders header ON header.code=line.purchase_order_code JOIN enterprise company ON company.code=header.enterprise_code WHERE company.id=$4 AND line.item_code=explosion.child_code AND line.is_active AND line.status IN ('OPEN','PARTIAL')) purchase ON TRUE
 		LEFT JOIN item_standard_costs cost ON cost.item_code=explosion.child_code AND cost.mask=''
 		WHERE ($6='' OR ($6='FABRICADO' AND item.engineering_type=0) OR ($6='COMPRADO' AND item.engineering_type=1) OR ($6 IN ('DE_TERCEIRO','TERCEIRIZADO') AND item.engineering_type=2))
@@ -334,7 +340,7 @@ func (r *Repository) ReorderPoint(ctx context.Context, filter mrp_report_uc.Filt
 		+COALESCE((SELECT SUM(need.quantity) FROM sales_needs need WHERE need.item_code=balance.item_code),0),
 		COALESCE((SELECT SUM(line.requested_qty-line.received_qty-line.cancelled_qty) FROM purchase_order_items line JOIN purchase_orders header ON header.code=line.purchase_order_code JOIN enterprise company ON company.code=header.enterprise_code WHERE company.id=$1 AND line.item_code=balance.item_code AND line.status IN ('OPEN','PARTIAL') AND line.is_active AND ($9::date IS NULL OR line.delivery_date >= $9) AND ($10::date IS NULL OR line.delivery_date <= $10)),0)
 		FROM stock_balances balance JOIN items item ON item.code=balance.item_code LEFT JOIN item_consumption_averages avg ON avg.enterprise_id=balance.enterprise_id AND avg.item_code=balance.item_code
-		WHERE balance.enterprise_id=$1 AND ($2::bigint IS NULL OR balance.item_code=$2) AND ($3::bigint IS NULL OR balance.warehouse_id=$3)
+		WHERE balance.enterprise_id=$1 AND ($2::bigint IS NULL OR balance.item_code=$2) AND ($3::bigint IS NULL OR balance.warehouse_id=$3) AND ($3::bigint IS NOT NULL OR `+saldoPlanejavelDaLinha+`)
 		AND ($4::bigint IS NULL OR item.planner_employee_code=$4)
 		AND ($5='' OR $5='TODOS' OR ($5='FABRICADO' AND item.engineering_type=0) OR ($5='COMPRADO' AND item.engineering_type=1) OR ($5 IN ('DE_TERCEIRO','TERCEIRIZADO') AND item.engineering_type=2))
 		AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM item_classification_assignments assignment
