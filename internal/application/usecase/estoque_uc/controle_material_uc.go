@@ -160,7 +160,7 @@ func (uc *UseCase) IdadeDosLotes(ctx context.Context, almox *int64) ([]entity.Id
 }
 
 // NiveisPeloConsumo sugere os níveis da política a partir do consumo real.
-func (uc *UseCase) NiveisPeloConsumo(ctx context.Context, item int64, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error) {
+func (uc *UseCase) NiveisPeloConsumo(ctx context.Context, item int64, mask string, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error) {
 	if err := uc.podeConsultar(ctx); err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (uc *UseCase) NiveisPeloConsumo(ctx context.Context, item int64, almox *int
 	if diasSeguranca <= 0 {
 		diasSeguranca = 7
 	}
-	return uc.Ops.NiveisPeloConsumo(ctx, item, almox, min(meses, maxMesesDeAnalise), prazo, diasSeguranca)
+	return uc.Ops.NiveisPeloConsumo(ctx, item, strings.TrimSpace(mask), almox, min(meses, maxMesesDeAnalise), prazo, diasSeguranca)
 }
 
 // MotivosDeDivergencia lista os motivos da empresa.

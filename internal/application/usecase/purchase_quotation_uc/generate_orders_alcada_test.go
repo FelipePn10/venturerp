@@ -53,6 +53,12 @@ func (c *cotacaoFalsa) UpdateStatus(context.Context, int64, string) error {
 type reqFalsa struct {
 	reqrepo.PurchaseRequisitionRepository
 	atendido map[int64]float64
+	mascara  string
+	almox    *int64
+}
+
+func (r *reqFalsa) GetItem(_ context.Context, id int64) (*reqentity.PurchaseRequisitionItem, error) {
+	return &reqentity.PurchaseRequisitionItem{ID: id, Mask: r.mascara, WarehouseID: r.almox}, nil
 }
 
 func (r *reqFalsa) RegisterAttendance(_ context.Context, id int64, q decimal.Decimal) (*reqentity.PurchaseRequisitionItem, error) {
@@ -120,7 +126,7 @@ func TestGerarPedidoDaCotacaoPassaPelaAlcada(t *testing.T) {
 		},
 	}
 	pos := &poFalso{pedidos: map[int64]*poentity.PurchaseOrder{}, itens: map[int64][]*poentity.PurchaseOrderItem{}}
-	reqs := &reqFalsa{atendido: map[int64]float64{}}
+	reqs := &reqFalsa{atendido: map[int64]float64{}, mascara: "AZUL"}
 	aprov := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: pos, Auth: authGerar{}, Policy: tetoDe100{}}
 	uc := &GenerateOrdersFromQuotationUseCase{Quotations: cot, Reqs: reqs, POs: pos, Auth: authGerar{},
 		Geracao: &purchase_order_uc.Geracao{Repo: pos, Almoxarifados: almoxFixo{}, Aprovacao: aprov}}
@@ -143,6 +149,9 @@ func TestGerarPedidoDaCotacaoPassaPelaAlcada(t *testing.T) {
 		la.PurchaseRequisitionItemID == nil || *la.PurchaseRequisitionItemID != req || !la.TotalPrice.Equal(decimal.NewFromFloat(60)) {
 		t.Fatalf("linha da cotação: %+v", la)
 	}
+	if la.Mask != "AZUL" {
+		t.Fatalf("a linha perdeu a máscara da requisição: %+v", la)
+	}
 	if la.DeliveryDate == nil || la.DeliveryDate.Before(time.Now().AddDate(0, 0, 9)) {
 		t.Fatalf("entrega pelo prazo de 10 dias: %v", la.DeliveryDate)
 	}
@@ -151,5 +160,26 @@ func TestGerarPedidoDaCotacaoPassaPelaAlcada(t *testing.T) {
 	}
 	if reqs.atendido[req] != 2 || !cot.fechada {
 		t.Fatalf("requisição atendida %v, cotação fechada %v", reqs.atendido, cot.fechada)
+	}
+}
+
+// A requisição diz para onde vai a compra: o padrão do item só vale sem ela.
+func TestPedidoDaCotacaoFicaNoAlmoxarifadoDaRequisicao(t *testing.T) {
+	req, almox := int64(78), int64(33)
+	cot := &cotacaoFalsa{
+		itens:  []*qentity.PurchaseQuotationItem{{ID: 1, ItemCode: 10, Quantity: decimal.NewFromFloat(1), SourceType: qentity.SourceRequisition, SourceItemID: &req}},
+		precos: []*qentity.PurchaseQuotationPrice{{QuotationItemID: 1, SupplierCode: 500, UnitPrice: decimal.NewFromFloat(30)}},
+	}
+	pos := &poFalso{pedidos: map[int64]*poentity.PurchaseOrder{}, itens: map[int64][]*poentity.PurchaseOrderItem{}}
+	reqs := &reqFalsa{atendido: map[int64]float64{}, almox: &almox}
+	aprov := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: pos, Auth: authGerar{}, Policy: tetoDe100{}}
+	uc := &GenerateOrdersFromQuotationUseCase{Quotations: cot, Reqs: reqs, POs: pos, Auth: authGerar{},
+		Geracao: &purchase_order_uc.Geracao{Repo: pos, Almoxarifados: almoxFixo{}, Aprovacao: aprov}}
+	res, err := uc.Execute(context.Background(), request.GenerateOrdersFromQuotationDTO{QuotationCode: 5, CreatedBy: uuid.New()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := pos.itens[res.Orders[0].Code][0].WarehouseID; w == nil || *w != almox {
+		t.Fatalf("almoxarifado da linha: %v", w)
 	}
 }

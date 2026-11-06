@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/notification"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 )
 
@@ -143,5 +144,58 @@ func TestReposicao_PoliticaPorMascaraNaoContaDuasVezes(t *testing.T) {
 	exigir(t, err)
 	if len(lista) != 2 {
 		t.Fatalf("%+v", lista)
+	}
+}
+
+// Item só com política de máscara: o mínimo do cadastro não pede o item sem máscara.
+func TestReposicao_ItemSoComPoliticaDeMascaraNaoPedeOCadastro(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	pool := testutil.Pool(t)
+	testutil.Exec(t, pool, `UPDATE items SET warehouse_minimum_stock=5, engineering_type=1 WHERE code=$1`, e.item)
+	_, err := e.repo.CreateMovement(e.ctx, &stockentity.StockMovement{ItemCode: e.item, Mask: "AZUL", WarehouseID: e.almox, MovementType: "IN",
+		Quantity: dec("30"), UnitPrice: decimal.NewFromInt(1), CreatedBy: e.ator})
+	exigir(t, err)
+	minimo := dec("10")
+	_, err = e.repo.SalvarPoliticaDeReposicao(e.ctx, stockentity.PoliticaReposicao{ItemCode: e.item, Mask: "AZUL", WarehouseID: e.almox, Minimo: &minimo,
+		Origem: stockentity.OrigemCompra, Ativa: true, CreatedBy: e.ator})
+	exigir(t, err)
+	sug, err := e.repo.SugestoesDeReposicao(e.ctx)
+	exigir(t, err)
+	for _, s := range sug {
+		if s.ItemCode == e.item {
+			t.Fatalf("pediu o item com a máscara abastecida: %+v", s)
+		}
+	}
+}
+
+// Cada máscara com política responde pelo próprio saldo: somar as duas escondia a
+// que está abaixo do mínimo, e o alerta saía na linha de outra máscara.
+func TestAlertaDeMinimoRespeitaAMascaraDaPolitica(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	pool := testutil.Pool(t)
+	t.Cleanup(func() {
+		testutil.Exec(t, pool, `DELETE FROM notification_alerts WHERE enterprise_id=$1`, e.empresa)
+		testutil.Exec(t, pool, `DELETE FROM notification_outbox WHERE enterprise_id=$1`, e.empresa)
+	})
+	entrada := func(mask string, qtd int64) {
+		_, err := e.repo.CreateMovement(e.ctx, &stockentity.StockMovement{ItemCode: e.item, Mask: mask, WarehouseID: e.almox, MovementType: "IN",
+			Quantity: decimal.NewFromInt(qtd), UnitPrice: decimal.NewFromInt(1), CreatedBy: e.ator})
+		exigir(t, err)
+	}
+	entrada("AZUL", 3)
+	entrada("VERDE", 50)
+	minimo := dec("10")
+	for _, m := range []string{"AZUL", "VERDE"} {
+		_, err := e.repo.SalvarPoliticaDeReposicao(e.ctx, stockentity.PoliticaReposicao{ItemCode: e.item, Mask: m, WarehouseID: e.almox, Minimo: &minimo,
+			Origem: stockentity.OrigemCompra, Ativa: true, CreatedBy: e.ator})
+		exigir(t, err)
+	}
+	exigir(t, notification.New(pool).ScheduleOperationalAlerts(e.ctx))
+	var alertas int
+	var mascara string
+	exigir(t, pool.QueryRow(e.ctx, `SELECT COUNT(*), COALESCE(MAX(b.mask),'') FROM notification_outbox o JOIN stock_balances b ON b.id::text=o.aggregate_internal_id
+		WHERE o.enterprise_id=$1 AND o.event_key='ESTOQUE_ABAIXO_MINIMO' AND b.item_code=$2`, e.empresa, e.item).Scan(&alertas, &mascara))
+	if alertas != 1 || mascara != "AZUL" {
+		t.Fatalf("alertas = %d na máscara %q; quer 1 na AZUL", alertas, mascara)
 	}
 }

@@ -646,16 +646,21 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
-// minimoDoAlmoxarifadoSQL: o mínimo vem da política de reposição e vale para o
-// item no almoxarifado inteiro, somados os endereços. Cada endereço tem a sua
-// linha de saldo: primeira_linha evita um alerta por endereço. As colunas de
-// mínimo em stock_balances nunca foram preenchidas.
+// minimoDoAlmoxarifadoSQL: o mínimo vem da política de reposição e vale para a
+// máscara dela no almoxarifado, somados os endereços. A política sem máscara vale
+// para as máscaras sem política própria. Cada endereço tem a sua linha de saldo:
+// primeira_linha evita um alerta por endereço. As colunas de mínimo em
+// stock_balances nunca foram preenchidas.
 const minimoDoAlmoxarifadoSQL = `SELECT p.minimum_qty minimo, p.safety_qty seguranca, p.maximum_qty maximo, t.disponivel, t.fisico, t.reservado, t.valor,
 		   b.id=t.primeira primeira_linha
 		 FROM stock_replenishment_policies p
 		 JOIN LATERAL (SELECT SUM(x.available_qty) disponivel, SUM(x.quantity) fisico, SUM(x.reserved_qty) reservado, SUM(x.total_cost) valor, MIN(x.id) primeira FROM stock_balances x
-		   WHERE x.enterprise_id=b.enterprise_id AND x.item_code=b.item_code AND x.warehouse_id=b.warehouse_id) t ON TRUE
-		 WHERE p.enterprise_id=b.enterprise_id AND p.item_code=b.item_code AND p.warehouse_id=b.warehouse_id AND p.is_active`
+		   WHERE x.enterprise_id=b.enterprise_id AND x.item_code=b.item_code AND x.warehouse_id=b.warehouse_id
+		     AND (x.mask=p.mask OR (p.mask='' AND NOT EXISTS (SELECT 1 FROM stock_replenishment_policies o
+		          WHERE o.enterprise_id=x.enterprise_id AND o.item_code=x.item_code AND o.warehouse_id=x.warehouse_id AND o.mask=x.mask AND o.is_active)))) t ON TRUE
+		 WHERE p.enterprise_id=b.enterprise_id AND p.item_code=b.item_code AND p.warehouse_id=b.warehouse_id AND p.is_active
+		   AND (p.mask=b.mask OR (p.mask='' AND NOT EXISTS (SELECT 1 FROM stock_replenishment_policies o
+		        WHERE o.enterprise_id=b.enterprise_id AND o.item_code=b.item_code AND o.warehouse_id=b.warehouse_id AND o.mask=b.mask AND o.is_active)))`
 
 // slaAssistenciaStatements: cada prazo do chamado (primeira resposta e
 // solução) vira pendência "em risco" no momento de risco gravado no chamado

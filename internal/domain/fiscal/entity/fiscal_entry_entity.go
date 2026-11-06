@@ -107,10 +107,12 @@ func (e *FiscalEntry) ValorAPagar() decimal.Decimal {
 }
 
 type FiscalEntryItem struct {
-	ID               int64
-	FiscalEntryID    int64
-	Sequence         int
-	ItemCode         *int64
+	ID            int64
+	FiscalEntryID int64
+	Sequence      int
+	ItemCode      *int64
+	// Mask: a nota não guarda máscara; vem do movimento da entrada ou do pedido.
+	Mask             string
 	ItemSupplierID   *int64
 	SupplierItemCode *string
 	// LembrarVinculo: ao gravar, memoriza o código do fornecedor para este item.

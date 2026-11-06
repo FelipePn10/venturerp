@@ -64,7 +64,11 @@ func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entit
 		return nil, err
 	}
 	for _, code := range ordem {
-		out = append(out, itens[code].Sugestoes()...)
+		// Item só com política de máscara é controlado por elas: o mínimo do cadastro
+		// pediria o item sem máscara, que ninguém usa, com o saldo todo nas máscaras.
+		if len(itens[code].Politicas) > 0 || len(conjunto.mascaras[code]) == 0 {
+			out = append(out, itens[code].Sugestoes()...)
+		}
 		mascaras := make([]string, 0, len(conjunto.mascaras[code]))
 		for m := range conjunto.mascaras[code] {
 			mascaras = append(mascaras, m)

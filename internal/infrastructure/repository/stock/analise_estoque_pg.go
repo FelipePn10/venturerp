@@ -53,7 +53,7 @@ func (r *StockRepositorySQLC) IdadeDosLotes(ctx context.Context, almox *int64) (
 
 // NiveisPeloConsumo calcula o mínimo, a segurança e o máximo pelo consumo real da
 // janela. Sem prazo informado, usa o do fornecedor preferencial do item.
-func (r *StockRepositorySQLC) NiveisPeloConsumo(ctx context.Context, item int64, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error) {
+func (r *StockRepositorySQLC) NiveisPeloConsumo(ctx context.Context, item int64, mask string, almox *int64, meses, prazo, diasSeguranca int) (*entity.NiveisSugeridos, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,8 @@ func (r *StockRepositorySQLC) NiveisPeloConsumo(ctx context.Context, item int64,
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(ABS(m.quantity)), 0) FROM stock_movements m
 		  WHERE m.enterprise_id=$1 AND m.item_code=$2 AND ($3::bigint IS NULL OR m.warehouse_id=$3)
-		    AND m.movement_date >= $4::date AND `+consumoSQL, empresa, item, almox, desde).Scan(&consumo); err != nil {
+		    AND ($5 = '' OR m.mask=$5)
+		    AND m.movement_date >= $4::date AND `+consumoSQL, empresa, item, almox, desde, mask).Scan(&consumo); err != nil {
 		return nil, fmt.Errorf("lendo o consumo do item: %w", err)
 	}
 	if prazo <= 0 {

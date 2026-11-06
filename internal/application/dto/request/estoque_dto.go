@@ -117,6 +117,7 @@ type ReposicaoParaRequisicaoDTO struct {
 
 type ReposicaoItemRequisicaoDTO struct {
 	ItemCode int64   `json:"item_code"`
+	Mask     string  `json:"mask,omitempty"`
 	Quantity float64 `json:"quantity"`
 }
 

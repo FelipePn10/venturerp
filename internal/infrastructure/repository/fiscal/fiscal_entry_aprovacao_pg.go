@@ -33,19 +33,19 @@ var epsQtd = decimal.NewFromFloat(0.0001)
 type linhaPedidoTx struct {
 	code, pedido                                      int64
 	requested, received, invoiced, cancelled, interno decimal.Decimal
-	status, situacaoPedido                            string
+	status, situacaoPedido, mask                      string
 }
 
 func lockLinhaPedido(ctx context.Context, tx pgx.Tx, empresaCode, lineCode int64) (*linhaPedidoTx, error) {
 	var l linhaPedidoTx
 	err := tx.QueryRow(ctx,
 		`SELECT poi.code, poi.purchase_order_code, poi.requested_qty, poi.received_qty, poi.invoiced_qty, poi.cancelled_qty,
-		        COALESCE(poi.internal_qty,0), poi.status, po.status
+		        COALESCE(poi.internal_qty,0), poi.status, po.status, COALESCE(poi.mask,'')
 		   FROM purchase_order_items poi
 		   JOIN purchase_orders po ON po.code = poi.purchase_order_code AND po.enterprise_code = $2
 		  WHERE poi.code = $1
 		  FOR UPDATE OF poi`, lineCode, empresaCode).Scan(
-		&l.code, &l.pedido, &l.requested, &l.received, &l.invoiced, &l.cancelled, &l.interno, &l.status, &l.situacaoPedido)
+		&l.code, &l.pedido, &l.requested, &l.received, &l.invoiced, &l.cancelled, &l.interno, &l.status, &l.situacaoPedido, &l.mask)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d do pedido de compra não existe nesta empresa", lineCode))
 	}
@@ -184,11 +184,14 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 	for _, m := range a.Movimentos {
 		coberto := decimal.Zero
 		var pedido *int64
+		// A linha da nota não tem máscara: quem sabe qual variante chegou é o pedido.
+		mascara := ""
 		if m.PurchaseOrderItemCode != nil {
 			l, err := lockLinhaPedido(ctx, tx, empresaCode, *m.PurchaseOrderItemCode)
 			if err != nil {
 				return nil, err
 			}
+			mascara = l.mask
 			if l.status == "CANCELLED" {
 				return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d do pedido de compra está cancelada", l.code))
 			}
@@ -229,6 +232,7 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 			nota := fmt.Sprintf("Entrada da NF %d (nota de entrada %d)", numero, a.EntryID)
 			mov := &stockentity.StockMovement{
 				ItemCode:      m.ItemCode,
+				Mask:          mascara,
 				WarehouseID:   m.WarehouseID,
 				MovementType:  stockentity.MovementTypeIn,
 				Quantity:      paraEstoque,
@@ -248,7 +252,7 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 			movID = &mov.ID
 			res.MovimentosGerados++
 			res.Movimentados = append(res.Movimentados, repository.MovimentoGerado{
-				ItemID: m.ItemID, ItemCode: m.ItemCode, WarehouseID: m.WarehouseID, Quantidade: paraEstoque,
+				ItemID: m.ItemID, ItemCode: m.ItemCode, Mask: mascara, WarehouseID: m.WarehouseID, Quantidade: paraEstoque,
 				PurchaseOrderCode: pedido, PurchaseOrderItemCode: m.PurchaseOrderItemCode,
 			})
 		}
@@ -498,8 +502,9 @@ func estornarAprovacao(ctx context.Context, tx pgx.Tx, empresa, empresaCode int6
 func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repository.CancelamentoEntrada, numero, itemCode, movID int64, pendentes map[[2]int64]decimal.Decimal) (bool, error) {
 	ref := stockentity.ReferenceTypeNFEntry
 	var wh int64
+	var mascara string
 	var qtd, precoDaEntrada decimal.Decimal
-	if err := tx.QueryRow(ctx, `SELECT warehouse_id, quantity, unit_price FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &qtd, &precoDaEntrada); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT warehouse_id, mask, quantity, unit_price FROM stock_movements WHERE id=$1 AND enterprise_id=$2`, movID, empresa).Scan(&wh, &mascara, &qtd, &precoDaEntrada); err != nil {
 		return false, fmt.Errorf("lendo movimento de estoque da nota: %w", err)
 	}
 	chave := [2]int64{itemCode, wh}
@@ -524,8 +529,8 @@ func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repo
 	}
 	var saldo decimal.Decimal
 	if err := tx.QueryRow(ctx,
-		`SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND mask=''`,
-		empresa, itemCode, wh).Scan(&saldo); err != nil {
+		`SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3 AND mask=$4`,
+		empresa, itemCode, wh, mascara).Scan(&saldo); err != nil {
 		return false, err
 	}
 	if saldo.LessThan(qtd) {
@@ -535,7 +540,7 @@ func estornarEstoqueDoItem(ctx context.Context, tx pgx.Tx, empresa int64, c repo
 	}
 	nota := fmt.Sprintf("Estorno da NF %d (cancelamento da nota de entrada %d): %s", numero, c.EntryID, c.Motivo)
 	mov := &stockentity.StockMovement{
-		ItemCode: itemCode, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
+		ItemCode: itemCode, Mask: mascara, WarehouseID: wh, MovementType: stockentity.MovementTypeOut,
 		Quantity: qtd, UnitPrice: precoDaEntrada, SaidaPeloPreco: true,
 		ReferenceType: &ref, ReferenceCode: &c.EntryID,
 		Notes: &nota, CreatedBy: c.UserID,

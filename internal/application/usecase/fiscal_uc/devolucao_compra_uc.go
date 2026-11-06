@@ -239,7 +239,7 @@ func (uc *DevolucaoCompraUseCase) Criar(ctx context.Context, dto DevolucaoCompra
 		// A devolução é emitida pela empresa: o CST é o dela, não o do fornecedor.
 		cstICMS := devolucao.CSTICMS(deref(it.CstICMS), emitenteSimples)
 		item := &entity.FiscalExitItem{
-			FiscalExitID: criada.ID, Sequence: i + 1, ItemCode: it.ItemCode, Ncm: it.Ncm,
+			FiscalExitID: criada.ID, Sequence: i + 1, ItemCode: it.ItemCode, Mask: it.Mask, Ncm: it.Ncm,
 			Cfop: devolucao.CFOP(deref(it.CfopEntrada), mesmaUF, exterior), Quantity: q, UnitPrice: it.UnitPrice, TotalPrice: fl(l.Total),
 			BaseICMS: fl(l.BaseICMS), AliqICMS: it.AliqICMS, ValorICMS: fl(l.ICMS), BaseIPI: fl(l.BaseIPI), AliqIPI: it.AliqIPI, ValorIPI: fl(l.IPI),
 			ValorPIS: fl(l.PIS), ValorCOFINS: fl(l.COFINS), BaseICMSST: fl(l.BaseST), ValorICMSST: fl(l.ST),

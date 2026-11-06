@@ -168,7 +168,7 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		for _, mg := range res.Movimentados {
 			if wh, ok := inspecao[mg.ItemID]; ok {
 				entrada := doc.ID
-				if _, numero, err := uc.Inspecao.AbrirDoRecebimento(ctx, mg.ItemCode, "", mg.Quantidade, wh,
+				if _, numero, err := uc.Inspecao.AbrirDoRecebimento(ctx, mg.ItemCode, mg.Mask, mg.Quantidade, wh,
 					doc.SupplierCode, mg.PurchaseOrderCode, mg.PurchaseOrderItemCode, nil, &entrada); err != nil {
 					avisos = append(avisos, fmt.Sprintf("o item %d entrou no almoxarifado de inspeção, mas o lote de inspeção não foi aberto: %v", mg.ItemCode, err))
 				} else {
