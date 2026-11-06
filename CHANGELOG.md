@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.12.2] — 2026-11-06
+
+- feat(estoque): a nota de faturamento reconhece o consumo da consignação (`c8bd587e`)
+
 ## [v1.12.1] — 2026-11-06
 
 - fix(planejamento): numeração simultânea, referência do corte e saldo do MRP (`519c81d2`)
