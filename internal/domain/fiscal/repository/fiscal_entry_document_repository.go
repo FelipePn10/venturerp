@@ -209,9 +209,11 @@ type AprovacaoEntrada struct {
 }
 
 type ResultadoAprovacao struct {
-	TitulosGerados     int
-	MovimentosGerados  int
-	QtdJaRecebida      decimal.Decimal
+	TitulosGerados    int
+	MovimentosGerados int
+	QtdJaRecebida     decimal.Decimal
+	// QtdConsignada: o que a nota faturou de material consignado já consumido.
+	QtdConsignada      decimal.Decimal
 	LancamentosGerados int
 	Movimentados       []MovimentoGerado
 }
