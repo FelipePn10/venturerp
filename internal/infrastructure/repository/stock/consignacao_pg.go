@@ -20,12 +20,13 @@ import (
 var _ repository.ConsignacaoEstoque = (*StockRepositorySQLC)(nil)
 
 const consignacaoCols = `c.id, c.direction, c.partner_code, c.item_code, c.mask, c.lot, c.origin_warehouse_id, c.warehouse_id,
-	c.quantity, c.settled_qty, c.returned_qty, c.unit_value, c.fiscal_exit_id, c.document, c.issue_date, c.due_date, c.status, c.notes`
+	c.quantity, c.settled_qty, c.returned_qty, c.unit_value, c.fiscal_exit_id, c.document, c.issue_date, c.due_date, c.status, c.notes,
+	(SELECT COALESCE(SUM(b.quantity),0) FROM stock_consignment_billings b JOIN stock_consignment_settlements s ON s.id=b.settlement_id WHERE s.consignment_id=c.id)`
 
 func scanConsignacao(row pgx.Row, extra ...any) (*entity.Consignacao, error) {
 	var c entity.Consignacao
 	dst := append([]any{&c.ID, &c.Direcao, &c.Parceiro, &c.ItemCode, &c.Mask, &c.Lote, &c.AlmoxOrigem, &c.Almox,
-		&c.Quantidade, &c.Baixada, &c.Devolvida, &c.Valor, &c.NotaSaida, &c.Documento, &c.Emissao, &c.Prazo, &c.Status, &c.Notas}, extra...)
+		&c.Quantidade, &c.Baixada, &c.Devolvida, &c.Valor, &c.NotaSaida, &c.Documento, &c.Emissao, &c.Prazo, &c.Status, &c.Notas, &c.Faturada}, extra...)
 	if err := row.Scan(dst...); err != nil {
 		return nil, err
 	}
@@ -352,6 +353,61 @@ func (r *StockRepositorySQLC) ConsumirConsignacao(ctx context.Context, b entity.
 		return nil, err
 	}
 	return out, tx.Commit(ctx)
+}
+
+// FaturarConsumoTx roda na aprovação da nota de entrada: o que o fornecedor fatura do
+// material já consumido não entra de novo no estoque. A nota segue gerando a conta a
+// pagar. Devolve quanto da quantidade já estava no estoque por consumo.
+func FaturarConsumoTx(ctx context.Context, tx pgx.Tx, empresa, fornecedor, item int64, quantidade decimal.Decimal, entrada int64) (decimal.Decimal, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT s.id, s.quantity - COALESCE((SELECT SUM(b.quantity) FROM stock_consignment_billings b WHERE b.settlement_id=s.id),0)
+		   FROM stock_consignment_settlements s
+		   JOIN stock_consignments c ON c.id=s.consignment_id
+		  WHERE c.enterprise_id=$1 AND c.direction='ENTRADA' AND c.partner_code=$2 AND c.item_code=$3 AND s.kind=$4 AND NOT s.reversed
+		  ORDER BY s.settled_on, s.id FOR UPDATE OF s`, empresa, fornecedor, item, entity.BaixaConsignacaoConsumo)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("lendo o consumo da consignação: %w", err)
+	}
+	type pendente struct {
+		id  int64
+		qtd decimal.Decimal
+	}
+	var pendentes []pendente
+	for rows.Next() {
+		var p pendente
+		if err := rows.Scan(&p.id, &p.qtd); err != nil {
+			rows.Close()
+			return decimal.Zero, fmt.Errorf("lendo o consumo da consignação: %w", err)
+		}
+		pendentes = append(pendentes, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return decimal.Zero, err
+	}
+	coberta := decimal.Zero
+	for _, p := range pendentes {
+		q := decimal.Min(p.qtd, quantidade.Sub(coberta))
+		if !q.IsPositive() {
+			continue
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO stock_consignment_billings(enterprise_id,settlement_id,fiscal_entry_id,quantity) VALUES($1,$2,$3,$4)
+			 ON CONFLICT (settlement_id,fiscal_entry_id) DO UPDATE SET quantity=stock_consignment_billings.quantity+EXCLUDED.quantity`,
+			empresa, p.id, entrada, q); err != nil {
+			return decimal.Zero, fmt.Errorf("gravando o faturamento da consignação: %w", err)
+		}
+		coberta = coberta.Add(q)
+	}
+	return coberta, nil
+}
+
+// DesfazerFaturamentoTx: cancelada a nota de entrada, o consumo volta a aguardar nota.
+func DesfazerFaturamentoTx(ctx context.Context, tx pgx.Tx, empresa, entrada int64) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM stock_consignment_billings WHERE enterprise_id=$1 AND fiscal_entry_id=$2`, empresa, entrada); err != nil {
+		return fmt.Errorf("desfazendo o faturamento da consignação: %w", err)
+	}
+	return nil
 }
 
 // ReceberConsignacao registra o material do fornecedor. Não mexe no estoque.

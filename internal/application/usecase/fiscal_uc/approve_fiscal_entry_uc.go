@@ -177,6 +177,9 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 			}
 		}
 	}
+	if res.QtdConsignada.IsPositive() {
+		avisos = append(avisos, "parte da nota fatura material consignado já consumido: gerou a conta a pagar e não entrou de novo no estoque")
+	}
 	if res.QtdJaRecebida.IsPositive() {
 		avisos = append(avisos, "parte da nota já tinha entrado no estoque pelo recebimento do pedido de compra e não entrou de novo")
 	}

@@ -53,14 +53,16 @@ type Consignacao struct {
 	Quantidade  decimal.Decimal `json:"quantity"`
 	Baixada     decimal.Decimal `json:"settled_qty"`
 	Devolvida   decimal.Decimal `json:"returned_qty"`
-	Valor       decimal.Decimal `json:"unit_value"`
-	NotaSaida   *int64          `json:"fiscal_exit_id,omitempty"`
-	Documento   *string         `json:"document,omitempty"`
-	Emissao     time.Time       `json:"issue_date"`
-	Prazo       *time.Time      `json:"due_date,omitempty"`
-	Status      string          `json:"status"`
-	Notas       *string         `json:"notes,omitempty"`
-	CreatedBy   uuid.UUID       `json:"-"`
+	// Faturada: do que foi consumido, quanto o fornecedor já faturou por nota de entrada.
+	Faturada  decimal.Decimal `json:"billed_qty"`
+	Valor     decimal.Decimal `json:"unit_value"`
+	NotaSaida *int64          `json:"fiscal_exit_id,omitempty"`
+	Documento *string         `json:"document,omitempty"`
+	Emissao   time.Time       `json:"issue_date"`
+	Prazo     *time.Time      `json:"due_date,omitempty"`
+	Status    string          `json:"status"`
+	Notas     *string         `json:"notes,omitempty"`
+	CreatedBy uuid.UUID       `json:"-"`
 }
 
 // Saldo é o que ainda está em consignação.

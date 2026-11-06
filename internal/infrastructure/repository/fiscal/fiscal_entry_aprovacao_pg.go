@@ -179,6 +179,10 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 	}
 
 	// 3. Pedido de compra (3-way) e estoque.
+	var fornecedor *int64
+	if err = tx.QueryRow(ctx, `SELECT supplier_code FROM fiscal_entries WHERE id=$1 AND enterprise_id=$2`, a.EntryID, empresa).Scan(&fornecedor); err != nil {
+		return nil, err
+	}
 	ref := stockentity.ReferenceTypeNFEntry
 	algumEstoque := false
 	for _, m := range a.Movimentos {
@@ -219,6 +223,14 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 			res.QtdJaRecebida = res.QtdJaRecebida.Add(coberto)
 		}
 		paraEstoque := m.Quantidade.Sub(coberto)
+		if fornecedor != nil && m.ItemCode > 0 && paraEstoque.IsPositive() {
+			consignada, err := stockrepo.FaturarConsumoTx(ctx, tx, empresa, *fornecedor, m.ItemCode, paraEstoque, a.EntryID)
+			if err != nil {
+				return nil, err
+			}
+			paraEstoque = paraEstoque.Sub(consignada)
+			res.QtdConsignada = res.QtdConsignada.Add(consignada)
+		}
 		var movID *int64
 		if m.MovimentaEstoque {
 			algumEstoque = true
@@ -329,6 +341,9 @@ func (r *FiscalRepositoryPG) CancelarEntrada(ctx context.Context, c repository.C
 		return nil, err
 	}
 	if err = stockrepo.DesfazerRecebimentoEntreCNPJsTx(ctx, tx, empresa, c.EntryID, c.UserID); err != nil {
+		return nil, err
+	}
+	if err = stockrepo.DesfazerFaturamentoTx(ctx, tx, empresa, c.EntryID); err != nil {
 		return nil, err
 	}
 	// Frete e devolução apoiados na nota precisam sair antes dela: o frete
