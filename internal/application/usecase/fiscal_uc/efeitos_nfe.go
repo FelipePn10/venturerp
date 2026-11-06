@@ -171,6 +171,17 @@ func (e *EfeitosNFe) PreConferirDepositos(ctx context.Context, exit *entity.Fisc
 	if efeitos.Tipo == entity.TipoNotaVendaConsignacao {
 		return nil // sai do almoxarifado de consignação, não do depósito do item
 	}
+	if efeitos.Tipo == entity.TipoNotaTransferencia && e.Consignacao != nil && exit.CnpjDestinatario != nil {
+		irma, err := e.Consignacao.EmpresaIrma(ctx, *exit.CnpjDestinatario)
+		if err != nil {
+			return err
+		}
+		if irma > 0 {
+			if err := e.Consignacao.ConferirTransitoEntreCNPJs(ctx); err != nil {
+				return err
+			}
+		}
+	}
 	_, err = e.depositos(ctx, exit, items)
 	return err
 }
@@ -198,7 +209,7 @@ func (e *EfeitosNFe) conferirConsignacao(ctx context.Context, exit *entity.Fisca
 	if err != nil {
 		return err
 	}
-	pedido := map[[2]string]decimal.Decimal{}
+	pedido := map[[3]string]decimal.Decimal{}
 	for _, it := range items {
 		if it.ItemCode == nil {
 			continue
@@ -208,14 +219,17 @@ func (e *EfeitosNFe) conferirConsignacao(ctx context.Context, exit *entity.Fisca
 			q = v
 		}
 		mask := mascaraDaLinha(it, mascaras)
-		k := [2]string{fmt.Sprint(*it.ItemCode), mask}
+		k := [3]string{fmt.Sprint(*it.ItemCode), mask, ""}
+		if it.Lot != nil {
+			k[2] = *it.Lot
+		}
 		pedido[k] = pedido[k].Add(q)
-		saldo, err := e.Consignacao.SaldoConsignado(ctx, *exit.CustomerCode, *it.ItemCode, mask)
+		saldo, err := e.Consignacao.SaldoConsignado(ctx, *exit.CustomerCode, *it.ItemCode, mask, it.Lot)
 		if err != nil {
 			return err
 		}
 		if pedido[k].GreaterThan(saldo) {
-			return errorsuc.NewValidationError(fmt.Sprintf("o item %s tem só %s em consignação com este cliente", descricaoItem(it), saldo.String()))
+			return errorsuc.NewValidationError(fmt.Sprintf("o item %s tem só %s em consignação com este cliente", descricaoItem(it), stockentity.QuantidadeBR(saldo)))
 		}
 	}
 	return nil
@@ -244,13 +258,21 @@ func aplicarEstoque(ctx context.Context, r EfeitosRepos, exit *entity.FiscalExit
 			if q := qtd(it); q.IsPositive() {
 				valor = it.TotalPrice.DivRound(q, stockentity.CasasCusto)
 			}
-			if err := r.Consignacao.RegistrarRemessa(ctx, stockentity.RemessaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
-				Mask: mascaraDaLinha(it, mascaras), Lote: it.Lot, Endereco: it.Address, AlmoxOrigem: depositos[*it.ItemCode], Quantidade: qtd(it),
-				ValorUnitario: valor, Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
-				return fmt.Errorf("enviando o item %s à consignação: %w", descricaoItem(it), err)
+			// Pedido já separado: o material sai de onde a onda pôs, e a onda fecha.
+			saidas, err := saidasDaSeparacao(ctx, r.Estoque, exit, it, stockentity.StockMovement{ItemCode: *it.ItemCode, Mask: mascaraDaLinha(it, mascaras),
+				WarehouseID: depositos[*it.ItemCode], Quantity: qtd(it), Lot: it.Lot, Address: it.Address})
+			if err != nil {
+				return err
+			}
+			for _, s := range saidas {
+				if err := r.Consignacao.RegistrarRemessa(ctx, stockentity.RemessaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
+					Mask: s.Mask, Lote: s.Lot, Endereco: s.Address, LinhaDaOnda: s.LinhaDaOnda, AlmoxOrigem: s.WarehouseID, Quantidade: s.Quantity,
+					ValorUnitario: valor, Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
+					return fmt.Errorf("enviando o item %s à consignação: %w", descricaoItem(it), err)
+				}
 			}
 		}
-		return nil
+		return consumirReservasDoPedido(ctx, r.Estoque, exit, faturadoDaNota(items, qtd))
 	case entity.TipoNotaVendaConsignacao:
 		if r.Consignacao == nil || exit.CustomerCode == nil {
 			return errorsuc.NewValidationError("a venda em consignação precisa de um cliente cadastrado")
@@ -265,16 +287,23 @@ func aplicarEstoque(ctx context.Context, r EfeitosRepos, exit *entity.FiscalExit
 				daConsignacao[*it.ItemCode] = almox
 			}
 		}
-		if err := baixarEstoque(ctx, r.Estoque, exit, items, daConsignacao, quantidades, mascaras, userID); err != nil {
-			return err
-		}
+		// Linha a linha: a baixa de uma muda o saldo que a seguinte reparte pelos lotes.
 		for _, it := range items {
 			if it.ItemCode == nil {
 				continue
 			}
-			if err := r.Consignacao.RegistrarVendaConsignada(ctx, stockentity.VendaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
-				Mask: mascaraDaLinha(it, mascaras), Quantidade: qtd(it), Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
+			partes, qtds, err := partesDaVendaConsignada(ctx, r.Consignacao, *exit.CustomerCode, it, mascaraDaLinha(it, mascaras), qtd(it))
+			if err != nil {
 				return err
+			}
+			if err := baixarEstoque(ctx, r.Estoque, exit, partes, daConsignacao, qtds, mascaras, userID); err != nil {
+				return err
+			}
+			for _, p := range partes {
+				if err := r.Consignacao.RegistrarVendaConsignada(ctx, stockentity.VendaConsignada{NotaSaida: exit.ID, Cliente: *exit.CustomerCode, ItemCode: *it.ItemCode,
+					Mask: mascaraDaLinha(it, mascaras), Lote: p.Lot, Quantidade: qtds[p.ID], Documento: documento, Emissao: exit.DataEmissao, Ator: userID}); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -286,14 +315,26 @@ func aplicarEstoque(ctx context.Context, r EfeitosRepos, exit *entity.FiscalExit
 			}
 			if irma > 0 {
 				envio := stockentity.EnvioEntreCNPJs{NotaSaida: exit.ID, Destino: irma, Chave: *exit.ChaveAcesso, Ator: userID}
+				// O envio grava tudo no fim: duas linhas do item não podem levar a mesma separação.
+				usado := map[int64]decimal.Decimal{}
 				for _, it := range items {
 					if it.ItemCode == nil {
 						continue
 					}
-					envio.Linhas = append(envio.Linhas, stockentity.LinhaEntreCNPJs{ItemCode: *it.ItemCode, Mask: mascaraDaLinha(it, mascaras),
-						Lote: it.Lot, Endereco: it.Address, AlmoxDe: depositos[*it.ItemCode], Quantidade: qtd(it)})
+					saidas, err := saidasDaSeparacao(ctx, r.Estoque, exit, it, stockentity.StockMovement{ItemCode: *it.ItemCode, Mask: mascaraDaLinha(it, mascaras),
+						WarehouseID: depositos[*it.ItemCode], Quantity: qtd(it), Lot: it.Lot, Address: it.Address}, usado)
+					if err != nil {
+						return err
+					}
+					for _, s := range saidas {
+						envio.Linhas = append(envio.Linhas, stockentity.LinhaEntreCNPJs{ItemCode: *it.ItemCode, Mask: s.Mask,
+							Lote: s.Lot, Endereco: s.Address, LinhaDaOnda: s.LinhaDaOnda, AlmoxDe: s.WarehouseID, Quantidade: s.Quantity})
+					}
 				}
-				return r.Consignacao.EnviarEntreCNPJs(ctx, envio)
+				if err := r.Consignacao.EnviarEntreCNPJs(ctx, envio); err != nil {
+					return err
+				}
+				return consumirReservasDoPedido(ctx, r.Estoque, exit, faturadoDaNota(items, qtd))
 			}
 		}
 	}
@@ -594,7 +635,7 @@ func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.F
 // saidasDaSeparacao reparte a saída pelo que a onda do pedido separou: a nota leva
 // o lote e o endereço pegos, não os que a baixa automática escolheria. Linha com lote
 // ou endereço digitado na nota fica como está.
-func saidasDaSeparacao(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, it *entity.FiscalExitItem, base stockentity.StockMovement) ([]stockentity.StockMovement, error) {
+func saidasDaSeparacao(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, it *entity.FiscalExitItem, base stockentity.StockMovement, usado ...map[int64]decimal.Decimal) ([]stockentity.StockMovement, error) {
 	leitor, ok := estoque.(interface {
 		SeparadoParaFaturar(ctx context.Context, pedido, item int64, mask string, almox int64) ([]stockentity.SeparadoDaOnda, error)
 	})
@@ -611,7 +652,17 @@ func saidasDaSeparacao(ctx context.Context, estoque stockrepo.StockRepository, e
 		if !resta.IsPositive() {
 			break
 		}
-		q := decimal.Min(resta, s.Quantidade)
+		livre := s.Quantidade
+		if len(usado) > 0 {
+			livre = livre.Sub(usado[0][s.Linha])
+		}
+		if !livre.IsPositive() {
+			continue
+		}
+		q := decimal.Min(resta, livre)
+		if len(usado) > 0 {
+			usado[0][s.Linha] = usado[0][s.Linha].Add(q)
+		}
 		m := base
 		m.Quantity = q
 		linha := s.Linha
@@ -677,25 +728,73 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 			}
 		}
 	}
-	if exit.SalesOrderCode != nil {
-		reservas, err := estoque.ListActiveReservations(ctx)
+	return consumirReservasDoPedido(ctx, estoque, exit, faturado)
+}
+
+// consumirReservasDoPedido solta da reserva do pedido o que a nota levou. A remessa e
+// a transferência também tiram a mercadoria da origem: a reserva vai junto.
+func consumirReservasDoPedido(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, faturado map[int64]decimal.Decimal) error {
+	if estoque == nil || exit.SalesOrderCode == nil {
+		return nil
+	}
+	reservas, err := estoque.ListActiveReservations(ctx)
+	if err != nil {
+		return fmt.Errorf("lendo as reservas do pedido: %w", err)
+	}
+	for _, r := range reservas {
+		if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != *exit.SalesOrderCode {
+			continue
+		}
+		// Consome só o que esta nota faturou: a nota parcial soltava a reserva
+		// inteira, e o saldo do pedido ficava livre para outro cliente.
+		consumido, err := estoque.ConsumirReservaParcial(ctx, r.ID, faturado[r.ItemCode])
 		if err != nil {
-			return fmt.Errorf("lendo as reservas do pedido: %w", err)
+			return fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
 		}
-		for _, r := range reservas {
-			if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != *exit.SalesOrderCode {
-				continue
-			}
-			// Consome só o que esta nota faturou: a nota parcial soltava a reserva
-			// inteira, e o saldo do pedido ficava livre para outro cliente.
-			consumido, err := estoque.ConsumirReservaParcial(ctx, r.ID, faturado[r.ItemCode])
-			if err != nil {
-				return fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
-			}
-			faturado[r.ItemCode] = faturado[r.ItemCode].Sub(consumido)
-		}
+		faturado[r.ItemCode] = faturado[r.ItemCode].Sub(consumido)
 	}
 	return nil
+}
+
+func faturadoDaNota(items []*entity.FiscalExitItem, qtd func(*entity.FiscalExitItem) decimal.Decimal) map[int64]decimal.Decimal {
+	out := map[int64]decimal.Decimal{}
+	for _, it := range items {
+		if it.ItemCode != nil {
+			out[*it.ItemCode] = out[*it.ItemCode].Add(qtd(it))
+		}
+	}
+	return out
+}
+
+// partesDaVendaConsignada divide a linha pelos lotes que o cliente tem. Linha com lote
+// segue inteira; o que passar do saldo fica sem lote, e a baixa recusa com a falta.
+func partesDaVendaConsignada(ctx context.Context, c stockrepo.ConsignacaoEstoque, cliente int64, it *entity.FiscalExitItem, mask string, q decimal.Decimal) ([]*entity.FiscalExitItem, map[int64]decimal.Decimal, error) {
+	qtds := map[int64]decimal.Decimal{}
+	var partes []*entity.FiscalExitItem
+	parte := func(lote *string, q decimal.Decimal) {
+		p := *it
+		p.ID = int64(-1 - len(partes))
+		p.Lot = lote
+		qtds[p.ID] = q
+		partes = append(partes, &p)
+	}
+	if it.Lot != nil {
+		parte(it.Lot, q)
+		return partes, qtds, nil
+	}
+	lotes, err := c.LotesConsignados(ctx, cliente, *it.ItemCode, mask, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	resta := q
+	for _, l := range lotes {
+		parte(l.Lote, l.Quantidade)
+		resta = resta.Sub(l.Quantidade)
+	}
+	if resta.IsPositive() {
+		parte(nil, resta)
+	}
+	return partes, qtds, nil
 }
 
 // faturarPedido soma ao atendido do pedido o que a nota faturou e marca o

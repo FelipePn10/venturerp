@@ -280,6 +280,17 @@ func (r *StockRepositorySQLC) SalvarParametrosDeEstoque(ctx context.Context, p e
 	if err != nil {
 		return err
 	}
+	// A venda consignada sai do almoxarifado do parâmetro: trocá-lo com remessa aberta
+	// deixaria a nota autorizada sem saldo de onde baixar.
+	var aberta bool
+	if err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM stock_consignments WHERE enterprise_id=$1 AND direction='SAIDA' AND status='ABERTA' AND warehouse_id IS DISTINCT FROM $2::bigint)`,
+		empresa, p.ConsignmentWarehouseID).Scan(&aberta); err != nil {
+		return fmt.Errorf("conferindo as remessas em consignação: %w", err)
+	}
+	if aberta {
+		return errorsuc.NewValidationError("há remessas em consignação abertas: encerre-as antes de trocar o almoxarifado de consignação")
+	}
 	_, err = r.pool.Exec(ctx,
 		`INSERT INTO stock_parameters(enterprise_id,expired_lot_action,updated_by,retroactive_months,tolerance_a,tolerance_b,tolerance_c,obsolete_days,obsolete_provision_pct,consignment_warehouse_id,consignment_days)
 		 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)

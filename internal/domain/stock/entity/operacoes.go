@@ -27,6 +27,8 @@ type TransferenciaEstoque struct {
 	// saída, como na transferência manual.
 	ReferenciaTipo   *string
 	ReferenciaCodigo *int64
+	// LinhaDaOnda: a linha da separação que esta transferência leva embora.
+	LinhaDaOnda *int64
 }
 
 type ResultadoTransferencia struct {

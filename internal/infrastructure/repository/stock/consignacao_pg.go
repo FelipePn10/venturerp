@@ -56,7 +56,8 @@ func (r *StockRepositorySQLC) ConferirAlmoxDeConsignacao(ctx context.Context, al
 		return err
 	}
 	var disponivel bool
-	err = r.pool.QueryRow(ctx, `SELECT w.disposition FROM warehouse w WHERE w.id=$1 AND w.enterprise_id=$2`, almox, empresa).Scan(&disponivel)
+	var local string
+	err = r.pool.QueryRow(ctx, `SELECT w.disposition, w.location::text FROM warehouse w WHERE w.id=$1 AND w.enterprise_id=$2`, almox, empresa).Scan(&disponivel, &local)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errorsuc.NewValidationError("o almoxarifado de consignação não existe nesta empresa")
 	}
@@ -65,6 +66,12 @@ func (r *StockRepositorySQLC) ConferirAlmoxDeConsignacao(ctx context.Context, al
 	}
 	if disponivel {
 		return errorsuc.NewValidationError("o almoxarifado de consignação precisa estar sem disponibilidade: a mercadoria com o cliente não pode ser prometida")
+	}
+	// Inspeção e rejeição travam a saída, e o trânsito é da transferência: a venda
+	// consignada ficaria presa, com a nota já autorizada.
+	switch local {
+	case "INSPECAO", "REJEICAO", "TRANSITO":
+		return errorsuc.NewValidationError("escolha um almoxarifado próprio para a consignação: inspeção, rejeição e trânsito têm outro uso")
 	}
 	return nil
 }
@@ -96,7 +103,7 @@ func (r *StockRepositorySQLC) RegistrarRemessa(ctx context.Context, m entity.Rem
 	ref := entity.ReferenceTypeConsignment
 	if _, err := transferirTx(ctx, tx, empresa, entity.TransferenciaEstoque{
 		ItemCode: m.ItemCode, Mask: m.Mask, DeAlmox: m.AlmoxOrigem, ParaAlmox: *param.ConsignmentWarehouseID, Quantidade: m.Quantidade,
-		Lote: m.Lote, EnderecoDe: m.Endereco, Ator: m.Ator, ReferenciaTipo: &ref, ReferenciaCodigo: &m.NotaSaida,
+		Lote: m.Lote, EnderecoDe: m.Endereco, LinhaDaOnda: m.LinhaDaOnda, Ator: m.Ator, ReferenciaTipo: &ref, ReferenciaCodigo: &m.NotaSaida,
 	}, false); err != nil {
 		return err
 	}
@@ -110,8 +117,9 @@ func (r *StockRepositorySQLC) RegistrarRemessa(ctx context.Context, m entity.Rem
 	return tx.Commit(ctx)
 }
 
-// SaldoConsignado soma o que o cliente tem do item.
-func (r *StockRepositorySQLC) SaldoConsignado(ctx context.Context, cliente, item int64, mask string) (decimal.Decimal, error) {
+// SaldoConsignado soma o que o cliente tem do item. Com lote, só o que pode ser dele:
+// a remessa daquele lote ou a que saiu sem lote.
+func (r *StockRepositorySQLC) SaldoConsignado(ctx context.Context, cliente, item int64, mask string, lote *string) (decimal.Decimal, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return decimal.Zero, err
@@ -119,12 +127,46 @@ func (r *StockRepositorySQLC) SaldoConsignado(ctx context.Context, cliente, item
 	var q decimal.Decimal
 	err = r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(quantity-settled_qty-returned_qty),0) FROM stock_consignments
-		  WHERE enterprise_id=$1 AND direction='SAIDA' AND status='ABERTA' AND partner_code=$2 AND item_code=$3 AND mask=$4`,
-		empresa, cliente, item, mask).Scan(&q)
+		  WHERE enterprise_id=$1 AND direction='SAIDA' AND status='ABERTA' AND partner_code=$2 AND item_code=$3 AND mask=$4
+		    AND ($5::text IS NULL OR lot IS NULL OR lot=$5)`,
+		empresa, cliente, item, mask, lote).Scan(&q)
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("lendo o saldo consignado: %w", err)
 	}
 	return q, nil
+}
+
+// LotesConsignados reparte a quantidade pelos lotes das remessas do cliente, da mais
+// antiga à mais nova. A nota sem lote não pode levar o lote de outro cliente, que
+// está no mesmo almoxarifado.
+func (r *StockRepositorySQLC) LotesConsignados(ctx context.Context, cliente, item int64, mask string, quantidade decimal.Decimal) ([]entity.LoteConsignado, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT lot, quantity-settled_qty-returned_qty FROM stock_consignments
+		  WHERE enterprise_id=$1 AND direction='SAIDA' AND status='ABERTA' AND partner_code=$2 AND item_code=$3 AND mask=$4
+		  ORDER BY issue_date, id`, empresa, cliente, item, mask)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os lotes do cliente: %w", err)
+	}
+	defer rows.Close()
+	out := []entity.LoteConsignado{}
+	resta := quantidade
+	for rows.Next() {
+		var l entity.LoteConsignado
+		if err := rows.Scan(&l.Lote, &l.Quantidade); err != nil {
+			return nil, fmt.Errorf("lendo o lote do cliente: %w", err)
+		}
+		if !resta.IsPositive() {
+			continue
+		}
+		l.Quantidade = decimal.Min(l.Quantidade, resta)
+		resta = resta.Sub(l.Quantidade)
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }
 
 // RegistrarVendaConsignada baixa as remessas do cliente, da mais antiga à mais nova.
@@ -141,7 +183,8 @@ func (r *StockRepositorySQLC) RegistrarVendaConsignada(ctx context.Context, v en
 	rows, err := tx.Query(ctx,
 		`SELECT id, quantity-settled_qty-returned_qty FROM stock_consignments
 		  WHERE enterprise_id=$1 AND direction='SAIDA' AND status='ABERTA' AND partner_code=$2 AND item_code=$3 AND mask=$4
-		  ORDER BY issue_date, id FOR UPDATE`, empresa, v.Cliente, v.ItemCode, v.Mask)
+		    AND ($5::text IS NULL OR lot IS NULL OR lot=$5)
+		  ORDER BY lot IS NOT DISTINCT FROM $5 DESC, issue_date, id FOR UPDATE`, empresa, v.Cliente, v.ItemCode, v.Mask, v.Lote)
 	if err != nil {
 		return fmt.Errorf("lendo as remessas do cliente: %w", err)
 	}
@@ -174,7 +217,11 @@ func (r *StockRepositorySQLC) RegistrarVendaConsignada(ctx context.Context, v en
 		falta = falta.Sub(q)
 	}
 	if falta.IsPositive() {
-		return errorsuc.NewValidationError(fmt.Sprintf("o cliente não tem saldo consignado do item %d: faltam %s", v.ItemCode, entity.QuantidadeBR(falta)))
+		var codigo string
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(NULLIF(business_code,''), code::text) FROM items WHERE enterprise_id=$1 AND code=$2`, empresa, v.ItemCode).Scan(&codigo); err != nil {
+			return fmt.Errorf("lendo o item da consignação: %w", err)
+		}
+		return errorsuc.NewValidationError(fmt.Sprintf("o cliente não tem saldo consignado do item %s: faltam %s", codigo, entity.QuantidadeBR(falta)))
 	}
 	return tx.Commit(ctx)
 }
@@ -217,6 +264,10 @@ func (r *StockRepositorySQLC) DevolverConsignacao(ctx context.Context, b entity.
 	if err != nil {
 		return nil, err
 	}
+	hoje, err := r.HojeDaEmpresa(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("abrindo a devolução: %w", err)
@@ -234,6 +285,9 @@ func (r *StockRepositorySQLC) DevolverConsignacao(ctx context.Context, b entity.
 		if destino == 0 {
 			destino = *c.AlmoxOrigem
 		}
+		if destino == *c.Almox {
+			return nil, errorsuc.NewValidationError("a devolução precisa voltar para outro almoxarifado: este é o de consignação")
+		}
 		ref := entity.ReferenceTypeConsignment
 		if _, err := transferirTx(ctx, tx, empresa, entity.TransferenciaEstoque{
 			ItemCode: c.ItemCode, Mask: c.Mask, DeAlmox: *c.Almox, ParaAlmox: destino, Quantidade: b.Quantidade,
@@ -242,7 +296,6 @@ func (r *StockRepositorySQLC) DevolverConsignacao(ctx context.Context, b entity.
 			return nil, err
 		}
 	}
-	hoje := time.Now()
 	if err := baixarConsignacaoTx(ctx, tx, c.ID, entity.BaixaConsignacaoDevolucao, b.Quantidade, hoje, nil, b.Documento, b.Ator); err != nil {
 		return nil, err
 	}
@@ -256,6 +309,10 @@ func (r *StockRepositorySQLC) DevolverConsignacao(ctx context.Context, b entity.
 // ConsumirConsignacao: o material do fornecedor passa a ser nosso, pelo valor combinado.
 func (r *StockRepositorySQLC) ConsumirConsignacao(ctx context.Context, b entity.BaixaConsignacao) (*entity.Consignacao, error) {
 	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hoje, err := r.HojeDaEmpresa(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -274,13 +331,20 @@ func (r *StockRepositorySQLC) ConsumirConsignacao(ctx context.Context, b entity.
 	if err := c.Conferir(b.Quantidade); err != nil {
 		return nil, err
 	}
+	var almoxDaEmpresa bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM warehouse WHERE id=$1 AND enterprise_id=$2)`, b.Almox, empresa).Scan(&almoxDaEmpresa); err != nil {
+		return nil, fmt.Errorf("conferindo o almoxarifado: %w", err)
+	}
+	if !almoxDaEmpresa {
+		return nil, errorsuc.NewValidationError("o almoxarifado que recebe o material não existe nesta empresa")
+	}
 	ref := entity.ReferenceTypeConsignment
 	if err := CreateMovementTx(ctx, tx, empresa, &entity.StockMovement{ItemCode: c.ItemCode, Mask: c.Mask, WarehouseID: b.Almox,
 		MovementType: entity.MovementTypeIn, Quantity: b.Quantidade, UnitPrice: c.Valor, Lot: c.Lote,
 		ReferenceType: &ref, ReferenceCode: &c.ID, CreatedBy: b.Ator}); err != nil {
 		return nil, err
 	}
-	if err := baixarConsignacaoTx(ctx, tx, c.ID, entity.BaixaConsignacaoConsumo, b.Quantidade, time.Now(), nil, b.Documento, b.Ator); err != nil {
+	if err := baixarConsignacaoTx(ctx, tx, c.ID, entity.BaixaConsignacaoConsumo, b.Quantidade, hoje, nil, b.Documento, b.Ator); err != nil {
 		return nil, err
 	}
 	out, err := lerConsignacaoTx(ctx, tx, empresa, b.ID)
@@ -365,10 +429,39 @@ func (r *StockRepositorySQLC) PodeCancelarNotaDeEstoque(ctx context.Context, not
 		return fmt.Errorf("conferindo o estoque da nota: %w", err)
 	}
 	if baixada {
-		return errorsuc.NewValidationError("esta remessa em consignação já tem venda ou devolução: estorne-as antes de cancelar a nota")
+		return errorsuc.NewValidationError("esta remessa em consignação já tem venda ou devolução: cancele antes as notas de venda. Com devolução registrada, a remessa não pode mais ser cancelada")
 	}
 	if recebida {
 		return errorsuc.NewValidationError("o destino já deu entrada nesta transferência: cancele a entrada antes de cancelar a nota")
+	}
+	return nil
+}
+
+// enderecoDaSaidaTx acha de que endereço a nota tirou o material: cancelada, ele volta
+// para lá, e não para o saldo sem endereço do almoxarifado.
+func enderecoDaSaidaTx(ctx context.Context, tx pgx.Tx, empresa int64, ref string, codigo, item int64, mask string, almox int64, lote *string) (*string, error) {
+	var endereco *string
+	err := tx.QueryRow(ctx,
+		`SELECT NULLIF(address,'') FROM stock_movements
+		  WHERE enterprise_id=$1 AND reference_type=$2 AND reference_code=$3 AND movement_type=$4 AND item_code=$5 AND mask=$6 AND warehouse_id=$7
+		    AND lot IS NOT DISTINCT FROM $8 ORDER BY id LIMIT 1`,
+		empresa, ref, codigo, entity.MovementTypeTransferOut, item, mask, almox, lote).Scan(&endereco)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("lendo o endereço da saída: %w", err)
+	}
+	return endereco, nil
+}
+
+// devolverSeparacaoTx deixa a onda pronta para a nota que substituir a cancelada.
+func devolverSeparacaoTx(ctx context.Context, tx pgx.Tx, empresa int64, ref string, codigo int64) error {
+	if _, err := tx.Exec(ctx,
+		`UPDATE stock_picking_wave_lines l SET invoiced_qty = GREATEST(l.invoiced_qty - x.q, 0)
+		   FROM (SELECT wave_line_id, SUM(quantity) q FROM stock_movements
+		          WHERE enterprise_id=$1 AND reference_type=$2 AND reference_code=$3 AND movement_type=$4 AND wave_line_id IS NOT NULL
+		          GROUP BY wave_line_id) x
+		  WHERE l.id = x.wave_line_id AND l.enterprise_id = $1`,
+		empresa, ref, codigo, entity.MovementTypeTransferOut); err != nil {
+		return fmt.Errorf("devolvendo a separação da nota: %w", err)
 	}
 	return nil
 }
@@ -396,14 +489,23 @@ func DesfazerConsignacaoDaNotaTx(ctx context.Context, tx pgx.Tx, empresa, nota i
 	}
 	ref := entity.ReferenceTypeConsignment
 	for _, c := range remessas {
+		endereco, err := enderecoDaSaidaTx(ctx, tx, empresa, ref, nota, c.ItemCode, c.Mask, *c.AlmoxOrigem, c.Lote)
+		if err != nil {
+			return err
+		}
 		if _, err := transferirTx(ctx, tx, empresa, entity.TransferenciaEstoque{
 			ItemCode: c.ItemCode, Mask: c.Mask, DeAlmox: *c.Almox, ParaAlmox: *c.AlmoxOrigem, Quantidade: c.Saldo(),
-			Lote: c.Lote, Ator: ator, ReferenciaTipo: &ref, ReferenciaCodigo: &nota,
+			Lote: c.Lote, EnderecoPara: endereco, Ator: ator, ReferenciaTipo: &ref, ReferenciaCodigo: &nota,
 		}, false); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE stock_consignments SET status='CANCELADA', updated_at=NOW() WHERE id=$1`, c.ID); err != nil {
 			return fmt.Errorf("cancelando a remessa: %w", err)
+		}
+	}
+	if len(remessas) > 0 {
+		if err := devolverSeparacaoTx(ctx, tx, empresa, ref, nota); err != nil {
+			return err
 		}
 	}
 	if _, err := tx.Exec(ctx,
@@ -441,15 +543,46 @@ func (r *StockRepositorySQLC) EmpresaIrma(ctx context.Context, cnpj string) (int
 	if !entity.MesmaRaizDeCNPJ(soDigitos(proprio), cnpj) {
 		return 0, nil
 	}
-	var irma int64
-	err = r.pool.QueryRow(ctx, `SELECT enterprise_id FROM fiscal_configs WHERE regexp_replace(cnpj_empresa,'\D','','g')=$1 AND enterprise_id<>$2`, cnpj, empresa).Scan(&irma)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
-	}
+	// Duas empresas com o mesmo CNPJ é cadastro errado: escolher uma delas gravaria o
+	// estoque de um cliente no outro.
+	rows, err := r.pool.Query(ctx, `SELECT enterprise_id FROM fiscal_configs WHERE regexp_replace(cnpj_empresa,'\D','','g')=$1 AND enterprise_id<>$2 LIMIT 2`, cnpj, empresa)
 	if err != nil {
 		return 0, fmt.Errorf("procurando o estabelecimento de destino: %w", err)
 	}
-	return irma, nil
+	defer rows.Close()
+	var irmas []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, fmt.Errorf("procurando o estabelecimento de destino: %w", err)
+		}
+		irmas = append(irmas, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("procurando o estabelecimento de destino: %w", err)
+	}
+	switch len(irmas) {
+	case 0:
+		return 0, nil
+	case 1:
+		return irmas[0], nil
+	}
+	return 0, errorsuc.NewValidationError("mais de uma empresa do sistema usa o CNPJ de destino desta nota: corrija o cadastro fiscal antes de emitir")
+}
+
+// ConferirTransitoEntreCNPJs barra antes da SEFAZ o que o envio recusaria depois.
+func (r *StockRepositorySQLC) ConferirTransitoEntreCNPJs(ctx context.Context) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("conferindo o almoxarifado de trânsito: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	_, err = almoxDeTransitoTx(ctx, tx, empresa, 0)
+	return err
 }
 
 // EnviarEntreCNPJs leva as linhas da nota ao trânsito da origem. O material continua
@@ -478,7 +611,7 @@ func (r *StockRepositorySQLC) EnviarEntreCNPJs(ctx context.Context, e entity.Env
 	for _, l := range e.Linhas {
 		if _, err := transferirTx(ctx, tx, empresa, entity.TransferenciaEstoque{
 			ItemCode: l.ItemCode, Mask: l.Mask, DeAlmox: l.AlmoxDe, ParaAlmox: transito, Quantidade: l.Quantidade,
-			Lote: l.Lote, EnderecoDe: l.Endereco, Ator: e.Ator, ReferenciaTipo: &ref, ReferenciaCodigo: &id,
+			Lote: l.Lote, EnderecoDe: l.Endereco, LinhaDaOnda: l.LinhaDaOnda, Ator: e.Ator, ReferenciaTipo: &ref, ReferenciaCodigo: &id,
 		}, false); err != nil {
 			return err
 		}
@@ -552,7 +685,8 @@ func ReceberEntreCNPJsTx(ctx context.Context, tx pgx.Tx, empresa int64, chave st
 }
 
 // DesfazerRecebimentoEntreCNPJsTx: cancelada a entrada, o material volta ao trânsito
-// da origem pelo custo em que saiu.
+// da origem pelo custo em que saiu. Só conta a baixa depois da última volta: a entrada
+// refeita baixa de novo, e somar as duas criaria saldo no trânsito.
 func DesfazerRecebimentoEntreCNPJsTx(ctx context.Context, tx pgx.Tx, empresa, entrada int64, ator uuid.UUID) error {
 	var id, origem, transito int64
 	err := tx.QueryRow(ctx,
@@ -566,8 +700,11 @@ func DesfazerRecebimentoEntreCNPJsTx(ctx context.Context, tx pgx.Tx, empresa, en
 	}
 	rows, err := tx.Query(ctx,
 		`SELECT item_code, mask, lot, ABS(quantity), unit_price FROM stock_movements
-		  WHERE enterprise_id=$1 AND warehouse_id=$2 AND reference_type=$3 AND reference_code=$4 AND movement_type=$5 ORDER BY id`,
-		origem, transito, entity.ReferenceTypeCNPJTransfer, id, entity.MovementTypeOut)
+		  WHERE enterprise_id=$1 AND warehouse_id=$2 AND reference_type=$3 AND reference_code=$4 AND movement_type=$5
+		    AND id > COALESCE((SELECT MAX(d.id) FROM stock_movements d
+		                        WHERE d.enterprise_id=$1 AND d.warehouse_id=$2 AND d.reference_type=$3 AND d.reference_code=$4 AND d.movement_type=$6),0)
+		  ORDER BY id`,
+		origem, transito, entity.ReferenceTypeCNPJTransfer, id, entity.MovementTypeOut, entity.MovementTypeIn)
 	if err != nil {
 		return fmt.Errorf("lendo a baixa do trânsito: %w", err)
 	}
@@ -616,12 +753,19 @@ func DesfazerEnvioEntreCNPJsTx(ctx context.Context, tx pgx.Tx, empresa, nota int
 	}
 	ref := entity.ReferenceTypeCNPJTransfer
 	for _, l := range linhas {
+		endereco, err := enderecoDaSaidaTx(ctx, tx, empresa, ref, id, l.item, l.mask, l.de, l.lote)
+		if err != nil {
+			return err
+		}
 		if _, err := transferirTx(ctx, tx, empresa, entity.TransferenciaEstoque{
-			ItemCode: l.item, Mask: l.mask, DeAlmox: transito, ParaAlmox: l.de, Quantidade: l.qtd, Lote: l.lote, Ator: ator,
+			ItemCode: l.item, Mask: l.mask, DeAlmox: transito, ParaAlmox: l.de, Quantidade: l.qtd, Lote: l.lote, EnderecoPara: endereco, Ator: ator,
 			ReferenciaTipo: &ref, ReferenciaCodigo: &id,
 		}, false); err != nil {
 			return err
 		}
+	}
+	if err := devolverSeparacaoTx(ctx, tx, empresa, ref, id); err != nil {
+		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE stock_cnpj_transfers SET status='CANCELADA' WHERE id=$1`, id); err != nil {
 		return fmt.Errorf("cancelando a transferência: %w", err)

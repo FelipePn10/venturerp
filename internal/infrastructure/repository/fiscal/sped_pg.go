@@ -164,7 +164,8 @@ func (r *FiscalRepositoryPG) inventarioConsignado(ctx context.Context, empresa i
 			}
 		}
 		if l.direcao == stockentity.ConsignacaoSaida {
-			if pos < 0 || l.nota == nil {
+			// Sem saldo próprio na data não há o que separar: outra remessa já levou tudo.
+			if pos < 0 || l.nota == nil || !itens[pos].Quantidade.IsPositive() {
 				continue
 			}
 			parte, err := r.parteDaRemessa(ctx, empresa, *l.nota)

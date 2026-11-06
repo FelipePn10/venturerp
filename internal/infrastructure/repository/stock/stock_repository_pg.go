@@ -1269,8 +1269,9 @@ func scanReservations(rows pgx.Rows) ([]*entity.StockReservation, error) {
 const consumoSQL = `m.movement_type IN ('OUT','SAIDA','REP')
 		   AND m.reverses_movement_id IS NULL AND m.reversed_by_movement_id IS NULL
 		   -- Desfazer uma entrada (nota ou recebimento cancelado), devolver ao
-		   -- fornecedor, sucatear na inspeção e perder no transporte tiram do saldo sem ser consumo.
-		   AND COALESCE(m.reference_type,'') NOT IN ('NF_ENTRADA','PURCHASE_ORDER','QUALITY_LOT','TRANSITO')
+		   -- fornecedor, sucatear na inspeção, perder no transporte e entregar a outro
+		   -- estabelecimento tiram do saldo sem ser consumo.
+		   AND COALESCE(m.reference_type,'') NOT IN ('NF_ENTRADA','PURCHASE_ORDER','QUALITY_LOT','TRANSITO','TRANSF_CNPJ')
 		   AND NOT (m.reference_type = 'NF_SAIDA' AND EXISTS (SELECT 1 FROM fiscal_return_settlements frs
 		                                                       WHERE frs.enterprise_id = m.enterprise_id AND frs.fiscal_exit_id = m.reference_code))
 		   AND NOT EXISTS (SELECT 1 FROM stock_movement_types t

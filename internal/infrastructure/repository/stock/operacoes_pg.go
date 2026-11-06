@@ -28,7 +28,7 @@ const sinalSQL = `(CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP','EPP','
 // não tira o item da prateleira.
 const movimentoQueGiraSQL = `reverses_movement_id IS NULL AND reversed_by_movement_id IS NULL
 		        AND movement_type NOT IN ('TRANSFER_OUT','TRANSFER_IN','TRANSF_ENDERECO','AJUSTE_CUSTO','ADJUSTMENT')
-		        AND COALESCE(reference_type,'') NOT IN ('INVENTORY','CONTAGEM_CICLICA','TRANSFERENCIA','TRANSITO','ESTORNO')`
+		        AND COALESCE(reference_type,'') NOT IN ('INVENTORY','CONTAGEM_CICLICA','TRANSFERENCIA','TRANSITO','TRANSF_CNPJ','ESTORNO')`
 
 const qtdSQL = `(` + sinalSQL + ` * ABS(m.quantity))`
 const valorSQL = `(CASE WHEN m.movement_type = 'AJUSTE_CUSTO' THEN m.total_price ELSE ` + sinalSQL + ` * ABS(m.total_price) END)`
@@ -83,7 +83,7 @@ func transferirTx(ctx context.Context, tx pgx.Tx, empresa int64, t entity.Transf
 		ItemCode: t.ItemCode, Mask: t.Mask, WarehouseID: t.DeAlmox, MovementType: entity.MovementTypeTransferOut,
 		Quantity: t.Quantidade, Lot: t.Lote, Address: t.EnderecoDe,
 		ReferenceType: &ref, ReferenceCode: t.ReferenciaCodigo, Notes: t.Notas, CreatedBy: t.Ator,
-		ExigirRastreio: exigirRastreio,
+		ExigirRastreio: exigirRastreio, LinhaDaOnda: t.LinhaDaOnda,
 	}
 	if err := CreateMovementTx(ctx, tx, empresa, saida); err != nil {
 		return nil, err

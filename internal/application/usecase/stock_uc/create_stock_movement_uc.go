@@ -128,7 +128,7 @@ var referenciasDeDocumento = map[string]bool{
 	entity.ReferenceTypeNFEntry: true, entity.ReferenceTypeNFExit: true, entity.ReferenceTypePurchaseOrder: true,
 	entity.ReferenceTypeProductionOrder: true, entity.ReferenceTypeInventory: true, entity.ReferenceTypeCycleCount: true,
 	entity.ReferenceTypeReversal: true, entity.ReferenceTypeTransfer: true, entity.ReferenceTypeRequisition: true,
-	entity.ReferenceTypeTransit: true,
+	entity.ReferenceTypeTransit: true, entity.ReferenceTypeConsignment: true, entity.ReferenceTypeCNPJTransfer: true,
 }
 
 func conferirReferenciaManual(ref *string) error {
