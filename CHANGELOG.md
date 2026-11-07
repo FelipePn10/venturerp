@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.13.0] — 2026-11-07
+
+- feat(cadastro-de-item): VENT0200 completa, setores responsáveis e regras de código, lote e IPI (`11864c3d`)
+
 ## [v1.12.2] — 2026-11-06
 
 - feat(estoque): a nota de faturamento reconhece o consumo da consignação (`c8bd587e`)
