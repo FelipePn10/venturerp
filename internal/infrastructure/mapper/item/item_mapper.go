@@ -27,6 +27,10 @@ func ToItemEntity(d request.CreateItemDTO) (*itementity.Item, error) {
 		return nil, err
 	}
 	aplicarMarcadores(item, d)
+	d.IdentificacaoAmpliadaDTO.AplicarEm(item)
+	if err := item.ValidateForCreation(); err != nil {
+		return nil, err
+	}
 	return item, nil
 }
 
@@ -73,7 +77,7 @@ func toCommercial(d *request.CommercialDTO) itementity.Commercial {
 	if d == nil {
 		return itementity.Commercial{}
 	}
-	return itementity.Commercial{
+	c := itementity.Commercial{
 		Description: clean(d.Description), SaleType: clean(d.SaleType), VolumeConversionFactor: d.VolumeConversionFactor,
 		SaleMultiple: d.SaleMultiple, MinimumSaleQuantity: d.MinimumSaleQuantity, EstimatedDeliveryDays: d.EstimatedDeliveryDays,
 		WarrantyDays: d.WarrantyDays, TransferWarehouseCode: d.TransferWarehouseCode.Ptr(),
@@ -84,6 +88,8 @@ func toCommercial(d *request.CommercialDTO) itementity.Commercial {
 		WithholdPISCOFINS: d.WithholdPISCOFINS, IsPackaging: d.IsPackaging, MobileEnabled: d.MobileEnabled,
 		ExportPackaging: d.ExportPackaging, ClassificationCode: clean(d.ClassificationCode), Notes: clean(d.Notes),
 	}
+	d.ComercialAmpliadoDTO.AplicarEm(&c)
+	return c
 }
 
 func toAccounting(d *request.AccountingDTO, legacy *request.LegacyAccountingDTO) itementity.Accounting {
@@ -93,7 +99,7 @@ func toAccounting(d *request.AccountingDTO, legacy *request.LegacyAccountingDTO)
 		}
 		return itementity.Accounting{}
 	}
-	return itementity.Accounting{
+	a := itementity.Accounting{
 		SaleFiscalClassificationCode: clean(d.SaleFiscalClassificationCode), PurchaseFiscalClassificationCode: clean(d.PurchaseFiscalClassificationCode),
 		Origin: d.Origin, SaleIPIType: clean(d.SaleIPIType), SaleIPIRate: d.SaleIPIRate,
 		PurchaseIPIType: clean(d.PurchaseIPIType), PurchaseIPIRate: d.PurchaseIPIRate, ICMSRate: d.ICMSRate,
@@ -101,6 +107,8 @@ func toAccounting(d *request.AccountingDTO, legacy *request.LegacyAccountingDTO)
 		InventoryGroupCode: d.InventoryGroupCode, AccountingClassificationCode: clean(d.AccountingClassificationCode),
 		CEST: clean(d.CEST), InputCode: clean(d.InputCode), CalculatePISCOFINS: d.CalculatePISCOFINS, Notes: clean(d.Notes),
 	}
+	d.FiscalAmpliadoDTO.AplicarEm(&a)
+	return a
 }
 
 func toPDM(d request.PDMDTO) itementity.PDM {
@@ -113,7 +121,8 @@ func toPDM(d request.PDMDTO) itementity.PDM {
 }
 
 func toWarehouse(d request.WarehouseDTO) itementity.Warehouse {
-	return itementity.Warehouse{
+	w := itementity.Warehouse{
+		AcceptsFractionalQuantity:       true,
 		WarehouseCode:                   d.WarehouseCode,
 		UnitOfMeasurement:               d.UnitOfMeasurement,
 		AutomaticLow:                    d.AutomaticLow,
@@ -121,10 +130,12 @@ func toWarehouse(d request.WarehouseDTO) itementity.Warehouse {
 		MinimumStock:                    d.MinimumStock,
 		AverageMonthlyConsumptionManual: d.AverageMonthlyConsumptionManual,
 	}
+	d.EstoqueAmpliadoDTO.AplicarEm(&w)
+	return w
 }
 
 func toEngineering(d request.EngineeringDTO) itementity.Engineering {
-	return itementity.Engineering{
+	e := itementity.Engineering{
 		ItemBaseBusinessCode: textCode(d.ItemBaseCod),
 		Weight:               d.Weight,
 		Dimensions:           d.Dimensions,
@@ -132,10 +143,12 @@ func toEngineering(d request.EngineeringDTO) itementity.Engineering {
 		TypeStruct:           d.TypeStruct,
 		OEM:                  d.OEM,
 	}
+	d.EngenhariaAmpliadaDTO.AplicarEm(&e)
+	return e
 }
 
 func toPlanning(d request.PlanningDTO) itementity.Planning {
-	return itementity.Planning{
+	p := itementity.Planning{
 		TypeMRP:      d.TypeMRP,
 		LLC:          d.LLC,
 		ReorderPoint: d.ReorderPoint,
@@ -149,10 +162,12 @@ func toPlanning(d request.PlanningDTO) itementity.Planning {
 		Exclusive:    d.Exclusive,
 		Active:       d.Active,
 	}
+	d.PlanejamentoAmpliadoDTO.AplicarEm(&p)
+	return p
 }
 
 func toSupplies(d request.SuppliesDTO) itementity.Supplies {
-	return itementity.Supplies{
+	s := itementity.Supplies{
 		TypeOfUse:          d.TypeOfUse,
 		PurchaseUOM:        d.PurchaseUOM,
 		WarehouseCode:      d.WarehouseCode,
@@ -160,6 +175,8 @@ func toSupplies(d request.SuppliesDTO) itementity.Supplies {
 		Harvest:            d.Harvest,
 		Notes:              d.Notes,
 	}
+	d.SuprimentosAmpliadoDTO.AplicarEm(&s)
+	return s
 }
 
 // textCode desembrulha um código de negócio opcional para string, tratando

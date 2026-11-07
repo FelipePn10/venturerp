@@ -2,6 +2,8 @@ package modifier_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -60,16 +62,46 @@ func NewUpdateModifierUseCase(repo repository.ModifierRepository, auth ports.Aut
 	return &UpdateModifierUseCase{Repo: repo, Auth: auth}
 }
 
-func (uc *UpdateModifierUseCase) Execute(ctx context.Context, id int, description string) (*response.ModifierResponse, error) {
+func (uc *UpdateModifierUseCase) Execute(ctx context.Context, id int, description string, ativo *bool) (*response.ModifierResponse, error) {
 	if !uc.Auth.CanCreateModifier(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	description = strings.TrimSpace(description)
 	if description == "" {
 		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
-	updated, err := uc.Repo.Update(ctx, &entity.Modifier{ID: id, Description: description})
+	atual, err := uc.Repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// Só confere quando o nome muda: o duplicado antigo precisa poder ser inativado.
+	if !strings.EqualFold(strings.TrimSpace(atual.Description), description) {
+		if err = descricaoLivre(ctx, uc.Repo, description, id); err != nil {
+			return nil, err
+		}
+	}
+	situacao := atual.IsActive
+	if ativo != nil {
+		situacao = *ativo
+	}
+	updated, err := uc.Repo.Update(ctx, &entity.Modifier{ID: id, Description: description, IsActive: situacao})
 	if err != nil {
 		return nil, err
 	}
 	return toModifierResponse(updated), nil
+}
+
+// descricaoLivre recusa dois modificadores com o mesmo nome na empresa.
+func descricaoLivre(ctx context.Context, repo repository.ModifierRepository, descricao string, idAtual int) error {
+	mods, err := repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	alvo := strings.ToUpper(strings.TrimSpace(descricao))
+	for _, m := range mods {
+		if m.ID != idAtual && strings.ToUpper(strings.TrimSpace(m.Description)) == alvo {
+			return errorsuc.NewValidationError(fmt.Sprintf("já existe o modificador %d com esta descrição", m.ID))
+		}
+	}
+	return nil
 }

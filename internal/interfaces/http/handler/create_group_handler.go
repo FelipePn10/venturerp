@@ -19,7 +19,7 @@ func (h *GroupHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	created, err := h.createGroupUC.Execute(r.Context(), req)
 	if err != nil {
-		h.InternalError(w, r, err)
+		respondErrStatus(w, http.StatusInternalServerError, err)
 		return
 	}
 

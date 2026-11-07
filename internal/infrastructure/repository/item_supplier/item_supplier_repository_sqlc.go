@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/item_supplier/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	itemrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,6 +46,11 @@ func (r *ItemSupplierRepositorySQLC) Upsert(ctx context.Context, s *entity.ItemP
 	}
 	if !doEmpresa {
 		return nil, errorsuc.NewNotFoundError("item ou fornecedor não encontrado na empresa")
+	}
+	if s.SupplierItemCode != nil {
+		if err = itemrepository.ConferirCodigoDoFornecedor(ctx, tx, s.EnterpriseID, s.ItemCode, *s.SupplierItemCode); err != nil {
+			return nil, err
+		}
 	}
 	if s.SupplierUF == nil {
 		// UF do endereço do fornecedor da mesma empresa; sem endereço, fica vazia.

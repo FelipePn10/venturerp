@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -347,6 +348,182 @@ func (uc *UseCase) Pendentes(ctx context.Context) ([]Pendente, error) {
 }
 
 // Duplicados: itens parecidos com o nome (e o NCM) informados.
+// Politicas devolve a matriz completa, com o padrão onde a empresa não ajustou.
+func (uc *UseCase) Politicas(ctx context.Context) ([]dom.RegraPolitica, error) {
+	gravadas, err := uc.Repo.Politicas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return dom.MatrizDePolitica(gravadas), nil
+}
+
+// SalvarPoliticas grava a matriz (só administrador, pela rota).
+func (uc *UseCase) SalvarPoliticas(ctx context.Context, regras []dom.RegraPolitica) ([]dom.RegraPolitica, error) {
+	for _, r := range regras {
+		if err := r.Conferir(); err != nil {
+			return nil, err
+		}
+	}
+	if err := uc.Repo.SalvarPoliticas(ctx, regras, uc.ator(ctx)); err != nil {
+		return nil, err
+	}
+	return uc.Politicas(ctx)
+}
+
+// Prontidao diz se o item está pronto para comprar, produzir, estocar, vender e
+// faturar, com o que falta e onde resolver.
+func (uc *UseCase) Prontidao(ctx context.Context, codigo string) ([]dom.Prontidao, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	s, err := uc.Repo.Situacao(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	f, err := uc.Repo.Ficha(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	matriz, err := uc.Politicas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return dom.AvaliarProntidao(*f, s.Status, matriz), nil
+}
+
+// PreviaFiscal mostra o que a nota do item vai levar e o que a SEFAZ recusaria,
+// antes da primeira venda.
+func (uc *UseCase) PreviaFiscal(ctx context.Context, codigo string) (*dom.PreviaFiscal, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	f, err := uc.Repo.Ficha(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	u, err := uc.Repo.Uso(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	out := dom.AvaliarFiscal(*f, *u)
+	return &out, nil
+}
+
+// Embalagens lista os GTIN do item por unidade.
+func (uc *UseCase) Embalagens(ctx context.Context, codigo string) ([]dom.Embalagem, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	return uc.Repo.Embalagens(ctx, item)
+}
+
+// SalvarEmbalagens troca a lista inteira, conferida antes.
+func (uc *UseCase) SalvarEmbalagens(ctx context.Context, codigo string, lista []dom.Embalagem) ([]dom.Embalagem, error) {
+	it, err := itemresolution.Resolve(ctx, uc.Items, request.TextCode(codigo))
+	if err != nil {
+		return nil, err
+	}
+	item := int64(it.Code)
+	if err := dom.ConferirEmbalagens(lista, string(it.Warehouse.UnitOfMeasurement)); err != nil {
+		return nil, err
+	}
+	if err := uc.Repo.SalvarEmbalagens(ctx, item, lista); err != nil {
+		return nil, err
+	}
+	return uc.Repo.Embalagens(ctx, item)
+}
+
+// Revisoes lista as revisões do item, da mais nova para a mais antiga.
+func (uc *UseCase) Revisoes(ctx context.Context, codigo string) ([]dom.Revisao, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	return uc.Repo.Revisoes(ctx, item)
+}
+
+// NovaRevisaoDTO é o pedido da tela.
+type NovaRevisaoDTO struct {
+	Revision  string `json:"revision"`
+	ValidFrom string `json:"valid_from"`
+	Reason    string `json:"reason"`
+}
+
+// CriarRevisao grava a revisão. Com início hoje ou antes, ela passa a ser a vigente.
+func (uc *UseCase) CriarRevisao(ctx context.Context, codigo string, dto NovaRevisaoDTO) ([]dom.Revisao, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	de, err := time.Parse("2006-01-02", strings.TrimSpace(dto.ValidFrom))
+	if err != nil {
+		return nil, errorsuc.NewValidationError("data de início da vigência inválida")
+	}
+	existentes, err := uc.Repo.Revisoes(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	n := dom.NovaRevisao{Revisao: dto.Revision, De: de, Motivo: dto.Reason}
+	if err := n.Conferir(existentes); err != nil {
+		return nil, err
+	}
+	if err := uc.Repo.CriarRevisao(ctx, item, n, uc.ator(ctx)); err != nil {
+		return nil, err
+	}
+	return uc.Repo.Revisoes(ctx, item)
+}
+
+// AtributosLivres lê as características do item fora do padrão do PDM.
+func (uc *UseCase) AtributosLivres(ctx context.Context, codigo string) ([]dom.AtributoLivre, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	return uc.Repo.AtributosLivres(ctx, item)
+}
+
+// SalvarAtributosLivres troca a lista inteira, conferida antes.
+func (uc *UseCase) SalvarAtributosLivres(ctx context.Context, codigo string, lista []dom.AtributoLivre) ([]dom.AtributoLivre, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	if err := dom.ConferirAtributosLivres(lista); err != nil {
+		return nil, err
+	}
+	if err := uc.Repo.SalvarAtributosLivres(ctx, item, lista); err != nil {
+		return nil, err
+	}
+	return uc.Repo.AtributosLivres(ctx, item)
+}
+
+// NomesDeAtributosLivres alimenta a sugestão da tela.
+func (uc *UseCase) NomesDeAtributosLivres(ctx context.Context) ([]string, error) {
+	return uc.Repo.NomesDeAtributosLivres(ctx)
+}
+
+// ResumoDeAtributosLivres deixa as telas acharem o item pelo atributo.
+func (uc *UseCase) ResumoDeAtributosLivres(ctx context.Context) ([]dom.ResumoDeAtributos, error) {
+	return uc.Repo.ResumoDeAtributosLivres(ctx)
+}
+
+// SaldoDuasUnidades mostra o saldo nas duas unidades do item.
+func (uc *UseCase) SaldoDuasUnidades(ctx context.Context, codigo string) (*dom.SaldoDuasUnidades, error) {
+	item, err := uc.item(ctx, codigo)
+	if err != nil {
+		return nil, err
+	}
+	return uc.Repo.SaldoDuasUnidades(ctx, item)
+}
+
+// UsoDoItem atende a conferência de impacto do cadastro.
+func (uc *UseCase) UsoDoItem(ctx context.Context, itemCode int64) (*dom.Uso, error) {
+	return uc.Repo.Uso(ctx, itemCode)
+}
+
 func (uc *UseCase) Duplicados(ctx context.Context, nome, ncm, excluir string) ([]dom.Candidato, error) {
 	nome = strings.TrimSpace(nome)
 	if len([]rune(nome)) < 3 {
@@ -363,4 +540,9 @@ func (uc *UseCase) Duplicados(ctx context.Context, nome, ncm, excluir string) ([
 		return nil, err
 	}
 	return dom.Classificar(nome, ncm, cands), nil
+}
+
+// CuidadosDosItens alimenta o aviso de cuidados nas telas de operação.
+func (uc *UseCase) CuidadosDosItens(ctx context.Context) ([]dom.CuidadoDoItem, error) {
+	return uc.Repo.CuidadosDosItens(ctx)
 }

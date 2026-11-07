@@ -112,7 +112,14 @@ func (r *ProductionOrderRepositoryPGX) GetByCode(ctx context.Context, id int64) 
 		        status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		        is_active, created_at, updated_at, created_by, warehouse_id
 		 FROM public.production_orders WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID)
-	return scanProductionOrder(row)
+	ordem, err := scanProductionOrder(row)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.pool.QueryRow(ctx, `SELECT item_revision FROM public.production_orders WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID).Scan(&ordem.ItemRevision); err != nil {
+		return nil, fmt.Errorf("lendo a revisão da ordem: %w", err)
+	}
+	return ordem, nil
 }
 
 func (r *ProductionOrderRepositoryPGX) GetDeliveryByIdempotencyKey(ctx context.Context, key string) (*entity.ProductionDelivery, error) {

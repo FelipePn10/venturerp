@@ -8,6 +8,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	dpentity "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise/entity"
 	calendarentity "github.com/FelipePn10/panossoerp/internal/domain/item_calendar_promise/entity"
 )
 
@@ -102,5 +103,38 @@ func TestIsWorkdayFallsBackToWeekdaysWhenCalendarIsMissing(t *testing.T) {
 	}
 	if saturday {
 		t.Fatal("saturday should not be workday by fallback")
+	}
+}
+
+type fakeLinhas struct{ linhas []dpentity.LinhaDeCapacidade }
+
+func (f fakeLinhas) Linhas(context.Context) ([]dpentity.LinhaDeCapacidade, error) {
+	return f.linhas, nil
+}
+func (f fakeLinhas) SalvarLinha(context.Context, dpentity.LinhaDeCapacidade) error { return nil }
+
+// Cada tanque usa a sua capacidade; a da consulta só cobre tanque sem cadastro
+// ou desativado.
+func TestCapacidadePorTanque(t *testing.T) {
+	uc := &DeliveryPromiseUseCase{Linhas: fakeLinhas{linhas: []dpentity.LinhaDeCapacidade{
+		{Codigo: 1, CapacidadeDiaria: decimal.NewFromInt(120), Ativa: true},
+		{Codigo: 2, CapacidadeDiaria: decimal.NewFromInt(80), Ativa: false},
+	}}}
+	capacidade, err := uc.capacidades(context.Background(), decimal.NewFromInt(50))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tanque, quer := range map[int64]int64{1: 120, 2: 50, 9: 50} {
+		if got := capacidade(tanque); !got.Equal(decimal.NewFromInt(quer)) {
+			t.Fatalf("tanque %d: %s, queria %d", tanque, got, quer)
+		}
+	}
+	l := dpentity.LinhaDeCapacidade{Codigo: 1, Descricao: "  Pintura  a pó ", CapacidadeDiaria: decimal.Zero}
+	if l.Conferir() == nil {
+		t.Fatal("capacidade zero devia ser recusada")
+	}
+	l.CapacidadeDiaria = decimal.NewFromInt(10)
+	if err := l.Conferir(); err != nil || l.Descricao != "Pintura a pó" || l.Unidade != "UN" {
+		t.Fatalf("normalização: %+v %v", l, err)
 	}
 }

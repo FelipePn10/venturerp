@@ -44,6 +44,10 @@ func (r *StockRepositorySQLC) ResolverLeitura(ctx context.Context, codigo string
 		`i.code IN (SELECT p.item_code FROM item_preferred_suppliers p
 		             WHERE p.enterprise_id=$1 AND p.is_active AND p.barcode = ANY($2)
 		            UNION
+		            SELECT c.code FROM items c WHERE c.enterprise_id=$1 AND c.accounting_gtin = ANY($2)
+		            UNION
+		            SELECT g.item_code FROM item_gtins g WHERE g.enterprise_id=$1 AND g.gtin = ANY($2)
+		            UNION
 		            SELECT x.item_code FROM fiscal_entry_items x JOIN fiscal_entries f ON f.id=x.fiscal_entry_id
 		             WHERE f.enterprise_id=$1 AND x.ean = ANY($2))`, barras)
 	if err != nil {

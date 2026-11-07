@@ -34,6 +34,8 @@ type CreateItemUseCase struct {
 	Governanca interface {
 		AoCriarItem(ctx context.Context, itemCode int64) error
 	}
+	// PDM confere o par grupo+modificador e gera a descrição do padrão.
+	PDM aplicadorDePDM
 }
 
 func NewCreateItemUseCase(
@@ -87,6 +89,11 @@ func (uc *CreateItemUseCase) Execute(
 			return nil, fmt.Errorf("validação de referências PDM indisponível")
 		}
 		if err = validator.ValidatePDMReferences(ctx, enterpriseID, int(item.PDM.GroupCode), int(item.PDM.ModifierCode)); err != nil {
+			return nil, err
+		}
+	}
+	if uc.PDM != nil {
+		if err = uc.PDM.AplicarNoItem(ctx, item, false); err != nil {
 			return nil, err
 		}
 	}

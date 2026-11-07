@@ -679,6 +679,36 @@ func TestFaseB_BaixaAutomaticaSegueARegraDoItem(t *testing.T) {
 	igual(t, "FIFO tira do que chegou antes", e.saldoLote(t, e.item, e.almox, "ANTIGO"), "7")
 }
 
+// A sugestão de separação sem regra escolhida segue a regra do item: o item FIFO
+// era sugerido em FEFO, porque a tela e o repositório partiam sempre de FEFO.
+func TestFaseB_SeparacaoSegueARegraDoItem(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	e.limparFaseB(t)
+	pool := testutil.Pool(t)
+	exigir(t, e.moverLote(t, e.item, e.almox, "IN", 10, 5, "", "ANTIGO"))
+	exigir(t, e.moverLote(t, e.item, e.almox, "IN", 10, 5, "", "VENCE-ANTES"))
+	testutil.Exec(t, pool, `UPDATE stock_lots SET received_at=$3::date, expires_at=$4::date WHERE enterprise_id=$1 AND item_code=$2 AND lot='ANTIGO'`, e.empresa, e.item, time.Now().AddDate(0, 0, -30), time.Now().AddDate(0, 0, 90))
+	testutil.Exec(t, pool, `UPDATE stock_lots SET received_at=$3::date, expires_at=$4::date WHERE enterprise_id=$1 AND item_code=$2 AND lot='VENCE-ANTES'`, e.empresa, e.item, time.Now().AddDate(0, 0, -1), time.Now().AddDate(0, 0, 20))
+	primeiro := func(regra string) (string, string) {
+		r, err := e.repo.SugerirSeparacaoFEFO(e.ctx, e.item, "", e.almox, decimal.NewFromInt(3), regra)
+		exigir(t, err)
+		if len(r.Linhas) == 0 {
+			t.Fatalf("sem sugestão para a regra %q", regra)
+		}
+		return r.Linhas[0].Lot, r.Regra
+	}
+	if lote, regra := primeiro(""); lote != "VENCE-ANTES" || regra != "FEFO" {
+		t.Fatalf("item FEFO sem regra pedida: %s (%s)", lote, regra)
+	}
+	exigir(t, e.repo.SalvarControleDoItem(e.ctx, stockentity.ControleDoItem{ItemCode: e.item, ControlsLot: true, LotIssueRule: "FIFO"}))
+	if lote, regra := primeiro(""); lote != "ANTIGO" || regra != "FIFO" {
+		t.Fatalf("item FIFO sem regra pedida: %s (%s)", lote, regra)
+	}
+	if lote, _ := primeiro("FEFO"); lote != "VENCE-ANTES" {
+		t.Fatalf("FEFO pedido vence a regra do item: %s", lote)
+	}
+}
+
 func TestFaseB_ImplantarLote(t *testing.T) {
 	e := novoAmbienteEstoque(t)
 	e.limparFaseB(t)
@@ -1697,4 +1727,37 @@ func TestPendencias_RecalculoEmNiveis(t *testing.T) {
 	igual(t, "custo do produto", e.somar(t, `SELECT unit_price FROM stock_movements WHERE enterprise_id=$1 AND item_code=$2 AND movement_type='EP'`, e.empresa, e.outro), "3")
 	igual(t, "saldo do produto", e.somar(t, `SELECT avg_cost FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, e.empresa, e.outro), "3")
 	igual(t, "diferença no resultado", e.somar(t, `SELECT COALESCE(SUM(value),0) FROM stock_cost_variances WHERE enterprise_id=$1 AND kind='RECALCULO'`, e.empresa), "0")
+}
+
+// Desligar o lote de item com validade é recusado: a validade é do lote.
+func TestFaseB_DesligarLoteComValidadeERecusado(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	e.limparFaseB(t)
+	pool := testutil.Pool(t)
+	exigir(t, e.repo.SalvarControleDoItem(e.ctx, stockentity.ControleDoItem{ItemCode: e.item, ControlsLot: true, LotIssueRule: "FEFO"}))
+	testutil.Exec(t, pool, `UPDATE items SET warehouse_shelf_life_days=90 WHERE enterprise_id=$1 AND code=$2`, e.empresa, e.item)
+	if err := e.repo.SalvarControleDoItem(e.ctx, stockentity.ControleDoItem{ItemCode: e.item, ControlsLot: false, LotIssueRule: "FEFO"}); !ehValidacao(err) {
+		t.Fatalf("desligar o lote com validade: esperava recusa, veio %v", err)
+	}
+	testutil.Exec(t, pool, `UPDATE items SET warehouse_shelf_life_days=NULL WHERE enterprise_id=$1 AND code=$2`, e.empresa, e.item)
+	exigir(t, e.repo.SalvarControleDoItem(e.ctx, stockentity.ControleDoItem{ItemCode: e.item, ControlsLot: false, LotIssueRule: "FEFO"}))
+}
+
+// O MRP usa este cálculo no modo por dia trabalhado: consumo por dia × dias que a
+// empresa trabalha no prazo (calendário industrial) + segurança.
+func TestPontoDePedidoDoItemPorDiaTrabalhado(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	pool := testutil.Pool(t)
+	testutil.Exec(t, pool, `UPDATE items SET planning_reorder_point='{"TR":5,"CM":10,"CR":1,"ES":20,"modo":"DIA_TRABALHADO"}'::jsonb WHERE enterprise_id=$1 AND code=$2`, e.empresa, e.item)
+	hoje, err := e.repo.HojeDaEmpresa(e.ctx)
+	exigir(t, err)
+	quer := stockentity.PontoPorDiaTrabalhado(decimal.NewFromInt(10), stockentity.CalendarioDeTrabalho{}.DiasDeConsumoNoPrazo(hoje, 5), decimal.NewFromInt(20))
+	ponto, ok, err := e.repo.PontoDePedidoDoItem(e.ctx, e.item)
+	exigir(t, err)
+	if !ok || !ponto.Equal(quer) {
+		t.Fatalf("ponto %s (ok=%v), queria %s", ponto, ok, quer)
+	}
+	if _, ok, _ := e.repo.PontoDePedidoDoItem(e.ctx, e.outro); ok {
+		t.Fatal("item sem ponto de pedido não devia ter ponto")
+	}
 }

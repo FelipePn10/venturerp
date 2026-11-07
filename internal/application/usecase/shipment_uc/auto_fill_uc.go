@@ -86,6 +86,35 @@ type ShipmentAutoFillUseCase struct {
 	SalesRepo      SalesOrderReader
 	PurchaseRepo   PurchaseOrderReader
 	ProductionRepo ProductionOrderReader
+	// Regras dá os volumes por unidade do cadastro. Opcional.
+	Regras RegrasDoRomaneio
+}
+
+// volumesDoPedido soma os volumes pelo cadastro: um guarda-roupa que embarca em 3
+// caixas e sai em 2 unidades são 6 volumes; 250 parafusos com fator 0,01 (caixa
+// de 100) são 3. Item sem a informação conta um por pedido, como sempre foi.
+func (uc *ShipmentAutoFillUseCase) volumesDoPedido(ctx context.Context, so *SalesOrderHeader) (int, error) {
+	if uc.Regras == nil {
+		return 1, nil
+	}
+	itens := make([]int64, 0, len(so.Items))
+	for _, it := range so.Items {
+		itens = append(itens, it.ItemCode)
+	}
+	porUnidade, err := uc.Regras.VolumesPorUnidade(ctx, itens)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, it := range so.Items {
+		if n := porUnidade[it.ItemCode]; n.IsPositive() {
+			total += int(it.RequestedQty.Mul(n).Ceil().IntPart())
+		}
+	}
+	if total == 0 {
+		return 1, nil
+	}
+	return total, nil
 }
 
 func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, salesOrderCode int64, createdBy uuid.UUID) (*response.ShipmentResponse, error) {
@@ -101,7 +130,10 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 
 	volumes := so.TotalVolumes
 	if volumes == 0 {
-		volumes = 1
+		var err error
+		if volumes, err = uc.volumesDoPedido(ctx, so); err != nil {
+			return nil, err
+		}
 	}
 
 	refType := entity.ShipmentRefSalesOrder

@@ -15,6 +15,7 @@ type ToolResponse struct {
 	Cost             float64   `json:"cost"`
 	Status           string    `json:"status"`
 	IsActive         bool      `json:"is_active"`
+	ItemCode         *int64    `json:"item_code,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 }
 

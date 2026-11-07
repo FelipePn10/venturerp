@@ -16,6 +16,6 @@ SELECT * FROM modifier WHERE enterprise_id = $1 ORDER BY id;
 
 -- name: UpdateModifier :one
 UPDATE modifier
-SET description = $3
+SET description = $3, is_active = $4
 WHERE enterprise_id = $1 AND id = $2
 RETURNING *;

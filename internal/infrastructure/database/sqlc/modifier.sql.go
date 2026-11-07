@@ -19,7 +19,7 @@ INSERT INTO modifier (
 ) VALUES (
 $1, $2, $3
 )
-RETURNING id, description, created_by, created_at, enterprise_id
+RETURNING id, description, created_by, created_at, enterprise_id, abbreviation, is_active
 `
 
 type CreateModifierParams struct {
@@ -37,12 +37,14 @@ func (q *Queries) CreateModifier(ctx context.Context, arg CreateModifierParams) 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.EnterpriseID,
+		&i.Abbreviation,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const getModifierByID = `-- name: GetModifierByID :one
-SELECT id, description, created_by, created_at, enterprise_id FROM modifier WHERE enterprise_id = $1 AND id = $2
+SELECT id, description, created_by, created_at, enterprise_id, abbreviation, is_active FROM modifier WHERE enterprise_id = $1 AND id = $2
 `
 
 type GetModifierByIDParams struct {
@@ -59,12 +61,14 @@ func (q *Queries) GetModifierByID(ctx context.Context, arg GetModifierByIDParams
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.EnterpriseID,
+		&i.Abbreviation,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const listModifiers = `-- name: ListModifiers :many
-SELECT id, description, created_by, created_at, enterprise_id FROM modifier WHERE enterprise_id = $1 ORDER BY id
+SELECT id, description, created_by, created_at, enterprise_id, abbreviation, is_active FROM modifier WHERE enterprise_id = $1 ORDER BY id
 `
 
 func (q *Queries) ListModifiers(ctx context.Context, enterpriseID int64) ([]Modifier, error) {
@@ -82,6 +86,8 @@ func (q *Queries) ListModifiers(ctx context.Context, enterpriseID int64) ([]Modi
 			&i.CreatedBy,
 			&i.CreatedAt,
 			&i.EnterpriseID,
+			&i.Abbreviation,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -95,19 +101,25 @@ func (q *Queries) ListModifiers(ctx context.Context, enterpriseID int64) ([]Modi
 
 const updateModifier = `-- name: UpdateModifier :one
 UPDATE modifier
-SET description = $3
+SET description = $3, is_active = $4
 WHERE enterprise_id = $1 AND id = $2
-RETURNING id, description, created_by, created_at, enterprise_id
+RETURNING id, description, created_by, created_at, enterprise_id, abbreviation, is_active
 `
 
 type UpdateModifierParams struct {
 	EnterpriseID int64
 	ID           int64
 	Description  string
+	IsActive     bool
 }
 
 func (q *Queries) UpdateModifier(ctx context.Context, arg UpdateModifierParams) (Modifier, error) {
-	row := q.db.QueryRow(ctx, updateModifier, arg.EnterpriseID, arg.ID, arg.Description)
+	row := q.db.QueryRow(ctx, updateModifier,
+		arg.EnterpriseID,
+		arg.ID,
+		arg.Description,
+		arg.IsActive,
+	)
 	var i Modifier
 	err := row.Scan(
 		&i.ID,
@@ -115,6 +127,8 @@ func (q *Queries) UpdateModifier(ctx context.Context, arg UpdateModifierParams) 
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.EnterpriseID,
+		&i.Abbreviation,
+		&i.IsActive,
 	)
 	return i, err
 }

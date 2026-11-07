@@ -3,6 +3,7 @@ package sales_quotation_uc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -56,6 +57,9 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 		Notes:              dto.Notes,
 	}
 	quotation, err := uc.Repo.GetByCode(ctx, dto.SalesQuotationCode)
+	if err == nil {
+		err = resolvedItem.ConferirVenda(dto.RequestedQty, quotation.CustomerCode)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,6 +86,9 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 		return nil, err
 	}
 	calcItemTotals(item)
+	if item.DeliveryDate == nil && quotation.DeliveryDate == nil {
+		item.DeliveryDate = resolvedItem.EntregaPadrao(time.Now())
+	}
 	created, err := uc.Repo.CreateItem(ctx, item)
 	if err != nil {
 		return nil, err
@@ -127,6 +134,15 @@ func (uc *UseCase) UpdateItem(ctx context.Context, dto request.UpdateSalesQuotat
 	quotation, err := uc.Repo.GetByCode(ctx, current.SalesQuotationCode)
 	if err != nil {
 		return nil, err
+	}
+	if uc.Items != nil {
+		cadastro, errItem := itemresolution.PelaChave(ctx, uc.Items, current.ItemCode)
+		if errItem != nil {
+			return nil, errItem
+		}
+		if err = cadastro.ConferirVenda(dto.RequestedQty, quotation.CustomerCode); err != nil {
+			return nil, err
+		}
 	}
 	tableCode := current.PriceTableCode
 	if tableCode == nil {

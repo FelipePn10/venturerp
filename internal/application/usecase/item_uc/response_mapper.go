@@ -11,11 +11,15 @@ func toItemResponse(it *entity.Item) *response.ItemResponse {
 		return nil
 	}
 	return &response.ItemResponse{
-		ID:              it.ID,
-		Code:            string(it.BusinessCode),
-		LegacyCode:      int64(it.Code),
-		Name:            it.Name,
-		Complement:      it.Complement,
+		ID:         it.ID,
+		Code:       string(it.BusinessCode),
+		LegacyCode: int64(it.Code),
+		Name:       it.Name,
+		Complement: it.Complement,
+
+		LongDescription: it.LongDescription, GeneralNotes: it.GeneralNotes, Revision: it.Revision, PreviousCode: it.PreviousCode,
+		ManufacturerName: it.ManufacturerName, ManufacturerPartNumber: it.ManufacturerPartNumber, IsScrap: it.IsScrap, DescriptionEN: it.DescriptionEN,
+
 		Nature:          int(it.Nature),
 		IsBase:          it.IsBase,
 		IsConfigured:    it.IsConfigured,
@@ -53,6 +57,7 @@ func toFiscalEffectiveResponse(v entity.FiscalEffective) response.ItemFiscalEffe
 
 func toCommercialResponse(v entity.Commercial) response.ItemCommercialResponse {
 	return response.ItemCommercialResponse{
+		ExclusiveCustomerCode: v.ExclusiveCustomerCode, VolumesPerUnit: v.VolumesPerUnit,
 		Description: v.Description, SaleType: v.SaleType, VolumeConversionFactor: v.VolumeConversionFactor, SaleMultiple: v.SaleMultiple, MinimumSaleQuantity: v.MinimumSaleQuantity,
 		EstimatedDeliveryDays: v.EstimatedDeliveryDays, WarrantyDays: v.WarrantyDays, TransferWarehouseCode: v.TransferWarehouseCode, TechnicalAssistanceWarehouseCode: v.TechnicalAssistanceWarehouseCode,
 		PackagingItemCode: nilIfEmpty(v.PackagingItemBusinessCode), LegacyPackagingItemCode: v.PackagingItemCode, AllowBillingDescriptionChange: v.AllowBillingDescriptionChange, IssueLoadingLabels: v.IssueLoadingLabels, AssembleShippingVolumes: v.AssembleShippingVolumes,
@@ -73,6 +78,8 @@ func toAccountingResponse(v entity.Accounting) response.ItemAccountingResponse {
 	return response.ItemAccountingResponse{SaleFiscalClassificationCode: v.SaleFiscalClassificationCode, PurchaseFiscalClassificationCode: v.PurchaseFiscalClassificationCode, Origin: v.Origin,
 		SaleIPIType: v.SaleIPIType, SaleIPIRate: v.SaleIPIRate, PurchaseIPIType: v.PurchaseIPIType, PurchaseIPIRate: v.PurchaseIPIRate, ICMSRate: v.ICMSRate,
 		SaleUnitOfMeasurement: sale, PurchaseUnitOfMeasurement: purchase, InventoryGroupCode: v.InventoryGroupCode, AccountingClassificationCode: v.AccountingClassificationCode,
+		GTIN: v.GTIN, GTINTax: v.GTINTax, EFDItemType: v.EFDItemType, TaxUnit: v.TaxUnit, TaxUnitFactor: decimalPtrParaFloat(v.TaxUnitFactor),
+		ExTIPI: v.ExTIPI, RelevantScale: v.RelevantScale, ManufacturerCNPJ: v.ManufacturerCNPJ, FCINumber: v.FCINumber,
 		CEST: v.CEST, InputCode: v.InputCode, CalculatePISCOFINS: v.CalculatePISCOFINS, Notes: v.Notes}
 }
 
@@ -109,6 +116,15 @@ func toItemWarehouseResponse(w entity.Warehouse) response.ItemWarehouseResponse 
 		CyclicalCountConfig:             cyclical,
 		MinimumStock:                    w.MinimumStock.InexactFloat64(),
 		AverageMonthlyConsumptionManual: decimalPtrParaFloat(w.AverageMonthlyConsumptionManual),
+		ShelfLifeDays:                   w.ShelfLifeDays,
+		MinRemainingLifeDays:            w.MinRemainingLifeDays,
+		StorageConditions:               w.StorageConditions,
+		Hazardous:                       w.Hazardous,
+		UNNumber:                        w.UNNumber,
+		HazardClass:                     w.HazardClass,
+		AcceptsFractionalQuantity:       w.AcceptsFractionalQuantity,
+		SecondaryUOM:                    w.SecondaryUOM,
+		SecondaryFactor:                 decimalPtrParaFloat(w.SecondaryFactor),
 	}
 }
 
@@ -128,10 +144,12 @@ func toItemEngineeringResponse(e entity.Engineering) response.ItemEngineeringRes
 			Net:   e.Weight.Net,
 			Unit:  e.Weight.Unit,
 		},
-		Dimensions: dims,
-		Type:       e.Type.String(),
-		TypeStruct: e.TypeStruct.String(),
-		OEM:        e.OEM,
+		Dimensions:      dims,
+		Type:            e.Type.String(),
+		TypeStruct:      e.TypeStruct.String(),
+		OEM:             e.OEM,
+		Volume:          decimalPtrParaFloat(e.Volume),
+		RequiresDrawing: e.RequiresDrawing, CuttingGrain: e.CuttingGrain, CuttingNoRotation: e.CuttingNoRotation,
 	}
 }
 
@@ -158,6 +176,12 @@ func toItemPlanningResponse(p entity.Planning) response.ItemPlanningResponse {
 		Critical:     p.Critical,
 		Exclusive:    p.Exclusive,
 		Active:       p.Active,
+
+		PlannerEmployeeCode: p.PlannerEmployeeCode, BuyerEmployeeCode: p.BuyerEmployeeCode,
+		PurchaseLeadTimeDays: p.PurchaseLeadTimeDays, ManufacturingLeadTimeDays: p.ManufacturingLeadTimeDays, Notes: p.Notes,
+		MaterialIssueTiming: p.MaterialIssueTiming, ProductionReportingType: p.ProductionReportingType,
+		MaximumStock: p.Extras.MaximumStock.InexactFloat64(), Coverage: p.Extras.Coverage, GroupingKey: p.Extras.GroupingKey,
+		SafetyTimeDays: p.Extras.SafetyTimeDays, MaximumLot: decimalPtrParaFloat(p.Extras.MaximumLot),
 	}
 }
 
@@ -170,6 +194,8 @@ func toItemSuppliesResponse(s entity.Supplies) response.ItemSuppliesResponse {
 	return response.ItemSuppliesResponse{
 		TypeOfUse: s.TypeOfUse.String(), PurchaseUOM: purchaseUOM, WarehouseCode: s.WarehouseCode,
 		ReceivingChecklist: s.ReceivingChecklist, Harvest: s.Harvest, Notes: s.Notes,
+		UnderDeliveryTolerancePct: decimalPtrParaFloat(s.UnderDeliveryTolerancePct), OverDeliveryTolerancePct: decimalPtrParaFloat(s.OverDeliveryTolerancePct),
+		ReceiptRouting: s.ReceiptRouting, ClassificationCode: s.ClassificationCode, RequiresCertificate: s.RequiresCertificate,
 	}
 }
 

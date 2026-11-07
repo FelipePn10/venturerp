@@ -172,11 +172,11 @@ func (uc *ItemDaNotaUseCase) Execute(ctx context.Context, entryID, itemID int64,
 	criador, _ := uuid.Parse(userID.String())
 	item, err := itementity.NewItem("", nome, nil, itementity.ItemGeneric,
 		itementity.PDM{DescriptionTechnique: nome}, types.LINHA, types.ACTIVE,
-		itementity.Warehouse{WarehouseCode: int(*almox), UnitOfMeasurement: unid},
+		itementity.Warehouse{WarehouseCode: int(*almox), UnitOfMeasurement: unid, AcceptsFractionalQuantity: true},
 		itementity.Engineering{Type: types.COMPRADO, TypeStruct: estrutura, Weight: valueobject.Weight{Unit: "KG"}},
 		itementity.Planning{TypeMRP: types.NORMAL_MRP, Active: true},
 		itementity.Supplies{TypeOfUse: tipoUso, PurchaseUOM: &unid},
-		itementity.Commercial{SaleType: tipoVenda},
+		itementity.Commercial{SaleType: tipoVenda, AllowBillingDescriptionChange: true},
 		itementity.Accounting{Origin: origem, CEST: cest, PurchaseUnitOfMeasurement: &unid},
 		criador)
 	if err != nil {

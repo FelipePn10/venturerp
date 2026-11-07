@@ -18,5 +18,12 @@ type ReceivePurchaseOrderItemDTO struct {
 	SerialNumber          *string         `json:"serial_number,omitempty"`
 	Batch                 *string         `json:"batch,omitempty"`
 	ExpirationDate        *string         `json:"expiration_date,omitempty"`
-	Notes                 *string         `json:"notes,omitempty"`
+	// HeatNumber (corrida) e Certificate: exigidos pelo cadastro do item.
+	HeatNumber  *string `json:"heat_number,omitempty"`
+	Certificate *string `json:"certificate,omitempty"`
+	// SecondaryQuantity: o peso real da balança, em item com segunda unidade.
+	SecondaryQuantity *decimal.Decimal `json:"secondary_quantity,omitempty"`
+	// ChecklistConfirmed: quem recebe confirma o check list do item.
+	ChecklistConfirmed bool    `json:"checklist_confirmed,omitempty"`
+	Notes              *string `json:"notes,omitempty"`
 }

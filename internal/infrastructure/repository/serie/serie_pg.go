@@ -100,12 +100,20 @@ func (r *PG) SalvarPerfil(ctx context.Context, p *dom.Perfil) error {
 			return errorsuc.NewValidationError(fmt.Sprintf("a máscara de série %d não existe nesta empresa ou está inativa", *p.MascaraSerieID))
 		}
 	}
-	var existe bool
-	if err := r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE code=$1 AND enterprise_id=$2)`, p.ItemCode, empresa).Scan(&existe); err != nil {
+	var existe, fracionado bool
+	if err := r.db.QueryRow(ctx, `SELECT TRUE, COALESCE(accepts_fractional_quantity, FALSE) FROM items WHERE code=$1 AND enterprise_id=$2`, p.ItemCode, empresa).Scan(&existe, &fracionado); err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
 	if !existe {
 		return errorsuc.NewNotFoundError(fmt.Sprintf("item %d", p.ItemCode))
+	}
+	// Número de série é por unidade: meia peça não tem série. Ligar a série torna
+	// o item de quantidade inteira (o padrão do cadastro é aceitar fração, então
+	// recusar obrigaria todo item a ser corrigido antes).
+	if p.ControlaSerie && fracionado {
+		if _, err := r.db.Exec(ctx, `UPDATE items SET accepts_fractional_quantity = FALSE WHERE code=$1 AND enterprise_id=$2`, p.ItemCode, empresa); err != nil {
+			return fmt.Errorf("tornando o item de quantidade inteira: %w", err)
+		}
 	}
 	g := p.Garantia
 	if g.Inicio == "" {

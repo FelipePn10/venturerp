@@ -9,4 +9,5 @@ type GroupResponse struct {
 	Description  string    `json:"description"`
 	EnterpriseID int       `json:"enterprise_id"`
 	CreatedBy    uuid.UUID `json:"created_by"`
+	IsActive     bool      `json:"is_active"`
 }

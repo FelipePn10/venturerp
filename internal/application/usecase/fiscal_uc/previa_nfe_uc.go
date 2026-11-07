@@ -32,11 +32,13 @@ const (
 // vezes o time quiser, antes de cada emissão.
 type PreviaNFeUseCase struct {
 	// CFOPs confere o CFOP de cada linha contra a tabela oficial.
-	CFOPs     CatalogoCFOP
-	Repo      repository.FiscalRepository
-	Auth      ports.AuthService
-	Customers customerrepo.CustomerRepository
-	Orders    salesrepo.SalesOrderRepository
+	CFOPs CatalogoCFOP
+	// Identificacao: a prévia mostra o GTIN e a unidade tributável que vão à nota.
+	Identificacao IdentificacaoFiscalDosItens
+	Repo          repository.FiscalRepository
+	Auth          ports.AuthService
+	Customers     customerrepo.CustomerRepository
+	Orders        salesrepo.SalesOrderRepository
 	// Devolucao, quando presente, liga os itens da devolução de compra à nota
 	// de origem (DFeReferenciado), como na transmissão.
 	Devolucao *DevolucaoCompraUseCase
@@ -102,6 +104,9 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		if err := anexarSeries(ctx, fonte, exit.ID, items, &payload); err != nil {
 			return nil, err
 		}
+	}
+	if err := anexarIdentificacao(ctx, uc.Identificacao, items, &payload); err != nil {
+		return nil, err
 	}
 	if uc.Devolucao != nil {
 		if err := uc.Devolucao.ReferenciarItens(ctx, exit, items, &payload); err != nil {

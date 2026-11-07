@@ -79,9 +79,15 @@ type CarrierInfo struct {
 }
 
 type RomaneioItem struct {
-	Sequence    int
-	ItemCode    int64
+	Sequence int
+	ItemCode int64
+	// Codigo é o código comercial do item, o que a pessoa conhece. ItemCode é a
+	// chave interna e só aparece quando o código não veio.
+	Codigo      string
 	Description string
+	// Cuidados: produto perigoso (ONU, classe), armazenagem e embalagem. Sai num
+	// quadro próprio do PDF: na linha do item a descrição é cortada.
+	Cuidados    string
 	Mask        string
 	NCM         string
 	CFOP        string

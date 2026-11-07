@@ -15,5 +15,6 @@ func toGroupResponse(g *entity.Group) *response.GroupResponse {
 		Description:  g.Description,
 		EnterpriseID: g.EnterpriseID,
 		CreatedBy:    g.CreatedBy,
+		IsActive:     g.IsActive,
 	}
 }

@@ -30,6 +30,8 @@ type AuthorizeFiscalExitUseCase struct {
 	CFOPs CatalogoCFOP
 	// Series: números de série das linhas, impressos no infAdProd do item.
 	Series SeriesPorLinha
+	// Identificacao: GTIN e unidade tributável do cadastro dos itens.
+	Identificacao IdentificacaoFiscalDosItens
 	// Efeitos aplica estoque, reservas, títulos e pedido como pendência
 	// reprocessável (ver EfeitosNFe).
 	Efeitos       *EfeitosNFe
@@ -173,6 +175,9 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	plano = planoDoTipoNota(plano, efeitosTipo)
 	payload, retrato := montarPayloadNFe(exit, items, cfg, plano, rt)
 	if err := anexarSeries(ctx, uc.Series, id, items, &payload); err != nil {
+		return nil, err
+	}
+	if err := anexarIdentificacao(ctx, uc.Identificacao, items, &payload); err != nil {
 		return nil, err
 	}
 	if uc.Devolucao != nil {

@@ -587,6 +587,14 @@ func (r *Repository) ScheduleDigests(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
+// alertaLigado só deixa nascer o evento de um alerta que a empresa ligou. O
+// evento de alerta desligado era criado e cancelado, mas ocupava a chave de
+// deduplicação: quando a empresa ligava o alerta, a contagem já vencida e o saldo
+// já abaixo do mínimo nunca avisavam.
+func alertaLigado(empresa, evento string) string {
+	return "EXISTS (SELECT 1 FROM enterprise_notification_subscriptions sub WHERE sub.enterprise_id=" + empresa + " AND sub.event_key=" + evento + " AND sub.enabled)"
+}
+
 func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -597,7 +605,7 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
 		 SELECT c.enterprise_id,'ESTOQUE_CONTAGEM_PROXIMA_VENCIMENTO',1,'CONTAGEM_CICLICA',c.id::text,c.id::text,jsonb_strip_nulls(jsonb_build_object('contagem_id',c.id,'descricao','Uma contagem cíclica está próxima do prazo e precisa ser preparada.','programada_para',c.scheduled_for,'item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'mascara',NULLIF(c.mask,''),'unidade_estoque',i.warehouse_unit_of_measurement::text,'classe_abc',i.planning_abc_class,'critico',i.planning_critical),'localizacao',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code),'endereco_id',c.warehouse_address_id,'lote',c.lot_code))),'contagem:'||c.id::text||':proxima' FROM stock_cycle_counts c JOIN enterprise_notification_subscriptions s ON s.enterprise_id=c.enterprise_id AND s.event_key='ESTOQUE_CONTAGEM_PROXIMA_VENCIMENTO' AND s.enabled JOIN items i ON i.enterprise_id=c.enterprise_id AND i.code=c.item_code JOIN warehouse w ON w.id=c.warehouse_id WHERE c.state='PROGRAMADA' AND c.scheduled_for>NOW() AND c.scheduled_for<=NOW()+make_interval(days=>COALESCE((s.thresholds->>'antecedencia_dias')::int,3)) ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
-		 SELECT c.enterprise_id,'ESTOQUE_CONTAGEM_VENCIDA',1,'CONTAGEM_CICLICA',c.id::text,c.id::text,jsonb_strip_nulls(jsonb_build_object('contagem_id',c.id,'descricao','A contagem cíclica venceu sem conclusão e o saldo ainda não foi confirmado.','programada_para',c.scheduled_for,'atraso_dias',GREATEST(EXTRACT(DAY FROM NOW()-c.scheduled_for)::int,0),'item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'mascara',NULLIF(c.mask,''),'unidade_estoque',i.warehouse_unit_of_measurement::text,'classe_abc',i.planning_abc_class,'critico',i.planning_critical),'localizacao',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code),'endereco_id',c.warehouse_address_id,'lote',c.lot_code))),'contagem:'||c.id::text||':vencida' FROM stock_cycle_counts c JOIN items i ON i.enterprise_id=c.enterprise_id AND i.code=c.item_code JOIN warehouse w ON w.id=c.warehouse_id WHERE c.state='PROGRAMADA' AND c.scheduled_for<NOW() ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
+		 SELECT c.enterprise_id,'ESTOQUE_CONTAGEM_VENCIDA',1,'CONTAGEM_CICLICA',c.id::text,c.id::text,jsonb_strip_nulls(jsonb_build_object('contagem_id',c.id,'descricao','A contagem cíclica venceu sem conclusão e o saldo ainda não foi confirmado.','programada_para',c.scheduled_for,'atraso_dias',GREATEST(EXTRACT(DAY FROM NOW()-c.scheduled_for)::int,0),'item',jsonb_build_object('codigo',i.business_code,'descricao',i.name,'mascara',NULLIF(c.mask,''),'unidade_estoque',i.warehouse_unit_of_measurement::text,'classe_abc',i.planning_abc_class,'critico',i.planning_critical),'localizacao',jsonb_build_object('almoxarifado',w.code||' — '||COALESCE(w.description,w.code),'endereco_id',c.warehouse_address_id,'lote',c.lot_code))),'contagem:'||c.id::text||':vencida' FROM stock_cycle_counts c JOIN items i ON i.enterprise_id=c.enterprise_id AND i.code=c.item_code JOIN warehouse w ON w.id=c.warehouse_id WHERE c.state='PROGRAMADA' AND c.scheduled_for<NOW() AND ` + alertaLigado("c.enterprise_id", "'ESTOQUE_CONTAGEM_VENCIDA'") + ` ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
 		`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Contagem iniciada ou encerrada' WHERE a.state='ABERTO' AND a.event_key IN('ESTOQUE_CONTAGEM_PROXIMA_VENCIMENTO','ESTOQUE_CONTAGEM_VENCIDA') AND NOT EXISTS(SELECT 1 FROM stock_cycle_counts c WHERE c.enterprise_id=a.enterprise_id AND c.id::text=a.aggregate_internal_id AND c.state='PROGRAMADA')`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
 		 SELECT b.enterprise_id,CASE WHEN b.quantity<0 THEN 'ESTOQUE_NEGATIVO' ELSE 'ESTOQUE_ABAIXO_MINIMO' END,1,'SALDO_ESTOQUE',b.id::text,i.business_code,
@@ -627,7 +635,8 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		         WHERE e.id=b.enterprise_id AND poi.item_code=b.item_code AND poi.is_active AND po.is_active AND po.status NOT IN('CANCELLED','CANCELED','CLOSED') AND poi.requested_qty-poi.received_qty-poi.cancelled_qty>0
 		         ORDER BY COALESCE(poi.promised_date,poi.delivery_date,po.delivery_date) NULLS LAST LIMIT 5) x
 		 ) open_po ON TRUE
-		 WHERE b.quantity<0 OR (pol.primeira_linha AND pol.minimo>0 AND pol.disponivel<pol.minimo)
+		 WHERE (b.quantity<0 OR (pol.primeira_linha AND pol.minimo>0 AND pol.disponivel<pol.minimo))
+		   AND ` + alertaLigado("b.enterprise_id", "CASE WHEN b.quantity<0 THEN 'ESTOQUE_NEGATIVO' ELSE 'ESTOQUE_ABAIXO_MINIMO' END") + `
 		 ON CONFLICT(enterprise_id,event_key,deduplication_key) DO NOTHING`,
 		`UPDATE notification_alerts a SET state='RESOLVIDO',resolved_at=NOW(),resolution_reason='Saldo regularizado' WHERE a.state='ABERTO' AND a.event_key IN('ESTOQUE_NEGATIVO','ESTOQUE_ABAIXO_MINIMO') AND EXISTS(SELECT 1 FROM stock_balances b LEFT JOIN LATERAL (` + minimoDoAlmoxarifadoSQL + `) pol ON TRUE WHERE b.enterprise_id=a.enterprise_id AND b.id::text=a.aggregate_internal_id AND b.quantity>=0 AND (a.event_key<>'ESTOQUE_ABAIXO_MINIMO' OR COALESCE(pol.minimo,0)<=0 OR pol.disponivel>=pol.minimo))`,
 		`INSERT INTO notification_outbox(enterprise_id,event_key,event_version,aggregate_type,aggregate_internal_id,aggregate_public_id,payload,deduplication_key)
@@ -827,6 +836,27 @@ var contratoVendaStatements = []string{
 	                                       WHERE ch.contrato_item_id=ci.id AND si.status <> 'CANCELLED'), 0) < ci.quantidade * c.alerta_saldo_pct / 100)`,
 }
 
+// politicaDeContagem é a regra de contagem de cada item, a mesma para programar
+// e para cancelar: o intervalo do item, se houver; senão o da classe ABC da
+// empresa; senão o padrão da classe. O início vem da ativação do intervalo do
+// item ou, na regra ABC, do começo da política (ou do cadastro do item, se
+// posterior) — sem isso o item só com classe ABC nunca era programado, e o passo
+// de cancelamento, que só olhava o intervalo do item, cancelaria a contagem.
+const politicaDeContagem = `policy AS (
+		SELECT i.enterprise_id, i.code item_code, i.warehouse_code warehouse_id,
+		COALESCE(p.dias_do_item, abc.days_interval,
+			CASE i.planning_abc_class WHEN 'A' THEN 90 WHEN 'B' THEN 180 WHEN 'C' THEN 365 END, 0) days,
+		CASE WHEN p.dias_do_item IS NOT NULL THEN i.cyclical_count_policy_activated_at
+		     WHEN i.planning_abc_class IN ('A','B','C') AND i.health <> 'INATIVO' THEN GREATEST(i.created_at, COALESCE(abc.created_at, i.created_at)) END activated_at
+		FROM items i JOIN warehouse w ON w.id=i.warehouse_code
+		CROSS JOIN LATERAL (SELECT NULLIF(COALESCE(
+			NULLIF(i.warehouse_cyclical_count_config->>'days','')::int,
+			NULLIF(i.warehouse_cyclical_count_config->>'days_interval','')::int,
+			NULLIF(i.warehouse_cyclical_count_config->>'DaysInterval','')::int, 0), 0) dias_do_item) p
+		LEFT JOIN stock_abc_count_policy abc
+		       ON abc.enterprise_id=i.enterprise_id AND abc.abc_class=i.planning_abc_class
+	)`
+
 // SchedulePolicyCycleCounts materializes the permanent policy stored on each
 // item into operational occurrences. The transaction-scoped advisory lock and
 // the partial unique index make this safe when several API replicas run it.
@@ -840,39 +870,18 @@ func (r *Repository) SchedulePolicyCycleCounts(ctx context.Context) error {
 	if err = tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock(8420314)`).Scan(&locked); err != nil || !locked {
 		return err
 	}
-	_, err = tx.Exec(ctx, `WITH policy AS (
-		SELECT enterprise_id,code,warehouse_code,COALESCE(NULLIF(warehouse_cyclical_count_config->>'days','')::int,NULLIF(warehouse_cyclical_count_config->>'days_interval','')::int,NULLIF(warehouse_cyclical_count_config->>'DaysInterval','')::int,0) days
-		FROM items
-	), cancelled AS (
+	_, err = tx.Exec(ctx, `WITH `+politicaDeContagem+`, cancelled AS (
 		UPDATE stock_cycle_counts c SET state='CANCELADA',updated_at=NOW()
 		WHERE c.origin='POLITICA_ITEM' AND c.state='PROGRAMADA' AND NOT EXISTS (
-			SELECT 1 FROM policy p WHERE p.enterprise_id=c.enterprise_id AND p.code=c.item_code AND p.warehouse_code=c.warehouse_id AND p.days>0 AND p.days=c.policy_days
+			SELECT 1 FROM policy p WHERE p.enterprise_id=c.enterprise_id AND p.item_code=c.item_code AND p.warehouse_id=c.warehouse_id
+			   AND p.days>0 AND p.days=c.policy_days AND p.activated_at IS NOT NULL
 		) RETURNING c.enterprise_id,c.id
 	) INSERT INTO stock_cycle_count_audit(enterprise_id,cycle_count_id,action,previous_state,new_state,details)
 	SELECT enterprise_id,id,'POLITICA_ALTERADA','PROGRAMADA','CANCELADA',jsonb_build_object('motivo','Política de contagem do item alterada ou desativada') FROM cancelled`)
 	if err != nil {
 		return err
 	}
-	// O intervalo por item continua tendo prioridade; quando não há um, vale a
-	// política da classe ABC. É o ponto da contagem cíclica: item A conta mais
-	// vezes por ano que item C. Antes, item sem intervalo digitado simplesmente
-	// nunca era contado.
-	_, err = tx.Exec(ctx, `WITH policy AS (
-		SELECT i.enterprise_id,i.code item_code,i.warehouse_code warehouse_id,
-		COALESCE(
-			NULLIF(i.warehouse_cyclical_count_config->>'days','')::int,
-			NULLIF(i.warehouse_cyclical_count_config->>'days_interval','')::int,
-			NULLIF(i.warehouse_cyclical_count_config->>'DaysInterval','')::int,
-			abc.days_interval,
-			-- Sem linha na política (empresa criada depois da migração), vale o
-			-- padrão da classe. Cair para 0 significaria "nunca contar".
-			CASE i.planning_abc_class WHEN 'A' THEN 90 WHEN 'B' THEN 180 WHEN 'C' THEN 365 END,
-			0) days,
-		i.cyclical_count_policy_activated_at activated_at
-		FROM items i JOIN warehouse w ON w.id=i.warehouse_code
-		LEFT JOIN stock_abc_count_policy abc
-		       ON abc.enterprise_id=i.enterprise_id AND abc.abc_class=i.planning_abc_class
-	), due AS (
+	_, err = tx.Exec(ctx, `WITH `+politicaDeContagem+`, due AS (
 		SELECT p.*,COALESCE(last.approved_at,p.activated_at)+make_interval(days=>p.days) scheduled_for
 		FROM policy p LEFT JOIN LATERAL (
 			SELECT MAX(c.approved_at) approved_at FROM stock_cycle_counts c

@@ -200,3 +200,50 @@ func TestReceivePurchaseOrderConfiguredToleranceWarnsOrBlocks(t *testing.T) {
 		})
 	}
 }
+
+func (r *receivePORepo) EncerrarSaldoPorTolerancia(context.Context, int64, map[int64]decimal.Decimal) error {
+	return nil
+}
+
+type regraFixa struct{ regra RegraDoItem }
+
+func (r regraFixa) RegraDeRecebimento(context.Context, int64) (RegraDoItem, error) {
+	return r.regra, nil
+}
+
+func TestToleranciaOlhaOTotalDosLotesDaLinha(t *testing.T) {
+	dois := decimal.NewFromInt(2)
+	dto := func(qs ...int64) request.ReceivePurchaseOrderDTO {
+		d := request.ReceivePurchaseOrderDTO{PurchaseOrderCode: 10}
+		for _, q := range qs {
+			d.Items = append(d.Items, request.ReceivePurchaseOrderItemDTO{PurchaseOrderItemCode: 55, Quantity: decimal.NewFromInt(q), WarehouseID: 2})
+		}
+		return d
+	}
+	novo := func(regra RegraDoItem) ReceivePurchaseOrderUseCase {
+		repo := receiveRepo()
+		repo.items[0].RequestedQty, repo.items[0].ReceivedQty = decimal.NewFromInt(100), decimal.Zero
+		repo.items[0].InternalQty = decimal.Zero
+		return ReceivePurchaseOrderUseCase{Repo: repo, StockRepo: &receiveStockRepo{}, Regras: regraFixa{regra}, Auth: receiveAuth{canPO: true, canStock: true}}
+	}
+	uc := novo(RegraDoItem{ToleranciaExcessoPct: &dois})
+	if _, err := uc.Execute(context.Background(), dto(60, 60)); err == nil {
+		t.Fatal("dois lotes de 60 passam dos 102 da tolerância, mesmo cada um cabendo sozinho")
+	}
+	uc = novo(RegraDoItem{ToleranciaFaltaPct: &dois})
+	out, err := uc.Execute(context.Background(), dto(98, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, aviso := range out.Warnings {
+		t.Fatalf("98 + 2 = 100, não há falta para encerrar: %s", aviso)
+	}
+	uc = novo(RegraDoItem{ToleranciaFaltaPct: &dois})
+	out, err = uc.Execute(context.Background(), dto(49, 50))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Warnings) != 1 {
+		t.Fatalf("falta de 1 no total, dentro de 2%%, encerra a linha uma vez: %v", out.Warnings)
+	}
+}

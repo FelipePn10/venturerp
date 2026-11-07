@@ -42,6 +42,9 @@ func (uc *CreateGroupUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
+	if err = descricaoLivre(ctx, uc.Repo, group.Description, 0); err != nil {
+		return nil, err
+	}
 	created, err := uc.Repo.Create(ctx, group)
 	if err != nil {
 		return nil, err

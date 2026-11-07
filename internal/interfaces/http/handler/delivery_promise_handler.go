@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/delivery_promise_uc"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	dpentity "github.com/FelipePn10/panossoerp/internal/domain/delivery_promise/entity"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"github.com/go-chi/chi/v5"
 	"github.com/shopspring/decimal"
@@ -135,4 +136,28 @@ func parseInt64List(values []string) []int64 {
 		}
 	}
 	return out
+}
+
+// ListarLinhas devolve os tanques / linhas de capacidade (o cadastro de item os oferece).
+func (h *DeliveryPromiseHandler) ListarLinhas(w http.ResponseWriter, r *http.Request) {
+	out, err := h.uc.ListarLinhas(r.Context())
+	if err != nil {
+		h.handleError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+// SalvarLinha cria, altera ou desativa um tanque / linha de capacidade.
+func (h *DeliveryPromiseHandler) SalvarLinha(w http.ResponseWriter, r *http.Request) {
+	var l dpentity.LinhaDeCapacidade
+	if err := json.NewDecoder(r.Body).Decode(&l); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "Dados inválidos para a linha de capacidade.")
+		return
+	}
+	if err := h.uc.SalvarLinha(r.Context(), l); err != nil {
+		h.handleError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, l)
 }

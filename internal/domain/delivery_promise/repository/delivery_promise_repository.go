@@ -14,3 +14,9 @@ type TankReservationRepository interface {
 	CancelReservation(ctx context.Context, code int64) error
 	ExpireReservations(ctx context.Context, now time.Time) (int64, error)
 }
+
+// LinhaDeCapacidadeRepository guarda os tanques / linhas de capacidade.
+type LinhaDeCapacidadeRepository interface {
+	Linhas(ctx context.Context) ([]entity.LinhaDeCapacidade, error)
+	SalvarLinha(ctx context.Context, l entity.LinhaDeCapacidade) error
+}

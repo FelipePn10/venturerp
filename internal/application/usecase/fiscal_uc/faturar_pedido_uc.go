@@ -283,12 +283,19 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 		produtos = produtos.Add(total)
 		itemCode := e.linha.item.ItemCode
 		linhaCode := e.linha.item.Code
-		desc := e.linha.cadastro.Name
+		desc := e.linha.cadastro.DescricaoNota
+		if desc == "" {
+			desc = e.linha.cadastro.Name
+		}
 		if desc == "" {
 			desc = fmt.Sprintf("Item %d", itemCode)
 		}
 		uom := unidadeDaLinha(*e.linha)
+		// cProd é o código que o cliente conhece, não a chave interna.
 		codigoProduto := fmt.Sprintf("%d", itemCode)
+		if e.linha.cadastro.BusinessCode != "" {
+			codigoProduto = e.linha.cadastro.BusinessCode
+		}
 		origem := e.linha.cadastro.Origem
 		if origem == "" {
 			origem = "0"

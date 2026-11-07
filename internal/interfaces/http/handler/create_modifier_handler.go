@@ -23,7 +23,7 @@ func (h *ModifierHandler) CreateModifier(w http.ResponseWriter, r *http.Request)
 
 	created, err := h.createModifierUC.Execute(r.Context(), modifier)
 	if err != nil {
-		h.InternalError(w, r, err)
+		respondErrStatus(w, http.StatusInternalServerError, err)
 		return
 	}
 

@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	itemrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	"io"
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -106,8 +110,10 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 				return
 			}
 			recorder := &itemCodeResponseRecorder{header: make(http.Header)}
+			ultimoEvento := marcoDoHistorico(r, pool)
 			next.ServeHTTP(recorder, r)
 			copyHeader(w.Header(), recorder.header)
+			avisarUsoDoItem(w, r, pool, enterpriseID, ultimoEvento)
 			body := recorder.body.Bytes()
 			if strings.Contains(recorder.header.Get("Content-Type"), "application/json") && len(body) > 0 {
 				body = translateItemResponse(r, pool, enterpriseID, body)
@@ -119,6 +125,63 @@ func ItemBusinessCodeCompatibility(pool *pgxpool.Pool) func(http.Handler) http.H
 			w.WriteHeader(status)
 			_, _ = w.Write(body)
 		})
+	}
+}
+
+// rotasDeDocumento são os documentos em que o gatilho do item pode gerar aviso.
+var rotasDeDocumento = []string{"/api/sales-order", "/api/sales-quotation", "/api/purchase-order", "/api/purchase-requisitions", "/api/production-order", "/api/fiscal"}
+
+func gravaDocumento(r *http.Request) bool {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
+		return false
+	}
+	for _, rota := range rotasDeDocumento {
+		if strings.HasPrefix(r.URL.Path, rota) {
+			return true
+		}
+	}
+	return false
+}
+
+// marcoDoHistorico guarda até onde o histórico ia antes da requisição.
+func marcoDoHistorico(r *http.Request, pool *pgxpool.Pool) int64 {
+	if !gravaDocumento(r) {
+		return -1
+	}
+	var ultimo int64
+	if err := pool.QueryRow(r.Context(), `SELECT COALESCE(MAX(id), 0) FROM item_historico`).Scan(&ultimo); err != nil {
+		return -1
+	}
+	return ultimo
+}
+
+// avisarUsoDoItem leva ao cliente o aviso da política "com aviso": o gatilho deixa o
+// documento passar e registra no histórico, e o cabeçalho X-Item-Aviso faz a tela
+// mostrar o que aconteceu. Falha aqui não muda o resultado da requisição.
+func avisarUsoDoItem(w http.ResponseWriter, r *http.Request, pool *pgxpool.Pool, enterpriseID, ultimo int64) {
+	if ultimo < 0 {
+		return
+	}
+	rows, err := pool.Query(r.Context(), `SELECT DISTINCT COALESCE(i.business_code, h.item_code::text), COALESCE(h.motivo, '')
+		  FROM item_historico h LEFT JOIN items i ON i.code = h.item_code AND i.enterprise_id = h.enterprise_id
+		 WHERE h.id > $1 AND h.enterprise_id = $2 AND h.evento = 'USO_COM_AVISO' LIMIT 5`, ultimo, enterpriseID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	avisos := []string{}
+	for rows.Next() {
+		var item, motivo string
+		if rows.Scan(&item, &motivo) == nil {
+			aviso := "item " + item
+			if motivo != "" {
+				aviso += " (" + motivo + ")"
+			}
+			avisos = append(avisos, aviso)
+		}
+	}
+	if len(avisos) > 0 {
+		w.Header().Set("X-Item-Aviso", url.QueryEscape(strings.Join(avisos, "; ")))
 	}
 }
 
@@ -162,7 +225,7 @@ func nativeItemBusinessCodePath(r *http.Request) bool {
 	if parts[2] == "create" || parts[2] == "with-masks" || parts[2] == "structure" {
 		return false
 	}
-	return len(parts) == 3 || (len(parts) == 4 && parts[3] == "activation-readiness")
+	return len(parts) == 3 || (len(parts) == 4 && (parts[3] == "activation-readiness" || parts[3] == "impacto"))
 }
 
 // itemPathSegmentIndex devolve a posição do segmento do caminho que carrega o
@@ -253,18 +316,28 @@ var itemPathPatterns = []struct {
 // translateKnownItemURLPath troca o código público do item no caminho pela chave
 // interna e devolve essa chave ("" quando a rota não tem item no caminho).
 func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID int64) (string, error) {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	// O caminho escapado preserva a barra do código: TP-0120%2F50-E é UM segmento.
+	// Pelo caminho decodificado, o código virava "TP-0120" e o resto da rota sobrava.
+	parts := strings.Split(strings.Trim(r.URL.EscapedPath(), "/"), "/")
 	index := itemPathSegmentIndex(parts)
 	if index < 0 {
 		return "", nil
 	}
-	publicCode := parts[index]
+	escapedCode := parts[index]
+	publicCode, err := url.PathUnescape(escapedCode)
+	if err != nil {
+		publicCode = escapedCode
+	}
 	id, err := resolveBusinessCode(r.Context(), pool, enterpriseID, publicCode)
 	if err != nil {
 		return "", err
 	}
 	parts[index] = strconv.FormatInt(id, 10)
-	r.URL.Path = "/" + strings.Join(parts, "/")
+	path := "/" + strings.Join(parts, "/")
+	if decoded, errPath := url.PathUnescape(path); errPath == nil {
+		path = decoded
+	}
+	r.URL.Path = path
 	r.URL.RawPath = ""
 	// In a chi middleware registered inside a routed Group, the outer router has
 	// already captured URL parameters before this middleware runs. Rewriting only
@@ -276,7 +349,7 @@ func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID
 		for i, key := range rc.URLParams.Keys {
 			switch key {
 			case "code", "itemCode", "item_code":
-				if rc.URLParams.Values[i] == publicCode {
+				if v := rc.URLParams.Values[i]; v == publicCode || v == escapedCode {
 					rc.URLParams.Values[i] = interno
 				}
 			case "*":
@@ -287,11 +360,11 @@ func translateKnownItemURLPath(r *http.Request, pool *pgxpool.Pool, enterpriseID
 				// o sub-roteador tira a sub-rota — reescrever só `r.URL.Path`
 				// não muda nada (embora o log passe a mostrar o código já
 				// traduzido, o que despista a investigação).
-				rc.URLParams.Values[i] = trocaSegmento(rc.URLParams.Values[i], publicCode, interno)
+				rc.URLParams.Values[i] = trocaSegmento(trocaSegmento(rc.URLParams.Values[i], escapedCode, interno), publicCode, interno)
 			}
 		}
 		if rc.RoutePath != "" {
-			rc.RoutePath = trocaSegmento(rc.RoutePath, publicCode, interno)
+			rc.RoutePath = trocaSegmento(trocaSegmento(rc.RoutePath, escapedCode, interno), publicCode, interno)
 		}
 	}
 	return interno, nil
@@ -549,7 +622,11 @@ func resolveBusinessCode(ctx context.Context, pool *pgxpool.Pool, e int64, code 
 			return existe, nil
 		}
 	}
-	return 0, fmt.Errorf("item %s não encontrado nesta empresa", code)
+	base := fmt.Sprintf("item %s não encontrado nesta empresa", code)
+	if apelidos, aErr := itemrepository.ApelidosDoCodigo(ctx, pool, e, code); aErr == nil {
+		base = itemresolution.MensagemDeApelido(base, code, apelidos)
+	}
+	return 0, errors.New(base)
 }
 
 type itemCodeResponseRecorder struct {

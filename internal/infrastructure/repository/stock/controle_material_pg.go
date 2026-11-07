@@ -158,14 +158,33 @@ func quantidadesRetidas(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *e
 // o FEFO e os alertas leem o cadastro e tratavam o lote como sem validade.
 func registrarLoteDaEntrada(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement, lote string) error {
 	_, err := tx.Exec(ctx,
+		// Sem data no movimento, vale a validade do cadastro do item.
 		`INSERT INTO public.stock_lots (item_code, mask, lot, received_at, expires_at, created_by, enterprise_id)
-		 VALUES ($1,$2,$3,CURRENT_DATE,$4,$5,$6)
+		 VALUES ($1,$2,$3,CURRENT_DATE,
+		         COALESCE($4::date, CURRENT_DATE + (SELECT i.warehouse_shelf_life_days FROM public.items i WHERE i.code = $1 AND i.enterprise_id = $6)),
+		         $5,$6)
 		 ON CONFLICT (enterprise_id, item_code, mask, lot) DO UPDATE
 		 SET expires_at = COALESCE(public.stock_lots.expires_at, EXCLUDED.expires_at),
 		     received_at = COALESCE(public.stock_lots.received_at, EXCLUDED.received_at)`,
 		m.ItemCode, m.Mask, lote, m.ExpirationDate, m.CreatedBy, enterpriseID)
 	if err != nil {
 		return fmt.Errorf("registrando o lote da entrada: %w", err)
+	}
+	return nil
+}
+
+// RegistrarCertificadoDoLote grava a corrida e o certificado do lote recebido.
+func (r *StockRepositorySQLC) RegistrarCertificadoDoLote(ctx context.Context, itemCode int64, mask, lote string, corrida, certificado *string) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx, `INSERT INTO public.stock_lots (item_code, mask, lot, heat_number, certificate, received_at, created_by, enterprise_id)
+		SELECT $1, $2, $3, $4, $5, CURRENT_DATE, i.created_by, $6 FROM public.items i WHERE i.code = $1 AND i.enterprise_id = $6
+		ON CONFLICT (enterprise_id, item_code, mask, lot) DO UPDATE SET heat_number = EXCLUDED.heat_number, certificate = EXCLUDED.certificate`,
+		itemCode, mask, lote, corrida, certificado, empresa)
+	if err != nil {
+		return fmt.Errorf("gravando o certificado do lote: %w", err)
 	}
 	return nil
 }
@@ -329,13 +348,30 @@ func (r *StockRepositorySQLC) SalvarControleDoItem(ctx context.Context, c entity
 		return err
 	}
 	var uom string
+	var semEstoque string
 	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(NULLIF(warehouse_unit_of_measurement::text,''),'UN') FROM items WHERE code=$1 AND enterprise_id=$2`, c.ItemCode, empresa).Scan(&uom)
+		`SELECT COALESCE(NULLIF(warehouse_unit_of_measurement::text,''),'UN'),
+		        CASE WHEN COALESCE(planning_ghost, FALSE) THEN 'fantasma' WHEN engineering_type = 3 THEN 'serviço' ELSE '' END
+		   FROM items WHERE code=$1 AND enterprise_id=$2`, c.ItemCode, empresa).Scan(&uom, &semEstoque)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errorsuc.NewNotFoundError("item não encontrado nesta empresa")
 	}
 	if err != nil {
 		return fmt.Errorf("lendo o item: %w", err)
+	}
+	// Fantasma e serviço não têm saldo: controlar lote ou endereço deles faria a
+	// baixa pedir um lote que nunca existiu.
+	if semEstoque != "" && (c.ControlsLot || c.ControlsAddress) {
+		return errorsuc.NewValidationError("item " + semEstoque + " não tem estoque: não controla lote nem endereço")
+	}
+	if !c.ControlsLot {
+		var temValidade bool
+		if err := r.pool.QueryRow(ctx, `SELECT warehouse_shelf_life_days IS NOT NULL OR warehouse_min_remaining_life_days IS NOT NULL FROM items WHERE code=$1 AND enterprise_id=$2`, c.ItemCode, empresa).Scan(&temValidade); err != nil {
+			return fmt.Errorf("conferindo a validade do item: %w", err)
+		}
+		if temValidade {
+			return errorsuc.NewValidationError("o item tem validade e vida útil mínima, que são do lote: tire as duas do cadastro antes de desligar o controle de lote")
+		}
 	}
 	if !c.ControlsLot {
 		var temLote bool

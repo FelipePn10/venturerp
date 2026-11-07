@@ -35,6 +35,8 @@ type Tool struct {
 	Cost      decimal.Decimal
 	Status    string // ATIVA | MANUTENCAO | INATIVA
 	IsActive  bool
+	// ItemCode liga a ficha ao item marcado como ferramenta.
+	ItemCode  *int64
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	CreatedBy uuid.UUID

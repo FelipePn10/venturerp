@@ -183,3 +183,42 @@ func scanReservation(row reservationScanner) (*entity.TankReservation, error) {
 	res.CreatedBy = createdBy
 	return &res, nil
 }
+
+// Linhas lista os tanques / linhas de capacidade da empresa.
+func (r *Repository) Linhas(ctx context.Context) ([]entity.LinhaDeCapacidade, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT code, description, daily_capacity, uom, is_active
+		  FROM delivery_capacity_lines WHERE enterprise_id = $1 ORDER BY code`, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as linhas de capacidade: %w", err)
+	}
+	defer rows.Close()
+	out := []entity.LinhaDeCapacidade{}
+	for rows.Next() {
+		var l entity.LinhaDeCapacidade
+		if err := rows.Scan(&l.Codigo, &l.Descricao, &l.CapacidadeDiaria, &l.Unidade, &l.Ativa); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// SalvarLinha cria ou altera a linha pelo código; desativar é gravar inativa.
+func (r *Repository) SalvarLinha(ctx context.Context, l entity.LinhaDeCapacidade) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := r.pool.Exec(ctx, `INSERT INTO delivery_capacity_lines (enterprise_id, code, description, daily_capacity, uom, is_active)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		ON CONFLICT (enterprise_id, code) DO UPDATE SET description = EXCLUDED.description, daily_capacity = EXCLUDED.daily_capacity,
+		    uom = EXCLUDED.uom, is_active = EXCLUDED.is_active, updated_at = NOW()`,
+		empresa, l.Codigo, l.Descricao, l.CapacidadeDiaria, l.Unidade, l.Ativa); err != nil {
+		return fmt.Errorf("gravando a linha de capacidade %d: %w", l.Codigo, err)
+	}
+	return nil
+}

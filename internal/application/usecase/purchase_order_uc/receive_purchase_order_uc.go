@@ -3,12 +3,14 @@ package purchase_order_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	poentity "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	porepo "github.com/FelipePn10/panossoerp/internal/domain/purchase_order/repository"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
@@ -52,6 +54,55 @@ type ReceivePurchaseOrderUseCase struct {
 	Tolerances ports.PurchaseToleranceEvaluator
 	// Unidade converte linhas antigas, gravadas sem quantidade interna.
 	Unidade *UnidadeInterna
+	// Regras traz o que o cadastro do item define para o recebimento. Opcional.
+	Regras RegrasDeRecebimento
+}
+
+// RegraDoItem é o que o cadastro do item define para o recebimento.
+type RegraDoItem struct {
+	Roteiro              string
+	ToleranciaExcessoPct *decimal.Decimal
+	ToleranciaFaltaPct   *decimal.Decimal
+	ValidadeDias         *int
+	VidaMinimaDias       *int
+	ExigeChecklist       bool
+	ExigeCertificado     bool
+}
+
+// EncerramentoPorTolerancia cancela o saldo que ficou dentro da tolerância de falta.
+type EncerramentoPorTolerancia interface {
+	EncerrarSaldoPorTolerancia(ctx context.Context, pedido int64, porLinha map[int64]decimal.Decimal) error
+}
+
+// CertificadoDoLote grava corrida e certificado no lote recebido.
+type CertificadoDoLote interface {
+	RegistrarCertificadoDoLote(ctx context.Context, itemCode int64, mask, lote string, corrida, certificado *string) error
+}
+
+type certificadoRecebido struct {
+	item                 int64
+	mask, lote           string
+	corrida, certificado *string
+}
+
+// conferirDocumentosDoRecebimento cobra o que o cadastro do item exige na doca.
+func conferirDocumentosDoRecebimento(regra RegraDoItem, item request.ReceivePurchaseOrderItemDTO) error {
+	if regra.ExigeChecklist && !item.ChecklistConfirmed {
+		return errorsuc.NewValidationError(fmt.Sprintf("confirme o check list de recebimento do item %d", item.PurchaseOrderItemCode))
+	}
+	if !regra.ExigeCertificado {
+		return nil
+	}
+	vazio := func(s *string) bool { return s == nil || strings.TrimSpace(*s) == "" }
+	if vazio(item.Lot) || vazio(item.HeatNumber) || vazio(item.Certificate) {
+		return errorsuc.NewValidationError(fmt.Sprintf("o item %d exige lote, corrida e certificado do material no recebimento", item.PurchaseOrderItemCode))
+	}
+	return nil
+}
+
+// RegrasDeRecebimento lê o cadastro do item na empresa da sessão.
+type RegrasDeRecebimento interface {
+	RegraDeRecebimento(ctx context.Context, itemCode int64) (RegraDoItem, error)
 }
 
 func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.ReceivePurchaseOrderDTO) (*response.PurchaseOrderReceiptResponse, error) {
@@ -92,6 +143,9 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 	receiptLines := make([]response.PurchaseReceiptLine, 0, len(dto.Items))
 	movements := make([]response.StockMovementResponse, 0, len(dto.Items))
 	inspectionOrders := make([]response.ReceiptInspectionOrder, 0)
+	var certificados []certificadoRecebido
+	encerrar := map[int64]decimal.Decimal{}
+	regras := map[int64]RegraDoItem{}
 	warnings := make([]string, 0)
 	entradas := make([]*stockentity.StockMovement, 0, len(dto.Items))
 	type loteAbrir struct {
@@ -120,10 +174,28 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d do pedido de compra está cancelado", item.PurchaseOrderItemCode))
 		}
 		folga := decimal.New(1, -4)
-		remaining := line.RequestedQty.Sub(line.ReceivedQty).Sub(line.CancelledQty)
+		// A mesma linha pode vir em vários lotes: a tolerância olha o total recebido.
+		recebidoAntes := line.ReceivedQty.Add(receivedByLine[line.Code])
+		remaining := line.RequestedQty.Sub(recebidoAntes).Sub(line.CancelledQty)
+		var regra RegraDoItem
+		if uc.Regras != nil {
+			var errRegra error
+			if regra, errRegra = uc.Regras.RegraDeRecebimento(ctx, line.ItemCode); errRegra != nil {
+				return nil, errRegra
+			}
+		}
 		toleranceHandled := false
-		if uc.Tolerances != nil && line.ReceivedQty.Add(item.Quantity).GreaterThan(line.RequestedQty.Add(folga)) {
-			action, message, exceeded, toleranceErr := uc.Tolerances.EvaluatePurchaseTolerance(ctx, order.SupplierCode, "QUANTITY", "RECEIVING_NOTICE", line.RequestedQty, line.ReceivedQty.Add(item.Quantity))
+		// A tolerância do próprio item é a mais específica: vence a da empresa,
+		// a do fornecedor e a da linha.
+		if regra.ToleranciaExcessoPct != nil {
+			toleranceHandled = true
+			limite := line.RequestedQty.Add(regra.ToleranciaExcessoPct.Div(decimal.NewFromInt(100)).Mul(line.RequestedQty))
+			if recebidoAntes.Add(item.Quantity).GreaterThan(limite.Add(folga)) {
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d passou da tolerância de excesso do cadastro (%s%%)", item.PurchaseOrderItemCode, regra.ToleranciaExcessoPct.String()))
+			}
+		}
+		if !toleranceHandled && uc.Tolerances != nil && recebidoAntes.Add(item.Quantity).GreaterThan(line.RequestedQty.Add(folga)) {
+			action, message, exceeded, toleranceErr := uc.Tolerances.EvaluatePurchaseTolerance(ctx, order.SupplierCode, "QUANTITY", "RECEIVING_NOTICE", line.RequestedQty, recebidoAntes.Add(item.Quantity))
 			if toleranceErr != nil {
 				return nil, toleranceErr
 			}
@@ -170,35 +242,49 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		if err != nil {
 			return nil, err
 		}
+		if err := conferirVidaUtil(regra, expirationDate, time.Now(), item.PurchaseOrderItemCode); err != nil {
+			return nil, err
+		}
+		if err := conferirDocumentosDoRecebimento(regra, item); err != nil {
+			return nil, err
+		}
+		if regra.ExigeCertificado {
+			certificados = append(certificados, certificadoRecebido{line.ItemCode, line.Mask, *item.Lot, item.HeatNumber, item.Certificate})
+		}
+		regras[line.Code] = regra
 
 		// FINS0212: if an active inspection route matches, receive into the
 		// inspection warehouse instead of the requested one so nothing reaches
 		// available stock without a laudo.
 		targetWarehouse := item.WarehouseID
 		underInspection := false
-		if uc.Inspection != nil {
+		if uc.Inspection != nil && regra.Roteiro != itementity.RecebimentoDireto {
 			if inspWH, matched := uc.Inspection.ResolveInspectionRoute(ctx, line.ItemCode, line.Mask); matched && inspWH > 0 {
 				targetWarehouse = inspWH
 				underInspection = true
 			}
 		}
+		if regra.Roteiro == itementity.RecebimentoInspecao && !underInspection {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d exige inspeção no recebimento e não há rota de inspeção ativa: cadastre a rota antes de receber", item.PurchaseOrderItemCode))
+		}
 
 		mov := &stockentity.StockMovement{
-			ItemCode:       line.ItemCode,
-			Mask:           line.Mask,
-			WarehouseID:    targetWarehouse,
-			MovementType:   stockentity.MovementTypeIn,
-			Quantity:       stockQtyExata,
-			UnitPrice:      unitPrice,
-			TotalPrice:     totalPrice,
-			ReferenceType:  &refType,
-			ReferenceCode:  &refCode,
-			Lot:            item.Lot,
-			SerialNumber:   item.SerialNumber,
-			Batch:          item.Batch,
-			ExpirationDate: expirationDate,
-			Notes:          notes,
-			CreatedBy:      actor,
+			ItemCode:          line.ItemCode,
+			Mask:              line.Mask,
+			WarehouseID:       targetWarehouse,
+			MovementType:      stockentity.MovementTypeIn,
+			Quantity:          stockQtyExata,
+			UnitPrice:         unitPrice,
+			TotalPrice:        totalPrice,
+			ReferenceType:     &refType,
+			ReferenceCode:     &refCode,
+			Lot:               item.Lot,
+			SecondaryQuantity: item.SecondaryQuantity,
+			SerialNumber:      item.SerialNumber,
+			Batch:             item.Batch,
+			ExpirationDate:    expirationDate,
+			Notes:             notes,
+			CreatedBy:         actor,
 		}
 		entradas = append(entradas, mov)
 		if underInspection {
@@ -217,6 +303,18 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 			UnderInspection:       underInspection,
 		})
 	}
+	// A falta se apura depois de somar todos os lotes da linha.
+	for _, item := range dto.Items {
+		line, regra := byCode[item.PurchaseOrderItemCode], regras[item.PurchaseOrderItemCode]
+		if _, feito := encerrar[line.Code]; feito || regra.ToleranciaFaltaPct == nil {
+			continue
+		}
+		falta := line.RequestedQty.Sub(line.ReceivedQty).Sub(line.CancelledQty).Sub(receivedByLine[line.Code])
+		if falta.IsPositive() && !falta.GreaterThan(regra.ToleranciaFaltaPct.Div(decimal.NewFromInt(100)).Mul(line.RequestedQty)) {
+			warnings = append(warnings, fmt.Sprintf("item %d: linha encerrada, faltaram %s dentro da tolerância de falta do cadastro", line.Code, falta.StringFixed(4)))
+			encerrar[line.Code] = falta
+		}
+	}
 
 	// Tudo valido antes de gravar: a falha na terceira linha não deixa as duas
 	// primeiras no estoque com o pedido ainda em aberto — o que, ao repetir o
@@ -234,6 +332,28 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 				return err
 			}
 			movements = append(movements, stockMovementReceiptResponse(created))
+		}
+		if len(certificados) > 0 {
+			gravador, ok := r.Estoque.(CertificadoDoLote)
+			if !ok {
+				return fmt.Errorf("gravação do certificado do lote indisponível")
+			}
+			for _, c := range certificados {
+				if err := gravador.RegistrarCertificadoDoLote(ctx, c.item, c.mask, c.lote, c.corrida, c.certificado); err != nil {
+					return err
+				}
+			}
+		}
+		// A falta dentro da tolerância sai antes do recebimento: assim a linha
+		// fecha e o status do pedido é calculado uma vez, já com ela encerrada.
+		if len(encerrar) > 0 {
+			encerrador, ok := r.Pedidos.(EncerramentoPorTolerancia)
+			if !ok {
+				return fmt.Errorf("encerramento por tolerância indisponível")
+			}
+			if err := encerrador.EncerrarSaldoPorTolerancia(ctx, dto.PurchaseOrderCode, encerrar); err != nil {
+				return err
+			}
 		}
 		matched, err := r.Pedidos.RegisterItemReceipts(ctx, dto.PurchaseOrderCode, receivedByLine)
 		if err != nil {
@@ -282,6 +402,21 @@ func (uc *ReceivePurchaseOrderUseCase) Execute(ctx context.Context, dto request.
 		InspectionOrders: inspectionOrders,
 		Warnings:         warnings,
 	}, nil
+}
+
+// conferirVidaUtil recusa o lote que já chega com menos vida útil que o cadastro
+// exige. Sem data informada não há o que conferir: a validade do cadastro será
+// contada a partir da entrada.
+func conferirVidaUtil(regra RegraDoItem, validade *time.Time, hoje time.Time, linha int64) error {
+	if regra.VidaMinimaDias == nil || validade == nil {
+		return nil
+	}
+	dia := time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, validade.Location())
+	restante := int(validade.Sub(dia).Hours() / 24)
+	if restante < *regra.VidaMinimaDias {
+		return errorsuc.NewValidationError(fmt.Sprintf("o lote do item %d chega com %d dia(s) de vida útil e o cadastro exige ao menos %d", linha, restante, *regra.VidaMinimaDias))
+	}
+	return nil
 }
 
 func parseReceiptDate(s *string) (*time.Time, error) {

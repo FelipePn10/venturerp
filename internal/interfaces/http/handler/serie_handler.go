@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/serie_uc"
 	dom "github.com/FelipePn10/panossoerp/internal/domain/posvenda/serie"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
@@ -31,7 +29,7 @@ func (h *SerieHandler) Perfis(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SerieHandler) Perfil(w http.ResponseWriter, r *http.Request) {
-	out, err := h.uc.Perfil(r.Context(), chi.URLParam(r, "item"))
+	out, err := h.uc.Perfil(r.Context(), itemCodePathParam(r, "item"))
 	responder(w, http.StatusOK, out, err)
 }
 
@@ -40,7 +38,7 @@ func (h *SerieHandler) SalvarPerfil(w http.ResponseWriter, r *http.Request) {
 	if !decodificar(w, r, &dto) {
 		return
 	}
-	out, err := h.uc.SalvarPerfil(r.Context(), chi.URLParam(r, "item"), dto)
+	out, err := h.uc.SalvarPerfil(r.Context(), itemCodePathParam(r, "item"), dto)
 	responder(w, http.StatusOK, out, err)
 }
 

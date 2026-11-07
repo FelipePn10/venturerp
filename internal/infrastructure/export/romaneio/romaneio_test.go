@@ -267,3 +267,19 @@ func TestCarrierInfo_Defaults(t *testing.T) {
 		t.Error("name should default to empty")
 	}
 }
+
+// Os cuidados saem num quadro próprio, inteiros, e o código é o comercial.
+func TestRomaneioMostraCuidadosECodigoComercial(t *testing.T) {
+	d := &RomaneioData{Items: []RomaneioItem{{Sequence: 1, ItemCode: 429, Codigo: "E2E-TINTA-01", Description: "TINTA EPOXI CINZA",
+		Cuidados: "PRODUTO PERIGOSO ONU 1263 CLASSE 3 — ARMAZENAR: local ventilado, longe de calor", Quantity: 2, Unit: "UN"}}}
+	if _, err := GenerateRomaneioPDF(d); err != nil {
+		t.Fatal(err)
+	}
+	if got := codigoDoItem(d.Items[0]); got != "E2E-TINTA-01" {
+		t.Fatalf("código: %s", got)
+	}
+	linhas := quebrar("E2E-TINTA-01 TINTA: "+d.Items[0].Cuidados, 40)
+	if len(linhas) < 2 || !strings.Contains(strings.Join(linhas, " "), "longe de calor") {
+		t.Fatalf("quebra perdeu texto: %v", linhas)
+	}
+}

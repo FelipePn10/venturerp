@@ -125,7 +125,7 @@ func reportFilter(r *http.Request) (mrp_report_uc.Filter, error) {
 		}
 	}
 	return mrp_report_uc.Filter{
-		PlanCode: reportInt64(q.Get("plan_code")), ItemCode: reportInt64(q.Get("item_code")), Planner: reportInt64(q.Get("planner")),
+		PlanCode: reportInt64(q.Get("plan_code")), ItemCode: reportInt64(q.Get("item_code")), Planner: reportInt64(q.Get("planner")), Buyer: reportInt64(q.Get("buyer")),
 		Warehouse: reportInt64(q.Get("warehouse_id")), From: from, To: to,
 		ItemType: q.Get("item_type"), Position: q.Get("position"), OnlyAvailable: q.Get("only_available") == "true",
 		ClassificationMaskCode: reportInt64(q.Get("classification_mask_code")), ClassificationCode: q.Get("classification_code"),

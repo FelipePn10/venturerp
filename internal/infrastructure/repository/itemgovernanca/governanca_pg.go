@@ -47,6 +47,47 @@ func (r *PG) SalvarParametros(ctx context.Context, p dom.Parametros, por *uuid.U
 	return err
 }
 
+func (r *PG) Politicas(ctx context.Context) ([]dom.RegraPolitica, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT status, processo, politica FROM item_status_politicas WHERE enterprise_id=$1`, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo a política do cadastro: %w", err)
+	}
+	defer rows.Close()
+	out := []dom.RegraPolitica{}
+	for rows.Next() {
+		var p dom.RegraPolitica
+		if err := rows.Scan(&p.Status, &p.Processo, &p.Politica); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+func (r *PG) SalvarPoliticas(ctx context.Context, regras []dom.RegraPolitica, por *uuid.UUID) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	for _, p := range regras {
+		if _, err := tx.Exec(ctx, `INSERT INTO item_status_politicas (enterprise_id, status, processo, politica, updated_by) VALUES ($1,$2,$3,$4,$5)
+			ON CONFLICT (enterprise_id, status, processo) DO UPDATE SET politica=EXCLUDED.politica, updated_by=EXCLUDED.updated_by, updated_at=NOW()`,
+			empresa, p.Status, p.Processo, p.Politica, por); err != nil {
+			return fmt.Errorf("gravando a política do cadastro: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *PG) Ajustes(ctx context.Context) (map[string]bool, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
@@ -99,9 +140,22 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 			EXISTS(SELECT 1 FROM item_standard_costs c WHERE c.item_code=i.code AND COALESCE(c.total_cost,0) > 0),
 			EXISTS(SELECT 1 FROM item_unit_conversions u WHERE u.item_code=i.code AND u.is_active
 			        AND u.from_uom::text = i.supplies_purchase_uom AND u.to_uom::text = i.warehouse_unit_of_measurement::text),
-			COALESCE(i.supplies_purchase_uom, '') <> '' AND i.supplies_purchase_uom <> i.warehouse_unit_of_measurement::text
-		  FROM items i WHERE i.code=$1 AND i.enterprise_id=$2`, itemCode, empresa).
-		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &f.TemConversao, &f.CompraEmOutraUM)
+			COALESCE(i.supplies_purchase_uom, '') <> '' AND i.supplies_purchase_uom <> i.warehouse_unit_of_measurement::text,
+			COALESCE((SELECT c.controls_lot FROM manufacturing_stock_item_controls c WHERE c.enterprise_id=i.enterprise_id AND c.item_code=i.code), FALSE),
+			EXISTS(SELECT 1 FROM receiving_inspection_routes rt WHERE rt.enterprise_code=(SELECT e.code FROM enterprise e WHERE e.id=i.enterprise_id) AND rt.is_active AND (rt.item_code=i.code OR rt.item_code IS NULL)),
+			EXISTS(SELECT 1 FROM item_engineering_drawings d WHERE d.enterprise_id=i.enterprise_id AND d.item_code=i.code),
+			EXISTS(SELECT 1 FROM tools t WHERE t.enterprise_id=i.enterprise_id AND t.item_code=i.code AND t.is_active),
+			COALESCE(fc.ncm, ''), COALESCE(fc.cod_clas_trib, ''), COALESCE(fc.cest, ''), COALESCE(fc.un_tributacao, ''), fc.default_origin,
+			fc.ipi_rate::text, fc.default_icms_rate::text, fc.pis_rate::text, fc.cofins_rate::text
+		  FROM items i
+		  LEFT JOIN LATERAL (SELECT f.ncm, f.cod_clas_trib, f.cest, f.un_tributacao, f.default_origin, f.ipi_rate, f.default_icms_rate, f.pis_rate, f.cofins_rate FROM fiscal_classifications f
+		       WHERE f.enterprise_id=i.enterprise_id AND f.is_active
+		         AND (f.code::text=i.accounting_sale_fiscal_classification_code OR f.ncm=i.accounting_sale_fiscal_classification_code)
+		       ORDER BY f.valid_from DESC, f.id DESC LIMIT 1) fc ON TRUE
+		 WHERE i.code=$1 AND i.enterprise_id=$2`, itemCode, empresa).
+		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &f.TemConversao, &f.CompraEmOutraUM,
+			&f.ControlaLote, &f.TemRotaInspecao, &f.TemDesenho, &f.TemFichaFerramenta, &f.Fiscal.NCM, &f.Fiscal.ClassTrib, &f.Fiscal.CEST, &f.Fiscal.Unidade, &f.Fiscal.Origem,
+			&f.Fiscal.IPI, &f.Fiscal.ICMS, &f.Fiscal.PIS, &f.Fiscal.COFINS)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d", itemCode))
 	}

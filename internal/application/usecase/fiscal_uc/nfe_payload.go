@@ -15,6 +15,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
+	fiscalrepository "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
@@ -449,6 +450,104 @@ func anexarSeries(ctx context.Context, fonte SeriesPorLinha, exitID int64, items
 				txt = string(r[:497]) + "..."
 			}
 			payload.Items[i].InformacoesAdicionaisItem = txt
+		}
+	}
+	return nil
+}
+
+// IdentificacaoFiscalDosItens lê o cadastro dos itens da nota, da empresa da sessão.
+type IdentificacaoFiscalDosItens interface {
+	IdentificacaoFiscal(ctx context.Context, itens []int64) (map[int64]fiscalrepository.IdentificacaoFiscal, error)
+}
+
+// anexarIdentificacao põe GTIN e unidade tributável do cadastro nas linhas. Linha
+// sem item cadastrado (beneficiamento com código do cliente) ou em outra unidade
+// que não a comercial do item fica como está.
+func anexarIdentificacao(ctx context.Context, fonte IdentificacaoFiscalDosItens, items []*entity.FiscalExitItem, payload *focusnfe.NFEPayload) error {
+	if fonte == nil || len(payload.Items) != len(items) {
+		return nil
+	}
+	codigos := make([]int64, 0, len(items))
+	for _, it := range items {
+		if c := safeInt64(it.ItemCode); c > 0 {
+			codigos = append(codigos, c)
+		}
+	}
+	if len(codigos) == 0 {
+		return nil
+	}
+	cadastro, err := fonte.IdentificacaoFiscal(ctx, codigos)
+	if err != nil {
+		return fmt.Errorf("lendo o GTIN e a unidade tributável dos itens: %w", err)
+	}
+	for i, it := range items {
+		c, ok := cadastro[safeInt64(it.ItemCode)]
+		if !ok {
+			continue
+		}
+		linha := &payload.Items[i]
+		if (it.Description == nil || strings.TrimSpace(*it.Description) == "") && c.DescricaoCadastro != "" {
+			linha.Descricao = c.DescricaoCadastro
+		}
+		if c.DescricaoFixa != "" {
+			linha.Descricao = c.DescricaoFixa
+		}
+		if c.DescricaoExportacao != "" && strings.HasPrefix(linha.CFOP, "7") {
+			linha.Descricao = c.DescricaoExportacao
+		}
+		if it.CodigoProduto == nil || strings.TrimSpace(*it.CodigoProduto) == "" {
+			if c.CodigoComercial != "" {
+				linha.CodigoProduto = c.CodigoComercial
+			}
+		}
+		linha.CodigoExTIPI, linha.NumeroFCI, linha.CEST = c.ExTIPI, c.FCI, c.CEST
+		// indEscala e CNPJFab pertencem ao grupo do CEST no leiaute: sem CEST o
+		// XML reprova no schema e a nota não chega à SEFAZ.
+		if c.CEST != "" {
+			linha.EscalaRelevante, linha.CNPJFabricante = c.EscalaRelevante, c.CNPJFabricante
+		}
+		linha.CodigoBarrasComercial = c.GTIN
+		// A embalagem cadastrada manda, mesmo sem código: o palete sem GTIN sai SEM
+		// GTIN, e não com o código de barras da unidade.
+		if g, cadastrada := c.GTINPorUnidade[linha.UnidadeComercial]; cadastrada {
+			linha.CodigoBarrasComercial = g
+		}
+		// cEANTrib acompanha o cEAN quando o item não tem um tributável próprio.
+		linha.CodigoBarrasTributavel = c.GTINTributavel
+		if linha.CodigoBarrasTributavel == "" {
+			linha.CodigoBarrasTributavel = linha.CodigoBarrasComercial
+		}
+		if c.UnidadeTributavel == "" || !c.FatorTributavel.IsPositive() {
+			continue
+		}
+		fator := c.FatorTributavel
+		if c.UnidadeComercial != linha.UnidadeComercial {
+			// A linha em embalagem chega à unidade tributável pela quantidade da
+			// embalagem; o cEANTrib é o da unidade, não o da caixa.
+			embalagem := c.QuantidadePorUnidade[linha.UnidadeComercial]
+			if !embalagem.IsPositive() {
+				continue
+			}
+			fator = fator.Mul(embalagem)
+			linha.CodigoBarrasTributavel = c.GTINTributavel
+			if linha.CodigoBarrasTributavel == "" {
+				linha.CodigoBarrasTributavel = c.GTIN
+			}
+		}
+		quantidade := it.Quantity.Mul(fator).Round(4)
+		if !quantidade.IsPositive() {
+			continue
+		}
+		linha.UnidadeTributavel = c.UnidadeTributavel
+		linha.QuantidadeTributavel = quantidade.InexactFloat64()
+		linha.ValorUnitarioTributavel = it.TotalPrice.DivRound(quantidade, 10).InexactFloat64()
+	}
+	// A SEFAZ exige o par: só o cEANTrib rejeita com 886, e o código da caixa não
+	// serve à unidade tributável. Faltando um dos dois, ambos saem SEM GTIN.
+	for i := range payload.Items {
+		linha := &payload.Items[i]
+		if (linha.CodigoBarrasComercial == "") != (linha.CodigoBarrasTributavel == "") {
+			linha.CodigoBarrasComercial, linha.CodigoBarrasTributavel = "", ""
 		}
 	}
 	return nil

@@ -74,9 +74,9 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		Serie:                   dto.Serie,
 		DataEmissao:             dto.DataEmissao,
 		DataSaida:               dto.DataSaida,
-		CnpjDestinatario:        dto.CnpjDestinatario,
+		CnpjDestinatario:        documentoSoDigitos(dto.CnpjDestinatario),
 		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
-		IEDestinatario:          dto.IEDestinatario,
+		IEDestinatario:          inscricaoEstadual(dto.IEDestinatario),
 		UFDestinatario:          dto.UFDestinatario,
 		TipoPessoa:              dto.TipoPessoa,
 		CustomerCode:            dto.CustomerCode,
@@ -307,7 +307,9 @@ func (uc *CreateFiscalExitFromLoadUseCase) completarDoCadastro(
 				break
 			}
 		}
-		if ov.Description == nil && c.Name != "" {
+		if ov.Description == nil && c.DescricaoNota != "" {
+			it.Description = strPtr(c.DescricaoNota)
+		} else if ov.Description == nil && c.Name != "" {
 			it.Description = strPtr(c.Name)
 		}
 		if ov.Ncm == nil {

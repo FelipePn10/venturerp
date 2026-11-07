@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -40,6 +42,31 @@ type ShipmentUseCase struct {
 	// Transacao roda status + reservas do romaneio numa transação só: separar,
 	// despachar ou cancelar grava tudo ou nada. Sem ela (testes), roda direto.
 	Transacao EmTransacaoRomaneio
+	// Regras traz o que o cadastro do item exige do despacho. Opcional.
+	Regras RegrasDoRomaneio
+}
+
+// RegrasDoRomaneio lê o cadastro dos itens da carga.
+type RegrasDoRomaneio interface {
+	// ItensQueExigemVolume devolve os códigos que precisam estar em volume.
+	ItensQueExigemVolume(ctx context.Context, itens []int64) ([]string, error)
+	// VolumesPorUnidade devolve quantos volumes cada unidade do item ocupa.
+	VolumesPorUnidade(ctx context.Context, itens []int64) (map[int64]decimal.Decimal, error)
+	// Embalagens devolve o item de embalagem e o almoxarifado dele, por item.
+	Embalagens(ctx context.Context, itens []int64) (map[int64]EmbalagemDoItem, error)
+	// SaldoDaEmbalagem devolve o que há disponível da embalagem no almoxarifado.
+	SaldoDaEmbalagem(ctx context.Context, e EmbalagemDoItem) (decimal.Decimal, error)
+}
+
+// EmbalagemDoItem é a embalagem que sai junto com o item.
+type EmbalagemDoItem struct {
+	ItemCode    int64
+	WarehouseID int64
+}
+
+// BaixaDeEmbalagem é o estoque que o despacho consome. Opcional.
+type BaixaDeEmbalagem interface {
+	CreateMovement(ctx context.Context, m *stockentity.StockMovement) (*stockentity.StockMovement, error)
 }
 
 // RomaneioRepos são os repositórios ligados à transação do romaneio.
@@ -248,11 +275,33 @@ func (uc *ShipmentUseCase) Ship(ctx context.Context, code int64, actor uuid.UUID
 	if err := ship.ValidateForShipping(acceptDivergences); err != nil {
 		return err
 	}
+	if err := uc.conferirVolumes(ctx, ship); err != nil {
+		return err
+	}
+	baixas, faltaEmbalagem, err := uc.baixasDeEmbalagem(ctx, ship, actor)
+	if err != nil {
+		return err
+	}
+	nota := "despacho"
+	if faltaEmbalagem != "" {
+		nota += "; " + faltaEmbalagem
+	}
 	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
 		if err := releaseReservations(ctx, r.Estoque, ship.Code, true); err != nil {
 			return err
 		}
-		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusShipped, &actor, "despacho")
+		if len(baixas) > 0 {
+			estoque, ok := r.Estoque.(BaixaDeEmbalagem)
+			if !ok {
+				return fmt.Errorf("baixa da embalagem indisponível")
+			}
+			for _, b := range baixas {
+				if _, err := estoque.CreateMovement(ctx, b); err != nil {
+					return fmt.Errorf("baixando a embalagem do despacho: %w", err)
+				}
+			}
+		}
+		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusShipped, &actor, nota)
 	})
 }
 
@@ -359,6 +408,90 @@ func (uc *ShipmentUseCase) ListEvents(ctx context.Context, shipmentCode int64) (
 }
 
 // ---- helpers ----
+
+// baixasDeEmbalagem monta a saída do item de embalagem: uma por volume, somando os
+// itens que usam a mesma embalagem e contando o que foi conferido. Falta de caixa no
+// sistema não segura a carga que já está pronta: baixa o saldo que há e devolve a
+// falta para ficar registrada no despacho.
+func (uc *ShipmentUseCase) baixasDeEmbalagem(ctx context.Context, ship *entity.Shipment, actor uuid.UUID) ([]*stockentity.StockMovement, string, error) {
+	if uc.Regras == nil {
+		return nil, "", nil
+	}
+	itens := make([]int64, 0, len(ship.Items))
+	for _, it := range ship.Items {
+		itens = append(itens, it.ItemCode)
+	}
+	embalagens, err := uc.Regras.Embalagens(ctx, itens)
+	if err != nil || len(embalagens) == 0 {
+		return nil, "", err
+	}
+	porUnidade, err := uc.Regras.VolumesPorUnidade(ctx, itens)
+	if err != nil {
+		return nil, "", err
+	}
+	total := map[EmbalagemDoItem]decimal.Decimal{}
+	for _, it := range ship.Items {
+		e, ok := embalagens[it.ItemCode]
+		if !ok {
+			continue
+		}
+		fator := decimal.NewFromInt(1)
+		if n := porUnidade[it.ItemCode]; n.IsPositive() {
+			fator = n
+		}
+		quantidade := it.Quantity
+		if it.IsConferred {
+			quantidade = it.ConferredQty
+		}
+		total[e] = total[e].Add(quantidade.Mul(fator).Ceil())
+	}
+	referencia, codigo := "SHIPMENT", ship.Code
+	baixas := make([]*stockentity.StockMovement, 0, len(total))
+	faltas := []string{}
+	for e, q := range total {
+		saldo, err := uc.Regras.SaldoDaEmbalagem(ctx, e)
+		if err != nil {
+			return nil, "", err
+		}
+		if saldo.LessThan(q) {
+			faltas = append(faltas, fmt.Sprintf("embalagem %d sem saldo: faltaram %s", e.ItemCode, q.Sub(decimal.Max(saldo, decimal.Zero)).String()))
+			q = decimal.Max(saldo, decimal.Zero)
+		}
+		if !q.IsPositive() {
+			continue
+		}
+		baixas = append(baixas, &stockentity.StockMovement{ItemCode: e.ItemCode, WarehouseID: e.WarehouseID, MovementType: stockentity.MovementTypeOut,
+			Quantity: q, ReferenceType: &referencia, ReferenceCode: &codigo, CreatedBy: actor})
+	}
+	sort.Strings(faltas)
+	return baixas, strings.Join(faltas, "; "), nil
+}
+
+// conferirVolumes recusa o despacho sem volumes quando algum item exige a montagem.
+func (uc *ShipmentUseCase) conferirVolumes(ctx context.Context, ship *entity.Shipment) error {
+	if uc.Regras == nil {
+		return nil
+	}
+	volumes, err := uc.Repo.ListVolumes(ctx, ship.ID)
+	if err != nil {
+		return err
+	}
+	if len(volumes) > 0 {
+		return nil
+	}
+	itens := make([]int64, 0, len(ship.Items))
+	for _, it := range ship.Items {
+		itens = append(itens, it.ItemCode)
+	}
+	exigem, err := uc.Regras.ItensQueExigemVolume(ctx, itens)
+	if err != nil {
+		return err
+	}
+	if len(exigem) > 0 {
+		return errorsuc.NewValidationError(fmt.Sprintf("monte os volumes antes de despachar: o cadastro exige para %s", strings.Join(exigem, ", ")))
+	}
+	return nil
+}
 
 func guardTransition(ship *entity.Shipment, next entity.ShipmentStatus) error {
 	if !ship.Status.CanTransitionTo(next) {

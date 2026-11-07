@@ -65,6 +65,17 @@ INSERT INTO items (
 	accounting_sale_ipi_type, accounting_sale_ipi_rate, accounting_purchase_ipi_type, accounting_purchase_ipi_rate,
 	accounting_icms_rate, accounting_sale_unit_of_measurement, accounting_purchase_unit_of_measurement,
 	accounting_inventory_group_code, accounting_classification_code, accounting_cest, accounting_input_code, accounting_notes,
+	long_description, general_notes, revision, previous_code, manufacturer_name, manufacturer_part_number,
+	pdm_signature, accepts_fractional_quantity,
+	warehouse_shelf_life_days, warehouse_min_remaining_life_days, warehouse_storage_conditions,
+	warehouse_hazardous, warehouse_un_number, warehouse_hazard_class, engineering_volume,
+	planner_employee_code, planning_buyer_employee_code, planning_purchase_lead_time_days,
+	planning_manufacturing_lead_time_days, planning_notes, material_issue_timing, production_reporting_type,
+	supplies_under_delivery_tolerance_pct, supplies_over_delivery_tolerance_pct, supplies_receipt_routing, supplies_classification_code,
+	accounting_gtin, accounting_gtin_tax, accounting_efd_item_type, accounting_tax_unit, accounting_tax_unit_factor,
+	is_scrap, engineering_requires_drawing, engineering_cutting_grain, engineering_cutting_no_rotation,
+	supplies_requires_certificate, commercial_exclusive_customer_code, commercial_volumes_per_unit,
+	description_en, warehouse_secondary_uom, warehouse_secondary_factor, accounting_ex_tipi, accounting_relevant_scale, accounting_manufacturer_cnpj, accounting_fci_number,
 
     created_by,
     created_at
@@ -93,6 +104,17 @@ INSERT INTO items (
 			 sqlc.arg(accounting_sale_ipi_type), sqlc.arg(accounting_sale_ipi_rate), sqlc.arg(accounting_purchase_ipi_type), sqlc.arg(accounting_purchase_ipi_rate),
 			 sqlc.arg(accounting_icms_rate), sqlc.arg(accounting_sale_unit_of_measurement), sqlc.arg(accounting_purchase_unit_of_measurement),
 			 sqlc.arg(accounting_inventory_group_code), sqlc.arg(accounting_classification_code), sqlc.arg(accounting_cest), sqlc.arg(accounting_input_code), sqlc.arg(accounting_notes),
+			 sqlc.narg(long_description), sqlc.narg(general_notes), sqlc.narg(revision), sqlc.narg(previous_code), sqlc.narg(manufacturer_name), sqlc.narg(manufacturer_part_number),
+			 sqlc.narg(pdm_signature), sqlc.arg(accepts_fractional_quantity),
+			 sqlc.narg(warehouse_shelf_life_days), sqlc.narg(warehouse_min_remaining_life_days), sqlc.narg(warehouse_storage_conditions),
+			 sqlc.arg(warehouse_hazardous), sqlc.narg(warehouse_un_number), sqlc.narg(warehouse_hazard_class), sqlc.narg(engineering_volume),
+			 sqlc.narg(planner_employee_code), sqlc.narg(planning_buyer_employee_code), sqlc.narg(planning_purchase_lead_time_days),
+			 sqlc.narg(planning_manufacturing_lead_time_days), sqlc.narg(planning_notes), sqlc.arg(material_issue_timing), sqlc.arg(production_reporting_type),
+			 sqlc.narg(supplies_under_delivery_tolerance_pct), sqlc.narg(supplies_over_delivery_tolerance_pct), sqlc.arg(supplies_receipt_routing), sqlc.narg(supplies_classification_code),
+			 sqlc.narg(accounting_gtin), sqlc.narg(accounting_gtin_tax), sqlc.narg(accounting_efd_item_type), sqlc.narg(accounting_tax_unit), sqlc.narg(accounting_tax_unit_factor),
+			 sqlc.arg(is_scrap), sqlc.arg(engineering_requires_drawing), sqlc.arg(engineering_cutting_grain), sqlc.arg(engineering_cutting_no_rotation),
+			 sqlc.arg(supplies_requires_certificate), sqlc.narg(commercial_exclusive_customer_code), sqlc.narg(commercial_volumes_per_unit),
+			 sqlc.narg(description_en), sqlc.narg(warehouse_secondary_uom), sqlc.narg(warehouse_secondary_factor), sqlc.narg(accounting_ex_tipi), sqlc.narg(accounting_relevant_scale), sqlc.narg(accounting_manufacturer_cnpj), sqlc.narg(accounting_fci_number),
 			 sqlc.arg(created_by), NOW()
          )
     RETURNING *;
@@ -144,6 +166,57 @@ UPDATE items SET
  warehouse_unit_of_measurement=sqlc.arg(warehouse_unit_of_measurement),
  warehouse_automatic_low=sqlc.arg(warehouse_automatic_low),
  warehouse_minimum_stock=sqlc.arg(warehouse_minimum_stock),
+ long_description=sqlc.narg(long_description),
+ general_notes=sqlc.narg(general_notes),
+ revision=sqlc.narg(revision),
+ previous_code=sqlc.narg(previous_code),
+ manufacturer_name=sqlc.narg(manufacturer_name),
+ manufacturer_part_number=sqlc.narg(manufacturer_part_number),
+ pdm_signature=sqlc.narg(pdm_signature),
+ warehouse_shelf_life_days=sqlc.narg(warehouse_shelf_life_days),
+ warehouse_min_remaining_life_days=sqlc.narg(warehouse_min_remaining_life_days),
+ warehouse_storage_conditions=sqlc.narg(warehouse_storage_conditions),
+ warehouse_un_number=sqlc.narg(warehouse_un_number),
+ warehouse_hazard_class=sqlc.narg(warehouse_hazard_class),
+ engineering_volume=sqlc.narg(engineering_volume),
+ planner_employee_code=sqlc.narg(planner_employee_code),
+ planning_buyer_employee_code=sqlc.narg(planning_buyer_employee_code),
+ planning_purchase_lead_time_days=sqlc.narg(planning_purchase_lead_time_days),
+ planning_manufacturing_lead_time_days=sqlc.narg(planning_manufacturing_lead_time_days),
+ planning_notes=sqlc.narg(planning_notes),
+ supplies_under_delivery_tolerance_pct=sqlc.narg(supplies_under_delivery_tolerance_pct),
+ supplies_over_delivery_tolerance_pct=sqlc.narg(supplies_over_delivery_tolerance_pct),
+ supplies_classification_code=sqlc.narg(supplies_classification_code),
+ accounting_gtin=sqlc.narg(accounting_gtin),
+ accounting_gtin_tax=sqlc.narg(accounting_gtin_tax),
+ accounting_efd_item_type=sqlc.narg(accounting_efd_item_type),
+ accounting_tax_unit=sqlc.narg(accounting_tax_unit),
+ accounting_tax_unit_factor=sqlc.narg(accounting_tax_unit_factor),
+ pdm_attributes=sqlc.arg(pdm_attributes),
+ is_scrap=sqlc.arg(is_scrap),
+ engineering_requires_drawing=sqlc.arg(engineering_requires_drawing),
+ engineering_cutting_grain=sqlc.arg(engineering_cutting_grain),
+ engineering_cutting_no_rotation=sqlc.arg(engineering_cutting_no_rotation),
+ supplies_requires_certificate=sqlc.arg(supplies_requires_certificate),
+ commercial_exclusive_customer_code=sqlc.narg(commercial_exclusive_customer_code),
+ commercial_volumes_per_unit=sqlc.narg(commercial_volumes_per_unit),
+ description_en=sqlc.narg(description_en),
+ warehouse_secondary_uom=sqlc.narg(warehouse_secondary_uom),
+ warehouse_secondary_factor=sqlc.narg(warehouse_secondary_factor),
+ accounting_ex_tipi=sqlc.narg(accounting_ex_tipi),
+ accounting_relevant_scale=sqlc.narg(accounting_relevant_scale),
+ accounting_manufacturer_cnpj=sqlc.narg(accounting_manufacturer_cnpj),
+ accounting_fci_number=sqlc.narg(accounting_fci_number),
+ accepts_fractional_quantity=sqlc.arg(accepts_fractional_quantity),
+ warehouse_hazardous=sqlc.arg(warehouse_hazardous),
+ material_issue_timing=sqlc.arg(material_issue_timing),
+ production_reporting_type=sqlc.arg(production_reporting_type),
+ supplies_receipt_routing=sqlc.arg(supplies_receipt_routing),
+ -- Ponto de pedido, tanque e item-base não estavam na alteração: a tela mostrava
+ -- o campo, o salvar respondia sucesso e o valor antigo continuava gravado.
+ planning_reorder_point=sqlc.narg(planning_reorder_point),
+ planning_tank_code=sqlc.narg(planning_tank_code),
+ engineering_item_base_code=sqlc.narg(engineering_item_base_code),
  commercial_description=$2, commercial_sale_type=$3, commercial_volume_conversion_factor=$4,
  commercial_sale_multiple=$5, commercial_minimum_sale_quantity=$6, commercial_estimated_delivery_days=$7,
  commercial_warranty_days=$8, commercial_transfer_warehouse_code=$9, commercial_technical_assistance_warehouse_code=$10,
@@ -205,5 +278,13 @@ WHERE f.enterprise_id=sqlc.arg(enterprise_id) AND f.is_active
  AND (f.code::text=sqlc.arg(classification_code)::text OR f.ncm=sqlc.arg(classification_code)::text)
 ORDER BY CASE WHEN f.code::text=sqlc.arg(classification_code)::text THEN 0 ELSE 1 END,f.valid_from DESC,f.id DESC LIMIT 1;
 -- name: ValidateItemPDMReferences :one
-SELECT ($2::bigint=0 OR EXISTS(SELECT 1 FROM groups g WHERE g.enterprise_id=$1 AND g.code=$2))
-   AND ($3::bigint=0 OR EXISTS(SELECT 1 FROM modifier m WHERE m.enterprise_id=$1 AND m.id=$3)) AS valid;
+SELECT ($2::bigint=0 OR EXISTS(SELECT 1 FROM groups g WHERE g.enterprise_id=$1 AND g.code=$2 AND g.is_active))
+   AND ($3::bigint=0 OR EXISTS(SELECT 1 FROM modifier m WHERE m.enterprise_id=$1 AND m.id=$3 AND m.is_active)) AS valid;
+
+-- name: ItemGTINEmUso :one
+-- Outro item da empresa com o mesmo GTIN: o índice único recusaria, mas a mensagem
+-- precisa dizer qual é.
+SELECT business_code FROM items
+WHERE enterprise_id = sqlc.arg(enterprise_id) AND accounting_gtin = sqlc.arg(gtin)
+  AND business_code <> sqlc.arg(business_code)
+LIMIT 1;

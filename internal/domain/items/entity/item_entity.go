@@ -20,6 +20,22 @@ type Item struct {
 	EnterpriseID int64
 	Name         string
 	Complement   *string
+	// DescriptionEN: a descrição da nota de exportação (CFOP 7xxx).
+	DescriptionEN *string
+	// Descrição longa e observações gerais do item; a descrição técnica do PDM
+	// continua sendo a que vai para documento.
+	LongDescription *string
+	GeneralNotes    *string
+	// Revisão vigente do item (engenharia).
+	Revision *string
+	// PreviousCode é o código do item no sistema anterior, para achar o item pela
+	// referência antiga. Não vai ao 0200: o Guia da EFD manda não preencher o
+	// COD_ANT_ITEM ali.
+	PreviousCode *string
+	// Fabricante e o número da peça dele (MPN), para achar o item pela referência
+	// que vem no catálogo ou na nota do fornecedor.
+	ManufacturerName       *string
+	ManufacturerPartNumber *string
 
 	// Nature guarda a natureza principal e continua alimentada para quem já a
 	// lê. Os marcadores abaixo são independentes: um item pode ser base e
@@ -35,6 +51,8 @@ type Item struct {
 	IsTool bool
 	// IsProcessItem marca item de processo em terceiros.
 	IsProcessItem bool
+	// IsScrap marca sucata e retalho: subproduto na EFD, fora do MRP.
+	IsScrap bool
 	//---- PDM
 	PDM PDM
 
@@ -86,6 +104,9 @@ type PDM struct {
 	Attributes   []valueobject.Attribute // "nome" para compor, ex: Grupo: CHAPAS Modificador: Chapa Aço Retax Nome: Retax 5MM
 	// PDM gera a descrição tecnica:
 	DescriptionTechnique string
+	// Signature identifica a combinação de atributos do padrão, para achar o
+	// duplicado que a grafia esconderia. Vazia em item sem padrão descritivo.
+	Signature *string
 }
 
 // Pastas
@@ -96,6 +117,22 @@ type Warehouse struct {
 	CyclicalCountConfig             *valueobject.CyclicalCountConfig
 	MinimumStock                    decimal.Decimal  // Estoque mínimo para alerta de compra, na unidade do estoque
 	AverageMonthlyConsumptionManual *decimal.Decimal // Consumo médio mensal inserido manualmente ou se for nil gera um calculo de consumo médio/mês
+	// ShelfLifeDays é a validade do item em dias: a entrada de lote sem data
+	// assume entrada + validade. MinRemainingLifeDays recusa, no recebimento, o
+	// lote que já chega com menos vida útil que isso.
+	ShelfLifeDays        *int
+	MinRemainingLifeDays *int
+	StorageConditions    *string
+	// Produto perigoso: número ONU e classe de risco vão para o romaneio.
+	Hazardous   bool
+	UNNumber    *string
+	HazardClass *string
+	// AcceptsFractionalQuantity: o item admite quantidade fracionada.
+	AcceptsFractionalQuantity bool
+	// Segunda unidade do estoque: 1 unidade principal = fator nominal na segunda.
+	// O movimento pode informar o valor real, como o peso da chapa na balança.
+	SecondaryUOM    *string
+	SecondaryFactor *decimal.Decimal
 }
 
 type Engineering struct {
@@ -110,6 +147,14 @@ type Engineering struct {
 	Type       types.TypeItem
 	TypeStruct types.TypeStructItem
 	OEM        bool // componentes ou produtos que são fabricados/montados sob a marca de outra empresa e revendidos pela empresa contratante do sistema
+	// Volume em metros cúbicos, para frete e ocupação.
+	Volume *decimal.Decimal
+	// RequiresDrawing: o item só fica pronto para produzir com desenho vinculado.
+	RequiresDrawing bool
+	// CuttingGrain e CuttingNoRotation vão para o plano de corte: veio do MDF ou
+	// sentido de laminação da chapa, peça que não pode girar.
+	CuttingGrain      string
+	CuttingNoRotation bool
 }
 
 type Planning struct {
@@ -126,6 +171,32 @@ type Planning struct {
 	Critical     bool
 	Exclusive    bool
 	Active       bool
+
+	// Responsáveis pelo item (funcionários da empresa).
+	PlannerEmployeeCode *int64
+	BuyerEmployeeCode   *int64
+	// Prazos do próprio item, em dias úteis: o MRP os usa quando não há prazo de
+	// fornecedor ou roteiro.
+	PurchaseLeadTimeDays      *int
+	ManufacturingLeadTimeDays *int
+	Notes                     *string
+	// MaterialIssueTiming: quando a OF baixa o material (REGISTRATION_RELEASE ou
+	// PRODUCTION). ProductionReportingType: apontamento por ORDER ou OPERATION.
+	MaterialIssueTiming     string
+	ProductionReportingType string
+
+	// Extras gravados em item_planning_extras e política em
+	// politicas_planejamento, na mesma transação do item.
+	Extras PlanningExtras
+}
+
+// PlanningExtras são os parâmetros de planejamento que moram fora de items.
+type PlanningExtras struct {
+	MaximumStock   decimal.Decimal
+	Coverage       int
+	GroupingKey    *string
+	SafetyTimeDays *int
+	MaximumLot     *decimal.Decimal
 }
 
 type Supplies struct {
@@ -137,6 +208,15 @@ type Supplies struct {
 	// Notes existia na tela (pasta Suprimentos) sem coluna nem campo aqui: o
 	// texto digitado sumia no salvar.
 	Notes *string
+	// Tolerâncias de recebimento do item, em percentual da quantidade pedida.
+	UnderDeliveryTolerancePct *decimal.Decimal
+	OverDeliveryTolerancePct  *decimal.Decimal
+	// ReceiptRouting: DIRETO não passa por inspeção, PADRAO segue a rota de
+	// inspeção cadastrada e INSPECAO exige que exista uma.
+	ReceiptRouting     string
+	ClassificationCode *string
+	// RequiresCertificate: o recebimento exige lote, corrida e certificado.
+	RequiresCertificate bool
 }
 
 type Commercial struct {
@@ -164,6 +244,10 @@ type Commercial struct {
 	ExportPackaging               bool
 	ClassificationCode            *string
 	Notes                         *string
+	// ExclusiveCustomerCode: peça de desenho do cliente, que só ele compra.
+	ExclusiveCustomerCode *int64
+	// VolumesPerUnit: em quantas caixas uma unidade embarca (móvel desmontado).
+	VolumesPerUnit *int
 }
 
 type Accounting struct {
@@ -183,6 +267,20 @@ type Accounting struct {
 	InputCode                        *string
 	CalculatePISCOFINS               *bool
 	Notes                            *string
+	// GTIN comercial e tributável: cEAN e cEANTrib da NF-e, COD_BARRA do 0200.
+	GTIN    *string
+	GTINTax *string
+	// EFDItemType é o TIPO_ITEM do 0200. Vazio deixa a EFD deduzir.
+	EFDItemType *string
+	// TaxUnit é a unidade tributável (uTrib) e TaxUnitFactor quantas dela há em
+	// uma unidade comercial: qTrib = qCom × fator.
+	TaxUnit       *string
+	TaxUnitFactor *decimal.Decimal
+	// EXTIPI, escala relevante, CNPJ do fabricante e FCI vão ao item da NF-e.
+	ExTIPI           *string
+	RelevantScale    *bool
+	ManufacturerCNPJ *string
+	FCINumber        *string
 }
 
 // SyncNature alinha a natureza principal aos marcadores, do mais específico
@@ -307,6 +405,9 @@ func (i *Item) Validate() error {
 		if field.value != nil && len(*field.value) > field.max {
 			return domainerr.NewValidation(fmt.Sprintf("o campo %s passou do tamanho máximo de %d caracteres", name, field.max))
 		}
+	}
+	if err := i.validarCadastroAmpliado(); err != nil {
+		return err
 	}
 	if i.Planning.ABCClass != nil && *i.Planning.ABCClass != "A" && *i.Planning.ABCClass != "B" && *i.Planning.ABCClass != "C" {
 		return domainerr.NewValidation("a curva ABC deve ser A, B ou C")

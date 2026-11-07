@@ -2,7 +2,13 @@ package group
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/group/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -28,6 +34,10 @@ func (r *repositoryGroupSQLC) Create(
 
 	dbGroup, err := r.q.CreateGroup(ctx, params)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("já existe grupo com o código %d", group.Code))
+		}
 		return nil, fmt.Errorf("create group: %w", err)
 	}
 
@@ -40,6 +50,9 @@ func (r *repositoryGroupSQLC) GetByCode(ctx context.Context, code int) (*entity.
 		return nil, err
 	}
 	row, err := r.q.GetGroupByCode(ctx, sqlc.GetGroupByCodeParams{EnterpriseID: tenantID, Code: int32(code)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("grupo do PDM nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get group by code %d: %w", code, err)
 	}
@@ -68,8 +81,11 @@ func (r *repositoryGroupSQLC) Update(ctx context.Context, group *entity.Group) (
 		return nil, err
 	}
 	row, err := r.q.UpdateGroup(ctx, sqlc.UpdateGroupParams{
-		Code: int32(group.Code), Description: group.Description, EnterpriseID: tenantID,
+		Code: int32(group.Code), Description: group.Description, EnterpriseID: tenantID, IsActive: group.IsActive,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("grupo do PDM nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("update group %d: %w", group.Code, err)
 	}
@@ -83,5 +99,6 @@ func groupToEntity(dbGroup sqlc.Group) *entity.Group {
 		Description:  dbGroup.Description,
 		EnterpriseID: int(dbGroup.EnterpriseID),
 		CreatedBy:    pgutil.FromPgUUID(dbGroup.CreatedBy),
+		IsActive:     dbGroup.IsActive,
 	}
 }

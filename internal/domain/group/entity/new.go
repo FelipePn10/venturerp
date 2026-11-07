@@ -17,7 +17,7 @@ func NewGroup(
 	enterpriseId int,
 	createdBy uuid.UUID,
 ) (*Group, error) {
-	if code < 0 {
+	if code <= 0 {
 		return nil, ErrInvalidCode
 	}
 

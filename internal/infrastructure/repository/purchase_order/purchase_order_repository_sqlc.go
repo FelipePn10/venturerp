@@ -2,8 +2,10 @@ package purchase_order
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/purchase_order_uc"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
@@ -989,4 +991,68 @@ func rowItemToEntity(row purchaseOrderItemRow) *entity.PurchaseOrderItem {
 	item.InvoicedQty = row.InvoicedQty
 
 	return item
+}
+
+// RegraDeRecebimento lê o que o cadastro do item define para o recebimento.
+func (r *PurchaseOrderRepositorySQLC) RegraDeRecebimento(ctx context.Context, itemCode int64) (purchase_order_uc.RegraDoItem, error) {
+	var regra purchase_order_uc.RegraDoItem
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return regra, err
+	}
+	err = r.db.QueryRow(ctx, `SELECT supplies_receipt_routing, supplies_over_delivery_tolerance_pct, supplies_under_delivery_tolerance_pct,
+			warehouse_shelf_life_days, warehouse_min_remaining_life_days, supplies_receiving_checklist, supplies_requires_certificate
+		  FROM items WHERE code = $1 AND enterprise_id = $2`, itemCode, empresa).
+		Scan(&regra.Roteiro, &regra.ToleranciaExcessoPct, &regra.ToleranciaFaltaPct, &regra.ValidadeDias, &regra.VidaMinimaDias, &regra.ExigeChecklist, &regra.ExigeCertificado)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return regra, nil
+	}
+	if err != nil {
+		return regra, fmt.Errorf("lendo as regras de recebimento do item %d: %w", itemCode, err)
+	}
+	return regra, nil
+}
+
+// EncerrarSaldoPorTolerancia cancela o saldo das linhas. O recebimento que vem em
+// seguida conta esse cancelado e fecha a linha e o pedido.
+func (r *PurchaseOrderRepositorySQLC) EncerrarSaldoPorTolerancia(ctx context.Context, pedido int64, porLinha map[int64]decimal.Decimal) error {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	for linha, q := range porLinha {
+		if _, err := r.db.Exec(ctx, `UPDATE public.purchase_order_items SET cancelled_qty = cancelled_qty + $3, updated_at = NOW()
+			 WHERE code = $1 AND purchase_order_code = $2
+			   AND EXISTS (SELECT 1 FROM purchase_orders po WHERE po.code = $2 AND po.enterprise_code = $4)`, linha, pedido, q, enterpriseCode); err != nil {
+			return fmt.Errorf("encerrando a linha %d pela tolerância: %w", linha, err)
+		}
+	}
+	return nil
+}
+
+// ClassificacaoFiscalDoItem é a classificação de compra do cadastro do item (a
+// de venda quando a de compra está vazia), só quando é desta empresa e está
+// ativa. nil quando o item não tem nenhuma.
+func (r *PurchaseOrderRepositorySQLC) ClassificacaoFiscalDoItem(ctx context.Context, itemCode int64) (*int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var code *int64
+	err = r.db.QueryRow(ctx,
+		`SELECT fc.code
+		   FROM items it
+		   JOIN fiscal_classifications fc
+		     ON fc.enterprise_id = $1
+		    AND fc.code::text = COALESCE(NULLIF(btrim(it.accounting_purchase_fiscal_classification_code), ''), NULLIF(btrim(it.accounting_sale_fiscal_classification_code), ''))
+		    AND COALESCE(fc.is_active, TRUE)
+		  WHERE it.enterprise_id = $1 AND it.code = $2`,
+		enterpriseID, itemCode).Scan(&code)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo a classificação fiscal do item %d: %w", itemCode, err)
+	}
+	return code, nil
 }

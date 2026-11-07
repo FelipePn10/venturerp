@@ -85,14 +85,19 @@ func RotuloTipo(t int) string {
 // Ficha: o cadastro do item (as colunas de items) e os fatos de outras tabelas
 // que a completude precisa.
 type Ficha struct {
-	Dados           map[string]json.RawMessage
-	Tipo            int
-	TemEstrutura    bool
-	TemRoteiro      bool
-	TemFornecedor   bool
-	TemCustoPadrao  bool
-	TemConversao    bool // conversão da unidade de compra para a de estoque
-	CompraEmOutraUM bool
+	Dados              map[string]json.RawMessage
+	Tipo               int
+	TemEstrutura       bool
+	TemRoteiro         bool
+	TemFornecedor      bool
+	TemCustoPadrao     bool
+	TemConversao       bool // conversão da unidade de compra para a de estoque
+	CompraEmOutraUM    bool
+	ControlaLote       bool
+	TemRotaInspecao    bool
+	TemDesenho         bool
+	TemFichaFerramenta bool
+	Fiscal             FichaFiscal
 }
 
 func (f Ficha) texto(campo string) string {
@@ -167,23 +172,25 @@ var Catalogo = []Campo{
 	{Chave: "accounting_origin", Rotulo: "Origem da mercadoria", Visao: Fiscal, Tipos: fisicos, Padrao: true, checar: func(f Ficha) bool { return f.texto("accounting_origin") != "" }},
 	{Chave: "accounting_purchase_fiscal_classification_code", Rotulo: "Classificação fiscal de compra", Visao: Fiscal, Tipos: []int{Comprado}, Padrao: false, checar: coluna("accounting_purchase_fiscal_classification_code")},
 	{Chave: "accounting_cest", Rotulo: "CEST", Visao: Fiscal, Tipos: fisicos, Padrao: false, checar: coluna("accounting_cest")},
+	{Chave: "accounting_gtin", Rotulo: "GTIN comercial", Visao: Fiscal, Tipos: fisicos, Padrao: false, checar: coluna("accounting_gtin")},
+	{Chave: "accounting_efd_item_type", Rotulo: "Tipo do item na EFD", Visao: Fiscal, Padrao: false, checar: func(f Ficha) bool { return f.texto("accounting_efd_item_type") != "" }},
 
 	{Chave: "fornecedor", Rotulo: "Fornecedor preferencial", Visao: Suprimentos, Tipos: []int{Comprado}, Padrao: true, checar: func(f Ficha) bool { return f.TemFornecedor }},
 	{Chave: "supplies_purchase_uom", Rotulo: "Unidade de compra", Visao: Suprimentos, Tipos: []int{Comprado}, Padrao: true, checar: coluna("supplies_purchase_uom")},
 	{Chave: "conversao_compra", Rotulo: "Conversão da unidade de compra", Visao: Suprimentos, Tipos: []int{Comprado}, Padrao: true,
 		checar: func(f Ficha) bool { return !f.CompraEmOutraUM || f.TemConversao }},
 	{Chave: "supplies_warehouse_code", Rotulo: "Almoxarifado de recebimento", Visao: Suprimentos, Tipos: []int{Comprado}, Padrao: false, checar: coluna("supplies_warehouse_code")},
+	{Chave: "planning_purchase_lead_time_days", Rotulo: "Prazo de compra", Visao: Suprimentos, Tipos: []int{Comprado}, Padrao: false, checar: coluna("planning_purchase_lead_time_days")},
 
 	{Chave: "warehouse_code", Rotulo: "Almoxarifado padrão", Visao: Planejamento, Tipos: fisicos, Padrao: true, checar: coluna("warehouse_code")},
 	{Chave: "planning_minimum_lot", Rotulo: "Lote mínimo", Visao: Planejamento, Tipos: []int{Fabricado, Comprado}, Padrao: false, checar: coluna("planning_minimum_lot")},
 	{Chave: "planning_safety_stock", Rotulo: "Estoque de segurança", Visao: Planejamento, Tipos: []int{Fabricado, Comprado}, Padrao: false, checar: coluna("planning_safety_stock")},
-	{Chave: "planner_employee_code", Rotulo: "Planejador responsável", Visao: Planejamento, Tipos: []int{Fabricado, Comprado}, Padrao: false, checar: coluna("planner_employee_code")},
+	{Chave: "planning_manufacturing_lead_time_days", Rotulo: "Prazo de fabricação", Visao: Planejamento, Tipos: []int{Fabricado}, Padrao: false, checar: coluna("planning_manufacturing_lead_time_days")},
 
 	{Chave: "commercial_sale_type", Rotulo: "Tipo de venda (venda/revenda)", Visao: Comercial, Tipos: []int{Fabricado}, Padrao: true, checar: coluna("commercial_sale_type")},
 	{Chave: "commercial_description", Rotulo: "Descrição comercial", Visao: Comercial, Padrao: false, checar: coluna("commercial_description")},
 
 	{Chave: "custo_padrao", Rotulo: "Custo padrão", Visao: Custos, Tipos: []int{Fabricado}, Padrao: true, checar: func(f Ficha) bool { return f.TemCustoPadrao }},
-	{Chave: "accounting_inventory_group_code", Rotulo: "Grupo contábil de estoque", Visao: Custos, Tipos: fisicos, Padrao: false, checar: coluna("accounting_inventory_group_code")},
 }
 
 func CampoDoCatalogo(chave string) (Campo, bool) {
@@ -357,6 +364,10 @@ type Repository interface {
 	SalvarAjuste(ctx context.Context, campo string, obrigatorio *bool, por *uuid.UUID) error
 	Ficha(ctx context.Context, itemCode int64) (*Ficha, error)
 	Situacao(ctx context.Context, itemCode int64) (*Situacao, error)
+	RepositorioDoCadastro
+	// Politicas devolve o que a empresa gravou na matriz status × processo.
+	Politicas(ctx context.Context) ([]RegraPolitica, error)
+	SalvarPoliticas(ctx context.Context, regras []RegraPolitica, por *uuid.UUID) error
 	// IniciarCadastro grava EM_CADASTRO para o item novo.
 	IniciarCadastro(ctx context.Context, itemCode int64, por *uuid.UUID) error
 	// Liberar grava a visão e, se pedido, o novo status — na mesma transação.

@@ -18,6 +18,8 @@ const (
 )
 
 type ProductionOrder struct {
+	// ItemRevision: a revisão do item quando a OF nasceu.
+	ItemRevision   *string
 	ID             int64
 	OrderNumber    int64
 	PlannedOrderID *int64

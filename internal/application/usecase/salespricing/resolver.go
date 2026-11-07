@@ -45,7 +45,7 @@ func Resolve(ctx context.Context, repo Repository, tableCode, itemCode int64, qu
 	}
 	price, err := repo.GetSalesTablePrice(ctx, table.ID, strconv.FormatInt(itemCode, 10))
 	if err != nil {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("não existe preço válido para o item %d na tabela %d", itemCode, tableCode))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("não existe preço válido para este item na tabela %d", tableCode))
 	}
 	if price.Blocked {
 		return nil, errorsuc.NewValidationError("o preço do item está bloqueado na tabela")
