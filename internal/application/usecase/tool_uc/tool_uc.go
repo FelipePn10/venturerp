@@ -30,6 +30,7 @@ func (uc *ToolUseCase) Create(ctx context.Context, dto request.CreateToolDTO) (*
 	if err != nil {
 		return nil, err
 	}
+	t.ItemCode = dto.ItemCode
 	created, err := uc.repo.CreateTool(ctx, t)
 	if err != nil {
 		return nil, err
@@ -52,6 +53,7 @@ func (uc *ToolUseCase) Update(ctx context.Context, dto request.UpdateToolDTO) (*
 	if dto.Status != "" {
 		t.Status = dto.Status
 	}
+	dto.ItemCode.Aplicar(&t.ItemCode)
 	updated, err := uc.repo.UpdateTool(ctx, t)
 	if err != nil {
 		return nil, err
@@ -284,6 +286,7 @@ func toToolResponse(t *entity.Tool) *response.ToolResponse {
 		Cost:             t.Cost.InexactFloat64(),
 		Status:           t.Status,
 		IsActive:         t.IsActive,
+		ItemCode:         t.ItemCode,
 		CreatedAt:        t.CreatedAt,
 	}
 }

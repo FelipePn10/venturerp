@@ -16,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entrada"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 )
 
 // InspecaoDeRecebimento é o roteiro de inspeção do recebimento (FINS0212):
@@ -45,7 +46,14 @@ type ApproveFiscalEntryUseCase struct {
 	FinancialRepo financialrepo.FinancialRepository
 	Tolerancias   ports.PurchaseToleranceEvaluator
 	Inspecao      InspecaoDeRecebimento
-	Auth          ports.AuthService
+	// Regras lê o roteiro de recebimento do cadastro do item. Opcional.
+	Regras RegrasDaEntrada
+	Auth   ports.AuthService
+}
+
+// RegrasDaEntrada lê o cadastro do item na empresa da sessão.
+type RegrasDaEntrada interface {
+	RegraDaEntrada(ctx context.Context, itemCode int64) (repository.RegraDaEntrada, error)
 }
 
 // ciapAtivo: a empresa toma crédito de ICMS (fora do Simples), então o ICMS do
@@ -156,12 +164,17 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 		return nil, err
 	}
 
-	var avisos []string
+	avisos := uc.avisosDoCadastro(ctx, doc)
 	// Ordens de inspeção para o que entrou no almoxarifado de inspeção.
 	if uc.Inspecao != nil {
 		inspecao := map[int64]int64{}
 		for _, m := range movimentos {
-			if wh, ok := uc.inspecaoDoItem(ctx, m.ItemCode); ok && wh == m.WarehouseID {
+			wh, ok, err := uc.inspecaoDoItem(ctx, m.ItemCode)
+			if err != nil {
+				avisos = append(avisos, err.Error())
+				continue
+			}
+			if ok && wh == m.WarehouseID {
 				inspecao[m.ItemID] = wh
 			}
 		}
@@ -197,12 +210,50 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 	return servico.Responder(ctx, aprovado)
 }
 
-func (uc *ApproveFiscalEntryUseCase) inspecaoDoItem(ctx context.Context, itemCode int64) (int64, bool) {
-	if uc.Inspecao == nil {
-		return 0, false
+// inspecaoDoItem aplica o roteiro do cadastro, como o recebimento pelo pedido: DIRETO
+// não passa pela inspeção, e INSPECAO sem rota ativa não entra no estoque.
+func (uc *ApproveFiscalEntryUseCase) inspecaoDoItem(ctx context.Context, itemCode int64) (int64, bool, error) {
+	var regra repository.RegraDaEntrada
+	if uc.Regras != nil {
+		var err error
+		if regra, err = uc.Regras.RegraDaEntrada(ctx, itemCode); err != nil {
+			return 0, false, err
+		}
 	}
-	wh, ok := uc.Inspecao.ResolveInspectionRoute(ctx, itemCode, "")
-	return wh, ok && wh > 0
+	if regra.Roteiro == itementity.RecebimentoDireto {
+		return 0, false, nil
+	}
+	var wh int64
+	var ok bool
+	if uc.Inspecao != nil {
+		wh, ok = uc.Inspecao.ResolveInspectionRoute(ctx, itemCode, "")
+	}
+	if regra.Roteiro == itementity.RecebimentoInspecao && (!ok || wh <= 0) {
+		return 0, false, errorsuc.NewValidationError(fmt.Sprintf("o item %d exige inspeção no recebimento e não há rota de inspeção ativa: cadastre a rota antes de aprovar a nota", itemCode))
+	}
+	return wh, ok && wh > 0, nil
+}
+
+// avisosDoCadastro lembra o que a nota não traz: corrida e certificado do material.
+func (uc *ApproveFiscalEntryUseCase) avisosDoCadastro(ctx context.Context, doc *entity.FiscalEntry) []string {
+	if uc.Regras == nil {
+		return nil
+	}
+	avisos := []string{}
+	vistos := map[int64]bool{}
+	for _, it := range doc.Itens {
+		if it.ItemCode == nil || !it.MovimentaEstoque || vistos[*it.ItemCode] {
+			continue
+		}
+		vistos[*it.ItemCode] = true
+		regra, err := uc.Regras.RegraDaEntrada(ctx, *it.ItemCode)
+		if err != nil {
+			avisos = append(avisos, fmt.Sprintf("não foi possível ler as regras do item %d: %v", *it.ItemCode, err))
+		} else if regra.ExigeCertificado {
+			avisos = append(avisos, fmt.Sprintf("o item %d exige corrida e certificado: a nota não traz esses dados, registre no lote", *it.ItemCode))
+		}
+	}
+	return avisos
 }
 
 // montarMovimentos diz o que cada item faz no estoque e no pedido de compra.
@@ -254,7 +305,11 @@ func (uc *ApproveFiscalEntryUseCase) montarMovimentos(ctx context.Context, doc *
 			m.WarehouseID = *it.WarehouseID
 		}
 		if it.MovimentaEstoque {
-			if wh, ok := uc.inspecaoDoItem(ctx, *it.ItemCode); ok {
+			wh, ok, err := uc.inspecaoDoItem(ctx, *it.ItemCode)
+			if err != nil {
+				return nil, nil, err
+			}
+			if ok {
 				m.WarehouseID = wh
 			}
 		}

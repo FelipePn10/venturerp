@@ -135,13 +135,13 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 		`INSERT INTO public.stock_movements
 			(item_code, mask, warehouse_id, movement_type, quantity, unit_price, total_price,
 			 reference_type, reference_code, lot, serial_number, batch, expiration_date, notes, created_by, enterprise_id,
-			 address, address_to, movement_type_code, cost_center_code, reverses_movement_id, movement_date, backdated, wave_line_id)
+			 address, address_to, movement_type_code, cost_center_code, reverses_movement_id, movement_date, backdated, wave_line_id, secondary_quantity)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-		         COALESCE($22::date, CURRENT_DATE), COALESCE($22::date, CURRENT_DATE) < CURRENT_DATE, $23)
+		         COALESCE($22::date, CURRENT_DATE), COALESCE($22::date, CURRENT_DATE) < CURRENT_DATE, $23, $24)
 		 RETURNING id, created_at, movement_date`,
 		m.ItemCode, m.Mask, m.WarehouseID, m.MovementType, movementQuantity(m), m.UnitPrice, m.TotalPrice,
 		m.ReferenceType, m.ReferenceCode, m.Lot, m.SerialNumber, m.Batch, m.ExpirationDate, m.Notes, m.CreatedBy, enterpriseID,
-		m.Address, m.AddressTo, m.MovementTypeCode, m.CostCenterCode, m.ReversesMovementID, m.MovementDate, m.LinhaDaOnda,
+		m.Address, m.AddressTo, m.MovementTypeCode, m.CostCenterCode, m.ReversesMovementID, m.MovementDate, m.LinhaDaOnda, m.SecondaryQuantity,
 	).Scan(&m.ID, &m.CreatedAt, &m.MovementDate)
 	if err != nil {
 		return fmt.Errorf("creating stock movement: %w", err)
@@ -2102,6 +2102,15 @@ func (r *StockRepositorySQLC) SugerirSeparacaoFEFO(
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	// Sem regra pedida, vale a do item (VENT0200): o item FIFO era sugerido em FEFO
+	// porque a tela e esta função partiam sempre de FEFO.
+	if regra == "" || strings.EqualFold(regra, "ITEM") {
+		regra = entity.BaixaFEFO
+		if err := r.pool.QueryRow(ctx, `SELECT lot_issue_rule FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`,
+			enterpriseID, itemCode).Scan(&regra); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lendo a regra de baixa do item: %w", err)
+		}
 	}
 	ordem := `l.expires_at IS NULL, l.expires_at, l.received_at NULLS LAST, b.lot`
 	if strings.EqualFold(regra, "FIFO") {

@@ -20,6 +20,7 @@ func TestAlertaDeMinimoLeAPoliticaDoAlmoxarifado(t *testing.T) {
 	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
 		for _, q := range []string{
 			`DELETE FROM notification_outbox WHERE enterprise_id=$1`,
+			`DELETE FROM enterprise_notification_subscriptions WHERE enterprise_id=$1`,
 			`DELETE FROM stock_replenishment_policies WHERE enterprise_id=$1`,
 			`DELETE FROM stock_balances WHERE enterprise_id=$1`,
 			`DELETE FROM items WHERE enterprise_id=$1`,
@@ -43,6 +44,17 @@ func TestAlertaDeMinimoLeAPoliticaDoAlmoxarifado(t *testing.T) {
 	saldo(acima, "A1", 6)
 	saldo(acima, "A2", 6)
 
+	// Alerta desligado não gera evento: o evento cancelado ocupava a chave e o
+	// alerta nunca vinha depois de ligado.
+	if err := notificationrepo.New(pool).ScheduleOperationalAlerts(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var desligado int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM notification_outbox WHERE enterprise_id=$1 AND event_key='ESTOQUE_ABAIXO_MINIMO'`, a.ID).Scan(&desligado); err != nil || desligado != 0 {
+		t.Fatalf("alerta desligado gerou %d eventos (%v)", desligado, err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO enterprise_notification_subscriptions(id,enterprise_id,event_key,event_version,enabled,cadence,thresholds,created_by,created_at,updated_at)
+		VALUES(gen_random_uuid(),$1,'ESTOQUE_ABAIXO_MINIMO',1,TRUE,'IMEDIATO','{}',$2,NOW(),NOW())`, a.ID, ator)
 	if err := notificationrepo.New(pool).ScheduleOperationalAlerts(ctx); err != nil {
 		t.Fatal(err)
 	}

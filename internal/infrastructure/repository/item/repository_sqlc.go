@@ -55,6 +55,7 @@ func (r *RepositoryItemSQLC) Create(
 		return nil, fmt.Errorf("marshal cyclical_count_config: %w", err)
 	}
 
+	item.AplicarPadroes()
 	params := sqlc.CreateItemParams{
 		EnterpriseID:  item.EnterpriseID,
 		BusinessCode:  string(item.BusinessCode),
@@ -129,10 +130,28 @@ func (r *RepositoryItemSQLC) Create(
 		AccountingInventoryGroupCode: item.Accounting.InventoryGroupCode, AccountingClassificationCode: pgutil.ToPgTextFromPtr(item.Accounting.AccountingClassificationCode),
 		AccountingCest: pgutil.ToPgTextFromPtr(item.Accounting.CEST), AccountingInputCode: pgutil.ToPgTextFromPtr(item.Accounting.InputCode), AccountingNotes: pgutil.ToPgTextFromPtr(item.Accounting.Notes),
 
+		LongDescription: pgutil.ToPgTextFromPtr(item.LongDescription), GeneralNotes: pgutil.ToPgTextFromPtr(item.GeneralNotes), Revision: pgutil.ToPgTextFromPtr(item.Revision),
+		PreviousCode: pgutil.ToPgTextFromPtr(item.PreviousCode), ManufacturerName: pgutil.ToPgTextFromPtr(item.ManufacturerName), ManufacturerPartNumber: pgutil.ToPgTextFromPtr(item.ManufacturerPartNumber),
+		PdmSignature: pgutil.ToPgTextFromPtr(item.PDM.Signature), AcceptsFractionalQuantity: item.Warehouse.AcceptsFractionalQuantity,
+		WarehouseShelfLifeDays: intPtrToInt32Ptr(item.Warehouse.ShelfLifeDays), WarehouseMinRemainingLifeDays: intPtrToInt32Ptr(item.Warehouse.MinRemainingLifeDays),
+		WarehouseStorageConditions: pgutil.ToPgTextFromPtr(item.Warehouse.StorageConditions), WarehouseHazardous: item.Warehouse.Hazardous,
+		WarehouseUnNumber: pgutil.ToPgTextFromPtr(item.Warehouse.UNNumber), WarehouseHazardClass: pgutil.ToPgTextFromPtr(item.Warehouse.HazardClass),
+		EngineeringVolume: decimalPtrToNumeric(item.Engineering.Volume), PlannerEmployeeCode: item.Planning.PlannerEmployeeCode, PlanningBuyerEmployeeCode: item.Planning.BuyerEmployeeCode,
+		PlanningPurchaseLeadTimeDays: intPtrToInt32Ptr(item.Planning.PurchaseLeadTimeDays), PlanningManufacturingLeadTimeDays: intPtrToInt32Ptr(item.Planning.ManufacturingLeadTimeDays),
+		PlanningNotes: pgutil.ToPgTextFromPtr(item.Planning.Notes), MaterialIssueTiming: item.Planning.MaterialIssueTiming, ProductionReportingType: item.Planning.ProductionReportingType,
+		SuppliesUnderDeliveryTolerancePct: decimalPtrToNumeric(item.Supplies.UnderDeliveryTolerancePct), SuppliesOverDeliveryTolerancePct: decimalPtrToNumeric(item.Supplies.OverDeliveryTolerancePct),
+		SuppliesReceiptRouting: item.Supplies.ReceiptRouting, SuppliesClassificationCode: pgutil.ToPgTextFromPtr(item.Supplies.ClassificationCode),
+		AccountingGtin: pgutil.ToPgTextFromPtr(item.Accounting.GTIN), AccountingGtinTax: pgutil.ToPgTextFromPtr(item.Accounting.GTINTax), AccountingEfdItemType: pgutil.ToPgTextFromPtr(item.Accounting.EFDItemType),
+		AccountingTaxUnit: pgutil.ToPgTextFromPtr(item.Accounting.TaxUnit), AccountingTaxUnitFactor: decimalPtrToNumeric(item.Accounting.TaxUnitFactor),
+		IsScrap: item.IsScrap, EngineeringRequiresDrawing: item.Engineering.RequiresDrawing, EngineeringCuttingGrain: item.Engineering.CuttingGrain, EngineeringCuttingNoRotation: item.Engineering.CuttingNoRotation,
+		SuppliesRequiresCertificate: item.Supplies.RequiresCertificate, CommercialExclusiveCustomerCode: item.Commercial.ExclusiveCustomerCode, CommercialVolumesPerUnit: intPtrToInt32Ptr(item.Commercial.VolumesPerUnit),
+		DescriptionEn: pgutil.ToPgTextFromPtr(item.DescriptionEN), WarehouseSecondaryUom: pgutil.ToPgTextFromPtr(item.Warehouse.SecondaryUOM), WarehouseSecondaryFactor: decimalPtrToNumeric(item.Warehouse.SecondaryFactor),
+		AccountingExTipi: pgutil.ToPgTextFromPtr(item.Accounting.ExTIPI), AccountingRelevantScale: boolPtrToPgBool(item.Accounting.RelevantScale), AccountingManufacturerCnpj: pgutil.ToPgTextFromPtr(item.Accounting.ManufacturerCNPJ), AccountingFciNumber: pgutil.ToPgTextFromPtr(item.Accounting.FCINumber),
+
 		CreatedBy: pgutil.ToPgUUID(item.CreatedBy),
 	}
 
-	dbItem, err := r.q.CreateItem(ctx, params)
+	dbItem, err := r.criarComComplementos(ctx, params, item)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -148,6 +167,7 @@ func (r *RepositoryItemSQLC) Create(
 	if err != nil {
 		return nil, err
 	}
+	created.Planning.Extras = item.Planning.Extras
 	if err := r.loadEffectiveFiscal(ctx, created); err != nil {
 		return nil, err
 	}
@@ -189,6 +209,28 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 	if err != nil {
 		return nil, fmt.Errorf("marshal engineering_dimensions: %w", err)
 	}
+	attributes, err := json.Marshal(item.PDM.Attributes)
+	if err != nil {
+		return nil, fmt.Errorf("marshal pdm_attributes: %w", err)
+	}
+	// Sem ponto de pedido a coluna fica no vazio que a leitura já entende, e não
+	// NULL: a alteração parcial não pode mudar a forma do que não foi tocado.
+	reorderPoint := []byte("{}")
+	if item.Planning.ReorderPoint != nil {
+		if reorderPoint, err = json.Marshal(item.Planning.ReorderPoint); err != nil {
+			return nil, fmt.Errorf("marshal planning_reorder_point: %w", err)
+		}
+	}
+	if err := r.conferirGTINeResponsaveis(ctx, item); err != nil {
+		return nil, err
+	}
+	if err := r.conferirConflitoDeCodigos(ctx, item, false); err != nil {
+		return nil, err
+	}
+	if err := r.conferirValidadeComLote(ctx, item); err != nil {
+		return nil, err
+	}
+	item.AplicarPadroes()
 	p := sqlc.UpdateItemFoldersParams{BusinessCode: string(item.BusinessCode), EnterpriseID: item.EnterpriseID, CommercialDescription: pgutil.ToPgTextFromPtr(item.Commercial.Description), CommercialSaleType: pgutil.ToPgTextFromPtr(item.Commercial.SaleType),
 		CommercialVolumeConversionFactor: decimalPtrToNumeric(item.Commercial.VolumeConversionFactor), CommercialSaleMultiple: decimalPtrToNumeric(item.Commercial.SaleMultiple), CommercialMinimumSaleQuantity: decimalPtrToNumeric(item.Commercial.MinimumSaleQuantity), CommercialEstimatedDeliveryDays: intPtrToInt32Ptr(item.Commercial.EstimatedDeliveryDays), CommercialWarrantyDays: int32(item.Commercial.WarrantyDays),
 		CommercialTransferWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TransferWarehouseCode), CommercialTechnicalAssistanceWarehouseCode: pgutil.ToPgTextFromPtr(item.Commercial.TechnicalAssistanceWarehouseCode), CommercialPackagingItemCode: item.Commercial.PackagingItemCode,
@@ -212,8 +254,26 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 		SuppliesWarehouseCode: item.Supplies.WarehouseCode, SuppliesNotes: pgutil.ToPgTextFromPtr(item.Supplies.Notes),
 		WarehouseCode: int64(item.Warehouse.WarehouseCode), WarehouseAvgMonthlyConsumptionManual: pgutil.ToPgNumericFromDecimalPtr(item.Warehouse.AverageMonthlyConsumptionManual),
 		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
-		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock)}
-	dbItem, err := r.atualizarComAutor(ctx, p)
+		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock),
+		LongDescription: pgutil.ToPgTextFromPtr(item.LongDescription), GeneralNotes: pgutil.ToPgTextFromPtr(item.GeneralNotes), Revision: pgutil.ToPgTextFromPtr(item.Revision),
+		PreviousCode: pgutil.ToPgTextFromPtr(item.PreviousCode), ManufacturerName: pgutil.ToPgTextFromPtr(item.ManufacturerName), ManufacturerPartNumber: pgutil.ToPgTextFromPtr(item.ManufacturerPartNumber),
+		PdmSignature: pgutil.ToPgTextFromPtr(item.PDM.Signature), PdmAttributes: attributes, AcceptsFractionalQuantity: item.Warehouse.AcceptsFractionalQuantity,
+		WarehouseShelfLifeDays: intPtrToInt32Ptr(item.Warehouse.ShelfLifeDays), WarehouseMinRemainingLifeDays: intPtrToInt32Ptr(item.Warehouse.MinRemainingLifeDays),
+		WarehouseStorageConditions: pgutil.ToPgTextFromPtr(item.Warehouse.StorageConditions), WarehouseHazardous: item.Warehouse.Hazardous,
+		WarehouseUnNumber: pgutil.ToPgTextFromPtr(item.Warehouse.UNNumber), WarehouseHazardClass: pgutil.ToPgTextFromPtr(item.Warehouse.HazardClass),
+		EngineeringVolume: decimalPtrToNumeric(item.Engineering.Volume), PlannerEmployeeCode: item.Planning.PlannerEmployeeCode, PlanningBuyerEmployeeCode: item.Planning.BuyerEmployeeCode,
+		PlanningPurchaseLeadTimeDays: intPtrToInt32Ptr(item.Planning.PurchaseLeadTimeDays), PlanningManufacturingLeadTimeDays: intPtrToInt32Ptr(item.Planning.ManufacturingLeadTimeDays),
+		PlanningNotes: pgutil.ToPgTextFromPtr(item.Planning.Notes), MaterialIssueTiming: item.Planning.MaterialIssueTiming, ProductionReportingType: item.Planning.ProductionReportingType,
+		SuppliesUnderDeliveryTolerancePct: decimalPtrToNumeric(item.Supplies.UnderDeliveryTolerancePct), SuppliesOverDeliveryTolerancePct: decimalPtrToNumeric(item.Supplies.OverDeliveryTolerancePct),
+		SuppliesReceiptRouting: item.Supplies.ReceiptRouting, SuppliesClassificationCode: pgutil.ToPgTextFromPtr(item.Supplies.ClassificationCode),
+		AccountingGtin: pgutil.ToPgTextFromPtr(item.Accounting.GTIN), AccountingGtinTax: pgutil.ToPgTextFromPtr(item.Accounting.GTINTax), AccountingEfdItemType: pgutil.ToPgTextFromPtr(item.Accounting.EFDItemType),
+		AccountingTaxUnit: pgutil.ToPgTextFromPtr(item.Accounting.TaxUnit), AccountingTaxUnitFactor: decimalPtrToNumeric(item.Accounting.TaxUnitFactor),
+		IsScrap: item.IsScrap, EngineeringRequiresDrawing: item.Engineering.RequiresDrawing, EngineeringCuttingGrain: item.Engineering.CuttingGrain, EngineeringCuttingNoRotation: item.Engineering.CuttingNoRotation,
+		SuppliesRequiresCertificate: item.Supplies.RequiresCertificate, CommercialExclusiveCustomerCode: item.Commercial.ExclusiveCustomerCode, CommercialVolumesPerUnit: intPtrToInt32Ptr(item.Commercial.VolumesPerUnit),
+		DescriptionEn: pgutil.ToPgTextFromPtr(item.DescriptionEN), WarehouseSecondaryUom: pgutil.ToPgTextFromPtr(item.Warehouse.SecondaryUOM), WarehouseSecondaryFactor: decimalPtrToNumeric(item.Warehouse.SecondaryFactor),
+		AccountingExTipi: pgutil.ToPgTextFromPtr(item.Accounting.ExTIPI), AccountingRelevantScale: boolPtrToPgBool(item.Accounting.RelevantScale), AccountingManufacturerCnpj: pgutil.ToPgTextFromPtr(item.Accounting.ManufacturerCNPJ), AccountingFciNumber: pgutil.ToPgTextFromPtr(item.Accounting.FCINumber),
+		PlanningReorderPoint: reorderPoint, PlanningTankCode: intPtrToInt64Ptr(item.Planning.TankCode), EngineeringItemBaseCode: intPtrToInt64Ptr(item.Engineering.ItemBaseCod)}
+	dbItem, err := r.atualizarComAutor(ctx, p, item)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
@@ -225,6 +285,7 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 	if err != nil {
 		return nil, err
 	}
+	updated.Planning.Extras = item.Planning.Extras
 	if err := r.loadEffectiveFiscal(ctx, updated); err != nil {
 		return nil, err
 	}
@@ -233,7 +294,7 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 
 // atualizarComAutor grava a alteração; com o pool, numa transação que informa
 // o autor ao gatilho do histórico do cadastro.
-func (r *RepositoryItemSQLC) atualizarComAutor(ctx context.Context, p sqlc.UpdateItemFoldersParams) (sqlc.Item, error) {
+func (r *RepositoryItemSQLC) atualizarComAutor(ctx context.Context, p sqlc.UpdateItemFoldersParams, entidade *entity.Item) (sqlc.Item, error) {
 	if r.pool == nil {
 		return r.q.UpdateItemFolders(ctx, p)
 	}
@@ -247,6 +308,9 @@ func (r *RepositoryItemSQLC) atualizarComAutor(ctx context.Context, p sqlc.Updat
 	}
 	item, err := r.q.WithTx(tx).UpdateItemFolders(ctx, p)
 	if err != nil {
+		return sqlc.Item{}, err
+	}
+	if err := gravarComplementos(ctx, tx, item.EnterpriseID, item.Code, entidade); err != nil {
 		return sqlc.Item{}, err
 	}
 	return item, tx.Commit(ctx)
@@ -292,6 +356,9 @@ func (r *RepositoryItemSQLC) FindItemByCode(
 	if err := r.loadEffectiveFiscal(ctx, item); err != nil {
 		return nil, err
 	}
+	if err := r.carregarComplementos(ctx, item); err != nil {
+		return nil, err
+	}
 	return item, nil
 }
 
@@ -314,9 +381,16 @@ func (r *RepositoryItemSQLC) FindItemByBusinessCode(ctx context.Context, code va
 	if err := r.loadEffectiveFiscal(ctx, item); err != nil {
 		return nil, err
 	}
+	if err := r.carregarComplementos(ctx, item); err != nil {
+		return nil, err
+	}
 	return item, nil
 }
 
+// loadEffectiveFiscal: o que a nota usa do item além da classificação — CEST,
+// origem e unidade. As alíquotas do item (IPI, ICMS, PIS/COFINS) não entram no
+// cálculo da nota (o motor usa o NCM, a UF e a regra de ICMS/IPI), então não são
+// anunciadas aqui como se valessem.
 func (r *RepositoryItemSQLC) loadEffectiveFiscal(ctx context.Context, item *entity.Item) error {
 	load := func(code *string, purchase bool) (*entity.EffectiveFiscalContext, error) {
 		if code == nil {
@@ -342,34 +416,23 @@ func (r *RepositoryItemSQLC) loadEffectiveFiscal(ctx context.Context, item *enti
 			c.Origin = item.Accounting.Origin
 			c.Sources["origin"] = entity.FiscalSourceOverride
 		}
-		if item.Accounting.ICMSRate != nil {
-			c.ICMSRate = item.Accounting.ICMSRate
-			c.Sources["icms_rate"] = entity.FiscalSourceOverride
-		}
-		if item.Accounting.CalculatePISCOFINS != nil {
-			v := *item.Accounting.CalculatePISCOFINS
-			c.CalculatePISCOFINS = &v
-			c.Sources["calculate_pis_cofins"] = entity.FiscalSourceOverride
-		}
 		if purchase {
-			if item.Accounting.PurchaseUnitOfMeasurement != nil {
+			// A unidade de compra é uma só: a da aba Estoque e compras. A antiga, da
+			// aba Contábil, só vale para o item que ainda não tem a de compra.
+			if u := item.Supplies.PurchaseUOM; u != nil && u.String() != "" {
+				s := u.String()
+				c.Unit = &s
+				c.Sources["unit"] = entity.FiscalSourceOverride
+			} else if item.Accounting.PurchaseUnitOfMeasurement != nil {
 				s := item.Accounting.PurchaseUnitOfMeasurement.String()
 				c.Unit = &s
 				c.Sources["unit"] = entity.FiscalSourceOverride
-			}
-			if item.Accounting.PurchaseIPIRate != nil {
-				c.IPIRate = item.Accounting.PurchaseIPIRate
-				c.Sources["ipi_rate"] = entity.FiscalSourceOverride
 			}
 		} else {
 			if item.Accounting.SaleUnitOfMeasurement != nil {
 				s := item.Accounting.SaleUnitOfMeasurement.String()
 				c.Unit = &s
 				c.Sources["unit"] = entity.FiscalSourceOverride
-			}
-			if item.Accounting.SaleIPIRate != nil {
-				c.IPIRate = item.Accounting.SaleIPIRate
-				c.Sources["ipi_rate"] = entity.FiscalSourceOverride
 			}
 		}
 		return c, nil
@@ -453,18 +516,24 @@ func mapDBItemToEntity(
 		Name:         dbItem.Name,
 		Complement:   complement,
 
+		LongDescription: pgTextToStringPtr(dbItem.LongDescription), GeneralNotes: pgTextToStringPtr(dbItem.GeneralNotes), Revision: pgTextToStringPtr(dbItem.Revision),
+		PreviousCode: pgTextToStringPtr(dbItem.PreviousCode), ManufacturerName: pgTextToStringPtr(dbItem.ManufacturerName), ManufacturerPartNumber: pgTextToStringPtr(dbItem.ManufacturerPartNumber),
+
 		Nature:        entity.ItemNature(dbItem.Nature),
 		IsBase:        dbItem.IsBase,
 		IsConfigured:  dbItem.IsConfigured,
 		IsPrototype:   dbItem.IsPrototype,
 		IsTool:        dbItem.IsTool,
 		IsProcessItem: dbItem.IsProcessItem,
+		IsScrap:       dbItem.IsScrap,
+		DescriptionEN: pgTextToStringPtr(dbItem.DescriptionEn),
 
 		PDM: entity.PDM{
 			GroupCode:            int32(dbItem.PdmGroupCode),
 			ModifierCode:         int32(dbItem.PdmModifierCode),
 			Attributes:           pdmAttributes,
 			DescriptionTechnique: dbItem.PdmDescriptionTechnique,
+			Signature:            pgTextToStringPtr(dbItem.PdmSignature),
 		},
 
 		Situation: types.TypeSituationItem(dbItem.Situation),
@@ -477,6 +546,15 @@ func mapDBItemToEntity(
 			CyclicalCountConfig:             cyclicalCount,
 			MinimumStock:                    pgutil.FromPgNumericToDecimal(dbItem.WarehouseMinimumStock),
 			AverageMonthlyConsumptionManual: pgutil.FromPgNumericToDecimalPtr(dbItem.WarehouseAvgMonthlyConsumptionManual),
+			ShelfLifeDays:                   int32PtrToIntPtr(dbItem.WarehouseShelfLifeDays),
+			MinRemainingLifeDays:            int32PtrToIntPtr(dbItem.WarehouseMinRemainingLifeDays),
+			StorageConditions:               pgTextToStringPtr(dbItem.WarehouseStorageConditions),
+			Hazardous:                       dbItem.WarehouseHazardous,
+			UNNumber:                        pgTextToStringPtr(dbItem.WarehouseUnNumber),
+			HazardClass:                     pgTextToStringPtr(dbItem.WarehouseHazardClass),
+			AcceptsFractionalQuantity:       dbItem.AcceptsFractionalQuantity,
+			SecondaryUOM:                    pgTextToStringPtr(dbItem.WarehouseSecondaryUom),
+			SecondaryFactor:                 numericToDecimalPtr(dbItem.WarehouseSecondaryFactor),
 		},
 
 		Engineering: entity.Engineering{
@@ -486,6 +564,9 @@ func mapDBItemToEntity(
 			Type:        types.TypeItem(dbItem.EngineeringType),
 			TypeStruct:  types.TypeStructItem(dbItem.EngineeringTypeStruct),
 			OEM:         dbItem.EngineeringOem,
+			Volume:      numericToDecimalPtr(dbItem.EngineeringVolume),
+
+			RequiresDrawing: dbItem.EngineeringRequiresDrawing, CuttingGrain: dbItem.EngineeringCuttingGrain, CuttingNoRotation: dbItem.EngineeringCuttingNoRotation,
 		},
 
 		Planning: entity.Planning{
@@ -501,6 +582,10 @@ func mapDBItemToEntity(
 			Critical:     dbItem.PlanningCritical,
 			Exclusive:    dbItem.PlanningExclusive,
 			Active:       dbItem.PlanningActive,
+
+			PlannerEmployeeCode: dbItem.PlannerEmployeeCode, BuyerEmployeeCode: dbItem.PlanningBuyerEmployeeCode,
+			PurchaseLeadTimeDays: int32PtrToIntPtr(dbItem.PlanningPurchaseLeadTimeDays), ManufacturingLeadTimeDays: int32PtrToIntPtr(dbItem.PlanningManufacturingLeadTimeDays),
+			Notes: pgTextToStringPtr(dbItem.PlanningNotes), MaterialIssueTiming: dbItem.MaterialIssueTiming, ProductionReportingType: dbItem.ProductionReportingType,
 		},
 
 		Supplies: entity.Supplies{
@@ -510,6 +595,10 @@ func mapDBItemToEntity(
 			ReceivingChecklist: dbItem.SuppliesReceivingChecklist,
 			Harvest:            dbItem.SuppliesHarvest,
 			Notes:              pgTextToStringPtr(dbItem.SuppliesNotes),
+
+			UnderDeliveryTolerancePct: numericToDecimalPtr(dbItem.SuppliesUnderDeliveryTolerancePct), OverDeliveryTolerancePct: numericToDecimalPtr(dbItem.SuppliesOverDeliveryTolerancePct),
+			ReceiptRouting: dbItem.SuppliesReceiptRouting, ClassificationCode: pgTextToStringPtr(dbItem.SuppliesClassificationCode),
+			RequiresCertificate: dbItem.SuppliesRequiresCertificate,
 		},
 		Commercial: entity.Commercial{
 			Description: pgTextToStringPtr(dbItem.CommercialDescription), SaleType: pgTextToStringPtr(dbItem.CommercialSaleType),
@@ -522,6 +611,7 @@ func mapDBItemToEntity(
 			WithholdPISCOFINS: dbItem.CommercialWithholdPisCofins, IsPackaging: dbItem.CommercialIsPackaging,
 			MobileEnabled: dbItem.CommercialMobileEnabled, ExportPackaging: dbItem.CommercialExportPackaging,
 			ClassificationCode: pgTextToStringPtr(dbItem.CommercialClassificationCode), Notes: pgTextToStringPtr(dbItem.CommercialNotes),
+			ExclusiveCustomerCode: dbItem.CommercialExclusiveCustomerCode, VolumesPerUnit: int32PtrToIntPtr(dbItem.CommercialVolumesPerUnit),
 		},
 		Accounting: entity.Accounting{
 			SaleFiscalClassificationCode: pgTextToStringPtr(dbItem.AccountingSaleFiscalClassificationCode), PurchaseFiscalClassificationCode: pgTextToStringPtr(dbItem.AccountingPurchaseFiscalClassificationCode),
@@ -530,6 +620,10 @@ func mapDBItemToEntity(
 			SaleUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingSaleUnitOfMeasurement), PurchaseUnitOfMeasurement: pgTextToUnitOfMeasurementPtr(dbItem.AccountingPurchaseUnitOfMeasurement),
 			InventoryGroupCode: dbItem.AccountingInventoryGroupCode, AccountingClassificationCode: pgTextToStringPtr(dbItem.AccountingClassificationCode),
 			CEST: pgTextToStringPtr(dbItem.AccountingCest), InputCode: pgTextToStringPtr(dbItem.AccountingInputCode), CalculatePISCOFINS: pgBoolToBoolPtr(dbItem.AccountingCalculatePisCofins), Notes: pgTextToStringPtr(dbItem.AccountingNotes),
+			GTIN: pgTextToStringPtr(dbItem.AccountingGtin), GTINTax: pgTextToStringPtr(dbItem.AccountingGtinTax), EFDItemType: pgTextToStringPtr(dbItem.AccountingEfdItemType),
+			TaxUnit: pgTextToStringPtr(dbItem.AccountingTaxUnit), TaxUnitFactor: numericToDecimalPtr(dbItem.AccountingTaxUnitFactor),
+			ExTIPI: pgTextToStringPtr(dbItem.AccountingExTipi), RelevantScale: pgBoolToBoolPtr(dbItem.AccountingRelevantScale),
+			ManufacturerCNPJ: pgTextToStringPtr(dbItem.AccountingManufacturerCnpj), FCINumber: pgTextToStringPtr(dbItem.AccountingFciNumber),
 		},
 
 		CreatedBy: pgutil.FromPgUUID(dbItem.CreatedBy),

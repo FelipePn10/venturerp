@@ -99,7 +99,7 @@ func (h *ItemClassificationHandler) UpdateClassification(w http.ResponseWriter, 
 }
 
 func (h *ItemClassificationHandler) GetClassification(w http.ResponseWriter, r *http.Request) {
-	code := chi.URLParam(r, "code")
+	code := itemCodePathParam(r, "code")
 	maskCode, err := strconv.ParseInt(chi.URLParam(r, "maskCode"), 10, 64)
 	if err != nil {
 		jsonError(w, http.StatusBadRequest, "código de máscara inválido")

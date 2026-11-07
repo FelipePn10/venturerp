@@ -24,6 +24,7 @@ type UpdateItemDTO struct {
 	IsProcessItem *bool                    `json:"is_process_item,omitempty"`
 	Situation     *types.TypeSituationItem `json:"situation,omitempty"`
 	Health        *types.Health            `json:"health,omitempty"`
+	IdentificacaoAmpliadaDTO
 
 	PDM         *UpdatePDMDTO         `json:"pdm,omitempty"`
 	Engineering *UpdateEngineeringDTO `json:"engineering,omitempty"`
@@ -38,6 +39,8 @@ type UpdatePDMDTO struct {
 	GroupCode            *int32  `json:"group_code,omitempty"`
 	ModifierCode         *int32  `json:"modifier_code,omitempty"`
 	DescriptionTechnique *string `json:"description_technique,omitempty"`
+	// Attributes ausente preserva os atributos; presente substitui.
+	Attributes *[]valueobject.Attribute `json:"attributes,omitempty"`
 }
 
 type UpdateEngineeringDTO struct {
@@ -46,6 +49,9 @@ type UpdateEngineeringDTO struct {
 	Type       *types.TypeItem          `json:"type,omitempty"`
 	TypeStruct *types.TypeStructItem    `json:"type_struct,omitempty"`
 	OEM        *bool                    `json:"oem,omitempty"`
+	// ItemBaseCod também não existia na alteração.
+	ItemBaseCod Opcional[TextCode] `json:"item_base_cod"`
+	EngenhariaAmpliadaDTO
 }
 
 type UpdatePlanningDTO struct {
@@ -59,6 +65,11 @@ type UpdatePlanningDTO struct {
 	Critical    *bool              `json:"critical,omitempty"`
 	Exclusive   *bool              `json:"exclusive,omitempty"`
 	Active      *bool              `json:"active,omitempty"`
+	// Ponto de pedido e tanque não existiam na alteração: a tela mostrava o campo
+	// e o valor digitado sumia.
+	ReorderPoint Opcional[valueobject.ReorderPoint] `json:"reorder_point"`
+	TankCode     Opcional[int]                      `json:"tank_code"`
+	PlanejamentoAmpliadoDTO
 }
 
 type UpdateSuppliesDTO struct {
@@ -71,6 +82,7 @@ type UpdateSuppliesDTO struct {
 	ReceivingChecklist *bool   `json:"receiving_checklist,omitempty"`
 	Harvest            *bool   `json:"harvest,omitempty"`
 	Notes              *string `json:"notes,omitempty"`
+	SuprimentosAmpliadoDTO
 }
 
 type UpdateWarehouseDTO struct {
@@ -83,6 +95,7 @@ type UpdateWarehouseDTO struct {
 	AutomaticLow                    *bool                            `json:"automatic_low,omitempty"`
 	MinimumStock                    *decimal.Decimal                 `json:"minimum_stock,omitempty"`
 	AverageMonthlyConsumptionManual *decimal.Decimal                 `json:"average_monthly_consumption_manual,omitempty"`
+	EstoqueAmpliadoDTO
 }
 
 // OptionalCyclicalCountConfig distinguishes omission (preserve) from an
@@ -128,6 +141,7 @@ type UpdateCommercialDTO struct {
 	ExportPackaging               *bool      `json:"export_packaging,omitempty"`
 	ClassificationCode            **string   `json:"classification_code,omitempty"`
 	Notes                         **string   `json:"notes,omitempty"`
+	ComercialAmpliadoDTO
 }
 
 type UpdateAccountingDTO struct {
@@ -147,4 +161,5 @@ type UpdateAccountingDTO struct {
 	InputCode                        **string                          `json:"input_code,omitempty"`
 	CalculatePISCOFINS               *bool                             `json:"calculate_pis_cofins,omitempty"`
 	Notes                            **string                          `json:"notes,omitempty"`
+	FiscalAmpliadoDTO
 }

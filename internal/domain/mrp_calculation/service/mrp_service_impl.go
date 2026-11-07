@@ -68,6 +68,15 @@ type MRPServiceImpl struct {
 	// Politicas lê a política de planejamento por item/classificação
 	// (VPLA0310). Opcional: sem ela, vale a dos parâmetros da empresa.
 	Politicas PlanningPolicyReader
+	// PontosDePedido calcula o ponto de pedido no modo por dia trabalhado (consumo
+	// por dia e calendário industrial), o mesmo da sugestão de reposição. Opcional:
+	// sem ele, vale TR × CM ÷ CR + ES, de segunda a sexta.
+	PontosDePedido PontoDePedidoReader
+}
+
+// PontoDePedidoReader calcula o ponto de pedido de um item pelo calendário.
+type PontoDePedidoReader interface {
+	PontoDePedidoDoItem(ctx context.Context, itemCode int64) (decimal.Decimal, bool, error)
 }
 
 // MaskVariableReader devolve variável → valor da configuração de um item,
@@ -148,6 +157,12 @@ type cachedItemMRP struct {
 	// prazoBase: prazo do cadastro (fornecedor ou roteiro), lido uma vez por
 	// cálculo. nil = ainda não lido.
 	prazoBase *int
+	// Prazos do próprio item: valem quando o fornecedor ou o roteiro não dão um.
+	prazoCompra     *int
+	prazoFabricacao *int
+	// foraDoMRP: item desligado no MRP, protótipo ou sucata. Não gera ordem nem
+	// necessidade de componente.
+	foraDoMRP bool
 }
 
 // =============================================================================
@@ -713,6 +728,9 @@ func (s *MRPServiceImpl) calculateMRP(
 				errs[fmt.Sprintf("item_%d_restricted", input.ItemCode)] = "item has active restriction — skipped"
 				continue
 			}
+			if cadastro, errItem := s.ensureItemCache(ctx, itemCache, input.ItemCode); errItem == nil && cadastro.foraDoMRP {
+				continue
+			}
 
 			output, err := s.calcNetReqFast(ctx, input, snapshotMap, rulesMap, supplyMap, itemCache, params)
 			if err != nil {
@@ -865,7 +883,7 @@ func (s *MRPServiceImpl) calculateMinMax(
 
 			cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
 			registrarErro(errs, "cadastro_item", errItem)
-			if cached == nil || cached.engineeringType == 2 { // DE_TERCEIRO
+			if cached == nil || cached.engineeringType == 2 || cached.foraDoMRP { // DE_TERCEIRO
 				continue
 			}
 
@@ -961,7 +979,19 @@ func (s *MRPServiceImpl) calculateReorderPoint(
 			continue
 		}
 
+		if cached.foraDoMRP {
+			continue
+		}
 		pr, err := cached.reorderPoint.Calculate()
+		if cached.reorderPoint.Modo == valueobject.ModoPorDiaTrabalhado && s.PontosDePedido != nil {
+			// Consumo por dia trabalhado e prazo pelo calendário, como a reposição.
+			var ok bool
+			pr, ok, err = s.PontosDePedido.PontoDePedidoDoItem(ctx, itemCode)
+			registrarErro(errs, "ponto_de_pedido", err)
+			if !ok {
+				continue
+			}
+		}
 		if err != nil || !pr.IsPositive() {
 			continue
 		}
@@ -1091,7 +1121,7 @@ func (s *MRPServiceImpl) calculateKanban(
 
 			cached, errItem := s.ensureItemCache(ctx, itemCache, itemCode)
 			registrarErro(errs, "cadastro_item", errItem)
-			if cached == nil || cached.engineeringType == 2 {
+			if cached == nil || cached.engineeringType == 2 || cached.foraDoMRP {
 				continue
 			}
 
@@ -1549,10 +1579,31 @@ func (s *MRPServiceImpl) prazoDoCadastro(ctx context.Context, cached *cachedItem
 			if err != nil {
 				return 0, fmt.Errorf("lendo o prazo do fornecedor do item %d: %w", itemCode, err)
 			}
-			return dias, nil
+			if dias > 0 {
+				return dias, nil
+			}
 		}
-		return 0, nil
+		return prazoInformado(cached.prazoCompra), nil
 	}
+	dias, err := s.prazoDoRoteiro(ctx, itemCode)
+	if err != nil {
+		return 0, err
+	}
+	if dias > 0 {
+		return dias, nil
+	}
+	return prazoInformado(cached.prazoFabricacao), nil
+}
+
+func prazoInformado(dias *int) int {
+	if dias == nil {
+		return 0
+	}
+	return *dias
+}
+
+// prazoDoRoteiro: caminho crítico do roteiro do item, em dias úteis.
+func (s *MRPServiceImpl) prazoDoRoteiro(ctx context.Context, itemCode int64) (int, error) {
 	if s.RoutingRepo == nil {
 		return 0, nil
 	}
@@ -1687,6 +1738,9 @@ func (s *MRPServiceImpl) ensureItemCache(ctx context.Context, itemCache map[int6
 		cached.reorderPoint = item.Planning.ReorderPoint
 		cached.minimumLot = item.Planning.MinimumLot
 		cached.multipleLot = item.Planning.MultipleLot
+		cached.prazoCompra = item.Planning.PurchaseLeadTimeDays
+		cached.prazoFabricacao = item.Planning.ManufacturingLeadTimeDays
+		cached.foraDoMRP = item.ForaDoMRP()
 	}
 	itemCache[itemCode] = cached
 	return cached, nil

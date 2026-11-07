@@ -49,21 +49,27 @@ func (r *Repository) Coverage(ctx context.Context, filter mrp_report_uc.Filter) 
 		    ) x GROUP BY item_code
 		)
 		SELECT i.code, COALESCE(i.business_code::text, ''), i.name, COALESCE(i.warehouse_unit_of_measurement::text, ''),
-		       COALESCE(i.engineering_type, 0), i.planner_employee_code, COALESCE(emp.name, ''),
+		       COALESCE(i.engineering_type, 0), i.planner_employee_code,
+		       -- O responsável é o setor de planejamento do grupo do PDM; a pessoa
+		       -- antiga do item só vale enquanto o grupo não tiver setor.
+		       COALESCE(NULLIF(setor.name, ''), emp.name, ''), i.planning_buyer_employee_code,
 		       COALESCE(i.planning_safety_stock, 0), COALESCE(e.saldo, 0),
 		       pend.primeiro_inicio, COALESCE(pend.quantas, 0),
 		       p.need_date, p.demand, p.firm, p.planned
 		  FROM perfil p
 		  JOIN items i ON i.code = p.item_code AND i.enterprise_id = $1
 		  LEFT JOIN employees emp ON emp.code = i.planner_employee_code AND emp.enterprise_id = $1
+		  LEFT JOIN pdm_group_responsibles resp ON resp.enterprise_id = $1 AND resp.group_code = i.pdm_group_code
+		  LEFT JOIN enterprise_departments setor ON setor.id = resp.planning_department_id AND setor.enterprise_id = $1
 		  LEFT JOIN estoque e ON e.item_code = i.code
 		  LEFT JOIN pendentes pend ON pend.item_code = i.code
 		 WHERE ($3::bigint IS NULL OR i.planner_employee_code = $3)
+		   AND ($7::bigint IS NULL OR i.planning_buyer_employee_code = $7)
 		   AND ($4 = '' OR $4 = 'TODOS' OR ($4 = 'FABRICADO' AND i.engineering_type = 0) OR ($4 = 'COMPRADO' AND i.engineering_type = 1)
 		        OR ($4 IN ('DE_TERCEIRO', 'TERCEIRIZADO') AND i.engineering_type = 2))
 		   AND ($6::bigint IS NULL OR i.code = $6)
 		 ORDER BY i.code, p.need_date`,
-		enterpriseID, filter.PlanCode, filter.Planner, filter.ItemType, filter.Warehouse, filter.ItemCode)
+		enterpriseID, filter.PlanCode, filter.Planner, filter.ItemType, filter.Warehouse, filter.ItemCode, filter.Buyer)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +81,7 @@ func (r *Repository) Coverage(ctx context.Context, filter mrp_report_uc.Filter) 
 		var primeiro *time.Time
 		var demand, firm, planned decimal.Decimal
 		if err := rows.Scan(&in.ItemCode, &in.BusinessCode, &in.Description, &in.UOM,
-			&in.EngineeringType, &in.PlannerCode, &in.PlannerName,
+			&in.EngineeringType, &in.PlannerCode, &in.PlannerName, &in.BuyerCode,
 			&in.SafetyStock, &in.Stock, &primeiro, &in.PlannedOrders,
 			&b.Date, &demand, &firm, &planned); err != nil {
 			return nil, err

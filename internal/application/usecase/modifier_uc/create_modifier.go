@@ -42,6 +42,9 @@ func (uc *CreateModifierUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	modifier.CreatedBy = actor
+	if err = descricaoLivre(ctx, uc.Repo, modifier.Description, 0); err != nil {
+		return nil, err
+	}
 
 	created, err := uc.Repo.Create(ctx, modifier)
 	if err != nil {

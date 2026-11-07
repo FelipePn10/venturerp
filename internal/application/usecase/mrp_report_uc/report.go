@@ -16,6 +16,8 @@ import (
 )
 
 type Filter struct {
+	Buyer *int64 // comprador do item
+
 	PlanCode               *int64
 	ItemCode               *int64
 	Planner                *int64

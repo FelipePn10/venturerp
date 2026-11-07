@@ -70,6 +70,7 @@ func (r *ToolRepositorySQLC) CreateTool(ctx context.Context, t *entity.Tool) (*e
 		Cost:         pgutil.ToPgNumericFromDecimal(t.Cost),
 		Status:       t.Status,
 		CreatedBy:    pgutil.ToPgUUID(t.CreatedBy),
+		ItemCode:     t.ItemCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating tool: %w", err)
@@ -89,6 +90,7 @@ func (r *ToolRepositorySQLC) UpdateTool(ctx context.Context, t *entity.Tool) (*e
 		LifeLimit: pgutil.ToPgNumericFromDecimal(t.LifeLimit),
 		Cost:      pgutil.ToPgNumericFromDecimal(t.Cost),
 		Status:    t.Status,
+		ItemCode:  t.ItemCode,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating tool: %w", err)
@@ -384,6 +386,7 @@ func toolRowToEntity(row sqlc.Tool) *entity.Tool {
 		Cost:      pgutil.FromPgNumericToDecimal(row.Cost),
 		Status:    row.Status,
 		IsActive:  row.IsActive,
+		ItemCode:  row.ItemCode,
 		CreatedAt: pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt: pgutil.FromPgTimestamptz(row.UpdatedAt),
 		CreatedBy: pgutil.FromPgUUID(row.CreatedBy),

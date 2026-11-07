@@ -35,7 +35,10 @@ func (b *BuscaPorDescricaoPG) ItensPorDescricao(ctx context.Context, texto strin
 		  FROM items
 		 WHERE enterprise_id = $1
 		   AND (name ILIKE '%' || $2 || '%' OR pdm_description_technique ILIKE '%' || $2 || '%'
-		        OR COALESCE(commercial_description, '') ILIKE '%' || $2 || '%')
+		        OR COALESCE(commercial_description, '') ILIKE '%' || $2 || '%'
+		        OR accounting_gtin = $2 OR previous_code ILIKE $2 OR manufacturer_part_number ILIKE $2
+		        OR code IN (SELECT g.item_code FROM item_gtins g WHERE g.enterprise_id = $1 AND g.gtin = $2)
+		        OR code IN (SELECT a.item_code FROM item_atributos_livres a WHERE a.enterprise_id = $1 AND a.value ILIKE '%' || $2 || '%'))
 		 ORDER BY (upper(btrim(name)) = upper($2) OR upper(btrim(pdm_description_technique)) = upper($2)) DESC,
 		          (health::text = 'ATIVO') DESC, code
 		 LIMIT $3`, empresa, texto, limite)

@@ -88,6 +88,25 @@ func GenerateRomaneioPDF(d *RomaneioData) ([]byte, error) {
 	y += 4
 	page, y = drawItemsTable(doc, page, th, co, logo, m, y, contentW, d.Items, footTop)
 
+	// Cuidados: produto perigoso e armazenagem, sem corte.
+	var cuidados []string
+	for _, it := range d.Items {
+		if it.Cuidados == "" {
+			continue
+		}
+		for _, l := range quebrar(fmt.Sprintf("%s %s: %s", codigoDoItem(it), it.Description, it.Cuidados), 130) {
+			cuidados = append(cuidados, l)
+		}
+	}
+	if len(cuidados) > 0 {
+		y += 8
+		if y+14+float64(len(cuidados))*12+12 > footTop-90 {
+			page = doc.AddPage()
+			y = page.Letterhead(th, co, logo, m, pdfkit.Margin, contentW, true) + 12
+		}
+		y = section(page, th, m, y, contentW, "CUIDADOS NO TRANSPORTE E NA ARMAZENAGEM", cuidados)
+	}
+
 	// Volumes / packing detail.
 	if len(d.Volumes) > 0 {
 		y += 10
@@ -156,8 +175,8 @@ type itemCol struct {
 
 var itemCols = []itemCol{
 	{"Seq", pdfkit.AlignLeft, 0.7},
-	{"Código", pdfkit.AlignLeft, 1.2},
-	{"Descrição", pdfkit.AlignLeft, 4.2},
+	{"Código", pdfkit.AlignLeft, 2.1},
+	{"Descrição", pdfkit.AlignLeft, 3.3},
 	{"NCM", pdfkit.AlignLeft, 1.6},
 	{"CFOP", pdfkit.AlignLeft, 1.0},
 	{"Qtd", pdfkit.AlignRight, 1.2},
@@ -185,7 +204,7 @@ func drawItemsTable(doc *pdfkit.Doc, page *pdfkit.Page, th pdfkit.Theme, co pdfk
 		}
 		vals := []string{
 			fmt.Sprintf("%d", it.Sequence),
-			fmt.Sprintf("%d", it.ItemCode),
+			codigoDoItem(it),
 			it.Description,
 			it.NCM,
 			it.CFOP,
@@ -411,4 +430,34 @@ func sum(xs []float64) float64 {
 		t += x
 	}
 	return t
+}
+
+// quebrar divide o texto em linhas de até max caracteres, nas palavras.
+func quebrar(texto string, max int) []string {
+	var linhas []string
+	atual := ""
+	for _, p := range strings.Fields(texto) {
+		if atual != "" && len([]rune(atual))+1+len([]rune(p)) > max {
+			linhas = append(linhas, atual)
+			atual = "   " + p
+			continue
+		}
+		if atual == "" {
+			atual = p
+		} else {
+			atual += " " + p
+		}
+	}
+	if atual != "" {
+		linhas = append(linhas, atual)
+	}
+	return linhas
+}
+
+// codigoDoItem mostra o código comercial; a chave interna só na falta dele.
+func codigoDoItem(it RomaneioItem) string {
+	if it.Codigo != "" {
+		return it.Codigo
+	}
+	return fmt.Sprintf("%d", it.ItemCode)
 }

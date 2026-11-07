@@ -87,10 +87,12 @@ func TipoMovimentoValido(tipo string) bool {
 }
 
 type StockMovement struct {
-	ID          int64
-	ItemCode    int64
-	Mask        string
-	WarehouseID int64
+	// SecondaryQuantity: valor real na segunda unidade do item. Nil usa o fator.
+	SecondaryQuantity *decimal.Decimal
+	ID                int64
+	ItemCode          int64
+	Mask              string
+	WarehouseID       int64
 	// Endereço de origem e, numa transferência interna, o de destino. Vazio
 	// significa almoxarifado sem endereçamento — é como fica toda a base que
 	// existia antes da migração 344.

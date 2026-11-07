@@ -176,7 +176,11 @@ func TestAlertaDeMinimoRespeitaAMascaraDaPolitica(t *testing.T) {
 	t.Cleanup(func() {
 		testutil.Exec(t, pool, `DELETE FROM notification_alerts WHERE enterprise_id=$1`, e.empresa)
 		testutil.Exec(t, pool, `DELETE FROM notification_outbox WHERE enterprise_id=$1`, e.empresa)
+		testutil.Exec(t, pool, `DELETE FROM enterprise_notification_subscriptions WHERE enterprise_id=$1`, e.empresa)
 	})
+	// O evento só nasce com o alerta ligado na empresa (VNOT0100).
+	testutil.Exec(t, pool, `INSERT INTO enterprise_notification_subscriptions(enterprise_id,event_key,event_version,enabled,cadence,created_by)
+		VALUES($1,'ESTOQUE_ABAIXO_MINIMO',1,TRUE,'IMEDIATO',$2) ON CONFLICT (enterprise_id,event_key) DO UPDATE SET enabled=TRUE`, e.empresa, e.ator)
 	entrada := func(mask string, qtd int64) {
 		_, err := e.repo.CreateMovement(e.ctx, &stockentity.StockMovement{ItemCode: e.item, Mask: mask, WarehouseID: e.almox, MovementType: "IN",
 			Quantity: decimal.NewFromInt(qtd), UnitPrice: decimal.NewFromInt(1), CreatedBy: e.ator})

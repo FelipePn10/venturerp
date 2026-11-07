@@ -24,6 +24,14 @@ type FiscalClassificationUseCase struct {
 	// ClassTrib confere o cClassTrib contra a tabela oficial do IBS/CBS. Opcional:
 	// sem ele o campo é gravado como digitado.
 	ClassTrib ValidadorClassTrib
+	// TabelaNCM dá o IPI do NCM pela tabela tributária (VFIS0110), a mesma que a
+	// nota usa. Sem ela, vale a alíquota gravada na classificação.
+	TabelaNCM TabelaIPI
+}
+
+// TabelaIPI dá o IPI (%) do NCM na tabela tributária.
+type TabelaIPI interface {
+	AliquotaIPIDoNCM(ctx context.Context, ncm string) (decimal.Decimal, bool, error)
 }
 
 // ValidadorClassTrib recusa cClassTrib fora da tabela oficial ou não admitido
@@ -200,6 +208,17 @@ func (uc *FiscalClassificationUseCase) GetIPIRate(ctx context.Context, classific
 	c, err := uc.repo.GetByCode(ctx, enterpriseID, classificationCode)
 	if err != nil || c == nil {
 		return decimal.Zero, false, nil
+	}
+	// A nota tira o IPI da tabela do NCM: o pedido de compra sugere o mesmo, para
+	// as duas não divergirem. A alíquota da classificação só cobre NCM fora da tabela.
+	if uc.TabelaNCM != nil && c.NCM != nil && *c.NCM != "" {
+		aliq, ok, err := uc.TabelaNCM.AliquotaIPIDoNCM(ctx, *c.NCM)
+		if err != nil {
+			return decimal.Zero, false, err
+		}
+		if ok {
+			return aliq, true, nil
+		}
 	}
 	return c.IPIRate, true, nil
 }

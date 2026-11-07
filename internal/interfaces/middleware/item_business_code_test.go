@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -89,5 +90,15 @@ func TestCodigoDoItemEmTextoLivreNaoEhTraduzido(t *testing.T) {
 	}
 	if itemCodeIsFreeText(httptest.NewRequest("POST", "/api/sales-order/create", nil), "item_code") {
 		t.Fatal("pedido de venda referencia item cadastrado e precisa da tradução")
+	}
+}
+
+// A simulação de impacto recebe o código comercial, como a alteração do item.
+// Traduzido antes da rota, "1" vira a chave interna e a tela simula sobre outro
+// item — ou recebe 404.
+func TestImpactoDoItemNaoTraduzOCaminho(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/api/items/RN-01001/impacto", nil)
+	if !nativeItemBusinessCodePath(req) {
+		t.Fatal("POST /api/items/{code}/impacto deve receber o código comercial")
 	}
 }

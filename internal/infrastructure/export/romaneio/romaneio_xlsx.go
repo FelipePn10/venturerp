@@ -140,8 +140,8 @@ func buildSheet(d *RomaneioData) string {
 	for _, it := range d.Items {
 		addRow(0,
 			fmt.Sprintf("%d", it.Sequence),
-			fmt.Sprintf("%d", it.ItemCode),
-			it.Description,
+			codigoDoItem(it),
+			strings.TrimSpace(it.Description+" "+cuidadosEntreParenteses(it.Cuidados)),
 			it.NCM,
 			it.CFOP,
 			fmt.Sprintf("%.2f", it.Quantity),
@@ -222,4 +222,11 @@ func xmlEscape(s string) string {
 
 func init() {
 	_ = time.Now()
+}
+
+func cuidadosEntreParenteses(c string) string {
+	if c == "" {
+		return ""
+	}
+	return "(" + c + ")"
 }

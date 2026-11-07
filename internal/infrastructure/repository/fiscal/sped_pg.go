@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	fiscalrepository "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	"strings"
 	"time"
 
@@ -49,7 +50,114 @@ func (r *FiscalRepositoryPG) CarregarPeriodoEFD(ctx context.Context, inicio, fim
 	if d.AjustesApuracao, err = r.ajustesEFD(ctx, empresa, inicio.Format("2006-01")); err != nil {
 		return nil, err
 	}
+	cadastro, err := r.cadastroEFD(ctx, empresa)
+	if err != nil {
+		return nil, err
+	}
+	for i := range d.Entradas {
+		for j := range d.Entradas[i].Itens {
+			cadastro.aplicar(&d.Entradas[i].Itens[j].Item)
+		}
+	}
+	for i := range d.Itens {
+		cadastro.aplicar(&d.Itens[i])
+	}
 	return d, nil
+}
+
+// cadastroEFD é o que o cadastro do item define para o 0200 e vence o que veio da
+// nota: o tipo informado e o GTIN.
+type cadastroEFD map[string]struct{ tipo, gtin string }
+
+func (c cadastroEFD) aplicar(it *sped.ItemCadastro) {
+	cad, ok := c[it.Cod]
+	if !ok {
+		return
+	}
+	if cad.tipo != "" {
+		it.Tipo = cad.tipo
+	}
+	if cad.gtin != "" {
+		it.CodBarra = cad.gtin
+	}
+}
+
+func (r *FiscalRepositoryPG) cadastroEFD(ctx context.Context, empresa int64) (cadastroEFD, error) {
+	// Sucata é subproduto (05), salvo se o cadastro disser outro tipo.
+	rows, err := r.db.Query(ctx, `SELECT code::text, COALESCE(accounting_efd_item_type, CASE WHEN is_scrap THEN '05' END, ''), COALESCE(accounting_gtin, '')
+		  FROM items WHERE enterprise_id = $1 AND (accounting_efd_item_type IS NOT NULL OR accounting_gtin IS NOT NULL OR is_scrap)`, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o tipo e o GTIN dos itens da EFD: %w", err)
+	}
+	defer rows.Close()
+	out := cadastroEFD{}
+	for rows.Next() {
+		var codigo, tipo, gtin string
+		if err := rows.Scan(&codigo, &tipo, &gtin); err != nil {
+			return nil, err
+		}
+		out[codigo] = struct{ tipo, gtin string }{tipo, gtin}
+	}
+	return out, rows.Err()
+}
+
+// IdentificacaoFiscal lê GTIN e unidade tributável dos itens, para a NF-e.
+func (r *FiscalRepositoryPG) IdentificacaoFiscal(ctx context.Context, itens []int64) (map[int64]fiscalrepository.IdentificacaoFiscal, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, `SELECT i.code, COALESCE(accounting_gtin, ''), COALESCE(accounting_gtin_tax, ''),
+			COALESCE(accounting_sale_unit_of_measurement, warehouse_unit_of_measurement::text), COALESCE(accounting_tax_unit, ''), COALESCE(accounting_tax_unit_factor, 0),
+			CASE WHEN commercial_allow_billing_description_change THEN '' ELSE left(COALESCE(NULLIF(commercial_description, ''), NULLIF(pdm_description_technique, ''), name), 120) END,
+			left(COALESCE(description_en, ''), 120), COALESCE(accounting_ex_tipi, ''), COALESCE(accounting_manufacturer_cnpj, ''),
+			COALESCE(accounting_fci_number, ''), accounting_relevant_scale,
+			COALESCE(NULLIF(i.accounting_cest, ''), NULLIF(fc.cest, ''), ''),
+			COALESCE(i.business_code, ''), left(COALESCE(NULLIF(commercial_description, ''), NULLIF(pdm_description_technique, ''), name), 120)
+		  FROM items i
+		  LEFT JOIN LATERAL (
+		        SELECT f.cest FROM fiscal_classifications f
+		         WHERE f.enterprise_id = i.enterprise_id
+		           AND (f.code::text = i.accounting_sale_fiscal_classification_code OR f.ncm = i.accounting_sale_fiscal_classification_code)
+		         ORDER BY (f.code::text = i.accounting_sale_fiscal_classification_code) DESC LIMIT 1) fc ON TRUE
+		 WHERE i.enterprise_id = $1 AND i.code = ANY($2)`, empresa, itens)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o cadastro fiscal dos itens: %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]fiscalrepository.IdentificacaoFiscal{}
+	for rows.Next() {
+		var codigo int64
+		var c fiscalrepository.IdentificacaoFiscal
+		if err := rows.Scan(&codigo, &c.GTIN, &c.GTINTributavel, &c.UnidadeComercial, &c.UnidadeTributavel, &c.FatorTributavel, &c.DescricaoFixa,
+			&c.DescricaoExportacao, &c.ExTIPI, &c.CNPJFabricante, &c.FCI, &c.EscalaRelevante, &c.CEST, &c.CodigoComercial, &c.DescricaoCadastro); err != nil {
+			return nil, err
+		}
+		out[codigo] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	embalagens, err := r.db.Query(ctx, `SELECT item_code, uom, COALESCE(gtin, ''), package_quantity FROM item_gtins WHERE enterprise_id = $1 AND item_code = ANY($2)`, empresa, itens)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os GTIN por embalagem: %w", err)
+	}
+	defer embalagens.Close()
+	for embalagens.Next() {
+		var codigo int64
+		var unidade, gtin string
+		var quantidade decimal.Decimal
+		if err := embalagens.Scan(&codigo, &unidade, &gtin, &quantidade); err != nil {
+			return nil, err
+		}
+		c := out[codigo]
+		if c.GTINPorUnidade == nil {
+			c.GTINPorUnidade, c.QuantidadePorUnidade = map[string]string{}, map[string]decimal.Decimal{}
+		}
+		c.GTINPorUnidade[unidade], c.QuantidadePorUnidade[unidade] = gtin, quantidade
+		out[codigo] = c
+	}
+	return out, embalagens.Err()
 }
 
 func (r *FiscalRepositoryPG) empresaEFD(ctx context.Context, empresa int64, e *sped.EFDEmpresa) error {
@@ -629,6 +737,13 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 	rows.Close()
 	if out, err = r.inventarioConsignado(ctx, empresa, data, out); err != nil {
 		return nil, "", err
+	}
+	cadastro, err := r.cadastroEFD(ctx, empresa)
+	if err != nil {
+		return nil, "", err
+	}
+	for i := range out {
+		cadastro.aplicar(&out[i].Item)
 	}
 	var conta string
 	err = r.db.QueryRow(ctx,

@@ -289,3 +289,13 @@ func TestMontar_Inventario(t *testing.T) {
 		t.Error("item do inventário sem 0200")
 	}
 }
+
+func TestTipoItemInformadoVenceADeducao(t *testing.T) {
+	fabricado := 0
+	if got := TipoItem(CadastroDoItem{TipoEngenharia: &fabricado}, ""); got != "04" {
+		t.Fatalf("sem informar deduz 04, veio %s", got)
+	}
+	if got := TipoItem(CadastroDoItem{TipoEngenharia: &fabricado, Informado: "03"}, "1102"); got != "03" {
+		t.Fatalf("informado deve vencer inclusive o CFOP, veio %s", got)
+	}
+}

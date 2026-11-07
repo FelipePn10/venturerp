@@ -17,6 +17,6 @@ SELECT * FROM groups WHERE enterprise_id = $1 ORDER BY code;
 
 -- name: UpdateGroup :one
 UPDATE groups
-SET description = $3
+SET description = $3, is_active = $4
 WHERE enterprise_id = $1 AND code = $2
 RETURNING *;

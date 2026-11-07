@@ -38,6 +38,7 @@ type CoverageInput struct {
 	UOM             string
 	EngineeringType int
 	PlannerCode     *int64
+	BuyerCode       *int64
 	PlannerName     string
 	SafetyStock     decimal.Decimal
 	Stock           decimal.Decimal
@@ -56,6 +57,7 @@ type CoverageRow struct {
 	UOM           string          `json:"uom,omitempty"`
 	ItemType      string          `json:"item_type"`
 	PlannerCode   *int64          `json:"planner_code,omitempty"`
+	BuyerCode     *int64          `json:"buyer_code,omitempty"`
 	PlannerName   string          `json:"planner_name,omitempty"`
 	Status        string          `json:"status"`
 	Reason        string          `json:"reason"`
@@ -148,7 +150,7 @@ func daysBetween(from, to time.Time) int {
 func computeCoverage(in CoverageInput, hoje time.Time) CoverageRow {
 	row := CoverageRow{
 		ItemCode: in.ItemCode, BusinessCode: in.BusinessCode, Description: in.Description, UOM: in.UOM,
-		ItemType: itemTypeLabel(in.EngineeringType), PlannerCode: in.PlannerCode, PlannerName: in.PlannerName,
+		ItemType: itemTypeLabel(in.EngineeringType), PlannerCode: in.PlannerCode, PlannerName: in.PlannerName, BuyerCode: in.BuyerCode,
 		Stock: in.Stock, SafetyStock: in.SafetyStock, PlannedOrders: in.PlannedOrders, FirstPlannedStart: in.FirstPlannedStart,
 	}
 	buckets := append([]CoverageBucket(nil), in.Buckets...)

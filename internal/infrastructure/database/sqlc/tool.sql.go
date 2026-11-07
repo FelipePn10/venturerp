@@ -52,7 +52,7 @@ func (q *Queries) AddRouteOpTool(ctx context.Context, arg AddRouteOpToolParams) 
 const consumeToolLife = `-- name: ConsumeToolLife :one
 UPDATE tools SET life_used = life_used + $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code
 `
 
 type ConsumeToolLifeParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) ConsumeToolLife(ctx context.Context, arg ConsumeToolLifeParams
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.ItemCode,
 	)
 	return i, err
 }
@@ -86,9 +87,9 @@ const createTool = `-- name: CreateTool :one
 
 
 INSERT INTO tools (
-    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
+    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id, item_code
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code
 `
 
 type CreateToolParams struct {
@@ -101,6 +102,7 @@ type CreateToolParams struct {
 	Status       string
 	CreatedBy    pgtype.UUID
 	EnterpriseID int64
+	ItemCode     *int64
 }
 
 // Ferramenta é da empresa (enterprise_id). As consultas por id sem empresa são
@@ -118,6 +120,7 @@ func (q *Queries) CreateTool(ctx context.Context, arg CreateToolParams) (Tool, e
 		arg.Status,
 		arg.CreatedBy,
 		arg.EnterpriseID,
+		arg.ItemCode,
 	)
 	var i Tool
 	err := row.Scan(
@@ -135,6 +138,7 @@ func (q *Queries) CreateTool(ctx context.Context, arg CreateToolParams) (Tool, e
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.ItemCode,
 	)
 	return i, err
 }
@@ -149,7 +153,7 @@ func (q *Queries) DeactivateTool(ctx context.Context, id int64) error {
 }
 
 const getTool = `-- name: GetTool :one
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools WHERE id = $1
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code FROM tools WHERE id = $1
 `
 
 func (q *Queries) GetTool(ctx context.Context, id int64) (Tool, error) {
@@ -170,12 +174,13 @@ func (q *Queries) GetTool(ctx context.Context, id int64) (Tool, error) {
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.ItemCode,
 	)
 	return i, err
 }
 
 const listTools = `-- name: ListTools :many
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code FROM tools
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
@@ -209,6 +214,7 @@ func (q *Queries) ListTools(ctx context.Context, arg ListToolsParams) ([]Tool, e
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.ItemCode,
 		); err != nil {
 			return nil, err
 		}
@@ -341,7 +347,7 @@ func (q *Queries) ListToolsByRouteOp(ctx context.Context, arg ListToolsByRouteOp
 }
 
 const listToolsNeedingReplacement = `-- name: ListToolsNeedingReplacement :many
-SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id FROM tools
+SELECT id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code FROM tools
 WHERE is_active = TRUE AND life_limit > 0 AND enterprise_id = $1
   AND life_used >= life_limit * $2::NUMERIC
 ORDER BY (life_used / life_limit) DESC, code
@@ -383,6 +389,7 @@ func (q *Queries) ListToolsNeedingReplacement(ctx context.Context, arg ListTools
 			&i.UpdatedAt,
 			&i.CreatedBy,
 			&i.EnterpriseID,
+			&i.ItemCode,
 		); err != nil {
 			return nil, err
 		}
@@ -428,7 +435,7 @@ func (q *Queries) RemoveRouteOpTool(ctx context.Context, arg RemoveRouteOpToolPa
 const resetToolLife = `-- name: ResetToolLife :one
 UPDATE tools SET life_used = 0, status = 'ATIVA', updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code
 `
 
 func (q *Queries) ResetToolLife(ctx context.Context, id int64) (Tool, error) {
@@ -449,6 +456,7 @@ func (q *Queries) ResetToolLife(ctx context.Context, id int64) (Tool, error) {
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.ItemCode,
 	)
 	return i, err
 }
@@ -461,9 +469,10 @@ UPDATE tools SET
     life_limit = $5,
     cost       = $6,
     status     = $7,
+    item_code  = $8,
     updated_at = NOW()
 WHERE id = $1
-RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id
+RETURNING id, code, name, tool_type, life_type, life_limit, life_used, cost, status, is_active, created_at, updated_at, created_by, enterprise_id, item_code
 `
 
 type UpdateToolParams struct {
@@ -474,6 +483,7 @@ type UpdateToolParams struct {
 	LifeLimit pgtype.Numeric
 	Cost      pgtype.Numeric
 	Status    string
+	ItemCode  *int64
 }
 
 func (q *Queries) UpdateTool(ctx context.Context, arg UpdateToolParams) (Tool, error) {
@@ -485,6 +495,7 @@ func (q *Queries) UpdateTool(ctx context.Context, arg UpdateToolParams) (Tool, e
 		arg.LifeLimit,
 		arg.Cost,
 		arg.Status,
+		arg.ItemCode,
 	)
 	var i Tool
 	err := row.Scan(
@@ -502,6 +513,7 @@ func (q *Queries) UpdateTool(ctx context.Context, arg UpdateToolParams) (Tool, e
 		&i.UpdatedAt,
 		&i.CreatedBy,
 		&i.EnterpriseID,
+		&i.ItemCode,
 	)
 	return i, err
 }

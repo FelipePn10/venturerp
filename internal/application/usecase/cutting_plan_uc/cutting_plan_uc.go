@@ -17,6 +17,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	itementity "github.com/FelipePn10/panossoerp/internal/domain/items/entity"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	machinerepo "github.com/FelipePn10/panossoerp/internal/domain/machine/repository"
@@ -205,11 +206,43 @@ func (uc *CuttingPlanUseCase) AddPart(ctx context.Context, dto request.AddCuttin
 	if err != nil {
 		return nil, err
 	}
+	if err := uc.herdarSentidoDoCadastro(ctx, part); err != nil {
+		return nil, err
+	}
 	created, err := uc.repo.AddPart(ctx, part)
 	if err != nil {
 		return nil, err
 	}
 	return toPartResponse(created), nil
+}
+
+// herdarSentidoDoCadastro: peça 2D sem sentido informado segue o cadastro da peça e
+// do material do plano. Quem informou o veio na mão decide.
+func (uc *CuttingPlanUseCase) herdarSentidoDoCadastro(ctx context.Context, part *entity.CuttingPlanPart) error {
+	if uc.items == nil || part.WidthMM <= 0 || (part.Grain != "" && part.Grain != entity.GrainNone) {
+		return nil
+	}
+	plan, err := uc.repo.GetPlanByID(ctx, part.PlanID)
+	if err != nil {
+		return err
+	}
+	ler := func(codigo int64) *itementity.Item {
+		ic, errCodigo := valueobject.NewItemCode(codigo)
+		if errCodigo != nil {
+			return nil
+		}
+		item, errItem := uc.items.FindItemByCode(ctx, ic)
+		if errItem != nil {
+			return nil
+		}
+		return item
+	}
+	var peca *itementity.Item
+	if part.ItemCode != nil {
+		peca = ler(*part.ItemCode)
+	}
+	part.Grain, part.AllowRotation = sentidoDoCorte(peca, ler(plan.MaterialItemCode), part.AllowRotation)
+	return nil
 }
 
 func (uc *CuttingPlanUseCase) RemovePart(ctx context.Context, id int64) error {

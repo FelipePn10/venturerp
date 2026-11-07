@@ -6,6 +6,9 @@ type CadastroDoItem struct {
 	TipoUso        *int // 0 industrialização (padrão), 1 consumo, 2 imobilizado
 	Revenda        bool // tipo de venda REVENDA
 	Embalagem      bool // item de embalagem
+	// Informado é o TIPO_ITEM escolhido no cadastro; vence qualquer dedução. É o
+	// único jeito de chegar a 03, 05, 06 e 10, que nada no cadastro distingue.
+	Informado string
 }
 
 // TipoItem (0200/TIPO_ITEM). O 0200 é um por item no arquivo, então a
@@ -16,6 +19,9 @@ type CadastroDoItem struct {
 //  3. embalagem 02, serviço 09, fabricado 04 (produto acabado), comprado para
 //     revenda 00, comprado 01 (matéria-prima); sem nada, 99.
 func TipoItem(c CadastroDoItem, cfopEntrada string) string {
+	if c.Informado != "" {
+		return c.Informado
+	}
 	if c.TipoUso != nil {
 		switch *c.TipoUso {
 		case 1:

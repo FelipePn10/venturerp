@@ -55,6 +55,9 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
+	if err = resolvedItem.ConferirVenda(dto.RequestedQty, order.CustomerCode); err != nil {
+		return nil, err
+	}
 	tableCode := order.PriceTableCode
 	if dto.PriceTableCode != nil {
 		tableCode = dto.PriceTableCode
@@ -108,6 +111,11 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 	}
 
 	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
+	if item.DeliveryDate == nil && order.DeliveryDate == nil {
+		// Sem data na linha nem no pedido, vale o prazo estimado do cadastro. A
+		// data do pedido vence: o MRP lê a da linha antes da do cabeçalho.
+		item.DeliveryDate = resolvedItem.EntregaPadrao(time.Now())
+	}
 
 	item.RecalcularTotais()
 
@@ -168,6 +176,15 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	order, err := uc.Repo.GetByCode(ctx, current.SalesOrderCode)
 	if err != nil {
 		return nil, err
+	}
+	if uc.Items != nil {
+		cadastro, errItem := itemresolution.PelaChave(ctx, uc.Items, current.ItemCode)
+		if errItem != nil {
+			return nil, errItem
+		}
+		if err = cadastro.ConferirVenda(dto.RequestedQty, order.CustomerCode); err != nil {
+			return nil, err
+		}
 	}
 	tableCode := current.PriceTableCode
 	if tableCode == nil {

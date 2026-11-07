@@ -27,6 +27,14 @@ type AddPurchaseOrderItemUseCase struct {
 	Almoxarifados AlmoxarifadoPadrao
 	// Unidade completa quantidade e preço na unidade de estoque do item.
 	Unidade *UnidadeInterna
+	// Classificacoes completa a classificação fiscal da linha com a do cadastro
+	// do item, de onde sai o IPI sugerido. Opcional.
+	Classificacoes ClassificacaoFiscalDoItem
+}
+
+// ClassificacaoFiscalDoItem lê a classificação fiscal de compra do item.
+type ClassificacaoFiscalDoItem interface {
+	ClassificacaoFiscalDoItem(ctx context.Context, itemCode int64) (*int64, error)
 }
 
 func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.CreatePurchaseOrderItemDTO) (*response.PurchaseOrderItemResponse, error) {
@@ -71,7 +79,16 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 		}
 	}
 
-	// 2) IPI% — from the fiscal classification when not informed.
+	// 2) IPI% — from the fiscal classification when not informed. Sem a
+	// classificação na linha vale a do cadastro do item, como a tela promete;
+	// antes a linha ficava com IPI zero.
+	if dto.FiscalClassificationCode == nil && uc.Classificacoes != nil {
+		code, cerr := uc.Classificacoes.ClassificacaoFiscalDoItem(ctx, dto.ItemCode)
+		if cerr != nil {
+			return nil, cerr
+		}
+		dto.FiscalClassificationCode = code
+	}
 	ipiPct := decimal.Zero
 	if dto.IPIPct != nil {
 		ipiPct = *dto.IPIPct

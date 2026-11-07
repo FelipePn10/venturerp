@@ -9,10 +9,11 @@ import (
 )
 
 type CreateItemDTO struct {
-	Code       string                `json:"code"`
-	Name       string                `json:"name"`
-	Complement *string               `json:"complement,omitempty"`
-	Nature     itementity.ItemNature `json:"nature"`
+	Code       string  `json:"code"`
+	Name       string  `json:"name"`
+	Complement *string `json:"complement,omitempty"`
+	IdentificacaoAmpliadaDTO
+	Nature itementity.ItemNature `json:"nature"`
 	// Marcadores independentes: um item pode ser base e configurado ao mesmo
 	// tempo. Quando ausentes, são derivados de `nature` para não quebrar quem
 	// ainda envia só a natureza.
@@ -48,6 +49,7 @@ type WarehouseDTO struct {
 	CyclicalCountConfig             *valueobject.CyclicalCountConfig `json:"cyclical_count_config,omitempty"`
 	MinimumStock                    decimal.Decimal                  `json:"minimum_stock"`
 	AverageMonthlyConsumptionManual *decimal.Decimal                 `json:"average_monthly_consumption_manual,omitempty"`
+	EstoqueAmpliadoDTO
 }
 
 type EngineeringDTO struct {
@@ -58,6 +60,7 @@ type EngineeringDTO struct {
 	Type        types.TypeItem          `json:"type"`
 	TypeStruct  types.TypeStructItem    `json:"type_struct"`
 	OEM         bool                    `json:"oem"`
+	EngenhariaAmpliadaDTO
 }
 
 type PlanningDTO struct {
@@ -73,6 +76,7 @@ type PlanningDTO struct {
 	Critical     bool                      `json:"critical"`
 	Exclusive    bool                      `json:"exclusive"`
 	Active       bool                      `json:"active"`
+	PlanejamentoAmpliadoDTO
 }
 
 type SuppliesDTO struct {
@@ -82,6 +86,7 @@ type SuppliesDTO struct {
 	ReceivingChecklist bool                             `json:"receiving_checklist"`
 	Harvest            bool                             `json:"harvest"`
 	Notes              *string                          `json:"notes,omitempty"`
+	SuprimentosAmpliadoDTO
 }
 
 type CommercialDTO struct {
@@ -106,6 +111,7 @@ type CommercialDTO struct {
 	ExportPackaging               bool      `json:"export_packaging"`
 	ClassificationCode            *string   `json:"classification_code,omitempty"`
 	Notes                         *string   `json:"notes,omitempty"`
+	ComercialAmpliadoDTO
 }
 
 type AccountingDTO struct {
@@ -125,6 +131,7 @@ type AccountingDTO struct {
 	InputCode                        *string                          `json:"input_code,omitempty"`
 	CalculatePISCOFINS               *bool                            `json:"calculate_pis_cofins,omitempty"`
 	Notes                            *string                          `json:"notes,omitempty"`
+	FiscalAmpliadoDTO
 }
 
 // LegacyAccountingDTO keeps v1.1.2 request bodies valid during the frontend rollout.

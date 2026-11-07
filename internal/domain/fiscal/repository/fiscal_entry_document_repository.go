@@ -265,7 +265,10 @@ type ItemAccount struct {
 type ItemCandidate struct {
 	Code int64
 	// BusinessCode é o código que a pessoa conhece (RN-01001); Code é a chave interna.
-	BusinessCode       string
+	BusinessCode string
+	// DescricaoNota é o que a nota de venda imprime: a descrição comercial antes
+	// do nome interno, nos 120 caracteres do xProd.
+	DescricaoNota      string
 	Name               string
 	UOM                string
 	NCM                string
@@ -389,4 +392,36 @@ type AccountingPostingParams struct {
 	ProvisaoObsoletosAccountID *int64     `json:"provisao_obsoletos_account_id,omitempty"`
 	DespesaProvisaoAccountID   *int64     `json:"despesa_provisao_account_id,omitempty"`
 	UpdatedBy                  *uuid.UUID `json:"-"`
+}
+
+// RegraDaEntrada é o que o cadastro do item define para a entrada por nota.
+type RegraDaEntrada struct {
+	Roteiro          string
+	ExigeCertificado bool
+}
+
+// IdentificacaoFiscal é o que o cadastro do item acrescenta à linha da nota.
+type IdentificacaoFiscal struct {
+	GTIN, GTINTributavel string
+	// UnidadeComercial é a unidade a que o fator se refere.
+	UnidadeComercial  string
+	UnidadeTributavel string
+	FatorTributavel   decimal.Decimal
+	// DescricaoFixa: o item não permite alterar a descrição no faturamento, e a
+	// nota sai com esta. Vazia, a descrição da linha vale.
+	DescricaoFixa string
+	// DescricaoExportacao vai na nota com CFOP 7xxx.
+	DescricaoExportacao string
+	// GTINPorUnidade: a caixa tem GTIN próprio, usado quando a linha sai nela.
+	GTINPorUnidade map[string]string
+	// QuantidadePorUnidade: quantas unidades do item cabem em cada embalagem. É o
+	// que leva a linha em caixa até a unidade tributável.
+	QuantidadePorUnidade        map[string]decimal.Decimal
+	ExTIPI, CNPJFabricante, FCI string
+	EscalaRelevante             *bool
+	// CEST do item ou, sem ele, o da classificação fiscal de venda.
+	CEST string
+	// CodigoComercial e DescricaoCadastro entram na linha que não trouxe os seus:
+	// a chave interna do item não é o código que o cliente conhece.
+	CodigoComercial, DescricaoCadastro string
 }

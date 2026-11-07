@@ -5952,6 +5952,7 @@ type Group struct {
 	EnterpriseID int64
 	CreatedBy    pgtype.UUID
 	CreatedAt    pgtype.Timestamptz
+	IsActive     bool
 }
 
 type HttpIdempotencyRecord struct {
@@ -6642,7 +6643,48 @@ type Item struct {
 	AbcSharePct     pgtype.Numeric
 	AbcCalculatedAt pgtype.Timestamptz
 	// Família de PREPARAÇÃO: agrupa itens que custam o mesmo para trocar na máquina (ex.: CHAPA-3MM). Independe da classificação comercial.
-	SetupFamily pgtype.Text
+	SetupFamily                       pgtype.Text
+	LongDescription                   pgtype.Text
+	GeneralNotes                      pgtype.Text
+	Revision                          pgtype.Text
+	PreviousCode                      pgtype.Text
+	ManufacturerName                  pgtype.Text
+	ManufacturerPartNumber            pgtype.Text
+	WarehouseShelfLifeDays            *int32
+	WarehouseMinRemainingLifeDays     *int32
+	WarehouseStorageConditions        pgtype.Text
+	WarehouseHazardous                bool
+	WarehouseUnNumber                 pgtype.Text
+	WarehouseHazardClass              pgtype.Text
+	EngineeringVolume                 pgtype.Numeric
+	PlanningBuyerEmployeeCode         *int64
+	PlanningPurchaseLeadTimeDays      *int32
+	PlanningManufacturingLeadTimeDays *int32
+	PlanningNotes                     pgtype.Text
+	SuppliesUnderDeliveryTolerancePct pgtype.Numeric
+	SuppliesOverDeliveryTolerancePct  pgtype.Numeric
+	SuppliesReceiptRouting            string
+	SuppliesClassificationCode        pgtype.Text
+	AccountingGtin                    pgtype.Text
+	AccountingGtinTax                 pgtype.Text
+	AccountingEfdItemType             pgtype.Text
+	AccountingTaxUnit                 pgtype.Text
+	AccountingTaxUnitFactor           pgtype.Numeric
+	PdmSignature                      pgtype.Text
+	IsScrap                           bool
+	EngineeringRequiresDrawing        bool
+	EngineeringCuttingGrain           string
+	EngineeringCuttingNoRotation      bool
+	SuppliesRequiresCertificate       bool
+	CommercialExclusiveCustomerCode   *int64
+	CommercialVolumesPerUnit          *int32
+	DescriptionEn                     pgtype.Text
+	WarehouseSecondaryUom             pgtype.Text
+	WarehouseSecondaryFactor          pgtype.Numeric
+	AccountingExTipi                  pgtype.Text
+	AccountingRelevantScale           pgtype.Bool
+	AccountingManufacturerCnpj        pgtype.Text
+	AccountingFciNumber               pgtype.Text
 }
 
 type ItemBusinessCodeSequence struct {
@@ -6727,6 +6769,17 @@ type ItemGovernancaParametro struct {
 	Visoes         []string
 	UpdatedBy      pgtype.UUID
 	UpdatedAt      pgtype.Timestamptz
+}
+
+type ItemGtin struct {
+	ID              int64
+	EnterpriseID    int64
+	ItemCode        int64
+	Gtin            string
+	Uom             string
+	PackageQuantity pgtype.Numeric
+	Description     pgtype.Text
+	CreatedAt       pgtype.Timestamptz
 }
 
 type ItemHistorico struct {
@@ -6853,6 +6906,18 @@ type ItemRegrasCampo struct {
 	UpdatedAt    pgtype.Timestamptz
 }
 
+type ItemReviso struct {
+	ID           int64
+	EnterpriseID int64
+	ItemCode     int64
+	Revision     string
+	ValidFrom    pgtype.Date
+	ValidUntil   pgtype.Date
+	Reason       string
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
 type ItemStandardCost struct {
 	ID              int64
 	ItemCode        int64
@@ -6893,6 +6958,15 @@ type ItemStandardCostHistory struct {
 	OverheadDetail  []byte
 	CalculatedAt    pgtype.Timestamptz
 	CalculatedBy    pgtype.UUID
+}
+
+type ItemStatusPolitica struct {
+	EnterpriseID int64
+	Status       string
+	Processo     string
+	Politica     string
+	UpdatedBy    pgtype.UUID
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type ItemStructure struct {
@@ -7458,6 +7532,8 @@ type Modifier struct {
 	CreatedBy    pgtype.UUID
 	CreatedAt    pgtype.Timestamptz
 	EnterpriseID int64
+	Abbreviation pgtype.Text
+	IsActive     bool
 }
 
 type MpsSchedule struct {
@@ -8164,6 +8240,42 @@ type PaymentConditionInstallment struct {
 	BaseEvent PaymentBaseEventEnum
 }
 
+type PdmAtributo struct {
+	ID            int64
+	EnterpriseID  int64
+	GroupCode     int32
+	ModifierID    int64
+	Name          string
+	Position      int32
+	ValueType     string
+	Unit          pgtype.Text
+	Prefix        pgtype.Text
+	DecimalPlaces int16
+	IsRequired    bool
+	InDescription bool
+	InSignature   bool
+	IsActive      bool
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
+type PdmAtributoValore struct {
+	ID           int64
+	AttributeID  int64
+	Value        string
+	Abbreviation pgtype.Text
+	Position     int32
+	IsActive     bool
+}
+
+type PdmGrupoModificadore struct {
+	EnterpriseID int64
+	GroupCode    int32
+	ModifierID   int64
+	CreatedAt    pgtype.Timestamptz
+}
+
 type PerfisUsuario struct {
 	ID        int64
 	Nome      string
@@ -8582,6 +8694,7 @@ type ProductionOrder struct {
 	RoutingSnapshotAt          pgtype.Timestamptz
 	CustoPendente              pgtype.Text
 	SalesOrderCode             *int64
+	ItemRevision               pgtype.Text
 }
 
 type ProductionOrderCost struct {
@@ -11119,6 +11232,77 @@ type StockClosingProduction struct {
 	VarianceValue     pgtype.Numeric
 }
 
+type StockCnpjTransfer struct {
+	ID               int64
+	OriginID         int64
+	DestinationID    int64
+	FiscalExitID     int64
+	NfeKey           string
+	TransitWarehouse int64
+	Status           string
+	FiscalEntryID    *int64
+	ReceivedAt       pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
+	CreatedAt        pgtype.Timestamptz
+}
+
+type StockCnpjTransferLine struct {
+	ID            int64
+	TransferID    int64
+	OriginItem    int64
+	Mask          string
+	Lot           pgtype.Text
+	FromWarehouse int64
+	Quantity      pgtype.Numeric
+}
+
+type StockConsignment struct {
+	ID                int64
+	EnterpriseID      int64
+	Direction         string
+	PartnerCode       int64
+	ItemCode          int64
+	Mask              string
+	Lot               pgtype.Text
+	OriginWarehouseID *int64
+	WarehouseID       *int64
+	Quantity          pgtype.Numeric
+	SettledQty        pgtype.Numeric
+	ReturnedQty       pgtype.Numeric
+	UnitValue         pgtype.Numeric
+	FiscalExitID      *int64
+	Document          pgtype.Text
+	IssueDate         pgtype.Date
+	DueDate           pgtype.Date
+	Status            string
+	Notes             pgtype.Text
+	CreatedBy         pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type StockConsignmentBilling struct {
+	ID            int64
+	EnterpriseID  int64
+	SettlementID  int64
+	FiscalEntryID int64
+	Quantity      pgtype.Numeric
+	CreatedAt     pgtype.Timestamptz
+}
+
+type StockConsignmentSettlement struct {
+	ID            int64
+	ConsignmentID int64
+	Kind          string
+	Quantity      pgtype.Numeric
+	SettledOn     pgtype.Date
+	FiscalExitID  *int64
+	Document      pgtype.Text
+	Reversed      bool
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+}
+
 type StockCostRecalcLog struct {
 	ID         int64
 	ClosingID  int64
@@ -11291,6 +11475,7 @@ type StockMovement struct {
 	MovementDate         pgtype.Date
 	Backdated            bool
 	WaveLineID           *int64
+	SecondaryQuantity    pgtype.Numeric
 }
 
 type StockMovementType struct {
@@ -11315,16 +11500,18 @@ type StockMovementType struct {
 }
 
 type StockParameter struct {
-	EnterpriseID         int64
-	ExpiredLotAction     string
-	UpdatedBy            pgtype.UUID
-	UpdatedAt            pgtype.Timestamptz
-	RetroactiveMonths    pgtype.Int2
-	ToleranceA           pgtype.Numeric
-	ToleranceB           pgtype.Numeric
-	ToleranceC           pgtype.Numeric
-	ObsoleteDays         *int32
-	ObsoleteProvisionPct pgtype.Numeric
+	EnterpriseID           int64
+	ExpiredLotAction       string
+	UpdatedBy              pgtype.UUID
+	UpdatedAt              pgtype.Timestamptz
+	RetroactiveMonths      pgtype.Int2
+	ToleranceA             pgtype.Numeric
+	ToleranceB             pgtype.Numeric
+	ToleranceC             pgtype.Numeric
+	ObsoleteDays           *int32
+	ObsoleteProvisionPct   pgtype.Numeric
+	ConsignmentWarehouseID *int64
+	ConsignmentDays        *int32
 }
 
 type StockPickingWafe struct {
@@ -12105,6 +12292,7 @@ type Tool struct {
 	UpdatedAt    pgtype.Timestamptz
 	CreatedBy    pgtype.UUID
 	EnterpriseID int64
+	ItemCode     *int64
 }
 
 type ToolSerial struct {

@@ -1313,3 +1313,20 @@ func (r *FiscalRepositoryPG) SequenciaDoItemDeSaida(ctx context.Context, itemID 
 	}
 	return seq, nil
 }
+
+// AliquotaIPIDoNCM é o IPI (em %) da tabela tributária para o NCM, com o NCM
+// normalizado como o motor da nota faz. found=false quando o NCM não está na
+// tabela ou está inativo.
+func (r *FiscalRepositoryPG) AliquotaIPIDoNCM(ctx context.Context, ncm string) (decimal.Decimal, bool, error) {
+	var aliq decimal.Decimal
+	err := r.db.QueryRow(ctx, `SELECT aliq_ipi FROM public.ncm_tax_table
+		 WHERE regexp_replace(ncm, '\D', '', 'g') = regexp_replace($1, '\D', '', 'g') AND COALESCE(is_active, TRUE)
+		 ORDER BY ncm LIMIT 1`, ncm).Scan(&aliq)
+	if err == pgx.ErrNoRows {
+		return decimal.Zero, false, nil
+	}
+	if err != nil {
+		return decimal.Zero, false, fmt.Errorf("lendo o IPI do NCM %s: %w", ncm, err)
+	}
+	return aliq.Mul(decimal.NewFromInt(100)), true, nil
+}

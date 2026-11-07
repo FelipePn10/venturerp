@@ -117,6 +117,8 @@ var rotasPorModulo = []struct {
 	{"/api/employee", acesso.Cadastros},
 	{"/api/location", acesso.Cadastros},
 	{"/api/notifications", acesso.Cadastros},
+	{"/api/setores", acesso.Cadastros},
+	{"/api/setores/grupos", acesso.Engenharia},
 	{"/api/cnpj", acesso.Cadastros},
 	{"/api/reports", acesso.Cadastros},
 	// Administração
@@ -137,6 +139,7 @@ var leituraDeReferencia = []string{
 	"/api/industrial-calendar", "/api/order-priority", "/api/estoque/tipos-movimento", "/api/lot-masks",
 	"/api/cost-center", "/api/financial/condicoes-pagamento", "/api/financial/centros-custo", "/api/financial/plano-contas",
 	"/api/notifications/alerts", "/api/cnpj", "/api/stock/balances", "/api/routing", "/api/machine",
+	"/api/setores", "/api/delivery-promise/lines",
 }
 
 // rotasLivres valem para qualquer usuário autenticado, com ou sem perfil: o

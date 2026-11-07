@@ -26,10 +26,13 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var supplier int64
-	if err := pool.QueryRow(ctx, "SELECT code FROM suppliers WHERE is_active ORDER BY code LIMIT 1").Scan(&supplier); err != nil {
-		t.Skip("integration database has no supplier")
+	// O fornecedor é da empresa do teste: pegar o primeiro do banco, de qualquer
+	// empresa, faz a conferência de empresa recusar a tabela de preço.
+	supplier := testutil.UniqueCode() % 900_000_000
+	if _, err := pool.Exec(ctx, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORNECEDOR PRECO','11444777000161',$2,$3)`, supplier, testutil.Actor(t, pool), enterpriseID); err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM suppliers WHERE code=$1", supplier) })
 	tbl, err := entity.NewPurchasePriceTable(enterpriseID, code, &supplier, "Tabela integração", "BRL", testutil.Actor(t, pool))
 	if err != nil {
 		t.Fatal(err)

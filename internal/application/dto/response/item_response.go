@@ -15,6 +15,15 @@ type ItemResponse struct {
 	Name       string  `json:"name"`
 	Complement *string `json:"complement,omitempty"`
 	Nature     int     `json:"nature"`
+
+	LongDescription        *string `json:"long_description,omitempty"`
+	GeneralNotes           *string `json:"general_notes,omitempty"`
+	Revision               *string `json:"revision,omitempty"`
+	PreviousCode           *string `json:"previous_code,omitempty"`
+	ManufacturerName       *string `json:"manufacturer_name,omitempty"`
+	ManufacturerPartNumber *string `json:"manufacturer_part_number,omitempty"`
+	IsScrap                bool    `json:"is_scrap"`
+	DescriptionEN          *string `json:"description_en,omitempty"`
 	// Marcadores independentes: um item pode ser base e configurado ao mesmo tempo.
 	IsBase          bool                        `json:"is_base"`
 	IsConfigured    bool                        `json:"is_configured"`
@@ -76,6 +85,15 @@ type ItemWarehouseResponse struct {
 	CyclicalCountConfig             *ItemCyclicalCountConfigResponse `json:"cyclical_count_config,omitempty"`
 	MinimumStock                    float64                          `json:"minimum_stock"`
 	AverageMonthlyConsumptionManual *float64                         `json:"average_monthly_consumption_manual,omitempty"`
+	ShelfLifeDays                   *int                             `json:"shelf_life_days,omitempty"`
+	MinRemainingLifeDays            *int                             `json:"min_remaining_life_days,omitempty"`
+	StorageConditions               *string                          `json:"storage_conditions,omitempty"`
+	Hazardous                       bool                             `json:"hazardous"`
+	UNNumber                        *string                          `json:"un_number,omitempty"`
+	HazardClass                     *string                          `json:"hazard_class,omitempty"`
+	AcceptsFractionalQuantity       bool                             `json:"accepts_fractional_quantity"`
+	SecondaryUOM                    *string                          `json:"secondary_uom,omitempty"`
+	SecondaryFactor                 *float64                         `json:"secondary_factor,omitempty"`
 }
 
 type ItemCyclicalCountConfigResponse struct {
@@ -93,6 +111,10 @@ type ItemEngineeringResponse struct {
 	Type              string                  `json:"type"`
 	TypeStruct        string                  `json:"type_struct"`
 	OEM               bool                    `json:"oem"`
+	Volume            *float64                `json:"volume,omitempty"`
+	RequiresDrawing   bool                    `json:"requires_drawing"`
+	CuttingGrain      string                  `json:"cutting_grain"`
+	CuttingNoRotation bool                    `json:"cutting_no_rotation"`
 }
 
 // ItemWeightResponse is an item weight value.
@@ -123,6 +145,19 @@ type ItemPlanningResponse struct {
 	Critical     bool                      `json:"critical"`
 	Exclusive    bool                      `json:"exclusive"`
 	Active       bool                      `json:"active"`
+
+	PlannerEmployeeCode       *int64   `json:"planner_employee_code,omitempty"`
+	BuyerEmployeeCode         *int64   `json:"buyer_employee_code,omitempty"`
+	PurchaseLeadTimeDays      *int     `json:"purchase_lead_time_days,omitempty"`
+	ManufacturingLeadTimeDays *int     `json:"manufacturing_lead_time_days,omitempty"`
+	Notes                     *string  `json:"notes,omitempty"`
+	MaterialIssueTiming       string   `json:"material_issue_timing"`
+	ProductionReportingType   string   `json:"production_reporting_type"`
+	MaximumStock              float64  `json:"maximum_stock"`
+	Coverage                  int      `json:"coverage"`
+	GroupingKey               *string  `json:"grouping_key,omitempty"`
+	SafetyTimeDays            *int     `json:"safety_time_days,omitempty"`
+	MaximumLot                *float64 `json:"maximum_lot,omitempty"`
 }
 
 // ItemReorderPointResponse is an item reorder point value.
@@ -141,6 +176,12 @@ type ItemSuppliesResponse struct {
 	ReceivingChecklist bool    `json:"receiving_checklist"`
 	Harvest            bool    `json:"harvest"`
 	Notes              *string `json:"notes,omitempty"`
+
+	UnderDeliveryTolerancePct *float64 `json:"under_delivery_tolerance_pct,omitempty"`
+	OverDeliveryTolerancePct  *float64 `json:"over_delivery_tolerance_pct,omitempty"`
+	ReceiptRouting            string   `json:"receipt_routing"`
+	ClassificationCode        *string  `json:"classification_code,omitempty"`
+	RequiresCertificate       bool     `json:"requires_certificate"`
 }
 
 type ItemCommercialResponse struct {
@@ -167,6 +208,8 @@ type ItemCommercialResponse struct {
 	ExportPackaging               bool    `json:"export_packaging"`
 	ClassificationCode            *string `json:"classification_code,omitempty"`
 	Notes                         *string `json:"notes,omitempty"`
+	ExclusiveCustomerCode         *int64  `json:"exclusive_customer_code,omitempty"`
+	VolumesPerUnit                *int    `json:"volumes_per_unit,omitempty"`
 }
 
 type ItemAccountingResponse struct {
@@ -186,6 +229,16 @@ type ItemAccountingResponse struct {
 	InputCode                        *string          `json:"input_code,omitempty"`
 	CalculatePISCOFINS               *bool            `json:"calculate_pis_cofins,omitempty"`
 	Notes                            *string          `json:"notes,omitempty"`
+
+	GTIN             *string  `json:"gtin,omitempty"`
+	GTINTax          *string  `json:"gtin_tax,omitempty"`
+	EFDItemType      *string  `json:"efd_item_type,omitempty"`
+	TaxUnit          *string  `json:"tax_unit,omitempty"`
+	TaxUnitFactor    *float64 `json:"tax_unit_factor,omitempty"`
+	ExTIPI           *string  `json:"ex_tipi,omitempty"`
+	RelevantScale    *bool    `json:"relevant_scale,omitempty"`
+	ManufacturerCNPJ *string  `json:"manufacturer_cnpj,omitempty"`
+	FCINumber        *string  `json:"fci_number,omitempty"`
 }
 
 // MaskSummaryResponse is a compact representation of an item mask.

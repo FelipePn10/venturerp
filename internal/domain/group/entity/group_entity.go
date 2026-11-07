@@ -8,4 +8,5 @@ type Group struct {
 	Description  string
 	EnterpriseID int
 	CreatedBy    uuid.UUID
+	IsActive     bool
 }

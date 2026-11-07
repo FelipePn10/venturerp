@@ -2,6 +2,8 @@ package group_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -60,19 +62,47 @@ func NewUpdateGroupUseCase(repo repository.GroupRepository, auth ports.AuthServi
 	return &UpdateGroupUseCase{Repo: repo, Auth: auth}
 }
 
-func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description string) (*response.GroupResponse, error) {
+func (uc *UpdateGroupUseCase) Execute(ctx context.Context, code int, description string, ativo *bool) (*response.GroupResponse, error) {
 	if !uc.Auth.CanCreateGroup(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	description = strings.TrimSpace(description)
 	if description == "" {
 		return nil, errorsuc.NewValidationError("informe a descrição")
 	}
-	updated, err := uc.Repo.Update(ctx, &entity.Group{
-		Code:        code,
-		Description: description,
-	})
+	atual, err := uc.Repo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	// Só confere quando o nome muda: o duplicado antigo precisa poder ser inativado.
+	if !strings.EqualFold(strings.TrimSpace(atual.Description), description) {
+		if err = descricaoLivre(ctx, uc.Repo, description, code); err != nil {
+			return nil, err
+		}
+	}
+	situacao := atual.IsActive
+	if ativo != nil {
+		situacao = *ativo
+	}
+	updated, err := uc.Repo.Update(ctx, &entity.Group{Code: code, Description: description, IsActive: situacao})
 	if err != nil {
 		return nil, err
 	}
 	return toGroupResponse(updated), nil
+}
+
+// descricaoLivre recusa dois grupos com o mesmo nome: é assim que "CHAPAS" e
+// "Chapas " viravam dois grupos e o padrão se perdia.
+func descricaoLivre(ctx context.Context, repo repository.GroupRepository, descricao string, codigoAtual int) error {
+	grupos, err := repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	alvo := strings.ToUpper(strings.TrimSpace(descricao))
+	for _, g := range grupos {
+		if g.Code != codigoAtual && strings.ToUpper(strings.TrimSpace(g.Description)) == alvo {
+			return errorsuc.NewValidationError(fmt.Sprintf("já existe o grupo %d com esta descrição", g.Code))
+		}
+	}
+	return nil
 }

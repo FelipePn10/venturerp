@@ -43,6 +43,38 @@ func (c ItemCode) IsValid() bool {
 }
 
 //
+// GTIN
+//
+
+// GTINValido confere o tamanho (8, 12, 13 ou 14 dígitos) e o dígito verificador
+// GS1. Com o dígito errado a SEFAZ rejeita a nota, então o erro precisa aparecer
+// no cadastro, não na emissão.
+func GTINValido(gtin string) bool {
+	switch len(gtin) {
+	case 8, 12, 13, 14:
+	default:
+		return false
+	}
+	soma := 0
+	for i := len(gtin) - 2; i >= 0; i-- {
+		c := gtin[i]
+		if c < '0' || c > '9' {
+			return false
+		}
+		peso := 3
+		if (len(gtin)-2-i)%2 == 1 {
+			peso = 1
+		}
+		soma += int(c-'0') * peso
+	}
+	ultimo := gtin[len(gtin)-1]
+	if ultimo < '0' || ultimo > '9' {
+		return false
+	}
+	return (10-soma%10)%10 == int(ultimo-'0')
+}
+
+//
 // Dimensions
 //
 
@@ -195,18 +227,28 @@ type ReorderPoint struct {
 	CM decimal.Decimal
 	CR int
 	ES decimal.Decimal
+	// Modo DIA_TRABALHADO: CM é o consumo por dia trabalhado (0 = apurar do
+	// histórico), CR é 1 e TR é o prazo de reposição em dias úteis. A reposição
+	// troca TR pelos dias que a empresa trabalha no prazo, pelo calendário
+	// industrial (sábado trabalhado conta, feriado não). Sem modo, é o formato
+	// antigo: CM consumido em CR dias.
+	Modo string
 }
+
+// ModoPorDiaTrabalhado é o ponto de pedido pelo consumo por dia trabalhado.
+const ModoPorDiaTrabalhado = "DIA_TRABALHADO"
 
 // reorderPointJSON grava números no JSONB (o decimal sairia como texto).
 type reorderPointJSON struct {
-	TR int             `json:"TR"`
-	CM json.RawMessage `json:"CM"`
-	CR int             `json:"CR"`
-	ES json.RawMessage `json:"ES"`
+	TR   int             `json:"TR"`
+	CM   json.RawMessage `json:"CM"`
+	CR   int             `json:"CR"`
+	ES   json.RawMessage `json:"ES"`
+	Modo string          `json:"modo,omitempty"`
 }
 
 func (r ReorderPoint) MarshalJSON() ([]byte, error) {
-	return json.Marshal(reorderPointJSON{TR: r.TR, CM: json.RawMessage(r.CM.String()), CR: r.CR, ES: json.RawMessage(r.ES.String())})
+	return json.Marshal(reorderPointJSON{TR: r.TR, CM: json.RawMessage(r.CM.String()), CR: r.CR, ES: json.RawMessage(r.ES.String()), Modo: r.Modo})
 }
 
 // UnmarshalJSON aceita número ou texto, e o formato antigo (inteiros).
@@ -214,11 +256,15 @@ func (r *ReorderPoint) UnmarshalJSON(b []byte) error {
 	var raw struct {
 		TR, CR int
 		CM, ES decimal.NullDecimal
+		Modo   string `json:"modo"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
-	r.TR, r.CR = raw.TR, raw.CR
+	r.TR, r.CR, r.Modo = raw.TR, raw.CR, raw.Modo
+	if r.Modo != "" && r.Modo != ModoPorDiaTrabalhado {
+		return domainerr.NewValidation("modo do ponto de pedido inválido")
+	}
 	r.CM, r.ES = raw.CM.Decimal, raw.ES.Decimal
 	return nil
 }

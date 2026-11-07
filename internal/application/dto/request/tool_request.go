@@ -12,6 +12,8 @@ type CreateToolDTO struct {
 	LifeLimit decimal.Decimal `json:"life_limit"` // 0 = no life tracking
 	Cost      decimal.Decimal `json:"cost"`
 	CreatedBy uuid.UUID       `json:"created_by"`
+	// ItemCode liga a ficha ao item marcado como ferramenta.
+	ItemCode *int64 `json:"item_code,omitempty"`
 }
 
 type UpdateToolDTO struct {
@@ -22,6 +24,8 @@ type UpdateToolDTO struct {
 	LifeLimit decimal.Decimal `json:"life_limit"`
 	Cost      decimal.Decimal `json:"cost"`
 	Status    string          `json:"status"` // ATIVA | MANUTENCAO | INATIVA
+	// ItemCode ausente preserva o vínculo; null desfaz.
+	ItemCode Opcional[int64] `json:"item_code"`
 }
 
 type AddRouteOpToolDTO struct {

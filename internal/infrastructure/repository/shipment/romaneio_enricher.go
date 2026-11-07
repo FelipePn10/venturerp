@@ -100,9 +100,29 @@ func (a *RomaneioEnricherAdapter) GetItemDetails(ctx context.Context, code int64
 	if err != nil || it == nil {
 		return romaneioExport.RomaneioItem{}, err
 	}
+	// Quem transporta e quem recebe precisa ver o risco e a armazenagem. A linha
+	// do item no PDF corta a descrição, então os cuidados vão à parte.
+	var cuidados []string
+	if it.Warehouse.Hazardous {
+		c := "PRODUTO PERIGOSO ONU " + deref(it.Warehouse.UNNumber)
+		if cl := deref(it.Warehouse.HazardClass); cl != "" {
+			c += " CLASSE " + cl
+		}
+		cuidados = append(cuidados, c)
+	}
+	if c := deref(it.Warehouse.StorageConditions); c != "" {
+		cuidados = append(cuidados, "ARMAZENAR: "+c)
+	}
+	if it.Commercial.ExportPackaging {
+		cuidados = append(cuidados, "EMBALAGEM DE EXPORTAÇÃO")
+	} else if it.Commercial.RequiresSpecialPackaging {
+		cuidados = append(cuidados, "EMBALAGEM DIFERENCIADA")
+	}
 	return romaneioExport.RomaneioItem{
 		ItemCode:    code,
+		Codigo:      string(it.BusinessCode),
 		Description: it.PDM.DescriptionTechnique,
+		Cuidados:    strings.Join(cuidados, " — "),
 		Unit:        string(it.Warehouse.UnitOfMeasurement),
 	}, nil
 }

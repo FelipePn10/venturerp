@@ -185,6 +185,20 @@ type NFEItem struct {
 	ValorCOFINS                    float64  `json:"valor_cofins"`
 	OrigemMercadoria               int      `json:"origem_mercadoria"`
 	CEST                           string   `json:"cest,omitempty"`
+	// GTIN comercial e tributável (cEAN, cEANTrib). Vazio não vai no payload e a
+	// nota sai como sempre saiu.
+	CodigoBarrasComercial  string `json:"-"`
+	CodigoBarrasTributavel string `json:"-"`
+	// EXTIPI, CNPJFab, nFCI e indEscala do cadastro. Vazios não vão no payload.
+	CodigoExTIPI    string `json:"-"`
+	CNPJFabricante  string `json:"-"`
+	NumeroFCI       string `json:"-"`
+	EscalaRelevante *bool  `json:"-"`
+	// Unidade tributável própria do item (uTrib, qTrib, vUnTrib). Vazia repete a
+	// comercial.
+	UnidadeTributavel       string  `json:"-"`
+	QuantidadeTributavel    float64 `json:"-"`
+	ValorUnitarioTributavel float64 `json:"-"`
 	// Rateio do frete, seguro e desconto da nota (a SEFAZ soma os itens).
 	ValorFrete    float64 `json:"valor_frete,omitempty"`
 	ValorSeguro   float64 `json:"valor_seguro,omitempty"`
@@ -365,6 +379,25 @@ func (it NFEItem) campos() map[string]any {
 	}
 	if it.CEST != "" {
 		m["cest"] = it.CEST
+	}
+	for campo, valor := range map[string]string{"codigo_ex_tipi": it.CodigoExTIPI, "cnpj_fabricante": it.CNPJFabricante, "numero_fci": it.NumeroFCI} {
+		if valor != "" {
+			m[campo] = valor
+		}
+	}
+	if it.EscalaRelevante != nil {
+		m["escala_relevante"] = *it.EscalaRelevante
+	}
+	if it.CodigoBarrasComercial != "" {
+		m["codigo_barras_comercial"] = it.CodigoBarrasComercial
+	}
+	if it.CodigoBarrasTributavel != "" {
+		m["codigo_barras_tributavel"] = it.CodigoBarrasTributavel
+	}
+	if it.UnidadeTributavel != "" {
+		m["unidade_tributavel"] = it.UnidadeTributavel
+		m["quantidade_tributavel"] = it.QuantidadeTributavel
+		m["valor_unitario_tributavel"] = it.ValorUnitarioTributavel
 	}
 	for k, v := range map[string]float64{"valor_frete": it.ValorFrete, "valor_seguro": it.ValorSeguro, "valor_desconto": it.ValorDesconto} {
 		if v > 0 {

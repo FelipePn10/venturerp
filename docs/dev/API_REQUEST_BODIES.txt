@@ -143,6 +143,14 @@ PUT /api/items/{code}
   "accounting": {"origin": 1, "cest": "2101700"}
 }
 
+POST /api/items/{code}/impacto
+-- Mesmo corpo do PUT. Simula a alteração sem gravar e devolve as consequências:
+-- [{"campo","rotulo","antes","depois","severidade":"BLOQUEIA|ATENCAO","mensagem"}].
+
+POST /api/pdm/descricao
+{"group_code": 7001, "modifier_id": 9, "attributes": [{"name": "DIAMETRO", "value": "6"}], "exclude": "RN-01001"}
+-- Devolve a descrição gerada, os erros de preenchimento e os itens com a mesma assinatura.
+
 POST /api/items/mask/generate
 {
   "item_code": 10001,

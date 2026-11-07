@@ -174,7 +174,7 @@ func (uc *DemandUseCase) GenerateFromOrders(ctx context.Context, dto request.Gen
 			if qty <= 0 {
 				continue
 			}
-			part, perr := buildAutoPart(child, st.ChildDescription, qty, s.ref, materialIs2D(matItem), dto.AllowRotation)
+			part, perr := buildAutoPart(child, matItem, st.ChildDescription, qty, s.ref, materialIs2D(matItem), dto.AllowRotation)
 			if perr != nil {
 				warnings = append(warnings, fmt.Sprintf("%s: component %d: %v", s.ref, st.ChildCode, perr))
 				continue
@@ -323,9 +323,30 @@ func materialIs2D(mat *itementity.Item) bool {
 	}
 }
 
+// sentidoDoCorte: a peça manda, depois o material. Material com veio não gira:
+// girar a peça atravessa a fibra do MDF ou a laminação da chapa.
+func sentidoDoCorte(peca, material *itementity.Item, permiteGirar bool) (entity.Grain, bool) {
+	grain := entity.GrainNone
+	for _, i := range []*itementity.Item{material, peca} {
+		if i == nil {
+			continue
+		}
+		if i.Engineering.CuttingGrain != "" && i.Engineering.CuttingGrain != itementity.VeioNenhum {
+			grain = entity.Grain(i.Engineering.CuttingGrain)
+		}
+		if i.Engineering.CuttingNoRotation {
+			permiteGirar = false
+		}
+	}
+	if grain != entity.GrainNone {
+		permiteGirar = false
+	}
+	return grain, permiteGirar
+}
+
 // buildAutoPart maps a component's dimensions into a 1D or 2D cutting part. For a
 // sheet the face is taken as Length×Width (Height = thickness, ignored).
-func buildAutoPart(child *itementity.Item, label string, qty int, sourceRef string, is2D, allowRotation bool) (*entity.CuttingPlanPart, error) {
+func buildAutoPart(child, material *itementity.Item, label string, qty int, sourceRef string, is2D, allowRotation bool) (*entity.CuttingPlanPart, error) {
 	d := child.Engineering.Dimensions
 	itemCode := int64(child.Code)
 	ref := sourceRef
@@ -337,7 +358,8 @@ func buildAutoPart(child *itementity.Item, label string, qty int, sourceRef stri
 		if w <= 0 || h <= 0 {
 			return nil, errorsuc.NewValidationError("o componente de chapa precisa das dimensões de comprimento e largura")
 		}
-		return entity.NewPart2D(0, &itemCode, label, w, h, entity.GrainNone, allowRotation, qty, &ref)
+		grain, rotaciona := sentidoDoCorte(child, material, allowRotation)
+		return entity.NewPart2D(0, &itemCode, label, w, h, grain, rotaciona, qty, &ref)
 	}
 	length := float64(d.Length)
 	if length <= 0 {

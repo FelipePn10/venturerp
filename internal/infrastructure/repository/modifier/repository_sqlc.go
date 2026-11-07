@@ -2,7 +2,12 @@ package modifier
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
+
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/modifier/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
@@ -38,6 +43,9 @@ func (r *repositoryModifierSQLC) GetByID(ctx context.Context, id int) (*entity.M
 		return nil, err
 	}
 	row, err := r.q.GetModifierByID(ctx, sqlc.GetModifierByIDParams{EnterpriseID: tenantID, ID: int64(id)})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("modificador do PDM nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get modifier by id %d: %w", id, err)
 	}
@@ -66,8 +74,11 @@ func (r *repositoryModifierSQLC) Update(ctx context.Context, modifier *entity.Mo
 		return nil, err
 	}
 	row, err := r.q.UpdateModifier(ctx, sqlc.UpdateModifierParams{
-		EnterpriseID: tenantID, ID: int64(modifier.ID), Description: modifier.Description,
+		EnterpriseID: tenantID, ID: int64(modifier.ID), Description: modifier.Description, IsActive: modifier.IsActive,
 	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("modificador do PDM nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("update modifier %d: %w", modifier.ID, err)
 	}
@@ -79,5 +90,6 @@ func modifierToEntity(dbModifier sqlc.Modifier) *entity.Modifier {
 		ID:          int(dbModifier.ID),
 		Description: dbModifier.Description,
 		CreatedBy:   pgutil.FromPgUUID(dbModifier.CreatedBy),
+		IsActive:    dbModifier.IsActive,
 	}
 }

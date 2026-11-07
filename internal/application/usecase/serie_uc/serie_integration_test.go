@@ -83,6 +83,11 @@ func TestSerieDaProducaoAteOClienteENaoMisturaEmpresas(t *testing.T) {
 	if _, err := uc.SalvarPerfil(a.Ctx, itemTxt.String(), serie_uc.PerfilDTO{ControlaSerie: true, MascaraSerieID: &mascara}); err != nil {
 		t.Fatal(err)
 	}
+	// Série é por unidade: ligar a série torna o item de quantidade inteira.
+	var fracionado bool
+	if err := pool.QueryRow(a.Ctx, `SELECT accepts_fractional_quantity FROM items WHERE business_code=$1 AND enterprise_id=$2`, itemTxt.String(), a.ID).Scan(&fracionado); err != nil || fracionado {
+		t.Fatalf("o item com série devia ficar de quantidade inteira: fracionado=%v err=%v", fracionado, err)
+	}
 
 	// 2. Cadastro manual e série repetida.
 	manuais, err := uc.Cadastrar(a.Ctx, serie_uc.CadastroDTO{ItemCode: itemTxt, Series: []string{"LEG-1", "LEG-2"}, Situacao: "EM_ESTOQUE", WarehouseID: &almox})

@@ -34,6 +34,51 @@ type DeliveryPromiseUseCase struct {
 	Calendar        calendarrepo.ItemCalendarPromiseRepository
 	Auth            ports.AuthService
 	Representatives representativevalidation.Repository
+	// Linhas guarda a capacidade de cada tanque / linha. Sem ela (ou sem a linha
+	// do tanque), vale a capacidade informada na consulta.
+	Linhas dprepo.LinhaDeCapacidadeRepository
+}
+
+// capacidades devolve a capacidade diária de cada tanque, com a da consulta como
+// reserva para tanque sem cadastro.
+func (uc *DeliveryPromiseUseCase) capacidades(ctx context.Context, padrao decimal.Decimal) (func(int64) decimal.Decimal, error) {
+	porTanque := map[int64]decimal.Decimal{}
+	if uc.Linhas != nil {
+		linhas, err := uc.Linhas.Linhas(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, l := range linhas {
+			if l.Ativa {
+				porTanque[l.Codigo] = l.CapacidadeDiaria
+			}
+		}
+	}
+	return func(tanque int64) decimal.Decimal {
+		if c, ok := porTanque[tanque]; ok {
+			return c
+		}
+		return padrao
+	}, nil
+}
+
+// Linhas lista os tanques / linhas de capacidade.
+func (uc *DeliveryPromiseUseCase) ListarLinhas(ctx context.Context) ([]dpentity.LinhaDeCapacidade, error) {
+	if uc.Linhas == nil {
+		return []dpentity.LinhaDeCapacidade{}, nil
+	}
+	return uc.Linhas.Linhas(ctx)
+}
+
+// SalvarLinha cria, altera ou desativa um tanque / linha de capacidade.
+func (uc *DeliveryPromiseUseCase) SalvarLinha(ctx context.Context, l dpentity.LinhaDeCapacidade) error {
+	if !uc.Auth.CanManageDeliveryPromise(ctx) {
+		return errorsuc.ErrUnauthorized
+	}
+	if err := l.Conferir(); err != nil {
+		return err
+	}
+	return uc.Linhas.SalvarLinha(ctx, l)
 }
 
 type allocationRequest struct {
@@ -60,6 +105,10 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 		return nil, errorsuc.NewValidationError("a data final deve ser maior ou igual à data inicial")
 	}
 
+	capacidade, err := uc.capacidades(ctx, dto.DailyCapacity)
+	if err != nil {
+		return nil, err
+	}
 	days := map[string]*dpentity.TankOccupationDay{}
 	orders, err := uc.Orders.ListAdvanced(ctx, orderrepo.SalesOrderFilter{DeliveryFrom: &from, DeliveryTo: &to})
 	if err != nil {
@@ -92,7 +141,7 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 				Source:         "SALES_ORDER",
 				ReferenceCode:  &order.Code,
 			}
-			day := ensureDay(days, tankCode, alloc.AllocationDate, dto.DailyCapacity)
+			day := ensureDay(days, tankCode, alloc.AllocationDate, capacidade(tankCode))
 			if warn != "" {
 				day.Warnings = append(day.Warnings, warn)
 			}
@@ -114,7 +163,7 @@ func (uc *DeliveryPromiseUseCase) Occupation(ctx context.Context, dto request.De
 			Source:         "TANK_RESERVATION",
 			ReferenceCode:  &reservation.Code,
 		}
-		addAllocation(ensureDay(days, alloc.TankCode, alloc.AllocationDate, dto.DailyCapacity), alloc)
+		addAllocation(ensureDay(days, alloc.TankCode, alloc.AllocationDate, capacidade(alloc.TankCode)), alloc)
 	}
 
 	return occupationMapToResponse(days), nil
@@ -124,8 +173,15 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 	if !uc.Auth.CanManageDeliveryPromise(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
-	if !dto.DailyCapacity.IsPositive() {
-		return nil, errorsuc.NewValidationError("a capacidade diária deve ser maior que zero")
+	capacidade, err := uc.capacidades(ctx, dto.DailyCapacity)
+	if err != nil {
+		return nil, err
+	}
+	// A capacidade vem do tanque cadastrado; a da requisição só cobre tanque sem cadastro.
+	for _, line := range dto.Lines {
+		if tanque, _ := uc.tankCode(ctx, line.ItemCode); !capacidade(tanque).IsPositive() {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o tanque %d do item %d não tem capacidade cadastrada: cadastre a linha em VPME0102 ou informe a capacidade diária", tanque, line.ItemCode))
+		}
 	}
 	createdBy, err := uc.Auth.UserID(ctx)
 	if err != nil {
@@ -168,7 +224,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 			tankCode:  tankCode,
 			quantity:  qty,
 			unitPrice: line.UnitPrice,
-		}, requestedDate, dto.DailyCapacity)
+		}, requestedDate, capacidade(tankCode))
 		if err != nil {
 			return nil, err
 		}

@@ -24,6 +24,22 @@ type legacyCodeFinder interface {
 	FindItemByCode(context.Context, valueobject.ItemCode) (*itementity.Item, error)
 }
 
+// apelidoFinder diz de quem é um código que não é o de nenhum item (código
+// anterior, do fornecedor, referência do fabricante, GTIN).
+type apelidoFinder interface {
+	ApelidosDoCodigo(context.Context, string) ([]string, error)
+}
+
+// MensagemDeApelido completa o "não encontrado" com o dono do código. Não troca
+// o código sozinho: o anterior de um item pode ser o atual de outro, e dois
+// fornecedores podem usar o mesmo código.
+func MensagemDeApelido(base, codigo string, apelidos []string) string {
+	if len(apelidos) == 0 {
+		return base
+	}
+	return fmt.Sprintf("%s: %s %s. Use o código atual do item", base, strings.TrimSpace(codigo), strings.Join(apelidos, "; "))
+}
+
 type maskLister interface {
 	ListAllWithMasks(context.Context) ([]itementity.ItemWithMasks, error)
 }
@@ -80,7 +96,13 @@ func Resolve(ctx context.Context, repository any, raw request.TextCode) (*itemen
 			}
 		}
 	}
-	return nil, errorsuc.NewValidationError("item não encontrado na empresa autenticada")
+	base := "item não encontrado na empresa autenticada"
+	if finder, ok := repository.(apelidoFinder); ok {
+		if apelidos, err := finder.ApelidosDoCodigo(ctx, code); err == nil && len(apelidos) > 0 {
+			base = MensagemDeApelido("item "+code+" não encontrado nesta empresa", code, apelidos)
+		}
+	}
+	return nil, errorsuc.NewValidationError(base)
 }
 
 // resolvePelaChaveInterna busca pelo código interno (numérico). Devolve
@@ -136,6 +158,11 @@ func ValidateMask(ctx context.Context, repository any, itemCode int64, mask stri
 // Use em lançamento (pedido, ordem, estrutura, consumo). NÃO use em cadastro de
 // apoio — conversão de unidade, restrição, ficha de ferramenta e afins precisam
 // continuar abrindo o item inativo, senão não há como mantê-lo nem reativá-lo.
+// PelaChave lê o cadastro pela chave interna, para quem já tem a linha gravada.
+func PelaChave(ctx context.Context, repository any, code int64) (*itementity.Item, error) {
+	return resolvePelaChaveInterna(ctx, repository, fmt.Sprint(code))
+}
+
 func ResolveActive(ctx context.Context, repository any, raw request.TextCode) (*itementity.Item, error) {
 	item, err := Resolve(ctx, repository, raw)
 	if err != nil {

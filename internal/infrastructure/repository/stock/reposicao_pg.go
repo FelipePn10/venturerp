@@ -82,6 +82,15 @@ func (r *StockRepositorySQLC) SugestoesDeReposicao(ctx context.Context) ([]entit
 }
 
 func (r *StockRepositorySQLC) itensDeReposicao(ctx context.Context, empresa int64) (map[int64]*entity.ItemReposicao, []int64, error) {
+	hoje, err := r.HojeDaEmpresa(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	cal, err := r.calendarioDeTrabalho(ctx, empresa, hoje.AddDate(0, 0, -diasDoHistoricoDeConsumo), hoje.AddDate(1, 0, 0))
+	if err != nil {
+		return nil, nil, err
+	}
+	diasNoHistorico := cal.DiasTrabalhados(hoje.AddDate(0, 0, -diasDoHistoricoDeConsumo), hoje.AddDate(0, 0, -1))
 	rows, err := r.pool.Query(ctx,
 		`SELECT i.code, COALESCE(NULLIF(i.business_code,''), i.code::text), COALESCE(i.name,''),
 		        COALESCE(i.warehouse_unit_of_measurement::text,''), COALESCE(i.engineering_type,0), i.planning_reorder_point,
@@ -90,15 +99,18 @@ func (r *StockRepositorySQLC) itensDeReposicao(ctx context.Context, empresa int6
 		        COALESCE((SELECT x.maximum_stock FROM item_planning_extras x
 		                   WHERE x.enterprise_id=i.enterprise_id AND x.item_code=i.code), 0),
 		        COALESCE((SELECT a.avg_monthly_consumption FROM item_consumption_averages a
-		                   WHERE a.enterprise_id=i.enterprise_id AND a.item_code=i.code ORDER BY a.calculated_at DESC LIMIT 1), 0)
+		                   WHERE a.enterprise_id=i.enterprise_id AND a.item_code=i.code ORDER BY a.calculated_at DESC LIMIT 1), 0),
+		        COALESCE((SELECT SUM(ABS(m.quantity)) FROM stock_movements m
+		                   WHERE m.enterprise_id=i.enterprise_id AND m.item_code=i.code AND `+consumoSQL+`
+		                     AND m.created_at >= NOW() - make_interval(days => $2)), 0)
 		   FROM items i
-		  WHERE i.enterprise_id=$1 AND COALESCE(i.planning_active, TRUE) AND NOT COALESCE(i.planning_ghost, FALSE)
+		  WHERE i.enterprise_id=$1 AND COALESCE(i.planning_active, TRUE) AND NOT COALESCE(i.planning_ghost, FALSE) AND NOT i.is_prototype AND NOT i.is_scrap AND NOT i.is_process_item
 		    AND `+itemLiberadoSQL+`
 		    AND (COALESCE(i.warehouse_minimum_stock,0) > 0
 		         OR (i.planning_reorder_point IS NOT NULL AND i.planning_reorder_point <> 'null'::jsonb)
 		         OR EXISTS (SELECT 1 FROM stock_replenishment_policies p
 		                     WHERE p.enterprise_id=i.enterprise_id AND p.item_code=i.code AND p.is_active))
-		  ORDER BY 2`, empresa)
+		  ORDER BY 2`, empresa, diasDoHistoricoDeConsumo)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing replenishment candidates: %w", err)
 	}
@@ -108,12 +120,16 @@ func (r *StockRepositorySQLC) itensDeReposicao(ctx context.Context, empresa int6
 	for rows.Next() {
 		it := &entity.ItemReposicao{PorAlmox: map[int64]entity.SaldoReposicao{}}
 		var ppRaw []byte
-		var minimo decimal.Decimal
+		var minimo, consumoNoHistorico decimal.Decimal
 		if err := rows.Scan(&it.ItemCode, &it.Codigo, &it.Nome, &it.Unidade, &it.TipoItem, &ppRaw, &minimo, &it.Seguranca,
-			&it.LoteMinimo, &it.LoteMultiplo, &it.Maximo, &it.ConsumoMedio); err != nil {
+			&it.LoteMinimo, &it.LoteMultiplo, &it.Maximo, &it.ConsumoMedio, &consumoNoHistorico); err != nil {
 			return nil, nil, fmt.Errorf("scanning replenishment candidate: %w", err)
 		}
-		it.Ponto, it.Motivo = calcularPontoDePedido(ppRaw, minimo, it.Seguranca, it.ConsumoMedio)
+		porDia := decimal.Zero
+		if diasNoHistorico > 0 {
+			porDia = consumoNoHistorico.DivRound(decimal.NewFromInt(int64(diasNoHistorico)), 6)
+		}
+		it.Ponto, it.Motivo = calcularPontoDePedido(ppRaw, minimo, it.Seguranca, it.ConsumoMedio, porDia, cal, hoje)
 		itens[it.ItemCode] = it
 		ordem = append(ordem, it.ItemCode)
 	}
@@ -262,9 +278,50 @@ func (r *StockRepositorySQLC) chegadasDeReposicao(ctx context.Context, empresa i
 // calcularPontoDePedido: TR × CM / CR + ES do cadastro; CM zerado usa o consumo
 // médio apurado (mensal, levado ao ciclo CR em dias); sem fórmula, o mínimo. O
 // resultado já contém a segurança: a fórmula a soma, e no mínimo ela é o piso.
-func calcularPontoDePedido(raw []byte, minimo, seguranca, consumoMensal decimal.Decimal) (decimal.Decimal, string) {
+// diasDoHistoricoDeConsumo é a janela do consumo por dia trabalhado.
+const diasDoHistoricoDeConsumo = 90
+
+// calendarioDeTrabalho lê as exceções do calendário industrial no período.
+func (r *StockRepositorySQLC) calendarioDeTrabalho(ctx context.Context, empresa int64, de, ate time.Time) (entity.CalendarioDeTrabalho, error) {
+	cal := entity.CalendarioDeTrabalho{Excecoes: map[string]bool{}}
+	rows, err := r.pool.Query(ctx, `SELECT make_date(year, month, day)::text, is_workday FROM industrial_calendar
+		 WHERE enterprise_id = $1 AND make_date(year, month, day) BETWEEN $2::date AND $3::date`, empresa, de, ate)
+	if err != nil {
+		return cal, fmt.Errorf("lendo o calendário industrial: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var d string
+		var trabalha bool
+		if err := rows.Scan(&d, &trabalha); err != nil {
+			return cal, err
+		}
+		cal.Excecoes[d] = trabalha
+	}
+	return cal, rows.Err()
+}
+
+// calcularPontoDePedido: no modo por dia trabalhado, consumo por dia (o do
+// cadastro ou o apurado nos últimos 90 dias, dividido pelos dias que a empresa
+// trabalhou) × dias que ela vai trabalhar no prazo de reposição, pelo calendário,
+// + segurança. Assim o mês com sábado trabalhado não infla o consumo por dia, e o
+// prazo com sábado trabalhado pede mais. No formato antigo, TR × CM ÷ CR + ES.
+func calcularPontoDePedido(raw []byte, minimo, seguranca, consumoMensal, consumoPorDiaApurado decimal.Decimal, cal entity.CalendarioDeTrabalho, hoje time.Time) (decimal.Decimal, string) {
 	var pp valueobject.ReorderPoint
-	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &pp) == nil && pp.CR > 0 && pp.TR > 0 {
+	if len(raw) > 0 && string(raw) != "null" && json.Unmarshal(raw, &pp) == nil && pp.Modo == valueobject.ModoPorDiaTrabalhado && pp.TR > 0 {
+		porDia, origem := pp.CM, "ponto de pedido do cadastro"
+		if !porDia.IsPositive() {
+			porDia, origem = consumoPorDiaApurado, "ponto de pedido com o consumo por dia trabalhado apurado"
+		}
+		if porDia.IsPositive() {
+			es := pp.ES
+			if !es.IsPositive() {
+				es = seguranca
+			}
+			return entity.PontoPorDiaTrabalhado(porDia, cal.DiasDeConsumoNoPrazo(hoje, pp.TR), es), origem
+		}
+	}
+	if len(raw) > 0 && string(raw) != "null" && pp.Modo == "" && json.Unmarshal(raw, &pp) == nil && pp.CR > 0 && pp.TR > 0 {
 		cm := pp.CM
 		origem := "ponto de pedido do cadastro"
 		if !cm.IsPositive() && consumoMensal.IsPositive() {
@@ -400,4 +457,46 @@ func (r *StockRepositorySQLC) ExcluirPoliticaDeReposicao(ctx context.Context, id
 		return errorsuc.NewNotFoundError("política de reposição não encontrada")
 	}
 	return nil
+}
+
+// PontoDePedidoDoItem calcula o ponto de pedido de um item com a mesma regra da
+// sugestão de reposição: consumo por dia trabalhado e dias de consumo no prazo
+// pelo calendário industrial. O MRP usa isto no modo por dia trabalhado, para os
+// dois não divergirem. found=false quando o item não tem ponto de pedido.
+func (r *StockRepositorySQLC) PontoDePedidoDoItem(ctx context.Context, itemCode int64) (decimal.Decimal, bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	hoje, err := r.HojeDaEmpresa(ctx)
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	cal, err := r.calendarioDeTrabalho(ctx, empresa, hoje.AddDate(0, 0, -diasDoHistoricoDeConsumo), hoje.AddDate(1, 0, 0))
+	if err != nil {
+		return decimal.Zero, false, err
+	}
+	var ppRaw []byte
+	var minimo, seguranca, consumoMensal, consumoNoHistorico decimal.Decimal
+	err = r.pool.QueryRow(ctx,
+		`SELECT i.planning_reorder_point, COALESCE(i.warehouse_minimum_stock,0), COALESCE(i.planning_safety_stock,0),
+		        COALESCE((SELECT a.avg_monthly_consumption FROM item_consumption_averages a
+		                   WHERE a.enterprise_id=i.enterprise_id AND a.item_code=i.code ORDER BY a.calculated_at DESC LIMIT 1), 0),
+		        COALESCE((SELECT SUM(ABS(m.quantity)) FROM stock_movements m
+		                   WHERE m.enterprise_id=i.enterprise_id AND m.item_code=i.code AND `+consumoSQL+`
+		                     AND m.created_at >= NOW() - make_interval(days => $3)), 0)
+		   FROM items i WHERE i.enterprise_id=$1 AND i.code=$2`, empresa, itemCode, diasDoHistoricoDeConsumo).
+		Scan(&ppRaw, &minimo, &seguranca, &consumoMensal, &consumoNoHistorico)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return decimal.Zero, false, nil
+	}
+	if err != nil {
+		return decimal.Zero, false, fmt.Errorf("lendo o ponto de pedido do item %d: %w", itemCode, err)
+	}
+	porDia := decimal.Zero
+	if dias := cal.DiasTrabalhados(hoje.AddDate(0, 0, -diasDoHistoricoDeConsumo), hoje.AddDate(0, 0, -1)); dias > 0 {
+		porDia = consumoNoHistorico.DivRound(decimal.NewFromInt(int64(dias)), 6)
+	}
+	ponto, _ := calcularPontoDePedido(ppRaw, decimal.Zero, seguranca, consumoMensal, porDia, cal, hoje)
+	return ponto, ponto.IsPositive(), nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/governanca"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 )
@@ -19,6 +20,10 @@ type UpdateItemUseCase struct {
 	// FiscalCatalog valida as classificações fiscais contra o cadastro canônico
 	// (/api/fiscal-classifications). Opcional: sem ele os códigos passam livres.
 	FiscalCatalog fiscalClassificationCatalog
+	// PDM confere o par grupo+modificador e gera a descrição do padrão.
+	PDM aplicadorDePDM
+	// Uso alimenta a conferência de impacto; sem ele a alteração não é conferida.
+	Uso leitorDeUso
 }
 
 type updateItemBusinessRepository interface {
@@ -68,6 +73,29 @@ func (uc *UpdateItemUseCase) ExecuteBusinessCode(ctx context.Context, rawCode st
 }
 
 func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
+	antes := retratoDoItem(item)
+	if err := uc.aplicar(ctx, item, dto); err != nil {
+		return nil, err
+	}
+	if uc.Uso != nil {
+		impactos, err := uc.impactos(ctx, antes, item)
+		if err != nil {
+			return nil, err
+		}
+		if err := governanca.TemBloqueio(impactos); err != nil {
+			return nil, err
+		}
+	}
+	updated, err := uc.Repo.UpdateFolders(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	return toItemResponse(updated), nil
+}
+
+// aplicar leva a requisição para a entidade e valida, sem gravar: a conferência
+// de impacto usa o mesmo caminho do salvar, então os dois nunca discordam.
+func (uc *UpdateItemUseCase) aplicar(ctx context.Context, item *entity.Item, dto request.UpdateItemDTO) error {
 	applyIdentity(item, dto)
 	applyEngineeringFolder(item, dto)
 	applyPlanningFolder(item, dto)
@@ -108,7 +136,7 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 				item.Commercial.PackagingItemBusinessCode = strings.TrimSpace((*c.PackagingItemCode).String())
 			}
 			if err := resolveReferenceCodes(ctx, uc.Repo, item); err != nil {
-				return nil, err
+				return err
 			}
 		}
 		if c.AllowBillingDescriptionChange != nil {
@@ -141,6 +169,7 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 		if c.Notes != nil {
 			item.Commercial.Notes = cleanUpdate(*c.Notes)
 		}
+		c.ComercialAmpliadoDTO.AplicarEm(&item.Commercial)
 	}
 	if a := dto.Accounting; a != nil {
 		if a.SaleFiscalClassificationCode != nil {
@@ -191,6 +220,7 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 		if a.Notes != nil {
 			item.Accounting.Notes = cleanUpdate(*a.Notes)
 		}
+		a.FiscalAmpliadoDTO.AplicarEm(&item.Accounting)
 	}
 	if w := dto.Warehouse; w != nil {
 		if w.CyclicalCountConfig.Set {
@@ -212,24 +242,35 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 			v := *w.AverageMonthlyConsumptionManual
 			item.Warehouse.AverageMonthlyConsumptionManual = &v
 		}
+		w.EstoqueAmpliadoDTO.AplicarEm(&item.Warehouse)
+	}
+	if dto.Engineering != nil && dto.Engineering.ItemBaseCod.Set {
+		// Código de negócio (texto) da tela; null limpa o item-base.
+		item.Engineering.ItemBaseCod = nil
+		item.Engineering.ItemBaseBusinessCode = ""
+		if v := dto.Engineering.ItemBaseCod.Value; v != nil {
+			item.Engineering.ItemBaseBusinessCode = strings.TrimSpace(v.String())
+		}
+		if err := resolveReferenceCodes(ctx, uc.Repo, item); err != nil {
+			return err
+		}
 	}
 	if err := item.Validate(); err != nil {
-		return nil, err
+		return err
 	}
 	if uc.FiscalCatalog != nil {
 		enterpriseID, err := uc.Auth.EnterpriseID(ctx)
 		if err != nil {
-			return nil, errorsuc.ErrUnauthorized
+			return errorsuc.ErrUnauthorized
 		}
 		if err = validateFiscalClassifications(ctx, uc.FiscalCatalog, enterpriseID, item); err != nil {
-			return nil, err
+			return err
 		}
 	}
-	updated, err := uc.Repo.UpdateFolders(ctx, item)
-	if err != nil {
-		return nil, err
+	if uc.PDM != nil && dto.PDM != nil {
+		return uc.PDM.AplicarNoItem(ctx, item, true)
 	}
-	return toItemResponse(updated), nil
+	return nil
 }
 
 func cleanUpdate(v *string) *string {
@@ -276,6 +317,7 @@ func applyIdentity(item *entity.Item, dto request.UpdateItemDTO) {
 	if dto.Health != nil {
 		item.Health = *dto.Health
 	}
+	dto.IdentificacaoAmpliadaDTO.AplicarEm(item)
 	if p := dto.PDM; p != nil {
 		if p.GroupCode != nil {
 			item.PDM.GroupCode = *p.GroupCode
@@ -285,6 +327,9 @@ func applyIdentity(item *entity.Item, dto request.UpdateItemDTO) {
 		}
 		if p.DescriptionTechnique != nil {
 			item.PDM.DescriptionTechnique = strings.TrimSpace(*p.DescriptionTechnique)
+		}
+		if p.Attributes != nil {
+			item.PDM.Attributes = *p.Attributes
 		}
 	}
 }
@@ -309,6 +354,7 @@ func applyEngineeringFolder(item *entity.Item, dto request.UpdateItemDTO) {
 	if e.OEM != nil {
 		item.Engineering.OEM = *e.OEM
 	}
+	e.EngenhariaAmpliadaDTO.AplicarEm(&item.Engineering)
 }
 
 func applyPlanningFolder(item *entity.Item, dto request.UpdateItemDTO) {
@@ -346,6 +392,9 @@ func applyPlanningFolder(item *entity.Item, dto request.UpdateItemDTO) {
 	if p.Active != nil {
 		item.Planning.Active = *p.Active
 	}
+	p.ReorderPoint.Aplicar(&item.Planning.ReorderPoint)
+	p.TankCode.Aplicar(&item.Planning.TankCode)
+	p.PlanejamentoAmpliadoDTO.AplicarEm(&item.Planning)
 }
 
 func applySuppliesFolder(item *entity.Item, dto request.UpdateItemDTO) {
@@ -372,4 +421,5 @@ func applySuppliesFolder(item *entity.Item, dto request.UpdateItemDTO) {
 	if s.Notes != nil {
 		item.Supplies.Notes = cleanUpdate(s.Notes)
 	}
+	s.SuprimentosAmpliadoDTO.AplicarEm(&item.Supplies)
 }

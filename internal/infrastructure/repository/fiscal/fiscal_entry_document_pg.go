@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	itemrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -490,6 +491,14 @@ func upsertVinculo(ctx context.Context, tx pgx.Tx, empresa int64, v repository.S
 	if code == "" {
 		return 0, errorsuc.NewValidationError("o item da nota não tem código do fornecedor para memorizar o vínculo")
 	}
+	if err := itemrepository.ConferirCodigoDoFornecedor(ctx, tx, empresa, v.ItemCode, code); err != nil {
+		var ve *errorsuc.ValidationError
+		if errors.As(err, &ve) {
+			// Na nota o caminho é outro: lançá-la sem memorizar o vínculo.
+			return 0, errorsuc.NewValidationError(err.Error() + `. Nesta nota, desmarque "lembrar vínculo" na linha para lançá-la sem memorizar o código`)
+		}
+		return 0, err
+	}
 	if _, err := tx.Exec(ctx,
 		`UPDATE item_preferred_suppliers SET supplier_item_code = NULL, updated_at = NOW()
 		  WHERE enterprise_id=$1 AND supplier_code=$2 AND is_active AND item_code <> $3
@@ -627,12 +636,29 @@ func (r *FiscalRepositoryPG) ResolveByEAN(ctx context.Context, supplierCode *int
 		}
 		achados = append(achados, m)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	// Mais de um item com o mesmo código de barras é ambíguo: quem decide é o
 	// usuário, não o sistema.
-	if len(achados) != 1 {
-		return nil, rows.Err()
+	if len(achados) > 1 {
+		return nil, nil
 	}
-	return &achados[0], rows.Err()
+	if len(achados) == 1 {
+		return &achados[0], nil
+	}
+	// Nenhum vínculo de fornecedor tem o código: vale o GTIN do próprio item, que
+	// é único na empresa.
+	var m repository.ItemMatch
+	err = r.db.QueryRow(ctx, `SELECT code FROM items WHERE enterprise_id = $1 AND accounting_gtin = $2
+		UNION SELECT item_code FROM item_gtins WHERE enterprise_id = $1 AND gtin = $2 LIMIT 1`, empresa, ean).Scan(&m.ItemCode)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("procurando item pelo GTIN: %w", err)
+	}
+	return &m, nil
 }
 
 func (r *FiscalRepositoryPG) LastAccountForItem(ctx context.Context, itemCode int64) (*repository.ItemAccount, error) {
@@ -683,7 +709,8 @@ const nomeDoItemSQL = `COALESCE(NULLIF(btrim(it.name), ''), NULLIF(btrim(it.pdm_
 const candidatoCols = `it.code, ` + nomeDoItemSQL + `, it.warehouse_unit_of_measurement::text, ` + ncmDoItemSQL + `, it.health::text = 'ATIVO', COALESCE(it.accounting_origin, 0)::text,
 	COALESCE((SELECT w.id FROM warehouse w WHERE w.id = it.supplies_warehouse_code AND w.enterprise_id = it.enterprise_id),
 	         (SELECT w.id FROM warehouse w WHERE w.id = it.warehouse_code AND w.enterprise_id = it.enterprise_id)),
-	COALESCE(it.business_code, ''), COALESCE(it.engineering_type, 0) IN (1, 2), COALESCE(it.supplies_type_of_use, 0)`
+	COALESCE(it.business_code, ''), COALESCE(it.engineering_type, 0) IN (1, 2), COALESCE(it.supplies_type_of_use, 0),
+	left(COALESCE(NULLIF(btrim(it.commercial_description), ''), NULLIF(btrim(it.pdm_description_technique), ''), NULLIF(btrim(it.name), ''), ''), 120)`
 
 func (r *FiscalRepositoryPG) SearchItems(ctx context.Context, termos []string, limite int) ([]repository.ItemCandidate, error) {
 	empresa, err := tenant.ID(ctx)
@@ -772,7 +799,7 @@ func (r *FiscalRepositoryPG) queryCandidatos(ctx context.Context, q string, args
 	var out []repository.ItemCandidate
 	for rows.Next() {
 		var c repository.ItemCandidate
-		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID, &c.BusinessCode, &c.Comprado, &c.TipoUso); err != nil {
+		if err := rows.Scan(&c.Code, &c.Name, &c.UOM, &c.NCM, &c.IsActive, &c.Origem, &c.DefaultWarehouseID, &c.BusinessCode, &c.Comprado, &c.TipoUso, &c.DescricaoNota); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -883,4 +910,22 @@ func (r *FiscalRepositoryPG) ContasQueExigemCentro(ctx context.Context, ids []in
 		out[id] = codigo
 	}
 	return out, rows.Err()
+}
+
+// RegraDaEntrada lê o roteiro de recebimento e a exigência de certificado do item.
+func (r *FiscalRepositoryPG) RegraDaEntrada(ctx context.Context, itemCode int64) (repository.RegraDaEntrada, error) {
+	var regra repository.RegraDaEntrada
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return regra, err
+	}
+	err = r.db.QueryRow(ctx, `SELECT supplies_receipt_routing, supplies_requires_certificate FROM items WHERE code = $1 AND enterprise_id = $2`, itemCode, empresa).
+		Scan(&regra.Roteiro, &regra.ExigeCertificado)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return regra, nil
+	}
+	if err != nil {
+		return regra, fmt.Errorf("lendo as regras de entrada do item: %w", err)
+	}
+	return regra, nil
 }

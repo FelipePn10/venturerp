@@ -6,8 +6,8 @@
 
 -- name: CreateTool :one
 INSERT INTO tools (
-    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    code, name, tool_type, life_type, life_limit, cost, status, created_by, enterprise_id, item_code
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: UpdateTool :one
@@ -18,6 +18,7 @@ UPDATE tools SET
     life_limit = $5,
     cost       = $6,
     status     = $7,
+    item_code  = $8,
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;

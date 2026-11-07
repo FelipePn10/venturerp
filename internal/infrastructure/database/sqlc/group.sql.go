@@ -20,7 +20,7 @@ INSERT INTO groups (
 ) VALUES (
 $1, $2, $3, $4
 )
-RETURNING id, code, description, enterprise_id, created_by, created_at
+RETURNING id, code, description, enterprise_id, created_by, created_at, is_active
 `
 
 type CreateGroupParams struct {
@@ -45,12 +45,13 @@ func (q *Queries) CreateGroup(ctx context.Context, arg CreateGroupParams) (Group
 		&i.EnterpriseID,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const getGroupByCode = `-- name: GetGroupByCode :one
-SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE enterprise_id = $1 AND code = $2
+SELECT id, code, description, enterprise_id, created_by, created_at, is_active FROM groups WHERE enterprise_id = $1 AND code = $2
 `
 
 type GetGroupByCodeParams struct {
@@ -68,12 +69,13 @@ func (q *Queries) GetGroupByCode(ctx context.Context, arg GetGroupByCodeParams) 
 		&i.EnterpriseID,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.IsActive,
 	)
 	return i, err
 }
 
 const listGroups = `-- name: ListGroups :many
-SELECT id, code, description, enterprise_id, created_by, created_at FROM groups WHERE enterprise_id = $1 ORDER BY code
+SELECT id, code, description, enterprise_id, created_by, created_at, is_active FROM groups WHERE enterprise_id = $1 ORDER BY code
 `
 
 func (q *Queries) ListGroups(ctx context.Context, enterpriseID int64) ([]Group, error) {
@@ -92,6 +94,7 @@ func (q *Queries) ListGroups(ctx context.Context, enterpriseID int64) ([]Group, 
 			&i.EnterpriseID,
 			&i.CreatedBy,
 			&i.CreatedAt,
+			&i.IsActive,
 		); err != nil {
 			return nil, err
 		}
@@ -105,19 +108,25 @@ func (q *Queries) ListGroups(ctx context.Context, enterpriseID int64) ([]Group, 
 
 const updateGroup = `-- name: UpdateGroup :one
 UPDATE groups
-SET description = $3
+SET description = $3, is_active = $4
 WHERE enterprise_id = $1 AND code = $2
-RETURNING id, code, description, enterprise_id, created_by, created_at
+RETURNING id, code, description, enterprise_id, created_by, created_at, is_active
 `
 
 type UpdateGroupParams struct {
 	EnterpriseID int64
 	Code         int32
 	Description  string
+	IsActive     bool
 }
 
 func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group, error) {
-	row := q.db.QueryRow(ctx, updateGroup, arg.EnterpriseID, arg.Code, arg.Description)
+	row := q.db.QueryRow(ctx, updateGroup,
+		arg.EnterpriseID,
+		arg.Code,
+		arg.Description,
+		arg.IsActive,
+	)
 	var i Group
 	err := row.Scan(
 		&i.ID,
@@ -126,6 +135,7 @@ func (q *Queries) UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group
 		&i.EnterpriseID,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.IsActive,
 	)
 	return i, err
 }

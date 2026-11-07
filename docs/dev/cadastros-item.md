@@ -143,6 +143,89 @@ Campos por **pasta** (refletem `internal/domain/items/entity/item_entity.go`):
 }
 ```
 
+### Cadastro ampliado (migração 000468)
+
+O comparativo com outros ERPs está em `comparativo-cadastro-item.md`. Campos novos, nos
+corpos de criar e de alterar. Neles, ausente preserva e `null` limpa (`request.Opcional`).
+
+- Raiz: `long_description`, `general_notes`, `revision`, `previous_code`,
+  `manufacturer_name`, `manufacturer_part_number`.
+- `warehouse`: `shelf_life_days`, `min_remaining_life_days`, `storage_conditions`,
+  `hazardous`, `un_number`, `hazard_class`, `accepts_fractional_quantity`.
+- `engineering`: `volume`.
+- `planning`: `planner_employee_code`, `buyer_employee_code`, `purchase_lead_time_days`,
+  `manufacturing_lead_time_days`, `notes`, `material_issue_timing`,
+  `production_reporting_type`, `maximum_stock`, `coverage`, `grouping_key`,
+  `safety_time_days`, `maximum_lot`. Os três primeiros complementos ficam em
+  `item_planning_extras`; os dois últimos em `politicas_planejamento`, onde o MRP lê.
+- `supplies`: `under_delivery_tolerance_pct`, `over_delivery_tolerance_pct`,
+  `receipt_routing` (`DIRETO`, `PADRAO`, `INSPECAO`), `classification_code`.
+- `accounting`: `gtin`, `gtin_tax`, `efd_item_type`, `tax_unit`, `tax_unit_factor`.
+
+Migração 000469: `is_scrap`; `engineering`: `requires_drawing`, `cutting_grain`
+(`NONE`, `LENGTH`, `WIDTH`), `cutting_no_rotation`; `supplies`: `requires_certificate`;
+`commercial`: `exclusive_customer_code`, `volumes_per_unit`. `Item.ConferirVenda` e
+`Item.ForaDoMRP` concentram as regras. A auditoria de cada indicador está no comparativo.
+
+Grupo e modificador têm `is_active`, e o código do grupo é único por empresa.
+
+Migração 000470: `description_en` (vai na nota com CFOP 7xxx); `warehouse`: `secondary_uom` e
+`secondary_factor`; `accounting`: `ex_tipi`, `relevant_scale`, `manufacturer_cnpj`, `fci_number`.
+`item_gtins` guarda os níveis de embalagem do item, usados na NF-e, no leitor e na entrada de nota. Migração 000471:
+
+- `parent_uom` e `parent_quantity` dizem do que o nível é feito: o palete tem 40 CX, a caixa tem 10 UN. `package_quantity` é sempre o total de unidades do item, calculado ao gravar.
+- O GTIN é opcional no nível que informa o que contém: o palete costuma não ter código de barras.
+- Ciclo e nível inexistente são recusados, e também o que não cabe na coluna: unidade acima de 20 caracteres, descrição acima de 120, total a partir de 1 trilhão.
+- A linha da própria unidade do item tem quantidade 1.
+
+`item_atributos_livres` guarda o que o PDM não padroniza. O nome fica em maiúsculas, com no máximo 30 atributos por item. Os valores entram na busca de item das telas, por `GET /api/items/governanca/busca/resumo`.
+
+O saldo em duas unidades traz `details`, com quantidade e segunda quantidade por almoxarifado e lote.
+
+Regras da NF-e conferidas na homologação da SEFAZ-PR (06/11/2026):
+
+- `cProd` é o código comercial do item, nunca a chave interna. A linha que traz um código próprio (retorno de beneficiamento) mantém o dela.
+- O CEST vem do item ou, sem ele, da classificação fiscal de venda.
+- `indEscala` e `CNPJFab` pertencem ao grupo do CEST: sem CEST ficam fora do XML, e a prévia fiscal avisa.
+- Escala não relevante exige o CNPJ do fabricante (rejeição 879); o cadastro recusa.
+- Linha em embalagem: a quantidade tributável é quantidade × `package_quantity` × `tax_unit_factor`. O `cEAN` é o da caixa e o `cEANTrib`, o da unidade.
+- `cEAN` e `cEANTrib` andam em par: só o `cEANTrib` rejeita com 886. Faltando um dos dois, ambos saem `SEM GTIN`. É o caso do palete sem código e da caixa com GTIN de item sem GTIN na unidade (autorizadas em 07/11/2026).
+- Observado na homologação: só GTIN de prefixo 789 ou 790 é mantido; os demais saem `SEM GTIN` e a nota é autorizada. A prévia fiscal do item avisa.
+Revisão com início futuro: a OF já nasce na revisão vigente na data, e um job de hora em hora leva essa revisão a `items.revision`.
+
+Regras que o recebimento e o despacho aplicam:
+
+- A tolerância de excesso e a de falta olham o total da linha, somando os lotes do mesmo recebimento.
+- A entrada por NF-e segue o roteiro do item: `DIRETO` não passa pela inspeção, e `INSPECAO` sem rota ativa recusa a aprovação. A nota não traz corrida e certificado, então o sistema só avisa.
+- A baixa da embalagem usa a quantidade conferida. Sem saldo, o despacho segue, baixa o que há e registra a falta no histórico do romaneio.
+- A linha de venda sem data só assume o prazo estimado do item quando o pedido também não tem data.
+
+`item_revisoes` guarda a vigência: a nova fecha a anterior na véspera, e a OF grava a revisão com
+que nasceu (`item_revision`). Na segunda unidade, `stock_movements.secondary_quantity` recebe o
+valor real ou, sem ele, quantidade × fator; o estorno repete o original.
+
+A política "com aviso" chega à tela pelo cabeçalho `X-Item-Aviso` em POST e PUT dos documentos.
+
+Rotas: `GET|PUT /api/items/governanca/itens/{item}/gtins`, `GET|PUT .../atributos-livres`, `GET|POST .../revisoes`, `GET .../saldo`,
+`GET /api/pdm/uso`.
+
+Lote, endereço e série seguem nos endpoints próprios (`/api/stock/item-control/{item}` e
+`/api/pos-venda/perfis/{item}`), por causa das regras deles. A tela grava depois do item.
+
+Quem consome: NF-e (`anexarIdentificacao`), 0200 da EFD (`cadastroEFD`), entrada de nota
+(`ResolveByEAN`), lote (`registrarLoteDaEntrada`), recebimento (`RegrasDeRecebimento`),
+MRP (`prazoDoCadastro`), busca de item e romaneio.
+
+Rotas novas: `POST /api/items/{code}/impacto`, `GET /api/items/governanca/politicas`,
+`PUT /api/items/governanca/politicas`, `GET /api/items/governanca/itens/{item}/prontidao`,
+`GET /api/items/governanca/itens/{item}/previa-fiscal`, `GET /api/pdm/modelo`,
+`GET|PUT /api/pdm/groups/{code}/modifiers`, `PUT /api/pdm/modifiers/{id}/abbreviation`,
+`POST /api/pdm/atributos`, `PUT|DELETE /api/pdm/atributos/{id}`, `POST /api/pdm/descricao`.
+
+⚠️ Rota nova em `/api/items/{code}/...` que receba o código comercial precisa entrar em
+`nativeItemBusinessCodePath`. Sem isso o middleware troca o código pela chave interna
+antes do roteamento e o caso de uso abre outro item.
+
 As pastas `commercial` e `accounting` são opcionais. `PUT /api/items/{code}` aceita
 as mesmas pastas de forma parcial: somente propriedades enviadas são alteradas;
 valores `false` e `0` enviados explicitamente são preservados. `sale_type` aceita
@@ -381,3 +464,151 @@ catálogo de campos por visão, completude, similaridade); caso de uso
   exige `Aprovar` no módulo Engenharia.
 
 Teste: `item_governanca_uc/governanca_integration_test.go`.
+
+### Campos fora da tela (VENT0200)
+
+As colunas continuam no banco e na API; só deixaram de ser editadas na tela, e um
+item que já as tem não perde o valor ao ser gravado (o campo ausente no payload fica
+como está).
+
+| Campo | Por quê |
+|---|---|
+| `commercial_volume_conversion_factor` | Repetia **volumes por unidade**. O romaneio ainda o usa quando volumes por unidade está vazio. |
+| `commercial_packaging_item_code` | A embalagem do produto vai na estrutura (VENT0210). O despacho ainda baixa este item quando preenchido. |
+| `accounting_purchase_unit_of_measurement` | Repetia a unidade de compra de `supplies_purchase_uom`, que é a usada. |
+| `accounting_sale_unit_of_measurement` | Não saiu: foi para a aba Comercial como **unidade de venda**. |
+| `planner_employee_code`, `planning_buyer_employee_code` | Apontam para uma pessoa: com demissão ou troca de setor o cadastro fica errado. Saíram também do catálogo de obrigatórios. |
+| `item_planning_extras.coverage`, `grouping_key` | Lidos pelo MRP e nunca usados no cálculo. |
+| `accounting_inventory_group_code` | Repetia o grupo do PDM e nada o lia. Saiu do catálogo de obrigatórios. |
+| `accounting_classification_code`, `accounting_input_code`, `commercial_classification_code`, `supplies_classification_code` | Nada no sistema os lê. |
+
+### Busca por outros códigos do item
+
+`GET /api/items/governanca/busca/resumo` devolve, por item, o código anterior, a
+referência do fabricante, o código do item em cada fornecedor
+(`item_preferred_suppliers.supplier_item_code`), os GTINs (comercial, tributável e
+das embalagens) e os atributos livres. Todo seletor de item do front (`loadItems`,
+`loadBaseItems`, a lupa dos campos legados e as buscas das grades de OF, demanda e
+política de planejamento) filtra também por esse texto.
+
+Em campo que recebe **código digitado**, o sistema não troca o apelido pelo item:
+o código anterior de um item pode ser o atual de outro, e dois fornecedores podem
+usar o mesmo código. A recusa diz de quem é o código ("ANT-9981 é o código
+anterior do item TEA453-3"), no middleware e em `itemresolution.Resolve`.
+
+### Contagem cíclica
+
+O item com intervalo próprio é contado a cada N dias da última contagem aprovada
+(ou da ativação). Sem intervalo próprio vale a classe ABC (`stock_abc_count_policy`,
+padrão A 90, B 180, C 365), a partir do início da política ou do cadastro do item,
+o que vier depois. Item inativo não entra pela regra ABC. Programar e cancelar usam
+a mesma regra (`politicaDeContagem`): antes, o item só com classe ABC nunca era
+programado.
+
+Os alertas de contagem vencida e de estoque abaixo do mínimo só geram evento com o
+alerta ligado na empresa (VNOT0100). O evento de alerta desligado era criado e
+cancelado, e ocupava a chave de deduplicação: depois de ligado, o alerta não vinha.
+
+### Código digitado aponta para um item só
+
+Além de a recusa dizer de quem é o código, o cadastro impede o conflito na origem:
+o código anterior e a referência do fabricante não podem ser o código atual de
+outro item, e um item novo não pode nascer com o código anterior, a referência ou
+o código de fornecedor de outro (`conferirConflitoDeCodigos`). O código de
+fornecedor também não pode ser o código atual de outro item nosso
+(`ConferirCodigoDoFornecedor`, em `apelidos_pg.go`): o upsert de
+`item_suppliers` (VSUP0130) e o vínculo aprendido na entrada de NF-e
+(`upsertVinculo`) recusam com o item que já usa o código. Na busca, a opção achada por um apelido mostra qual
+("Achado pelo código do fornecedor X") e o apelido digitado não vira "código
+informado manualmente".
+
+### Marcações que se contradizem
+
+`conferirMarcadores` recusa: sucata com item base, configurado, protótipo,
+ferramenta ou item de processo; item de processo com base, configurado ou
+ferramenta; fantasma que não é Fabricado, que é crítico ou que tem contagem
+cíclica; embalagem de exportação e diferenciada juntas; serviço perigoso ou com
+contagem. O controle de lote/endereço recusa fantasma e serviço; ligar a série torna o
+item de quantidade inteira (o padrão do cadastro é aceitar fração). A tela desabilita a opção e diz o motivo.
+
+### Cuidados de armazenagem e segurança
+
+`GET /api/items/governanca/cuidados` lista os itens perigosos ou com condição de
+armazenagem. O aviso aparece na OF (resumo e materiais), na entrada de NF-e, na
+requisição, na separação, no recebimento e nas etiquetas do coletor (VEST0150) e
+na expedição. O romaneio (PDF e XLSX) usa o código comercial (`RomaneioItem.Codigo`)
+e, no PDF, a seção "CUIDADOS NO TRANSPORTE E NA ARMAZENAGEM" depois dos itens
+(`RomaneioItem.Cuidados`), sem truncar.
+
+### Tanques / linhas de capacidade
+
+Migração 000472: `delivery_capacity_lines` (código, descrição, capacidade diária,
+unidade). Cadastro em VPME0102; o item escolhe a linha e o cadastro recusa linha
+inexistente ou desativada. A promessa de entrega usa a capacidade de cada tanque;
+a informada na consulta só vale para tanque sem cadastro. A migração criou uma
+linha para cada tanque que os itens já usavam (capacidade 1, a ajustar).
+
+### Ponto de pedido por dia trabalhado
+
+`reorder_point` com `modo: "DIA_TRABALHADO"`: CM é o consumo por dia trabalhado
+(0 = apurar), CR = 1 e TR o prazo em dias úteis. A reposição calcula consumo por
+dia × dias que a empresa trabalha no prazo (calendário industrial; sem registro,
+segunda a sexta, como `subtract_workdays`) + segurança. Sem CM, o consumo é o dos
+últimos 90 dias ÷ dias trabalhados nesses 90 dias. O MRP usa o mesmo número:
+`MRPServiceImpl.PontosDePedido` (`StockRepositorySQLC.PontoDePedidoDoItem`) é
+consultado para o item em modo por dia trabalhado; o relatório antigo segue com
+TR × CM ÷ 1 + ES, a estimativa de segunda a sexta.
+
+### Impostos não ficam no item
+
+O motor da nota tira o IPI do NCM (`ncm_tax_table`, VFIS0110), o ICMS da UF e da
+regra de ICMS/IPI (VFIS0320) e o PIS/COFINS do regime e das exceções do NCM. As
+alíquotas e o "calcula PIS/COFINS" do item não entravam no cálculo e saíram da
+tela; as colunas continuam. A unidade da entrada manual vem da unidade de compra
+(`supplies_purchase_uom`); a antiga, da aba Contábil, é só reserva.
+
+### Dependências entre campos (VENT0200)
+
+- Tipo do item: campos de OF (prazo de fabricação, baixa de material, apontamento,
+  exige desenho) só para Fabricado; prazo de compra só para Comprado; Serviço
+  desliga segunda unidade, estoque mínimo/máximo, baixa automática, lote, endereço,
+  série, contagem e produto perigoso. Revenda exige Comprado (o backend recusa).
+- Validade e vida útil mínima só com controle de lote; regra FEFO/FIFO idem. O
+  backend impõe: `UpdateFolders` recusa validade sem lote
+  (`conferirValidadeComLote`); a criação com validade liga `controls_lot` na mesma
+  transação; `SalvarControleDoItem` recusa desligar o lote de item com validade.
+- Escala relevante e CNPJ do fabricante só com CEST; escala "Não" exige o CNPJ.
+- Produto perigoso exige condições de armazenagem; contagem própria exige o
+  intervalo; o mínimo de venda é múltiplo do múltiplo (o backend recusa);
+  embalagem é tipo 02 na EFD (o backend recusa).
+- Estado "Fantasma" e a marca Fantasma andam juntos na tela (não no backend: o
+  item 302 da Tecnofer é comprado com estado Fantasma).
+- Marcar número de série desmarca "aceita quantidade fracionada".
+
+### Prévia fiscal e fiscal efetivo
+
+A prévia fiscal (aba Prontidão) mostra os impostos pela simulação, o mesmo motor
+da nota, em `GET /api/items/governanca/itens/{item}/impostos?uf=XX` (módulo do
+item, sem exigir o fiscal): venda a pessoa jurídica com IE, para
+industrialização, dentro e fora do estado. Sem IE o motor trataria o destino como
+consumidor final (IPI na base do ICMS). As alíquotas da classificação fiscal
+(VFIS0350) não entram no cálculo e a prévia antes mostrava PIS/COFINS 0%. O
+`fiscal_effective` do item não anuncia mais IPI, ICMS e "calcula PIS/COFINS" do
+item como sobrescritos: continua só CEST, origem e unidade.
+
+### Classificação fiscal e IPI
+
+`FiscalClassificationUseCase.GetIPIRate` lê primeiro o IPI do NCM da
+classificação na `ncm_tax_table` (`TabelaNCM`, `AliquotaIPIDoNCM`) e só cai no
+`ipi_rate` da classificação quando o NCM não está na tabela. A linha do pedido de
+compra sem IPI e sem classificação usa a classificação do item
+(`ClassificacaoFiscalDoItem`: a de compra, senão a de venda, ativa e da empresa).
+
+### Setores e responsáveis por grupo (migração 000473)
+
+Reaproveita os setores da central de notificações (`enterprise_departments` e
+`enterprise_department_users`, migração 000308; só usuários da empresa) e cria
+`pdm_group_responsibles` (grupo PDM → setor de planejamento e setor de compras). Rotas `/api/setores`
+(cadastro, pessoas, responsáveis do grupo) e
+`GET /api/items/governanca/itens/{item}/responsaveis`. A cobertura do MRP mostra o
+setor de planejamento do grupo no lugar do planejador do item, quando há.
