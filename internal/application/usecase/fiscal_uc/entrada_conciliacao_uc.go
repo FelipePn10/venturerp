@@ -172,9 +172,17 @@ func (uc *SaveFiscalEntryConciliationUseCase) Execute(ctx context.Context, entry
 		}
 		escolhas[it.ID] = esc
 
+		// Fator informado que difere do atual é decisão da pessoa (MANUAL); o
+		// mesmo fator reenviado mantém a origem que ele já tinha.
 		fator := c.FatorConversao
+		origem, caminho := it.OrigemConversao, it.CaminhoConversao
 		if fator == nil && mesmoItem {
 			fator = it.FatorConversao
+		} else if fator != nil && (!mesmoItem || it.FatorConversao == nil || !fator.Equal(*it.FatorConversao)) {
+			origem, caminho = strPtr(OrigemManual), strPtr(fmt.Sprintf("informado na conciliação: 1 %s = %s na unidade de estoque", strings.ToUpper(textoUnidade(it.UOM)), fator.String()))
+		}
+		if !mesmoItem && c.FatorConversao == nil {
+			origem, caminho = nil, nil
 		}
 		if !mesmoItem {
 			// Outro item: almoxarifado e pedido escolhidos para o anterior não valem.
@@ -202,6 +210,7 @@ func (uc *SaveFiscalEntryConciliationUseCase) Execute(ctx context.Context, entry
 			}
 		}
 		it.FatorConversao, it.QuantidadeEstoque = nil, nil
+		it.OrigemConversao, it.CaminhoConversao = nil, nil
 		if c.ItemCode != nil {
 			f := umDec
 			if fator != nil {
@@ -209,6 +218,7 @@ func (uc *SaveFiscalEntryConciliationUseCase) Execute(ctx context.Context, entry
 			}
 			q := it.Quantity.Mul(f).Round(6)
 			it.FatorConversao, it.QuantidadeEstoque = &f, &q
+			it.OrigemConversao, it.CaminhoConversao = origem, caminho
 		}
 
 		if c.LembrarVinculo && c.ItemCode != nil {
@@ -303,6 +313,7 @@ func (uc *SaveFiscalEntryConciliationUseCase) Execute(ctx context.Context, entry
 			ItemID: it.ID, ItemCode: it.ItemCode, ItemSupplierID: it.ItemSupplierID, ResolutionStrategy: it.ResolutionStrategy,
 			PlanoContasID: it.PlanoContasID, CentroCustoID: it.CentroCustoID,
 			FatorConversao: it.FatorConversao, QuantidadeEstoque: it.QuantidadeEstoque,
+			UnidadeNormalizada: it.UnidadeNormalizada, OrigemConversao: it.OrigemConversao, CaminhoConversao: it.CaminhoConversao,
 			CfopEntrada: it.CfopEntrada, EntryOperationCode: it.EntryOperationCode,
 			MovimentaEstoque: it.MovimentaEstoque, GeraFinanceiro: it.GeraFinanceiro, WarehouseID: it.WarehouseID,
 			PurchaseOrderCode: it.PurchaseOrderCode, PurchaseOrderItemCode: it.PurchaseOrderItemCode,

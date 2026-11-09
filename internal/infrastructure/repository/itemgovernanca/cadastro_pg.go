@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,7 @@ import (
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	dom "github.com/FelipePn10/panossoerp/internal/domain/items/governanca"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -156,26 +158,49 @@ const sinalDoMovimento = `CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP',
 	WHEN m.movement_type IN ('OUT','TRANSFER_OUT','REP','SAIDA') THEN -1 ELSE 0 END * `
 
 // SaldoDuasUnidades soma o saldo da unidade do estoque e os movimentos na segunda.
+// O movimento sem a quantidade real na segunda unidade (a balança não pesou)
+// entra pelo fator: o da VSUP0110 para o par, ou o da segunda unidade do
+// cadastro do item — o mesmo grafo que a compra e a nota usam. Antes ele
+// contava zero e o saldo em KG ficava menor que o estoque.
 func (r *PG) SaldoDuasUnidades(ctx context.Context, item int64) (*dom.SaldoDuasUnidades, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	s := dom.SaldoDuasUnidades{Detalhes: []dom.SaldoPorLote{}}
-	err = r.pool.QueryRow(ctx, `SELECT i.warehouse_unit_of_measurement::text, i.warehouse_secondary_uom,
-			COALESCE((SELECT SUM(b.quantity) FROM stock_balances b WHERE b.enterprise_id=i.enterprise_id AND b.item_code=i.code), 0)::text,
-			COALESCE((SELECT SUM(`+sinalDoMovimento+`m.secondary_quantity) FROM stock_movements m WHERE m.enterprise_id=i.enterprise_id AND m.item_code=i.code), 0)::text
-		  FROM items i WHERE i.enterprise_id=$1 AND i.code=$2`, empresa, item).Scan(&s.Unidade, &s.SegundaUnidade, &s.Saldo, &s.SegundoSaldo)
+	if err := r.pool.QueryRow(ctx, `SELECT i.warehouse_unit_of_measurement::text, i.warehouse_secondary_uom FROM items i WHERE i.enterprise_id=$1 AND i.code=$2`,
+		empresa, item).Scan(&s.Unidade, &s.SegundaUnidade); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d não encontrado", item))
+		}
+		return nil, fmt.Errorf("lendo o saldo do item: %w", err)
+	}
+	var fator *string
+	if s.SegundaUnidade != nil && *s.SegundaUnidade != "" {
+		c, err := uomgraph.Resolver(ctx, r.pool, empresa, item, "", "", time.Time{}, s.Unidade, *s.SegundaUnidade)
+		if err != nil {
+			return nil, err
+		}
+		if c != nil {
+			f := c.Fator().String()
+			fator = &f
+		}
+	}
+	segunda := `COALESCE(m.secondary_quantity, m.quantity * $3::numeric, 0)`
+	err = r.pool.QueryRow(ctx, `SELECT
+			COALESCE((SELECT SUM(b.quantity) FROM stock_balances b WHERE b.enterprise_id=$1 AND b.item_code=$2), 0)::text,
+			COALESCE((SELECT SUM(`+sinalDoMovimento+segunda+`) FROM stock_movements m WHERE m.enterprise_id=$1 AND m.item_code=$2), 0)::text`,
+		empresa, item, fator).Scan(&s.Saldo, &s.SegundoSaldo)
 	if err != nil {
 		return nil, fmt.Errorf("lendo o saldo do item: %w", err)
 	}
 	rows, err := r.pool.Query(ctx, `SELECT m.warehouse_id, COALESCE(w.description, ''), NULLIF(m.lot, ''),
-			SUM(`+sinalDoMovimento+`m.quantity)::text, COALESCE(SUM(`+sinalDoMovimento+`m.secondary_quantity), 0)::text
+			SUM(`+sinalDoMovimento+`m.quantity)::text, COALESCE(SUM(`+sinalDoMovimento+segunda+`), 0)::text
 		  FROM stock_movements m LEFT JOIN warehouse w ON w.id = m.warehouse_id AND w.enterprise_id = m.enterprise_id
 		 WHERE m.enterprise_id=$1 AND m.item_code=$2
 		 GROUP BY m.warehouse_id, w.description, NULLIF(m.lot, '')
-		HAVING SUM(`+sinalDoMovimento+`m.quantity) <> 0 OR COALESCE(SUM(`+sinalDoMovimento+`m.secondary_quantity), 0) <> 0
-		 ORDER BY w.description, NULLIF(m.lot, '')`, empresa, item)
+		HAVING SUM(`+sinalDoMovimento+`m.quantity) <> 0 OR COALESCE(SUM(`+sinalDoMovimento+segunda+`), 0) <> 0
+		 ORDER BY w.description, NULLIF(m.lot, '')`, empresa, item, fator)
 	if err != nil {
 		return nil, fmt.Errorf("lendo o saldo por lote: %w", err)
 	}

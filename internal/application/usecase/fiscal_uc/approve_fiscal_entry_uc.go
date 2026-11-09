@@ -487,6 +487,7 @@ func conciliacoesDoDoc(doc *entity.FiscalEntry) []repository.ItemConciliation {
 			ItemID: it.ID, ItemCode: it.ItemCode, ItemSupplierID: it.ItemSupplierID, ResolutionStrategy: it.ResolutionStrategy,
 			PlanoContasID: it.PlanoContasID, CentroCustoID: it.CentroCustoID,
 			FatorConversao: it.FatorConversao, QuantidadeEstoque: it.QuantidadeEstoque,
+			UnidadeNormalizada: it.UnidadeNormalizada, OrigemConversao: it.OrigemConversao, CaminhoConversao: it.CaminhoConversao,
 			CfopEntrada: it.CfopEntrada, EntryOperationCode: it.EntryOperationCode,
 			MovimentaEstoque: it.MovimentaEstoque, GeraFinanceiro: it.GeraFinanceiro, WarehouseID: it.WarehouseID,
 			PurchaseOrderCode: it.PurchaseOrderCode, PurchaseOrderItemCode: it.PurchaseOrderItemCode,

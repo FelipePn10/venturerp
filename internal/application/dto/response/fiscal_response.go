@@ -1,6 +1,8 @@
 package response
 
 import (
+	"github.com/shopspring/decimal"
+
 	"time"
 
 	"github.com/google/uuid"
@@ -324,14 +326,22 @@ type FiscalEntryItemResponse struct {
 	ValorContabil     float64  `json:"valor_contabil"`
 	FatorConversao    *float64 `json:"fator_conversao,omitempty"`
 	QuantidadeEstoque *float64 `json:"quantidade_estoque,omitempty"`
-	PedidoCompraXML   *string  `json:"pedido_compra_xml,omitempty"`
-	PlanoContasID     *int64   `json:"plano_contas_id,omitempty"`
-	CentroCustoID     *int64   `json:"centro_custo_id,omitempty"`
-	ItemName          *string  `json:"item_name,omitempty"`
-	ItemUOM           *string  `json:"item_uom,omitempty"`
-	PlanoContasCodigo *string  `json:"plano_contas_codigo,omitempty"`
-	PlanoContasNome   *string  `json:"plano_contas_nome,omitempty"`
-	CentroCustoNome   *string  `json:"centro_custo_nome,omitempty"`
+	// Unidade tributável do XML, unidade da nota no catálogo e de onde veio o
+	// fator (MESMA_UNIDADE, SINONIMO, VINCULO_FORNECEDOR, PEDIDO_COMPRA,
+	// CADASTRO_ITEM, LOTE, PADRAO, XML_TRIBUTAVEL, MANUAL) com a explicação.
+	UnidadeTributavel    *string  `json:"unidade_tributavel,omitempty"`
+	QuantidadeTributavel *float64 `json:"quantidade_tributavel,omitempty"`
+	UnidadeNormalizada   *string  `json:"unidade_normalizada,omitempty"`
+	OrigemConversao      *string  `json:"origem_conversao,omitempty"`
+	CaminhoConversao     *string  `json:"caminho_conversao,omitempty"`
+	PedidoCompraXML      *string  `json:"pedido_compra_xml,omitempty"`
+	PlanoContasID        *int64   `json:"plano_contas_id,omitempty"`
+	CentroCustoID        *int64   `json:"centro_custo_id,omitempty"`
+	ItemName             *string  `json:"item_name,omitempty"`
+	ItemUOM              *string  `json:"item_uom,omitempty"`
+	PlanoContasCodigo    *string  `json:"plano_contas_codigo,omitempty"`
+	PlanoContasNome      *string  `json:"plano_contas_nome,omitempty"`
+	CentroCustoNome      *string  `json:"centro_custo_nome,omitempty"`
 
 	CfopEntrada           *string `json:"cfop_entrada,omitempty"`
 	EntryOperationCode    *int64  `json:"entry_operation_code,omitempty"`
@@ -688,4 +698,40 @@ type SugestaoItemEntradaResponse struct {
 	OrigemPreco         string   `json:"origem_preco,omitempty"`
 	AliqICMS            *float64 `json:"aliq_icms,omitempty"`
 	AliqIPI             *float64 `json:"aliq_ipi,omitempty"`
+}
+
+// UnitSuggestionLineResponse: uma linha da nota que chega em unidade
+// diferente da de estoque, com o fator atual e os candidatos a fator.
+type UnitSuggestionLineResponse struct {
+	ItemID             int64                   `json:"item_id"`
+	Sequence           int                     `json:"sequence"`
+	ItemCode           int64                   `json:"item_code"`
+	ItemBusinessCode   string                  `json:"item_business_code,omitempty"`
+	ItemName           string                  `json:"item_name,omitempty"`
+	UnidadeNota        string                  `json:"unidade_nota"`
+	UnidadeNormalizada string                  `json:"unidade_normalizada"`
+	UnidadeCatalogo    bool                    `json:"unidade_catalogo"` // a unidade da nota foi reconhecida no catálogo
+	UnidadeEstoque     string                  `json:"unidade_estoque"`
+	Quantidade         decimal.Decimal         `json:"quantidade"`
+	ValorTotal         decimal.Decimal         `json:"valor_total"`
+	FatorAtual         *decimal.Decimal        `json:"fator_atual,omitempty"`
+	OrigemAtual        *string                 `json:"origem_atual,omitempty"`
+	CaminhoAtual       *string                 `json:"caminho_atual,omitempty"`
+	Resolvida          bool                    `json:"resolvida"`
+	CustoReferencia    *decimal.Decimal        `json:"custo_referencia,omitempty"`
+	Candidatos         []UnitCandidateResponse `json:"candidatos"`
+	// Memorizacoes: como a escolha pode ser lembrada para as próximas notas.
+	Memorizacoes []string `json:"memorizacoes"`
+}
+
+// UnitCandidateResponse: um fator possível, de onde veio e o que ele faz com
+// a quantidade e o custo da linha.
+type UnitCandidateResponse struct {
+	Fonte             string           `json:"fonte"`     // CADASTRO_ITEM, PADRAO, LOTE, XML_TRIBUTAVEL, PEDIDO_COMPRA, HISTORICO_FORNECEDOR, PESO_DO_ITEM, CUSTO_REFERENCIA
+	Confianca         string           `json:"confianca"` // ALTA, MEDIA, BAIXA
+	Fator             decimal.Decimal  `json:"fator"`
+	QuantidadeEstoque decimal.Decimal  `json:"quantidade_estoque"`
+	CustoUnitario     *decimal.Decimal `json:"custo_unitario,omitempty"`
+	DesvioCusto       *decimal.Decimal `json:"desvio_custo,omitempty"` // custo ÷ custo da última entrada
+	Explicacao        string           `json:"explicacao"`
 }

@@ -86,14 +86,19 @@ type NFeItemLido struct {
 	CFOP          string
 	Unidade       string
 	Quantidade    decimal.Decimal
-	ValorUnitario decimal.Decimal
-	ValorProduto  decimal.Decimal
-	ValorFrete    decimal.Decimal
-	ValorSeguro   decimal.Decimal
-	ValorDesconto decimal.Decimal
-	ValorOutras   decimal.Decimal
-	PedidoCompra  string
-	ItemPedido    string
+	// Unidade tributável (uTrib/qTrib): muitas vezes o fornecedor vende em
+	// UN e tributa em KG — e a nota traz as duas quantidades. É evidência do
+	// fator de conversão vinda do próprio documento.
+	UnidadeTributavel    string
+	QuantidadeTributavel decimal.Decimal
+	ValorUnitario        decimal.Decimal
+	ValorProduto         decimal.Decimal
+	ValorFrete           decimal.Decimal
+	ValorSeguro          decimal.Decimal
+	ValorDesconto        decimal.Decimal
+	ValorOutras          decimal.Decimal
+	PedidoCompra         string
+	ItemPedido           string
 
 	Origem    string
 	CSTICMS   string // CST (regime normal) ou CSOSN (Simples Nacional)
@@ -297,6 +302,8 @@ type xmlDet struct {
 		CFOP    string `xml:"CFOP"`
 		UCom    string `xml:"uCom"`
 		QCom    string `xml:"qCom"`
+		UTrib   string `xml:"uTrib"`
+		QTrib   string `xml:"qTrib"`
 		VUnCom  string `xml:"vUnCom"`
 		VProd   string `xml:"vProd"`
 		VFrete  string `xml:"vFrete"`
@@ -446,23 +453,25 @@ func LerNFe(conteudo []byte) (*NFeLida, error) {
 
 	for i, det := range inf.Det {
 		it := NFeItemLido{
-			Numero:        i + 1,
-			CodigoProduto: strings.TrimSpace(det.Prod.CProd),
-			EAN:           eanValido(det.Prod.CEAN),
-			Descricao:     strings.TrimSpace(det.Prod.XProd),
-			NCM:           soDigitos(det.Prod.NCM),
-			CEST:          soDigitos(det.Prod.CEST),
-			CFOP:          strings.TrimSpace(det.Prod.CFOP),
-			Unidade:       strings.ToUpper(strings.TrimSpace(det.Prod.UCom)),
-			Quantidade:    dec(det.Prod.QCom),
-			ValorUnitario: dec(det.Prod.VUnCom),
-			ValorProduto:  dec(det.Prod.VProd),
-			ValorFrete:    dec(det.Prod.VFrete),
-			ValorSeguro:   dec(det.Prod.VSeg),
-			ValorDesconto: dec(det.Prod.VDesc),
-			ValorOutras:   dec(det.Prod.VOutro),
-			PedidoCompra:  strings.TrimSpace(det.Prod.XPed),
-			ItemPedido:    strings.TrimSpace(det.Prod.NItemPd),
+			Numero:               i + 1,
+			CodigoProduto:        strings.TrimSpace(det.Prod.CProd),
+			EAN:                  eanValido(det.Prod.CEAN),
+			Descricao:            strings.TrimSpace(det.Prod.XProd),
+			NCM:                  soDigitos(det.Prod.NCM),
+			CEST:                 soDigitos(det.Prod.CEST),
+			CFOP:                 strings.TrimSpace(det.Prod.CFOP),
+			Unidade:              strings.ToUpper(strings.TrimSpace(det.Prod.UCom)),
+			Quantidade:           dec(det.Prod.QCom),
+			UnidadeTributavel:    strings.ToUpper(strings.TrimSpace(det.Prod.UTrib)),
+			QuantidadeTributavel: dec(det.Prod.QTrib),
+			ValorUnitario:        dec(det.Prod.VUnCom),
+			ValorProduto:         dec(det.Prod.VProd),
+			ValorFrete:           dec(det.Prod.VFrete),
+			ValorSeguro:          dec(det.Prod.VSeg),
+			ValorDesconto:        dec(det.Prod.VDesc),
+			ValorOutras:          dec(det.Prod.VOutro),
+			PedidoCompra:         strings.TrimSpace(det.Prod.XPed),
+			ItemPedido:           strings.TrimSpace(det.Prod.NItemPd),
 		}
 		if g := primeiroGrupo(det.Imposto.ICMS.Grupos); g != nil {
 			it.Origem = strings.TrimSpace(g.Orig)

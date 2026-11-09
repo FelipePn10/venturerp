@@ -84,7 +84,9 @@ func TestItemValidateRejectsInvalidEnumsAndMasterData(t *testing.T) {
 		func(i *Item) { i.Warehouse.MinimumStock = decimal.RequireFromString("-0.5") },
 		func(i *Item) { invalid := "D"; i.Planning.ABCClass = &invalid },
 		func(i *Item) {
-			invalid := types.TypeUnitOfMeasurementItem("INVALID")
+			// O catálogo é cadastrável (migração 474): a entidade só recusa o
+			// formato; a existência da unidade é conferida pelo catálogo.
+			invalid := types.TypeUnitOfMeasurementItem("KG/M")
 			i.Supplies.PurchaseUOM = &invalid
 		},
 	}

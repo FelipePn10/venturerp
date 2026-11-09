@@ -38,6 +38,9 @@ func (r *FiscalRepositoryPG) CarregarPeriodoEFD(ctx context.Context, inicio, fim
 	if err := r.empresaEFD(ctx, empresa, &d.Empresa); err != nil {
 		return nil, err
 	}
+	if d.UnidadesFiscais, err = r.unidadesFiscaisEFD(ctx, empresa); err != nil {
+		return nil, err
+	}
 	if d.Entradas, err = r.entradasEFD(ctx, empresa, ini, fin); err != nil {
 		return nil, err
 	}
@@ -63,6 +66,26 @@ func (r *FiscalRepositoryPG) CarregarPeriodoEFD(ctx context.Context, inicio, fim
 		cadastro.aplicar(&d.Itens[i])
 	}
 	return d, nil
+}
+
+// unidadesFiscaisEFD: o catálogo da empresa (inclusive unidades desativadas,
+// que podem estar em documentos do período) com o código que vai no arquivo.
+func (r *FiscalRepositoryPG) unidadesFiscaisEFD(ctx context.Context, empresa int64) (map[string]sped.UnidadeFiscal, error) {
+	rows, err := r.db.Query(ctx, `SELECT code, fiscal_code, description FROM units_of_measure WHERE enterprise_id = $1`, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as unidades da EFD: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]sped.UnidadeFiscal{}
+	for rows.Next() {
+		var codigo string
+		var u sped.UnidadeFiscal
+		if err := rows.Scan(&codigo, &u.Codigo, &u.Descricao); err != nil {
+			return nil, err
+		}
+		out[codigo] = u
+	}
+	return out, rows.Err()
 }
 
 // cadastroEFD é o que o cadastro do item define para o 0200 e vence o que veio da

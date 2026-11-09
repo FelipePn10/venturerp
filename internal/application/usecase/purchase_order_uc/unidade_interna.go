@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
+	uomrepo "github.com/FelipePn10/panossoerp/internal/domain/unit_of_measure/repository"
 )
 
 // UnidadeDeEstoque diz em que unidade o item é estocado (cadastro do item).
@@ -27,6 +28,33 @@ type UnidadeDeEstoque interface {
 type UnidadeInterna struct {
 	Unidades  UnidadeDeEstoque
 	Conversor ports.UOMConverter
+	// Catalogo traduz a unidade de compra para o código do catálogo (sinônimo
+	// geral, código fiscal). Opcional: sem ele a unidade vai como veio.
+	Catalogo ResolvedorDeUnidade
+}
+
+// ResolvedorDeUnidade reconhece um texto como unidade do catálogo da empresa.
+type ResolvedorDeUnidade interface {
+	Resolver(ctx context.Context, supplierCode *int64, textos []string) (map[string]uomrepo.Resolucao, error)
+}
+
+// unidadeDoCatalogo devolve o código do catálogo para a unidade de compra.
+// Antes, um sinônimo ("BMB", cadastrado para BOMBONA) passava como se fosse
+// outra unidade e o pedido pedia uma conversão BMB→BOMBONA, que não existe
+// nem deve existir; e uma unidade inexistente gerava a mesma mensagem.
+func (u *UnidadeInterna) unidadeDoCatalogo(ctx context.Context, compra string) (string, error) {
+	if u.Catalogo == nil || compra == "" {
+		return compra, nil
+	}
+	res, err := u.Catalogo.Resolver(ctx, nil, []string{compra})
+	if err != nil {
+		return "", fmt.Errorf("conferindo a unidade de compra no catálogo: %w", err)
+	}
+	if r, ok := res[compra]; ok && r.Unidade != "" {
+		return r.Unidade, nil
+	}
+	return "", errorsuc.NewValidationError(fmt.Sprintf(
+		"unidade de compra %s fora do catálogo da empresa ou inativa — cadastre-a (ou um sinônimo) em Unidades e Conversões (VSUP0110 › Unidades) ou escolha outra", compra))
 }
 
 // Preencher define InternalUOM (a de estoque do cadastro), InternalQty e
@@ -54,6 +82,11 @@ func (u *UnidadeInterna) Preencher(ctx context.Context, l *entity.PurchaseOrderI
 	if l.PurchaseUOM != nil {
 		compra = strings.ToUpper(strings.TrimSpace(*l.PurchaseUOM))
 	}
+	if compra != "" && compra != estoque {
+		if compra, err = u.unidadeDoCatalogo(ctx, compra); err != nil {
+			return err
+		}
+	}
 	if compra == "" && estoque != "" {
 		compra = estoque
 	}
@@ -70,7 +103,7 @@ func (u *UnidadeInterna) Preencher(ctx context.Context, l *entity.PurchaseOrderI
 	if u.Conversor == nil {
 		return semConversao
 	}
-	qf, achou, err := u.Conversor.ConvertQuantity(ctx, l.ItemCode, l.RequestedQty, compra, estoque)
+	qf, achou, err := ports.ConvertQuantityWithMask(ctx, u.Conversor, l.ItemCode, l.Mask, l.RequestedQty, compra, estoque)
 	if err != nil {
 		return err
 	}

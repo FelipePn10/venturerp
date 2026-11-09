@@ -84,17 +84,32 @@ func (t *TypeUnitOfMeasurementItem) Scan(value interface{}) error {
 	return nil
 }
 
+// IsValid confere só o FORMATO do código (1 a 10 letras maiúsculas ou dígitos).
+//
+// A unidade deixou de ser uma lista fechada de 15 valores: cada empresa mantém
+// o seu catálogo (units_of_measure, migração 474) e pode cadastrar BARRA,
+// CHAPA, ROLO… Se a unidade EXISTE no catálogo da empresa é uma pergunta que
+// precisa do banco — quem grava (cadastro de item, estrutura, conversão)
+// confere pelo catálogo, e o banco garante com FK na unidade de estoque.
 func (t TypeUnitOfMeasurementItem) IsValid() bool {
-	switch t {
-	case MM, CM, M, IN, KG, M2, M3, UN, MICROMETRO, TONELADA, L, CX, PC, GL, PAR:
-		return true
-	default:
-		return false
-	}
+	return CodigoDeUnidadeValido(string(t))
 }
 
-// ValidUnitsOfMeasurement lista as unidades aceitas, para a mensagem de erro
-// dizer ao usuário o que ele pode informar.
+// CodigoDeUnidadeValido: 1 a 10 caracteres, só A-Z e 0-9.
+func CodigoDeUnidadeValido(s string) bool {
+	if len(s) == 0 || len(s) > 10 {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// ValidUnitsOfMeasurement lista as unidades que todo catálogo traz de fábrica,
+// para a mensagem de erro dar exemplos do que se pode informar.
 func ValidUnitsOfMeasurement() []string {
 	return []string{
 		string(MM), string(CM), string(M), string(IN), string(KG), string(M2), string(M3),

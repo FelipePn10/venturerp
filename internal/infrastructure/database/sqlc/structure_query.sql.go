@@ -68,7 +68,7 @@ type GetChildrenForConsultRow struct {
 	Quantity              decimal.Decimal
 	LossPercentage        decimal.Decimal
 	LossFormula           pgtype.Text
-	UnitOfMeasurement     UnitOfMeasurementEnum
+	UnitOfMeasurement     string
 	Health                HealthEnum
 	Sequence              int32
 	Notes                 pgtype.Text

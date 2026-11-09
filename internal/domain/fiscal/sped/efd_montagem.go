@@ -80,7 +80,14 @@ type Frete struct {
 }
 
 // DadosEFD é o período inteiro, como o sistema registrou.
+// UnidadeFiscal: como a unidade do cadastro sai na escrituração (0190, 0200,
+// C170, H010 aceitam até 6 caracteres): TONELADA → T, com a descrição.
+type UnidadeFiscal struct{ Codigo, Descricao string }
+
 type DadosEFD struct {
+	// UnidadesFiscais: código da unidade no catálogo da empresa → código
+	// fiscal e descrição. Sem ele, a unidade sai como está no documento.
+	UnidadesFiscais         map[string]UnidadeFiscal
 	Empresa                 EFDEmpresa
 	Periodo                 EFDPeriodo
 	Entradas                []NotaEntrada
@@ -216,7 +223,7 @@ func (a *analitico) fechar(vlDoc decimal.Decimal) []EFDC190 {
 //     E500/E510/E520 para o contribuinte do IPI.
 func Montar(d DadosEFD) EFDParams {
 	p := EFDParams{Empresa: d.Empresa, Periodo: d.Periodo, Inventario: d.Inventario, MotivoInventario: d.MotivoInventario}
-	cad := newCadastros()
+	cad := newCadastros(d.UnidadesFiscais)
 
 	debitos, creditos := decimal.Zero, decimal.Zero
 	ipi := newApuracaoIPI(d.ContribuinteIPI)
@@ -230,7 +237,7 @@ func Montar(d DadosEFD) EFDParams {
 		an := novoAnalitico()
 		bcDoc, icmsDoc := decimal.Zero, decimal.Zero
 		for i, it := range n.Itens {
-			unid := strings.ToUpper(firstNonBlank(it.Unid, it.Item.UnidInv, "UN"))
+			unid := cad.uf(firstNonBlank(it.Unid, it.Item.UnidInv, "UN"))
 			cad.item(it.Item, unid, it.Fator)
 			bc, aliq, icms := decimal.Zero, decimal.Zero, decimal.Zero
 			if it.CreditaICMS {
@@ -383,14 +390,14 @@ func Montar(d DadosEFD) EFDParams {
 	p.ApuracaoIPI = ipi.fechar(d.SaldoCredorAnteriorIPI)
 
 	for _, it := range d.Itens {
-		cad.item(it, strings.ToUpper(firstNonBlank(it.UnidInv, "UN")), decimal.NewFromInt(1))
+		cad.item(it, cad.uf(firstNonBlank(it.UnidInv, "UN")), decimal.NewFromInt(1))
 	}
 	// Bloco H: cada item do inventário precisa do seu 0200.
 	for _, inv := range d.InventarioItens {
 		if !inv.Quantidade.IsPositive() {
 			continue
 		}
-		unid := strings.ToUpper(firstNonBlank(inv.Item.UnidInv, "UN"))
+		unid := cad.uf(firstNonBlank(inv.Item.UnidInv, "UN"))
 		cad.item(inv.Item, unid, decimal.NewFromInt(1))
 		valor := inv.Valor.Round(2)
 		p.Inventario = append(p.Inventario, EFDInventarioItem{DtInv: d.DataInventario, CodItem: inv.Item.Cod, Unid: unid,
@@ -400,11 +407,17 @@ func Montar(d DadosEFD) EFDParams {
 	if len(p.Inventario) > 0 && p.MotivoInventario == "" {
 		p.MotivoInventario = "01"
 	}
-	for _, inv := range d.Inventario {
-		if inv.Unid != "" {
-			cad.unidades[strings.ToUpper(inv.Unid)] = true
+	// p.Inventario começou como cópia de d.Inventario: traduz numa fatia nova
+	// para não alterar a de quem chamou.
+	inv := make([]EFDInventarioItem, len(p.Inventario))
+	copy(inv, p.Inventario)
+	for i := range inv {
+		if inv[i].Unid != "" {
+			inv[i].Unid = cad.uf(inv[i].Unid)
+			cad.unidades[inv[i].Unid] = true
 		}
 	}
+	p.Inventario = inv
 	p.Participantes, p.Itens, p.Unidades = cad.listar()
 	return p
 }
@@ -523,10 +536,38 @@ type cadastros struct {
 	partes   map[string]EFDParticipante
 	unidades map[string]bool
 	itens    map[string]*EFDItem
+	fiscal   map[string]UnidadeFiscal
+	descr    map[string]string // código fiscal → descrição (0190)
 }
 
-func newCadastros() *cadastros {
-	return &cadastros{partes: map[string]EFDParticipante{}, unidades: map[string]bool{}, itens: map[string]*EFDItem{}}
+func newCadastros(fiscal map[string]UnidadeFiscal) *cadastros {
+	c := &cadastros{partes: map[string]EFDParticipante{}, unidades: map[string]bool{}, itens: map[string]*EFDItem{},
+		fiscal: map[string]UnidadeFiscal{}, descr: map[string]string{}}
+	for k, v := range fiscal {
+		k = strings.ToUpper(strings.TrimSpace(k))
+		v.Codigo = strings.ToUpper(strings.TrimSpace(v.Codigo))
+		if k == "" || v.Codigo == "" {
+			continue
+		}
+		c.fiscal[k] = v
+		if v.Descricao != "" {
+			c.descr[v.Codigo] = v.Descricao
+		}
+	}
+	return c
+}
+
+// uf: o código fiscal da unidade (TONELADA → T); sem cadastro, a própria.
+// Um código que já é fiscal passa direto, então traduzir duas vezes não muda nada.
+func (c *cadastros) uf(u string) string {
+	u = strings.ToUpper(strings.TrimSpace(u))
+	if _, jaFiscal := c.descr[u]; jaFiscal {
+		return u
+	}
+	if f, ok := c.fiscal[u]; ok {
+		return f.Codigo
+	}
+	return u
 }
 
 func (c *cadastros) participante(pt Participante) string {
@@ -548,12 +589,13 @@ func (c *cadastros) item(it ItemCadastro, unidDoc string, fator decimal.Decimal)
 	}
 	e := c.itens[it.Cod]
 	if e == nil {
-		unidInv := strings.ToUpper(firstNonBlank(it.UnidInv, unidDoc, "UN"))
+		unidInv := c.uf(firstNonBlank(it.UnidInv, unidDoc, "UN"))
 		c.unidades[unidInv] = true
 		e = &EFDItem{CodItem: it.Cod, DescItem: it.Desc, CodBarra: it.CodBarra, UnCom: unidInv, TipoItem: firstNonBlank(it.Tipo, "99"),
 			CodNCM: it.NCM, CEST: it.CEST}
 		c.itens[it.Cod] = e
 	}
+	unidDoc = c.uf(unidDoc)
 	if unidDoc == "" || unidDoc == e.UnCom {
 		return
 	}
@@ -580,7 +622,11 @@ func (c *cadastros) listar() ([]EFDParticipante, []EFDItem, []EFDUnidade) {
 	}
 	var us []EFDUnidade
 	for _, k := range chavesOrdenadas(c.unidades) {
-		us = append(us, EFDUnidade{CodUnd: k, DescUnd: k})
+		desc := c.descr[k]
+		if desc == "" {
+			desc = k
+		}
+		us = append(us, EFDUnidade{CodUnd: k, DescUnd: desc})
 	}
 	return ps, its, us
 }

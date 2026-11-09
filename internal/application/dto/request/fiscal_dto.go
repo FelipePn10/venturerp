@@ -365,3 +365,17 @@ type CreateCTeDTO struct {
 }
 
 var _ = time.Now
+
+// ApplyUnitResolutionDTO resolve a unidade de uma linha da nota de entrada.
+// Memorizar diz como lembrar a escolha nas próximas notas:
+//   - NENHUM: vale só para esta linha;
+//   - ITEM: cria a conversão do item (VSUP0110) unidade da nota → estoque;
+//   - FORNECEDOR: grava o fator no vínculo produto × fornecedor;
+//   - SINONIMO: a unidade da nota passa a ser sinônimo de UnidadeCatalogo
+//     para este fornecedor (fator ignorado — a conversão vem do cadastro).
+type ApplyUnitResolutionDTO struct {
+	ItemID          int64            `json:"item_id"`
+	Fator           *decimal.Decimal `json:"fator,omitempty"`
+	Memorizar       string           `json:"memorizar"`
+	UnidadeCatalogo string           `json:"unidade_catalogo,omitempty"`
+}

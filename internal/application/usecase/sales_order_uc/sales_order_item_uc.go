@@ -12,6 +12,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/salespricing"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -27,6 +28,10 @@ type CreateSalesOrderItemUseCase struct {
 	Tributos ports.SugestorTributosVenda
 	// Politica aplica as políticas comerciais e a alçada de desconto. Opcional.
 	Politica *PoliticaDoPedido
+	// Unidades confere a unidade de venda no catálogo da empresa. Opcional.
+	// A nota de saída usa essa unidade e converte para a de estoque: "KGS"
+	// gravado aqui só falhava no faturamento.
+	Unidades unit_of_measure_uc.Catalogo
 }
 
 func (uc *CreateSalesOrderItemUseCase) Execute(
@@ -42,6 +47,10 @@ func (uc *CreateSalesOrderItemUseCase) Execute(
 
 	if dto.SalesOrderCode == 0 {
 		return nil, errorsuc.NewValidationError("o código do pedido é obrigatório")
+	}
+	dto.SalesUOM = unit_of_measure_uc.NormalizarUnidade(dto.SalesUOM)
+	if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.Unidades, "unidade de venda", dto.SalesUOM); err != nil {
+		return nil, err
 	}
 	resolvedItem, err := itemresolution.ResolveActive(ctx, uc.Items, dto.ItemCode)
 	if err != nil {

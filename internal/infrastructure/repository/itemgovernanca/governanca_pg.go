@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,6 +17,7 @@ import (
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	dom "github.com/FelipePn10/panossoerp/internal/domain/items/governanca"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -132,14 +134,14 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 		return nil, err
 	}
 	var dados []byte
+	var parUM string
 	f := dom.Ficha{}
 	err = r.pool.QueryRow(ctx, `SELECT to_jsonb(i), i.engineering_type,
 			EXISTS(SELECT 1 FROM item_structures s WHERE s.parent_code=i.code AND s.is_active),
 			EXISTS(SELECT 1 FROM manufacturing_routes m WHERE m.item_code=i.code AND m.enterprise_id=i.enterprise_id AND m.is_active),
 			EXISTS(SELECT 1 FROM item_preferred_suppliers p WHERE p.item_code=i.code AND p.enterprise_id=i.enterprise_id AND p.is_active),
 			EXISTS(SELECT 1 FROM item_standard_costs c WHERE c.item_code=i.code AND COALESCE(c.total_cost,0) > 0),
-			EXISTS(SELECT 1 FROM item_unit_conversions u WHERE u.item_code=i.code AND u.is_active
-			        AND u.from_uom::text = i.supplies_purchase_uom AND u.to_uom::text = i.warehouse_unit_of_measurement::text),
+			upper(COALESCE(i.supplies_purchase_uom, '')) || '|' || i.warehouse_unit_of_measurement,
 			COALESCE(i.supplies_purchase_uom, '') <> '' AND i.supplies_purchase_uom <> i.warehouse_unit_of_measurement::text,
 			COALESCE((SELECT c.controls_lot FROM manufacturing_stock_item_controls c WHERE c.enterprise_id=i.enterprise_id AND c.item_code=i.code), FALSE),
 			EXISTS(SELECT 1 FROM receiving_inspection_routes rt WHERE rt.enterprise_code=(SELECT e.code FROM enterprise e WHERE e.id=i.enterprise_id) AND rt.is_active AND (rt.item_code=i.code OR rt.item_code IS NULL)),
@@ -153,7 +155,7 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 		         AND (f.code::text=i.accounting_sale_fiscal_classification_code OR f.ncm=i.accounting_sale_fiscal_classification_code)
 		       ORDER BY f.valid_from DESC, f.id DESC LIMIT 1) fc ON TRUE
 		 WHERE i.code=$1 AND i.enterprise_id=$2`, itemCode, empresa).
-		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &f.TemConversao, &f.CompraEmOutraUM,
+		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &parUM, &f.CompraEmOutraUM,
 			&f.ControlaLote, &f.TemRotaInspecao, &f.TemDesenho, &f.TemFichaFerramenta, &f.Fiscal.NCM, &f.Fiscal.ClassTrib, &f.Fiscal.CEST, &f.Fiscal.Unidade, &f.Fiscal.Origem,
 			&f.Fiscal.IPI, &f.Fiscal.ICMS, &f.Fiscal.PIS, &f.Fiscal.COFINS)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -164,6 +166,17 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 	}
 	if err := json.Unmarshal(dados, &f.Dados); err != nil {
 		return nil, err
+	}
+	// Conversão da compra para o estoque pelo mesmo motor da compra e da nota:
+	// direta, inversa, encadeada, padrão da empresa — vigente hoje. Antes só a
+	// direta compra→estoque contava, e quem cadastrou "1 UN = 6 KG" (inversa
+	// de KG→UN) via o item barrado na liberação.
+	if compra, estoque, ok := strings.Cut(parUM, "|"); ok && f.CompraEmOutraUM && compra != "" {
+		cam, err := uomgraph.Resolver(ctx, r.pool, empresa, itemCode, "", "", time.Time{}, compra, estoque)
+		if err != nil {
+			return nil, err
+		}
+		f.TemConversao = cam != nil
 	}
 	return &f, nil
 }

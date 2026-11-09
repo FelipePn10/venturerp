@@ -17,6 +17,7 @@ import (
 
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -388,34 +389,23 @@ func (r *Repo) ResolveConversionFactor(ctx context.Context, item int64, mask, fr
 		return nil, tenantErr
 	}
 	var stock string
-	if e := r.db.QueryRow(ctx, `SELECT warehouse_unit_of_measurement::text FROM items WHERE code=$1`, item).Scan(&stock); e != nil {
+	if e := r.db.QueryRow(ctx, `SELECT warehouse_unit_of_measurement::text FROM items WHERE code=$1 AND enterprise_id=$2`, item, eid).Scan(&stock); e != nil {
+		if errors.Is(e, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		return nil, e
 	}
-	from = strings.ToUpper(strings.TrimSpace(from))
-	if from == stock {
-		v := decimal.NewFromInt(1)
-		return &v, nil
+	// Mesmo motor de conversão da compra, da nota e da estrutura (máscara,
+	// conversão do item, padrão da empresa e cadeia entre elas).
+	c, e := uomgraph.Resolver(ctx, r.db, eid, item, strings.TrimSpace(mask), "", time.Time{}, from, stock)
+	if e != nil {
+		return nil, e
 	}
-	var factor decimal.Decimal
-	e := r.db.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND (mask=$2 OR mask='') AND from_uom=$3 AND to_uom=$4 AND is_active ORDER BY (mask=$2) DESC LIMIT 1`, item, mask, from, stock).Scan(&factor)
-	if e == nil {
-		return &factor, nil
+	if c == nil {
+		return nil, domain.ErrNotFound
 	}
-	e = r.db.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND (mask=$2 OR mask='') AND from_uom=$3 AND to_uom=$4 AND is_active ORDER BY (mask=$2) DESC LIMIT 1`, item, mask, stock, from).Scan(&factor)
-	if e == nil {
-		v := decimal.NewFromInt(1).Div(factor)
-		return &v, nil
-	}
-	e = r.db.QueryRow(ctx, `SELECT factor FROM global_unit_conversions WHERE enterprise_id=$1 AND from_uom=$2 AND to_uom=$3 AND is_active`, eid, from, stock).Scan(&factor)
-	if e == nil {
-		return &factor, nil
-	}
-	e = r.db.QueryRow(ctx, `SELECT factor FROM global_unit_conversions WHERE enterprise_id=$1 AND from_uom=$2 AND to_uom=$3 AND is_active`, eid, stock, from).Scan(&factor)
-	if e == nil {
-		v := decimal.NewFromInt(1).Div(factor)
-		return &v, nil
-	}
-	return nil, domain.ErrNotFound
+	v := c.Fator()
+	return &v, nil
 }
 func (r *Repo) History(ctx context.Context, id int64) ([]domain.History, error) {
 	eid, e := tenant.ID(ctx)
@@ -1030,8 +1020,32 @@ func (r *Repo) UpsertGlobalConversion(ctx context.Context, v domain.GlobalConver
 		return nil, errorsuc.NewValidationError("conversão global inválida")
 	}
 	v.EnterpriseID = eid
-	e = r.db.QueryRow(ctx, `INSERT INTO global_unit_conversions(enterprise_id,from_uom,to_uom,factor,created_by) VALUES($1,$2,$3,$4,$5) ON CONFLICT(enterprise_id,from_uom,to_uom) DO UPDATE SET factor=EXCLUDED.factor,is_active=TRUE,updated_at=NOW() RETURNING id,is_active,created_at,updated_at`, eid, v.FromUOM, v.ToUOM, v.Factor, v.CreatedBy).Scan(&v.ID, &v.IsActive, &v.CreatedAt, &v.UpdatedAt)
-	return &v, e
+	// As mesmas regras da conversão padrão da VSUP0110 (migração 474): as duas
+	// unidades ativas no catálogo e da mesma grandeza — KG→UN depende do item e
+	// não pode valer para todos. A inversa do par é substituída: "1 CX = 12 UN"
+	// e "1 UN = 0,1 CX" juntas dariam fatores contraditórios conforme o sentido.
+	var dimDe, dimPara string
+	e = r.db.QueryRow(ctx, `SELECT COALESCE(MAX(dimension) FILTER (WHERE code=$2),''), COALESCE(MAX(dimension) FILTER (WHERE code=$3),'')
+		  FROM units_of_measure WHERE enterprise_id=$1 AND is_active AND code IN ($2,$3)`, eid, v.FromUOM, v.ToUOM).Scan(&dimDe, &dimPara)
+	if e != nil {
+		return nil, e
+	}
+	if dimDe == "" || dimPara == "" {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("unidade fora do catálogo da empresa: cadastre %s e %s em VSUP0110 › Unidades", v.FromUOM, v.ToUOM))
+	}
+	if dimDe != dimPara || dimDe == "OUTRA" {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("conversão global só entre unidades da mesma grandeza; %s e %s dependem do item — cadastre na conversão do item (VSUP0110)", v.FromUOM, v.ToUOM))
+	}
+	e = pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `DELETE FROM global_unit_conversions WHERE enterprise_id=$1 AND from_uom=$3 AND to_uom=$2`, eid, v.FromUOM, v.ToUOM); err != nil {
+			return err
+		}
+		return tx.QueryRow(ctx, `INSERT INTO global_unit_conversions(enterprise_id,from_uom,to_uom,factor,from_quantity,to_quantity,created_by) VALUES($1,$2,$3,$4,1,$4,$5) ON CONFLICT(enterprise_id,from_uom,to_uom) DO UPDATE SET factor=EXCLUDED.factor,from_quantity=1,to_quantity=EXCLUDED.factor,is_active=TRUE,updated_at=NOW() RETURNING id,is_active,created_at,updated_at`, eid, v.FromUOM, v.ToUOM, v.Factor, v.CreatedBy).Scan(&v.ID, &v.IsActive, &v.CreatedAt, &v.UpdatedAt)
+	})
+	if e != nil {
+		return nil, e
+	}
+	return &v, nil
 }
 func (r *Repo) ListGlobalConversions(ctx context.Context) ([]domain.GlobalConversion, error) {
 	eid, e := tenant.ID(ctx)

@@ -13,6 +13,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	itemrepo "github.com/FelipePn10/panossoerp/internal/domain/items/repository"
 	divisionrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_division/repository"
@@ -34,6 +35,8 @@ type UseCase struct {
 	Aprovacoes Aprovacoes
 	// Tributos sugere IPI e ST das linhas pelo cálculo da nota. Opcional.
 	Tributos ports.SugestorTributosVenda
+	// Unidades confere a unidade de venda das linhas no catálogo. Opcional.
+	Unidades unit_of_measure_uc.Catalogo
 }
 
 func (uc *UseCase) Create(ctx context.Context, dto request.CreateSalesQuotationDTO) (*response.SalesQuotationResponse, error) {

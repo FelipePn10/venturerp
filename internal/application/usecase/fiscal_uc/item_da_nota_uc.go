@@ -68,7 +68,13 @@ func SugestaoItemDaNota(it *entity.FiscalEntryItem) ItemDaNotaDTO {
 			revenda = true
 		}
 	}
-	return ItemDaNotaDTO{Nome: strings.TrimSpace(deref(it.Description)), Unidade: UnidadeDoCadastro(deref(it.UOM)),
+	// A unidade já traduzida pelo catálogo (sinônimos do fornecedor e gerais)
+	// vale mais que a tradução fixa, que só conhece as variações comuns.
+	unidade := UnidadeDoCadastro(deref(it.UOM))
+	if it.UnidadeNormalizada != nil && strings.TrimSpace(*it.UnidadeNormalizada) != "" {
+		unidade = strings.ToUpper(strings.TrimSpace(*it.UnidadeNormalizada))
+	}
+	return ItemDaNotaDTO{Nome: strings.TrimSpace(deref(it.Description)), Unidade: unidade,
 		WarehouseID: it.WarehouseID, TipoUso: tipo, Revenda: &revenda}
 }
 

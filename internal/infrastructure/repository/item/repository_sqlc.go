@@ -79,7 +79,7 @@ func (r *RepositoryItemSQLC) Create(
 		PdmAttributes:           attributes,
 		PdmDescriptionTechnique: item.PDM.DescriptionTechnique,
 
-		WarehouseUnitOfMeasurement:           sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
+		WarehouseUnitOfMeasurement:           string(item.Warehouse.UnitOfMeasurement),
 		WarehouseAutomaticLow:                item.Warehouse.AutomaticLow,
 		WarehouseCyclicalCountConfig:         cyclicalCountConfig,
 		WarehouseMinimumStock:                pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock),
@@ -158,7 +158,7 @@ func (r *RepositoryItemSQLC) Create(
 			return nil, itemrepo.ErrConflict
 		}
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
-			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
+			return nil, referenciaInvalida(pgErr, item)
 		}
 		return nil, fmt.Errorf("create item: %w", err)
 	}
@@ -253,7 +253,7 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 		SuppliesReceivingChecklist: item.Supplies.ReceivingChecklist, SuppliesHarvest: item.Supplies.Harvest,
 		SuppliesWarehouseCode: item.Supplies.WarehouseCode, SuppliesNotes: pgutil.ToPgTextFromPtr(item.Supplies.Notes),
 		WarehouseCode: int64(item.Warehouse.WarehouseCode), WarehouseAvgMonthlyConsumptionManual: pgutil.ToPgNumericFromDecimalPtr(item.Warehouse.AverageMonthlyConsumptionManual),
-		WarehouseUnitOfMeasurement: sqlc.UnitOfMeasurementEnum(item.Warehouse.UnitOfMeasurement),
+		WarehouseUnitOfMeasurement: string(item.Warehouse.UnitOfMeasurement),
 		WarehouseAutomaticLow:      item.Warehouse.AutomaticLow, WarehouseMinimumStock: pgutil.ToPgNumericFromDecimal(item.Warehouse.MinimumStock),
 		LongDescription: pgutil.ToPgTextFromPtr(item.LongDescription), GeneralNotes: pgutil.ToPgTextFromPtr(item.GeneralNotes), Revision: pgutil.ToPgTextFromPtr(item.Revision),
 		PreviousCode: pgutil.ToPgTextFromPtr(item.PreviousCode), ManufacturerName: pgutil.ToPgTextFromPtr(item.ManufacturerName), ManufacturerPartNumber: pgutil.ToPgTextFromPtr(item.ManufacturerPartNumber),
@@ -277,7 +277,7 @@ func (r *RepositoryItemSQLC) UpdateFolders(ctx context.Context, item *entity.Ite
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23514") {
-			return nil, fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
+			return nil, referenciaInvalida(pgErr, item)
 		}
 		return nil, fmt.Errorf("update item folders: %w", err)
 	}
@@ -839,4 +839,14 @@ func (r *RepositoryItemSQLC) ListAllWithMasks(ctx context.Context) ([]entity.Ite
 		})
 	}
 	return result, nil
+}
+
+// referenciaInvalida explica a referência recusada pelo banco. A unidade de
+// estoque tem de existir no catálogo de unidades da empresa (migração 474).
+func referenciaInvalida(pgErr *pgconn.PgError, item *entity.Item) error {
+	if pgErr.ConstraintName == "fk_items_warehouse_uom" {
+		return fmt.Errorf("%w: a unidade de estoque %s não está cadastrada no catálogo de unidades — cadastre-a em VSUP0110, aba Unidades",
+			itemrepo.ErrInvalidReference, item.Warehouse.UnitOfMeasurement)
+	}
+	return fmt.Errorf("%w: %s", itemrepo.ErrInvalidReference, pgErr.ConstraintName)
 }

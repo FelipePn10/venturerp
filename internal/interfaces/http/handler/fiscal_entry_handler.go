@@ -35,6 +35,7 @@ type FiscalEntryHandler struct {
 	byKey     *fiscal_uc.ImportNFeByKeyUseCase
 	conciliar *fiscal_uc.SaveFiscalEntryConciliationUseCase
 	sugerir   *fiscal_uc.SuggestFiscalEntryItemUseCase
+	unidades  *fiscal_uc.FiscalEntryUnitsUseCase
 	docs      repository.FiscalEntryDocumentRepository
 	auth      ports.AuthService
 }
@@ -229,4 +230,44 @@ func (h *FiscalEntryHandler) DownloadXML(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="nfe-entrada-%d.xml"`, numero))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(conteudo))
+}
+
+// ComUnidades liga as sugestões e a resolução de unidade das linhas da nota.
+func (h *FiscalEntryHandler) ComUnidades(u *fiscal_uc.FiscalEntryUnitsUseCase) *FiscalEntryHandler {
+	h.unidades = u
+	return h
+}
+
+// UnitSuggestions: linhas em unidade diferente da de estoque e os fatores possíveis.
+func (h *FiscalEntryHandler) UnitSuggestions(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := h.unidades.Suggestions(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// ApplyUnitResolution aplica o fator escolhido a uma linha e, se pedido, memoriza.
+func (h *FiscalEntryHandler) ApplyUnitResolution(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var dto request.ApplyUnitResolutionDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	result, err := h.unidades.Apply(r.Context(), id, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }

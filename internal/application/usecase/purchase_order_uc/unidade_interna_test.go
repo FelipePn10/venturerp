@@ -10,6 +10,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
+	uomrepo "github.com/FelipePn10/panossoerp/internal/domain/unit_of_measure/repository"
 )
 
 type unidadeFixa map[int64]string
@@ -66,5 +67,39 @@ func TestUnidadeInterna(t *testing.T) {
 	l = &entity.PurchaseOrderItem{ItemCode: 1, RequestedQty: decimal.NewFromFloat(3), UnitPrice: decimal.NewFromFloat(4)}
 	if err := nada.Preencher(ctx, l); err != nil || !l.InternalQty.Equal(decimal.NewFromFloat(3)) || !l.InternalPrice.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("sem provedor: %+v %v", l, err)
+	}
+}
+
+type catalogoFixo map[string]string // texto → código do catálogo
+
+func (c catalogoFixo) Resolver(_ context.Context, _ *int64, textos []string) (map[string]uomrepo.Resolucao, error) {
+	out := map[string]uomrepo.Resolucao{}
+	for _, t := range textos {
+		out[t] = uomrepo.Resolucao{Texto: t, Unidade: c[t]}
+	}
+	return out, nil
+}
+
+// Sinônimo do catálogo (BMB = BOMBONA) é a própria unidade de estoque: não
+// pede conversão BMB→BOMBONA. Unidade que o catálogo não conhece é recusada
+// como fora do catálogo, não como "falta conversão".
+func TestUnidadeInternaTraduzSinonimoDoCatalogo(t *testing.T) {
+	ctx := context.Background()
+	u := &UnidadeInterna{
+		Unidades:  unidadeFixa{9010: "BOMBONA"},
+		Conversor: conversorFixo{fator: map[string]float64{"9010:L>BOMBONA": 0.02}},
+		Catalogo:  catalogoFixo{"BMB": "BOMBONA", "L": "L", "LT": "L"},
+	}
+	l := &entity.PurchaseOrderItem{ItemCode: 9010, RequestedQty: decimal.NewFromInt(2), UnitPrice: decimal.NewFromInt(200), PurchaseUOM: ptrS("bmb")}
+	if err := u.Preencher(ctx, l); err != nil || *l.PurchaseUOM != "BOMBONA" || !l.InternalQty.Equal(decimal.NewFromInt(2)) {
+		t.Fatalf("BMB é BOMBONA: esperava 2 BOMBONA sem conversão, veio %v %v %v", err, *l.PurchaseUOM, l.InternalQty)
+	}
+	l = &entity.PurchaseOrderItem{ItemCode: 9010, RequestedQty: decimal.NewFromInt(100), UnitPrice: decimal.NewFromInt(4), PurchaseUOM: ptrS("LT")}
+	if err := u.Preencher(ctx, l); err != nil || *l.PurchaseUOM != "L" || !l.InternalQty.Equal(decimal.NewFromInt(2)) {
+		t.Fatalf("100 LT = 100 L = 2 BOMBONA, veio %v %v %v", err, *l.PurchaseUOM, l.InternalQty)
+	}
+	l = &entity.PurchaseOrderItem{ItemCode: 9010, RequestedQty: decimal.NewFromInt(1), UnitPrice: decimal.NewFromInt(1), PurchaseUOM: ptrS("BOMBONAS")}
+	if err := u.Preencher(ctx, l); err == nil || !strings.Contains(err.Error(), "fora do catálogo") {
+		t.Fatalf("BOMBONAS não existe no catálogo, veio %v", err)
 	}
 }

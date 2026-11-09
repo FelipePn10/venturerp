@@ -87,57 +87,59 @@ func montarEntradaDoXML(n *NFeLida, conteudo string, dataEntrada time.Time) (*en
 	}
 	for _, it := range n.Itens {
 		item := &entity.FiscalEntryItem{
-			Sequence:          it.Numero,
-			SupplierItemCode:  strPtr(it.CodigoProduto),
-			Description:       strPtr(it.Descricao),
-			UOM:               strPtr(it.Unidade),
-			Ncm:               strPtr(it.NCM),
-			Cfop:              it.CFOP,
-			Quantity:          it.Quantidade,
-			UnitPrice:         it.ValorUnitario,
-			TotalPrice:        it.ValorProduto,
-			BaseICMS:          it.BaseICMS,
-			AliqICMS:          it.AliqICMS.Div(cemDec),
-			ValorICMS:         it.ValorICMS,
-			BaseIPI:           it.BaseIPI,
-			AliqIPI:           it.AliqIPI.Div(cemDec),
-			ValorIPI:          it.ValorIPI,
-			ValorPIS:          it.ValorPIS,
-			ValorCOFINS:       it.ValorCOFINS,
-			CstICMS:           strPtr(it.CSTICMS),
-			CstIPI:            strPtr(it.CSTIPI),
-			CstPIS:            strPtr(it.CSTPIS),
-			CstCOFINS:         strPtr(it.CSTCOFINS),
-			GeraCreditoICMS:   it.ValorICMS.IsPositive(),
-			GeraCreditoIPI:    it.ValorIPI.IsPositive(),
-			GeraCreditoPIS:    it.ValorPIS.IsPositive(),
-			GeraCreditoCOFINS: it.ValorCOFINS.IsPositive(),
-			EAN:               strPtr(it.EAN),
-			CEST:              strPtr(it.CEST),
-			Origem:            strPtr(it.Origem),
-			ValorFrete:        it.ValorFrete,
-			ValorSeguro:       it.ValorSeguro,
-			ValorDesconto:     it.ValorDesconto,
-			ValorOutras:       it.ValorOutras,
-			BaseICMSST:        it.BaseST,
-			ValorICMSST:       it.ValorST,
-			ValorContabil:     it.ValorContabil(),
-			PedidoCompraXML:   strPtr(it.PedidoCompra),
-			ItemPedidoXML:     strPtr(it.ItemPedido),
-			MovimentaEstoque:  true,
-			GeraFinanceiro:    true,
-			CSTIBSCBS:         strPtr(it.CSTIBSCBS),
-			ClassTrib:         strPtr(it.ClassTrib),
-			BaseIBSCBS:        it.BaseIBSCBS,
-			AliqIBSUF:         it.AliqIBSUF,
-			ValorIBSUF:        it.ValorIBSUF,
-			AliqIBSMun:        it.AliqIBSMun,
-			ValorIBSMun:       it.ValorIBSMun,
-			ValorIBS:          it.ValorIBS,
-			AliqCBS:           it.AliqCBS,
-			ValorCBS:          it.ValorCBS,
-			ValorIS:           it.ValorIS,
-			GeraCreditoIBSCBS: it.ValorIBS.IsPositive() || it.ValorCBS.IsPositive(),
+			Sequence:             it.Numero,
+			SupplierItemCode:     strPtr(it.CodigoProduto),
+			Description:          strPtr(it.Descricao),
+			UOM:                  strPtr(it.Unidade),
+			UnidadeTributavel:    strPtr(it.UnidadeTributavel),
+			QuantidadeTributavel: decPositivo(it.QuantidadeTributavel),
+			Ncm:                  strPtr(it.NCM),
+			Cfop:                 it.CFOP,
+			Quantity:             it.Quantidade,
+			UnitPrice:            it.ValorUnitario,
+			TotalPrice:           it.ValorProduto,
+			BaseICMS:             it.BaseICMS,
+			AliqICMS:             it.AliqICMS.Div(cemDec),
+			ValorICMS:            it.ValorICMS,
+			BaseIPI:              it.BaseIPI,
+			AliqIPI:              it.AliqIPI.Div(cemDec),
+			ValorIPI:             it.ValorIPI,
+			ValorPIS:             it.ValorPIS,
+			ValorCOFINS:          it.ValorCOFINS,
+			CstICMS:              strPtr(it.CSTICMS),
+			CstIPI:               strPtr(it.CSTIPI),
+			CstPIS:               strPtr(it.CSTPIS),
+			CstCOFINS:            strPtr(it.CSTCOFINS),
+			GeraCreditoICMS:      it.ValorICMS.IsPositive(),
+			GeraCreditoIPI:       it.ValorIPI.IsPositive(),
+			GeraCreditoPIS:       it.ValorPIS.IsPositive(),
+			GeraCreditoCOFINS:    it.ValorCOFINS.IsPositive(),
+			EAN:                  strPtr(it.EAN),
+			CEST:                 strPtr(it.CEST),
+			Origem:               strPtr(it.Origem),
+			ValorFrete:           it.ValorFrete,
+			ValorSeguro:          it.ValorSeguro,
+			ValorDesconto:        it.ValorDesconto,
+			ValorOutras:          it.ValorOutras,
+			BaseICMSST:           it.BaseST,
+			ValorICMSST:          it.ValorST,
+			ValorContabil:        it.ValorContabil(),
+			PedidoCompraXML:      strPtr(it.PedidoCompra),
+			ItemPedidoXML:        strPtr(it.ItemPedido),
+			MovimentaEstoque:     true,
+			GeraFinanceiro:       true,
+			CSTIBSCBS:            strPtr(it.CSTIBSCBS),
+			ClassTrib:            strPtr(it.ClassTrib),
+			BaseIBSCBS:           it.BaseIBSCBS,
+			AliqIBSUF:            it.AliqIBSUF,
+			ValorIBSUF:           it.ValorIBSUF,
+			AliqIBSMun:           it.AliqIBSMun,
+			ValorIBSMun:          it.ValorIBSMun,
+			ValorIBS:             it.ValorIBS,
+			AliqCBS:              it.AliqCBS,
+			ValorCBS:             it.ValorCBS,
+			ValorIS:              it.ValorIS,
+			GeraCreditoIBSCBS:    it.ValorIBS.IsPositive() || it.ValorCBS.IsPositive(),
 		}
 		e.Itens = append(e.Itens, item)
 	}
@@ -272,17 +274,19 @@ func usarVinculoDoItemEscolhido(it *entity.FiscalEntryItem, porCodigo map[string
 // aplicarConversao calcula a quantidade na unidade do cadastro. O fator do
 // vínculo só vale para a unidade do XML para a qual foi cadastrado.
 func aplicarConversao(it *entity.FiscalEntryItem, fator *decimal.Decimal, xmlUOM *string) {
-	f := umDec
-	if fator != nil && fator.IsPositive() {
-		mesmaUnidade := xmlUOM == nil || strings.TrimSpace(*xmlUOM) == "" ||
-			(it.UOM != nil && strings.EqualFold(strings.TrimSpace(*xmlUOM), strings.TrimSpace(*it.UOM)))
-		if mesmaUnidade {
-			f = *fator
-		}
+	limparFator(it)
+	if fator == nil || !fator.IsPositive() {
+		return
 	}
-	q := it.Quantity.Mul(f).Round(6)
-	it.FatorConversao = &f
-	it.QuantidadeEstoque = &q
+	declarada := xmlUOM != nil && strings.TrimSpace(*xmlUOM) != ""
+	mesmaUnidade := !declarada || (it.UOM != nil && strings.EqualFold(strings.TrimSpace(*xmlUOM), strings.TrimSpace(*it.UOM)))
+	// Fator 1 sem unidade declarada é o valor padrão do vínculo, não uma
+	// decisão: deixa a resolução de unidades decidir.
+	if !mesmaUnidade || (fator.Equal(umDec) && !declarada) {
+		return
+	}
+	caminho := fmt.Sprintf("vínculo com o fornecedor: 1 %s = %s na unidade de estoque", strings.ToUpper(textoUnidade(it.UOM)), fator.String())
+	definirFator(it, *fator, it.Quantity.Mul(*fator).Round(6), OrigemVinculoFornecedor, caminho)
 }
 
 // sugerirPlanosDeContas preenche o plano de contas dos itens conciliados que
@@ -428,6 +432,11 @@ func toFiscalEntryDocumentResponse(e *entity.FiscalEntry) *response.FiscalEntryR
 		ri.ValorContabil = it.ValorContabil.InexactFloat64()
 		ri.FatorConversao = decPtrFloat(it.FatorConversao)
 		ri.QuantidadeEstoque = decPtrFloat(it.QuantidadeEstoque)
+		ri.UnidadeTributavel = it.UnidadeTributavel
+		ri.QuantidadeTributavel = decPtrFloat(it.QuantidadeTributavel)
+		ri.UnidadeNormalizada = it.UnidadeNormalizada
+		ri.OrigemConversao = it.OrigemConversao
+		ri.CaminhoConversao = it.CaminhoConversao
 		ri.PedidoCompraXML = it.PedidoCompraXML
 		ri.PlanoContasID = it.PlanoContasID
 		ri.CentroCustoID = it.CentroCustoID
@@ -557,4 +566,12 @@ func strPtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// decPositivo: ponteiro para o valor quando ele é positivo (ausente = nulo).
+func decPositivo(d decimal.Decimal) *decimal.Decimal {
+	if !d.IsPositive() {
+		return nil
+	}
+	return &d
 }

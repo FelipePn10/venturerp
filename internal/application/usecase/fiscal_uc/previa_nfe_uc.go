@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 	"strings"
 	"time"
 
@@ -35,10 +36,12 @@ type PreviaNFeUseCase struct {
 	CFOPs CatalogoCFOP
 	// Identificacao: a prévia mostra o GTIN e a unidade tributável que vão à nota.
 	Identificacao IdentificacaoFiscalDosItens
-	Repo          repository.FiscalRepository
-	Auth          ports.AuthService
-	Customers     customerrepo.CustomerRepository
-	Orders        salesrepo.SalesOrderRepository
+	// Unidades: a prévia mostra a unidade como vai no XML (código fiscal).
+	Unidades  CodigosFiscaisDeUnidade
+	Repo      repository.FiscalRepository
+	Auth      ports.AuthService
+	Customers customerrepo.CustomerRepository
+	Orders    salesrepo.SalesOrderRepository
 	// Devolucao, quando presente, liga os itens da devolução de compra à nota
 	// de origem (DFeReferenciado), como na transmissão.
 	Devolucao *DevolucaoCompraUseCase
@@ -225,6 +228,25 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		return nil, err
 	}
 	out.Pendencias = append(out.Pendencias, divPedido...)
+	// A mesma tradução da transmissão, numa cópia: a prévia mostra a unidade como
+	// vai no XML e acusa aqui a que a SEFAZ recusaria.
+	copia := payload
+	copia.Items = append([]focusnfe.NFEItem(nil), payload.Items...)
+	if err := aplicarCodigosFiscaisDeUnidade(ctx, uc.Unidades, &copia); err != nil {
+		if _, validacao := errorsuc.AsValidation(err); !validacao {
+			return nil, err
+		}
+		out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+			Nivel: NivelImpede, Campo: "itens.unidade", Mensagem: err.Error(),
+			ComoResolver: "informe o código fiscal da unidade (até 6 caracteres) em VSUP0110 › Unidades",
+		})
+	} else if len(copia.Items) == len(out.Itens) {
+		for i := range out.Itens {
+			if u := copia.Items[i].UnidadeComercial; u != "" {
+				out.Itens[i].UM = u
+			}
+		}
+	}
 	if errReforma != nil {
 		out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
 			Nivel: NivelImpede, Campo: "itens.ibs_cbs", Mensagem: errReforma.Error(),

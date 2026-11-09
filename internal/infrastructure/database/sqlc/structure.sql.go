@@ -60,7 +60,7 @@ type CreateStructureComponentParams struct {
 	ChildCode           int64
 	ParentMask          pgtype.Text
 	Quantity            decimal.Decimal
-	UnitOfMeasurement   UnitOfMeasurementEnum
+	UnitOfMeasurement   string
 	LossPercentage      decimal.Decimal
 	Sequence            int32
 	Health              HealthEnum
@@ -278,12 +278,12 @@ type GetAllDirectChildrenRow struct {
 	ParentCode          int64
 	ChildCode           int64
 	ChildDescription    string
-	ChildStockUom       UnitOfMeasurementEnum
+	ChildStockUom       string
 	ParentMask          pgtype.Text
 	Quantity            decimal.Decimal
 	LossPercentage      decimal.Decimal
 	LossFormula         pgtype.Text
-	UnitOfMeasurement   UnitOfMeasurementEnum
+	UnitOfMeasurement   string
 	Health              HealthEnum
 	Sequence            int32
 	Notes               pgtype.Text
@@ -433,7 +433,7 @@ type GetDirectChildrenForMaskRow struct {
 	Quantity            decimal.Decimal
 	LossPercentage      decimal.Decimal
 	LossFormula         pgtype.Text
-	UnitOfMeasurement   UnitOfMeasurementEnum
+	UnitOfMeasurement   string
 	Health              HealthEnum
 	Sequence            int32
 	Notes               pgtype.Text
@@ -463,7 +463,7 @@ type GetDirectChildrenForMaskRow struct {
 	ConversionFactor    pgtype.Numeric
 	CustomerSupplied    bool
 	ChildDescription    string
-	ChildStockUom       UnitOfMeasurementEnum
+	ChildStockUom       string
 }
 
 func (q *Queries) GetDirectChildrenForMask(ctx context.Context, arg GetDirectChildrenForMaskParams) ([]GetDirectChildrenForMaskRow, error) {
@@ -544,7 +544,7 @@ type GetGenericChildrenRow struct {
 	ID                int64
 	ParentMask        pgtype.Text
 	Quantity          decimal.Decimal
-	UnitOfMeasurement UnitOfMeasurementEnum
+	UnitOfMeasurement string
 	LossPercentage    decimal.Decimal
 	Sequence          int32
 	Notes             pgtype.Text
@@ -795,7 +795,7 @@ type UpdateStructureComponentParams struct {
 	ChildCode           int64
 	ParentMask          pgtype.Text
 	Quantity            decimal.Decimal
-	UnitOfMeasurement   UnitOfMeasurementEnum
+	UnitOfMeasurement   string
 	LossPercentage      decimal.Decimal
 	Sequence            int32
 	Health              HealthEnum

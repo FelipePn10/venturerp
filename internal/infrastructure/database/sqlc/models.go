@@ -3284,61 +3284,6 @@ func (ns NullTypeStructItemEnum) Value() (driver.Value, error) {
 	return string(ns.TypeStructItemEnum), nil
 }
 
-type UnitOfMeasurementEnum string
-
-const (
-	UnitOfMeasurementEnumMM         UnitOfMeasurementEnum = "MM"
-	UnitOfMeasurementEnumCM         UnitOfMeasurementEnum = "CM"
-	UnitOfMeasurementEnumM          UnitOfMeasurementEnum = "M"
-	UnitOfMeasurementEnumIN         UnitOfMeasurementEnum = "IN"
-	UnitOfMeasurementEnumKG         UnitOfMeasurementEnum = "KG"
-	UnitOfMeasurementEnumM2         UnitOfMeasurementEnum = "M2"
-	UnitOfMeasurementEnumM3         UnitOfMeasurementEnum = "M3"
-	UnitOfMeasurementEnumUN         UnitOfMeasurementEnum = "UN"
-	UnitOfMeasurementEnumMICROMETRO UnitOfMeasurementEnum = "MICROMETRO"
-	UnitOfMeasurementEnumTONELADA   UnitOfMeasurementEnum = "TONELADA"
-	UnitOfMeasurementEnumL          UnitOfMeasurementEnum = "L"
-	UnitOfMeasurementEnumCX         UnitOfMeasurementEnum = "CX"
-	UnitOfMeasurementEnumPC         UnitOfMeasurementEnum = "PC"
-	UnitOfMeasurementEnumGL         UnitOfMeasurementEnum = "GL"
-	UnitOfMeasurementEnumPAR        UnitOfMeasurementEnum = "PAR"
-)
-
-func (e *UnitOfMeasurementEnum) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = UnitOfMeasurementEnum(s)
-	case string:
-		*e = UnitOfMeasurementEnum(s)
-	default:
-		return fmt.Errorf("unsupported scan type for UnitOfMeasurementEnum: %T", src)
-	}
-	return nil
-}
-
-type NullUnitOfMeasurementEnum struct {
-	UnitOfMeasurementEnum UnitOfMeasurementEnum
-	Valid                 bool // Valid is true if UnitOfMeasurementEnum is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullUnitOfMeasurementEnum) Scan(value interface{}) error {
-	if value == nil {
-		ns.UnitOfMeasurementEnum, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.UnitOfMeasurementEnum.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullUnitOfMeasurementEnum) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.UnitOfMeasurementEnum), nil
-}
-
 type AccountingAccount struct {
 	ID                 int64
 	PlanID             int64
@@ -4964,6 +4909,18 @@ type DapiTransferReason struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type DeliveryCapacityLine struct {
+	ID            int64
+	EnterpriseID  int64
+	Code          int64
+	Description   string
+	DailyCapacity pgtype.Numeric
+	Uom           string
+	IsActive      bool
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+}
+
 type DeliveryPromiseParam struct {
 	ID                      int64
 	UseDeliveryPromise      bool
@@ -5633,6 +5590,12 @@ type FiscalEntryItem struct {
 	ValorCbs               pgtype.Numeric
 	ValorIs                pgtype.Numeric
 	GeraCreditoIbscbs      bool
+	UnidadeTributavel      pgtype.Text
+	QuantidadeTributavel   pgtype.Numeric
+	UnidadeNormalizada     pgtype.Text
+	// De onde veio o fator_conversao da linha: vínculo do fornecedor, pedido, cadastro do item (VSUP0110), conversão padrão, lote, unidade tributável do próprio XML, sinônimo ou digitado.
+	OrigemConversao  pgtype.Text
+	CaminhoConversao pgtype.Text
 }
 
 type FiscalExit struct {
@@ -5943,6 +5906,9 @@ type GlobalUnitConversion struct {
 	CreatedBy    pgtype.UUID
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+	FromQuantity pgtype.Numeric
+	ToQuantity   pgtype.Numeric
+	IsSystem     bool
 }
 
 type Group struct {
@@ -6552,7 +6518,7 @@ type Item struct {
 	PdmModifierCode                      int64
 	PdmAttributes                        []byte
 	PdmDescriptionTechnique              string
-	WarehouseUnitOfMeasurement           UnitOfMeasurementEnum
+	WarehouseUnitOfMeasurement           string
 	WarehouseAutomaticLow                bool
 	WarehouseCyclicalCountConfig         []byte
 	WarehouseMinimumStock                pgtype.Numeric
@@ -6687,6 +6653,15 @@ type Item struct {
 	AccountingFciNumber               pgtype.Text
 }
 
+type ItemAtributosLivre struct {
+	ID           int64
+	EnterpriseID int64
+	ItemCode     int64
+	Name         string
+	Value        string
+	Position     int32
+}
+
 type ItemBusinessCodeSequence struct {
 	EnterpriseID int64
 	LastValue    int64
@@ -6775,11 +6750,13 @@ type ItemGtin struct {
 	ID              int64
 	EnterpriseID    int64
 	ItemCode        int64
-	Gtin            string
+	Gtin            pgtype.Text
 	Uom             string
 	PackageQuantity pgtype.Numeric
 	Description     pgtype.Text
 	CreatedAt       pgtype.Timestamptz
+	ParentUom       pgtype.Text
+	ParentQuantity  pgtype.Numeric
 }
 
 type ItemHistorico struct {
@@ -6793,6 +6770,23 @@ type ItemHistorico struct {
 	Motivo       pgtype.Text
 	Por          pgtype.UUID
 	OcorridoEm   pgtype.Timestamptz
+}
+
+// Fator medido de um lote (ex.: peso real da chapa da corrida X). Tem precedência sobre o fator do item. Empresa = a do item.
+type ItemLotUnitConversion struct {
+	ID           int64
+	ItemCode     int64
+	Lot          string
+	FromUom      string
+	ToUom        string
+	FromQuantity pgtype.Numeric
+	ToQuantity   pgtype.Numeric
+	Factor       pgtype.Numeric
+	Notes        pgtype.Text
+	IsActive     bool
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type ItemMachineTime struct {
@@ -6974,7 +6968,7 @@ type ItemStructure struct {
 	ParentMask pgtype.Text
 	Quantity   decimal.Decimal
 	// Unidade em que a engenharia escreveu a quantidade. Pode diferir da unidade de estoque do item — nesse caso é obrigatória uma conversão cadastrada.
-	UnitOfMeasurement  UnitOfMeasurementEnum
+	UnitOfMeasurement  string
 	LossPercentage     decimal.Decimal
 	Sequence           int32
 	Notes              pgtype.Text
@@ -7055,6 +7049,27 @@ type ItemUnitConversion struct {
 	RoundingPercent pgtype.Numeric
 	ToleranceValue  pgtype.Numeric
 	ToleranceType   string
+	FromQuantity    pgtype.Numeric
+	ToQuantity      pgtype.Numeric
+	ValidFrom       pgtype.Date
+	ValidTo         pgtype.Date
+	Origin          string
+	Notes           pgtype.Text
+	UpdatedAt       pgtype.Timestamptz
+	UpdatedBy       pgtype.UUID
+}
+
+type ItemUnitConversionEvent struct {
+	ID              int64
+	ItemCode        int64
+	ConversionID    *int64
+	LotConversionID *int64
+	Action          string
+	BeforeData      []byte
+	AfterData       []byte
+	Reason          pgtype.Text
+	CreatedBy       pgtype.UUID
+	CreatedAt       pgtype.Timestamptz
 }
 
 type ItemVisoesLiberada struct {
@@ -8267,6 +8282,15 @@ type PdmAtributoValore struct {
 	Abbreviation pgtype.Text
 	Position     int32
 	IsActive     bool
+}
+
+type PdmGroupResponsible struct {
+	EnterpriseID           int64
+	GroupCode              int32
+	PlanningDepartmentID   pgtype.UUID
+	PurchasingDepartmentID pgtype.UUID
+	UpdatedBy              pgtype.UUID
+	UpdatedAt              pgtype.Timestamptz
 }
 
 type PdmGrupoModificadore struct {
@@ -12328,6 +12352,35 @@ type Uf struct {
 	IbgeCode  pgtype.Text
 	IsActive  bool
 	CreatedAt pgtype.Timestamptz
+}
+
+// Sinônimos de unidade: texto recebido (XML da NF-e, planilha) → unidade do catálogo. supplier_code nulo = vale para todos os fornecedores da empresa.
+type UnitOfMeasureAlias struct {
+	ID           int64
+	EnterpriseID int64
+	Alias        string
+	UnitCode     string
+	SupplierCode *int64
+	IsSystem     bool
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
+// Catálogo de unidades de medida por empresa. Substitui o enum unit_of_measurement_enum (15 valores fixos).
+type UnitsOfMeasure struct {
+	ID           int64
+	EnterpriseID int64
+	Code         string
+	Description  string
+	Dimension    string
+	// Código da unidade na NF-e/SPED (uCom/0190 aceitam até 6 caracteres): TONELADA → T.
+	FiscalCode string
+	Decimals   int16
+	IsSystem   bool
+	IsActive   bool
+	CreatedBy  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
 }
 
 type User struct {

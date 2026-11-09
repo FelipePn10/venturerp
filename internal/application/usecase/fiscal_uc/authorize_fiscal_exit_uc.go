@@ -32,6 +32,9 @@ type AuthorizeFiscalExitUseCase struct {
 	Series SeriesPorLinha
 	// Identificacao: GTIN e unidade tributável do cadastro dos itens.
 	Identificacao IdentificacaoFiscalDosItens
+	// Unidades traduz a unidade do catálogo para o código fiscal (uCom/uTrib).
+	// Opcional: sem ele a unidade sai como está, e a de mais de 6 caracteres é recusada.
+	Unidades CodigosFiscaisDeUnidade
 	// Efeitos aplica estoque, reservas, títulos e pedido como pendência
 	// reprocessável (ver EfeitosNFe).
 	Efeitos       *EfeitosNFe
@@ -178,6 +181,9 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return nil, err
 	}
 	if err := anexarIdentificacao(ctx, uc.Identificacao, items, &payload); err != nil {
+		return nil, err
+	}
+	if err := aplicarCodigosFiscaisDeUnidade(ctx, uc.Unidades, &payload); err != nil {
 		return nil, err
 	}
 	if uc.Devolucao != nil {

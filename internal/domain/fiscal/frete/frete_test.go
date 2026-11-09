@@ -95,4 +95,8 @@ func TestPesoEmKg(t *testing.T) {
 	if !PesoEmKg(d("1500"), "g").Equal(d("1.5")) || !PesoEmKg(d("2"), "T").Equal(d("2000")) || !PesoEmKg(d("3"), "KG").Equal(d("3")) {
 		t.Fatal("conversão de peso")
 	}
+	// O código do catálogo (TONELADA) e o miligrama também convertem.
+	if !PesoEmKg(d("2"), "TONELADA").Equal(d("2000")) || !PesoEmKg(d("500000"), "MG").Equal(d("0.5")) {
+		t.Fatal("TONELADA/MG no peso do cadastro")
+	}
 }

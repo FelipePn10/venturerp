@@ -10,6 +10,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/salespricing"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	itemtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_quotation/entity"
@@ -37,6 +38,10 @@ func (uc *UseCase) CreateItem(ctx context.Context, dto request.CreateSalesQuotat
 	}
 	if !dto.RequestedQty.IsPositive() {
 		return nil, errorsuc.NewValidationError("a quantidade solicitada deve ser maior que zero")
+	}
+	dto.SalesUOM = unit_of_measure_uc.NormalizarUnidade(dto.SalesUOM)
+	if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.Unidades, "unidade de venda", dto.SalesUOM); err != nil {
+		return nil, err
 	}
 	item := &entity.SalesQuotationItem{
 		SalesQuotationCode: dto.SalesQuotationCode,

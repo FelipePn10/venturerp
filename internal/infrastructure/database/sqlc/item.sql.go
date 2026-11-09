@@ -151,7 +151,7 @@ type CreateItemParams struct {
 	PdmModifierCode                            int64
 	PdmAttributes                              []byte
 	PdmDescriptionTechnique                    string
-	WarehouseUnitOfMeasurement                 UnitOfMeasurementEnum
+	WarehouseUnitOfMeasurement                 string
 	WarehouseAutomaticLow                      bool
 	WarehouseCyclicalCountConfig               []byte
 	WarehouseMinimumStock                      pgtype.Numeric
@@ -1462,7 +1462,7 @@ type UpdateItemFoldersParams struct {
 	SuppliesNotes                              pgtype.Text
 	WarehouseCode                              int64
 	WarehouseAvgMonthlyConsumptionManual       pgtype.Numeric
-	WarehouseUnitOfMeasurement                 UnitOfMeasurementEnum
+	WarehouseUnitOfMeasurement                 string
 	WarehouseAutomaticLow                      bool
 	WarehouseMinimumStock                      pgtype.Numeric
 	LongDescription                            pgtype.Text
