@@ -13,7 +13,9 @@ import (
 	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	convservice "github.com/FelipePn10/panossoerp/internal/domain/item_conversion/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -446,8 +448,8 @@ func (r *StockRepositorySQLC) PosicaoEmData(ctx context.Context, data time.Time,
 	return out, nil
 }
 
-// fatoresParaUnidade: fator unidade de estoque → unidade pedida, por item
-// (conversão direta ou a inversa da cadastrada).
+// fatoresParaUnidade: fator unidade de estoque → unidade pedida, por item,
+// pelo mesmo motor de conversão do resto do sistema (cadeia e padrão incluídas).
 func (r *StockRepositorySQLC) fatoresParaUnidade(ctx context.Context, empresa int64, alvo map[int64]string) (map[int64]decimal.Decimal, error) {
 	out := map[int64]decimal.Decimal{}
 	if len(alvo) == 0 {
@@ -457,32 +459,34 @@ func (r *StockRepositorySQLC) fatoresParaUnidade(ctx context.Context, empresa in
 	for c := range alvo {
 		codes = append(codes, c)
 	}
-	rows, err := r.pool.Query(ctx,
-		`SELECT c.item_code, upper(c.from_uom), upper(c.to_uom), c.factor, upper(i.warehouse_unit_of_measurement::text)
-		   FROM item_unit_conversions c JOIN items i ON i.code=c.item_code AND i.enterprise_id=$1
-		  WHERE c.item_code = ANY($2) AND c.is_active AND c.mask=''`, empresa, codes)
+	rows, err := r.pool.Query(ctx, `SELECT code, upper(warehouse_unit_of_measurement::text) FROM items WHERE enterprise_id=$1 AND code = ANY($2)`, empresa, codes)
 	if err != nil {
-		return nil, fmt.Errorf("reading conversions for the second unit: %w", err)
+		return nil, fmt.Errorf("reading stock units for the second unit: %w", err)
 	}
-	defer rows.Close()
+	estoque := map[int64]string{}
 	for rows.Next() {
 		var item int64
-		var de, para, estoque string
-		var f decimal.Decimal
-		if err := rows.Scan(&item, &de, &para, &f, &estoque); err != nil {
+		var u string
+		if err := rows.Scan(&item, &u); err != nil {
+			rows.Close()
 			return nil, err
 		}
-		u := alvo[item]
-		switch {
-		case de == estoque && para == u:
-			out[item] = f
-		case de == u && para == estoque && f.IsPositive():
-			if _, ja := out[item]; !ja {
-				out[item] = decimal.NewFromInt(1).DivRound(f, 10)
-			}
+		estoque[item] = u
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	grafos, err := uomgraph.CarregarItens(ctx, r.pool, empresa, codes, "", "", time.Time{})
+	if err != nil {
+		return nil, err
+	}
+	for item, u := range alvo {
+		if c, ok := convservice.Resolver(grafos[item], estoque[item], u); ok && len(c.Passos) > 0 {
+			out[item] = c.Fator()
 		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // ---------- ATP com situação do estoque ----------

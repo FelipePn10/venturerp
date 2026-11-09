@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_requisition/repository"
 )
@@ -18,6 +19,14 @@ type PurchaseRequisitionUseCase struct {
 	// aprovacoes abre a aprovação do aprovador do centro de custo para os
 	// itens de centro que aprova requisições (opcional).
 	aprovacoes AprovacoesDoCentro
+	// unidades confere a unidade do item no catálogo da empresa (opcional).
+	unidades unit_of_measure_uc.Catalogo
+}
+
+// ComCatalogoDeUnidades liga a conferência da unidade no catálogo.
+func (uc *PurchaseRequisitionUseCase) ComCatalogoDeUnidades(c unit_of_measure_uc.Catalogo) *PurchaseRequisitionUseCase {
+	uc.unidades = c
+	return uc
 }
 
 // AprovacoesDoCentro: a aprovação da requisição pelo aprovador do centro de custo.
@@ -69,6 +78,14 @@ func (uc *PurchaseRequisitionUseCase) Create(ctx context.Context, dto request.Cr
 			return nil, err
 		}
 		dto.EnterpriseCode, dto.CreatedBy = enterpriseCode, actor
+	}
+	// Confere antes de gravar o cabeçalho: a criação não é uma transação só e
+	// uma unidade errada no terceiro item deixava a requisição pela metade.
+	for i := range dto.Items {
+		dto.Items[i].UOM = unit_of_measure_uc.NormalizarUnidade(dto.Items[i].UOM)
+		if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.unidades, fmt.Sprintf("unidade do item %d", i+1), dto.Items[i].UOM); err != nil {
+			return nil, err
+		}
 	}
 	code, err := uc.repo.NextCode(ctx)
 	if err != nil {
@@ -139,6 +156,10 @@ func (uc *PurchaseRequisitionUseCase) List(ctx context.Context, onlyOpen bool) (
 }
 
 func (uc *PurchaseRequisitionUseCase) AddItem(ctx context.Context, dto request.AddRequisitionItemDTO) (*response.PurchaseRequisitionItemResponse, error) {
+	dto.UOM = unit_of_measure_uc.NormalizarUnidade(dto.UOM)
+	if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.unidades, "unidade do item", dto.UOM); err != nil {
+		return nil, err
+	}
 	existing, err := uc.repo.ListItems(ctx, dto.RequisitionCode)
 	if err != nil {
 		return nil, err

@@ -561,3 +561,66 @@ func tipoOuSaida(t *int) int {
 	}
 	return 1
 }
+
+// CodigosFiscaisDeUnidade: o código com que cada unidade do catálogo sai na
+// NF-e (units_of_measure.fiscal_code): TONELADA → T, MICROMETRO → UM.
+type CodigosFiscaisDeUnidade interface {
+	CodigosFiscais(ctx context.Context, codigos ...string) (map[string]string, error)
+}
+
+// limiteUnidadeNFe: uCom e uTrib aceitam até 6 caracteres no leiaute.
+const limiteUnidadeNFe = 6
+
+// aplicarCodigosFiscaisDeUnidade troca a unidade do cadastro pelo código fiscal
+// em uCom e uTrib. A nota levava o código interno: com o catálogo aberto
+// (BOBINA, MICROMETRO, TONELADA…), a SEFAZ recusava a unidade com mais de 6
+// caracteres e a nota não saía. Unidade que nem traduzida cabe é recusada
+// aqui, com o caminho para corrigir, antes de transmitir.
+func aplicarCodigosFiscaisDeUnidade(ctx context.Context, fonte CodigosFiscaisDeUnidade, payload *focusnfe.NFEPayload) error {
+	pedir := map[string]bool{}
+	for _, it := range payload.Items {
+		for _, u := range []string{it.UnidadeComercial, it.UnidadeTributavel} {
+			if u = strings.ToUpper(strings.TrimSpace(u)); u != "" {
+				pedir[u] = true
+			}
+		}
+	}
+	if len(pedir) == 0 {
+		return nil
+	}
+	fiscais := map[string]string{}
+	if fonte != nil {
+		codigos := make([]string, 0, len(pedir))
+		for u := range pedir {
+			codigos = append(codigos, u)
+		}
+		var err error
+		if fiscais, err = fonte.CodigosFiscais(ctx, codigos...); err != nil {
+			return fmt.Errorf("lendo o código fiscal das unidades: %w", err)
+		}
+	}
+	traduzir := func(u string) (string, error) {
+		u = strings.ToUpper(strings.TrimSpace(u))
+		if u == "" {
+			return "", nil
+		}
+		if f := strings.TrimSpace(fiscais[u]); f != "" {
+			u = strings.ToUpper(f)
+		}
+		if len([]rune(u)) > limiteUnidadeNFe {
+			return "", errorsuc.NewValidationError(fmt.Sprintf("a unidade %s tem mais de %d caracteres e a NF-e não aceita: informe o código fiscal dela em Unidades e Conversões (VSUP0110 › Unidades)", u, limiteUnidadeNFe))
+		}
+		return u, nil
+	}
+	for i := range payload.Items {
+		linha := &payload.Items[i]
+		var err error
+		if linha.UnidadeComercial, err = traduzir(linha.UnidadeComercial); err != nil {
+			return err
+		}
+		if linha.UnidadeTributavel, err = traduzir(linha.UnidadeTributavel); err != nil {
+			return err
+		}
+	}
+	return nil
+}

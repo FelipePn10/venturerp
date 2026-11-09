@@ -59,7 +59,162 @@ func (h *ItemConversionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "identificador inválido")
 		return
 	}
-	if err := h.uc.Delete(r.Context(), id); err != nil {
+	if err := h.uc.DeleteWithReason(r.Context(), id, r.URL.Query().Get("reason")); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// Update altera uma conversão (PUT /{id}): corrige o fator ou abre nova vigência.
+func (h *ItemConversionHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
+		return
+	}
+	var dto request.UpdateItemConversionDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	res, err := h.uc.Update(r.Context(), id, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+// itemDaRota resolve o {itemCode} (código de negócio) da rota.
+func (h *ItemConversionHandler) itemDaRota(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	raw := strings.TrimSpace(chi.URLParam(r, "itemCode"))
+	if raw == "" {
+		jsonError(w, http.StatusBadRequest, "informe o código do item")
+		return 0, false
+	}
+	itemCode, err := h.uc.ResolveItem(r.Context(), request.TextCode(raw))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return 0, false
+	}
+	return itemCode, true
+}
+
+// Versions: todas as versões, inclusive as encerradas.
+func (h *ItemConversionHandler) Versions(w http.ResponseWriter, r *http.Request) {
+	itemCode, ok := h.itemDaRota(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.uc.ListVersions(r.Context(), itemCode)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) History(w http.ResponseWriter, r *http.Request) {
+	itemCode, ok := h.itemDaRota(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.uc.History(r.Context(), itemCode)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) Coverage(w http.ResponseWriter, r *http.Request) {
+	itemCode, ok := h.itemDaRota(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.uc.Coverage(r.Context(), itemCode, r.URL.Query().Get("mask"))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) Impact(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
+		return
+	}
+	res, err := h.uc.Impact(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+// Simulate: GET ?item=&from=&to=&qty=&mask=&lot=&date= — devolve o caminho.
+func (h *ItemConversionHandler) Simulate(w http.ResponseWriter, r *http.Request) {
+	if !queryValida(w, r, filtrosDaQuery{Decimais: []string{"qty"}, Datas: []string{"date"}}) {
+		return
+	}
+	q := r.URL.Query()
+	rawItem, from, to := strings.TrimSpace(q.Get("item")), strings.TrimSpace(q.Get("from")), strings.TrimSpace(q.Get("to"))
+	if rawItem == "" || from == "" || to == "" {
+		jsonError(w, http.StatusBadRequest, "informe o item, a unidade de origem e a de destino")
+		return
+	}
+	qty := decimal.NewFromInt(1)
+	if s := strings.TrimSpace(q.Get("qty")); s != "" {
+		qty, _ = decimal.NewFromString(s)
+	}
+	itemCode, err := h.uc.ResolveItem(r.Context(), request.TextCode(rawItem))
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	res, err := h.uc.Simulate(r.Context(), itemCode, q.Get("mask"), q.Get("lot"), q.Get("date"), from, to, qty)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) Lots(w http.ResponseWriter, r *http.Request) {
+	itemCode, ok := h.itemDaRota(w, r)
+	if !ok {
+		return
+	}
+	res, err := h.uc.ListLots(r.Context(), itemCode)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) SaveLot(w http.ResponseWriter, r *http.Request) {
+	var dto request.LotConversionDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	res, err := h.uc.SaveLot(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemConversionHandler) DeleteLot(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
+		return
+	}
+	if err := h.uc.DeleteLot(r.Context(), id, r.URL.Query().Get("reason")); err != nil {
 		security.RespondUseCaseError(w, err)
 		return
 	}

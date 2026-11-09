@@ -8,6 +8,8 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	convservice "github.com/FelipePn10/panossoerp/internal/domain/item_conversion/service"
+	uomrepo "github.com/FelipePn10/panossoerp/internal/domain/unit_of_measure/repository"
 )
 
 // FiscalEntryDocumentRepository é a nota de entrada como documento completo:
@@ -66,6 +68,18 @@ type FiscalEntryDocumentRepository interface {
 	// item — conversão do item (direta ou inversa, sem máscara), depois a
 	// conversão global da empresa. Nil quando não há conversão cadastrada.
 	FatorDeConversao(ctx context.Context, itemCode int64, de, para string) (*decimal.Decimal, error)
+	// ConversaoDeUnidade: o caminho completo (fator, origem e explicação) na
+	// data da nota. Nil quando não há caminho.
+	ConversaoDeUnidade(ctx context.Context, itemCode int64, mascara string, data time.Time, de, para string) (*convservice.Caminho, error)
+	// NormalizarUnidades traduz o texto da nota (UND, PÇ) para o catálogo,
+	// considerando os sinônimos do fornecedor.
+	NormalizarUnidades(ctx context.Context, fornecedor *int64, textos []string) (map[string]uomrepo.Resolucao, error)
+	// CustoDeReferencia: valor por unidade de estoque na última nota aprovada.
+	CustoDeReferencia(ctx context.Context, itemCode int64, excetoNota int64) (*decimal.Decimal, error)
+	// FatorHistorico: fator da última nota aprovada do fornecedor para o item/unidade.
+	FatorHistorico(ctx context.Context, fornecedor, itemCode int64, unidade string) (*decimal.Decimal, error)
+	// PesoDoItem: peso líquido por unidade de estoque e a unidade do peso.
+	PesoDoItem(ctx context.Context, itemCode int64) (decimal.Decimal, string, error)
 	ExistingPlanos(ctx context.Context, ids []int64) (map[int64]bool, error)
 	ExistingCentros(ctx context.Context, ids []int64) (map[int64]bool, error)
 	ExistingWarehouses(ctx context.Context, ids []int64) (map[int64]string, error)
@@ -117,6 +131,9 @@ type ItemConciliation struct {
 	CentroCustoID         *int64
 	FatorConversao        *decimal.Decimal
 	QuantidadeEstoque     *decimal.Decimal
+	UnidadeNormalizada    *string
+	OrigemConversao       *string
+	CaminhoConversao      *string
 	CfopEntrada           *string
 	EntryOperationCode    *int64
 	MovimentaEstoque      bool

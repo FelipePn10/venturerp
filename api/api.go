@@ -124,6 +124,7 @@ import (
 	thirdPartyServiceUC "github.com/FelipePn10/panossoerp/internal/application/usecase/third_party_service_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_sheet_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/tool_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/user_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/warehouse_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/aprovacao"
@@ -233,6 +234,7 @@ import (
 	technicalAssistanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/technical_assistance"
 	thirdPartyServiceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/third_party_service"
 	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
+	unitOfMeasureRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/unit_of_measure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
@@ -352,6 +354,8 @@ func (app *application) mount() chi.Router {
 	pdmUC := &pdm_uc.UseCase{Repo: pdmRepo.New(app.db.Pool), Auth: authService}
 	createItemUc.PDM = pdmUC
 	updateItemUc.PDM = pdmUC
+	createItemUc.Unidades = unitOfMeasureRepo.NewCatalogo(app.db.Pool)
+	updateItemUc.Unidades = createItemUc.Unidades
 	pdmPadraoHandler := handler.NewPDMPadraoHandler(pdmUC)
 
 	// Item Structure
@@ -878,9 +882,12 @@ func (app *application) mount() chi.Router {
 	entryOperationHandler := handler.NewEntryOperationHandler(entryOperationUC)
 
 	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
+	unitOfMeasureUC := unit_of_measure_uc.New(unitOfMeasureRepo.New(app.db.Pool), authService)
+	unitOfMeasureHandler := handler.NewUnitOfMeasureHandler(unitOfMeasureUC)
 
 	// purchase price tables (Tabela de Preço de Compra)
 	purchasePriceUC := purchase_price_uc.NewPurchasePriceUseCase(purchasePriceRepo.New(queries, app.db.Pool), authService, itemRepo)
+	purchasePriceUC.Unidades = unitOfMeasureRepo.NewCatalogo(app.db.Pool)
 	purchasePriceHandler := handler.NewPurchasePriceHandler(purchasePriceUC)
 
 	// preferred supplier per item (Fornecedor preferencial / Descrição por fornecedor)
@@ -918,7 +925,7 @@ func (app *application) mount() chi.Router {
 	poApproveUC := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC}
 	// Unidade interna: toda linha de pedido guarda quantidade e preço na unidade
 	// de estoque do cadastro (e recusa unidade de compra sem conversão).
-	poUnidade := &purchase_order_uc.UnidadeInterna{Unidades: poRepo, Conversor: itemConversionUC}
+	poUnidade := &purchase_order_uc.UnidadeInterna{Unidades: poRepo, Conversor: itemConversionUC, Catalogo: unitOfMeasureRepo.NewCatalogo(app.db.Pool)}
 	poGeracao := &purchase_order_uc.Geracao{Repo: poRepo, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade}
 	purchaseOrderHandler := handler.NewPurchaseOrderHandler(
 		&purchase_order_uc.CreatePurchaseOrderUseCase{Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Unidade: poUnidade},
@@ -984,7 +991,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
 	wireAtomicPlannedRelease(app.db.Pool, queries, plannedFirmUC, orderOpsUC)
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
-		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
+		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
 			Aprovacoes:       costCenterGestaoRepo,
 			Geracao:          poGeracao,
@@ -1028,7 +1035,7 @@ func (app *application) mount() chi.Router {
 	unblockSalesOrderUC := &sales_order_uc.UnblockSalesOrderUseCase{Repo: soRepo, Auth: authService, Aprovacoes: aprovacaoUC}
 	createSalesOrderUC := &sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
 	updateSalesOrderUC := &sales_order_uc.UpdateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
-	createSalesOrderItemUC := &sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo}
+	createSalesOrderItemUC := &sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo, Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool)}
 	updateSalesOrderItemUC := &sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo}
 	salesOrderHandler := handler.NewSalesOrderHandler(
 		createSalesOrderUC,
@@ -1079,7 +1086,7 @@ func (app *application) mount() chi.Router {
 	salesCommissionHandler := handler.NewSalesCommissionHandler(&sales_commission_uc.UseCase{Repo: salesCommissionRepo.New(app.db.Pool)})
 	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
 	custRepo := customerRepo.New(queries, app.db.Pool)
-	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository, Aprovacoes: aprovacaoUC}
+	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository, Aprovacoes: aprovacaoUC, Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool)}
 	aprovacaoUC.Registrar(aprovacao.OrcamentoPoliticaComercial, &sales_quotation_uc.LiberacaoDeOrcamento{Repo: salesQuotationRepository})
 	salesQuotationConvertUC := &sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool)}
 	salesQuotationHandler := handler.NewSalesQuotationHandler(
@@ -1173,7 +1180,7 @@ func (app *application) mount() chi.Router {
 	}
 	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
 		Ops: stockRepository, Auth: authService,
-		Compras:    purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo),
+		Compras:    purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)),
 		Planejadas: plannedCreateUC,
 		Aprovacoes: aprovacaoUC,
 	}}
@@ -1362,7 +1369,7 @@ func (app *application) mount() chi.Router {
 	reformaTributariaHandler := handler.NewReformaTributariaHandler(reformaTributariaUC)
 	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
 	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
-	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
+	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
 	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
 	destinatarioNotaHandler := handler.NewDestinatarioNotaHandler(&fiscalUC.DestinatarioDaNotaUseCase{Customers: custRepo, Fiscal: fiscalRepository, Auth: authService})
 	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com
@@ -1377,7 +1384,10 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.SuggestFiscalEntryItemUseCase{Docs: fiscalEntryDocs, Auth: authService},
 		fiscalEntryDocs,
 		authService,
-	)
+	).ComUnidades(&fiscalUC.FiscalEntryUnitsUseCase{
+		Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Tolerancias: purchaseToleranceUC,
+		Conversoes: itemConversionUC, Sinonimos: unitOfMeasureUC, Auth: authService,
+	})
 	// Cancelamento com estorno (financeiro, estoque, pedido e contabilidade),
 	// pedidos em aberto do item, parâmetros da contabilização automática e a
 	// caixa de entrada DF-e (notas emitidas contra o CNPJ da empresa).
@@ -1495,7 +1505,7 @@ func (app *application) mount() chi.Router {
 			SalesOrderRepo: soRepo,
 			Itens:          fiscalEntryDocs,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
+		&fiscalUC.AuthorizeFiscalExitUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
 		&fiscalUC.CancelFiscalExitUseCase{EstoqueDaNota: stockRepository, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
@@ -2717,6 +2727,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/import-key", fiscalEntryHandler.ImportByKey)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/entries/{code}/conciliacao", fiscalEntryHandler.SaveConciliation)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/itens/{itemId}/sugestoes", fiscalEntryHandler.SuggestItems)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/unidades/sugestoes", fiscalEntryHandler.UnitSuggestions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/unidades/resolver", fiscalEntryHandler.ApplyUnitResolution)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/sugestao-item", sugestaoItemEntradaHandler.Sugerir)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/entries/{code}/xml", fiscalEntryHandler.DownloadXML)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/entries/{code}/approve", fiscalHandler.ApproveEntry)
@@ -3735,8 +3747,34 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/item-conversions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemConversionHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/convert", itemConversionHandler.Convert)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/simulate", itemConversionHandler.Simulate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemConversionHandler.ListByItem)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}/versions", itemConversionHandler.Versions)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}/history", itemConversionHandler.History)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}/coverage", itemConversionHandler.Coverage)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}/lots", itemConversionHandler.Lots)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/lots", itemConversionHandler.SaveLot)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/lots/{id}", itemConversionHandler.DeleteLot)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/impact", itemConversionHandler.Impact)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", itemConversionHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemConversionHandler.Delete)
+		})
+
+		// Catálogo de unidades da empresa, sinônimos (texto da nota → unidade)
+		// e conversões padrão (mesma dimensão). Migração 474.
+		r.Route("/api/units-of-measure", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", unitOfMeasureHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", unitOfMeasureHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/resolve", unitOfMeasureHandler.Resolve)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/aliases", unitOfMeasureHandler.ListAliases)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/aliases", unitOfMeasureHandler.CreateAlias)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/aliases/{id}", unitOfMeasureHandler.DeleteAlias)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/standard-conversions", unitOfMeasureHandler.ListStandard)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/standard-conversions", unitOfMeasureHandler.SaveStandard)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/standard-conversions/{id}", unitOfMeasureHandler.DeleteStandard)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", unitOfMeasureHandler.Update)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{code}/activate", unitOfMeasureHandler.Activate)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/{code}/deactivate", unitOfMeasureHandler.Deactivate)
 		})
 
 		r.Route("/api/purchase-requisitions", func(r chi.Router) {

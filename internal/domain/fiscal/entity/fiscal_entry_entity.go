@@ -157,10 +157,17 @@ type FiscalEntryItem struct {
 	ValorContabil     decimal.Decimal
 	FatorConversao    *decimal.Decimal
 	QuantidadeEstoque *decimal.Decimal
-	PedidoCompraXML   *string
-	ItemPedidoXML     *string
-	PlanoContasID     *int64
-	CentroCustoID     *int64
+	// Migração 474: unidade tributável do XML (uTrib/qTrib), a unidade da
+	// nota traduzida para o catálogo e de onde veio o fator aplicado.
+	UnidadeTributavel    *string
+	QuantidadeTributavel *decimal.Decimal
+	UnidadeNormalizada   *string
+	OrigemConversao      *string
+	CaminhoConversao     *string
+	PedidoCompraXML      *string
+	ItemPedidoXML        *string
+	PlanoContasID        *int64
+	CentroCustoID        *int64
 	// Migração 000377: operação (TES), pedido de compra, estoque e Reforma.
 	CfopEntrada           *string
 	EntryOperationCode    *int64

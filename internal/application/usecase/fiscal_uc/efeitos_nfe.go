@@ -620,7 +620,7 @@ func (e *EfeitosNFe) quantidadesEmEstoque(ctx context.Context, items []*entity.F
 		if e.Conversor == nil {
 			return nil, semConversao
 		}
-		qf, achou, err := e.Conversor.ConvertQuantity(ctx, *it.ItemCode, it.Quantity, daNota, doEstoque)
+		qf, achou, err := ports.ConvertQuantityWithMask(ctx, e.Conversor, *it.ItemCode, it.Mask, it.Quantity, daNota, doEstoque)
 		if err != nil {
 			return nil, err
 		}

@@ -202,10 +202,12 @@ func (r *FiscalRepositoryPG) CreateEntryDocument(ctx context.Context, e *entity.
 				 base_icms_st, valor_icms_st, valor_contabil, fator_conversao, quantidade_estoque,
 				 pedido_compra_xml, item_pedido_xml, plano_contas_id, centro_custo_id,
 				 cfop_entrada, entry_operation_code, movimenta_estoque, gera_financeiro, warehouse_id, purchase_order_code, purchase_order_item_code,
-				 cst_ibscbs, cclass_trib, base_ibscbs, aliq_ibs_uf, valor_ibs_uf, aliq_ibs_mun, valor_ibs_mun, valor_ibs, aliq_cbs, valor_cbs, valor_is, gera_credito_ibscbs)
+				 cst_ibscbs, cclass_trib, base_ibscbs, aliq_ibs_uf, valor_ibs_uf, aliq_ibs_mun, valor_ibs_mun, valor_ibs, aliq_cbs, valor_cbs, valor_is, gera_credito_ibscbs,
+				 unidade_tributavel, quantidade_tributavel, unidade_normalizada, origem_conversao, caminho_conversao)
 			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,
 			         $32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,
-			         $48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66)
+			         $48,$49,$50,$51,$52,$53,$54,$55,$56,$57,$58,$59,$60,$61,$62,$63,$64,$65,$66,
+			         $67,$68,$69,$70,$71)
 			 RETURNING id, created_at`,
 			it.FiscalEntryID, it.Sequence, it.ItemCode, it.Ncm, it.Cfop, it.Quantity, it.UnitPrice, it.TotalPrice,
 			it.BaseICMS, it.AliqICMS, it.ValorICMS, it.BaseIPI, it.AliqIPI, it.ValorIPI, it.ValorPIS, it.ValorCOFINS,
@@ -217,6 +219,7 @@ func (r *FiscalRepositoryPG) CreateEntryDocument(ctx context.Context, e *entity.
 			truncar(it.PedidoCompraXML, 15), truncar(it.ItemPedidoXML, 6), it.PlanoContasID, it.CentroCustoID,
 			truncar(it.CfopEntrada, 4), it.EntryOperationCode, it.MovimentaEstoque, it.GeraFinanceiro, it.WarehouseID, it.PurchaseOrderCode, it.PurchaseOrderItemCode,
 			truncar(it.CSTIBSCBS, 3), truncar(it.ClassTrib, 6), it.BaseIBSCBS, it.AliqIBSUF, it.ValorIBSUF, it.AliqIBSMun, it.ValorIBSMun, it.ValorIBS, it.AliqCBS, it.ValorCBS, it.ValorIS, it.GeraCreditoIBSCBS,
+			truncar(it.UnidadeTributavel, 10), it.QuantidadeTributavel, truncar(it.UnidadeNormalizada, 10), it.OrigemConversao, it.CaminhoConversao,
 		).Scan(&it.ID, &it.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("gravando item %d da nota de entrada: %w", it.Sequence, err)
@@ -317,6 +320,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 		        i.purchase_order_code, i.purchase_order_item_code, i.qtd_recebida_antes, i.stock_movement_id, i.custo_aquisicao,
 		        i.cst_ibscbs, i.cclass_trib, i.base_ibscbs, i.aliq_ibs_uf, i.valor_ibs_uf, i.aliq_ibs_mun, i.valor_ibs_mun,
 		        i.valor_ibs, i.aliq_cbs, i.valor_cbs, i.valor_is, i.gera_credito_ibscbs,
+		        i.unidade_tributavel, i.quantidade_tributavel, i.unidade_normalizada, i.origem_conversao, i.caminho_conversao,
 		        NULLIF(`+nomeDoItemSQL+`, ''), it.warehouse_unit_of_measurement::text, pc.codigo, pc.descricao, cc.description,
 		        w.code || ' — ' || w.description, op.description,
 		        CASE WHEN it.code IS NULL THEN NULL ELSE `+ncmDoItemSQL+` END,
@@ -349,6 +353,7 @@ func (r *FiscalRepositoryPG) GetEntryDocument(ctx context.Context, id int64) (*e
 			&it.PurchaseOrderCode, &it.PurchaseOrderItemCode, &it.QtdRecebidaAntes, &it.StockMovementID, &it.CustoAquisicao,
 			&it.CSTIBSCBS, &it.ClassTrib, &it.BaseIBSCBS, &it.AliqIBSUF, &it.ValorIBSUF, &it.AliqIBSMun, &it.ValorIBSMun,
 			&it.ValorIBS, &it.AliqCBS, &it.ValorCBS, &it.ValorIS, &it.GeraCreditoIBSCBS,
+			&it.UnidadeTributavel, &it.QuantidadeTributavel, &it.UnidadeNormalizada, &it.OrigemConversao, &it.CaminhoConversao,
 			&it.ItemName, &it.ItemUOM, &it.PlanoContasCodigo, &it.PlanoContasNome, &it.CentroCustoNome,
 			&it.WarehouseName, &it.EntryOperationName, &it.ItemNCM,
 			&it.PurchaseOrderNumber, &it.PurchaseOrderSequence, &it.Mask,
@@ -433,12 +438,14 @@ func (r *FiscalRepositoryPG) SaveConciliation(ctx context.Context, entryID int64
 			        plano_contas_id=$6, centro_custo_id=$7, fator_conversao=$8, quantidade_estoque=$9,
 			        cfop_entrada=$10, entry_operation_code=$11, movimenta_estoque=$12, gera_financeiro=$13, warehouse_id=$14,
 			        purchase_order_code=$15, purchase_order_item_code=$16,
-			        gera_credito_icms=$17, gera_credito_ipi=$18, gera_credito_pis=$19, gera_credito_cofins=$20, gera_credito_ibscbs=$21
+			        gera_credito_icms=$17, gera_credito_ipi=$18, gera_credito_pis=$19, gera_credito_cofins=$20, gera_credito_ibscbs=$21,
+			        unidade_normalizada=$22, origem_conversao=$23, caminho_conversao=$24
 			  WHERE id=$1 AND fiscal_entry_id=$2`,
 			c.ItemID, entryID, c.ItemCode, c.ItemSupplierID, c.ResolutionStrategy, c.PlanoContasID, c.CentroCustoID, c.FatorConversao, c.QuantidadeEstoque,
 			truncar(c.CfopEntrada, 4), c.EntryOperationCode, c.MovimentaEstoque, c.GeraFinanceiro, c.WarehouseID,
 			c.PurchaseOrderCode, c.PurchaseOrderItemCode,
-			c.GeraCreditoICMS, c.GeraCreditoIPI, c.GeraCreditoPIS, c.GeraCreditoCOFINS, c.GeraCreditoIBSCBS)
+			c.GeraCreditoICMS, c.GeraCreditoIPI, c.GeraCreditoPIS, c.GeraCreditoCOFINS, c.GeraCreditoIBSCBS,
+			truncar(c.UnidadeNormalizada, 10), c.OrigemConversao, c.CaminhoConversao)
 		if err != nil {
 			return fmt.Errorf("gravando conciliação do item %d: %w", c.ItemID, err)
 		}

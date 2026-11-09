@@ -122,12 +122,16 @@ func Ratear(custo decimal.Decimal, tipo string, itens []Item) ([]Parte, error) {
 	return out, nil
 }
 
-// PesoEmKg converte o peso do cadastro (unidade KG, G ou T) para quilos.
+// PesoEmKg converte o peso do cadastro para quilos. Aceita o código do
+// catálogo (TONELADA, G, MG) e o fiscal (T): com só "T", o peso cadastrado em
+// TONELADA entrava no rateio do frete como se fosse em quilos.
 func PesoEmKg(peso decimal.Decimal, unidade string) decimal.Decimal {
 	switch strings.ToUpper(strings.TrimSpace(unidade)) {
 	case "G":
 		return peso.Div(decimal.NewFromInt(1000))
-	case "T", "TON":
+	case "MG":
+		return peso.Div(decimal.NewFromInt(1_000_000))
+	case "T", "TON", "TN", "TONELADA":
 		return peso.Mul(decimal.NewFromInt(1000))
 	}
 	return peso

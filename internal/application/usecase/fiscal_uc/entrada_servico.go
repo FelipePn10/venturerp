@@ -213,6 +213,11 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 		if cfop := entrada.CFOPEntradaComFinalidade(it.Cfop, natureza, finalidade, ufForn, uf); cfop != "" {
 			it.CfopEntrada = &cfop
 		}
+		// O fator do pedido é refeito abaixo: se o vínculo com o pedido saiu,
+		// não pode ficar o fator velho.
+		if it.OrigemConversao != nil && *it.OrigemConversao == OrigemPedidoCompra {
+			limparFator(it)
+		}
 		if it.PurchaseOrderItemCode != nil {
 			if l, ok := linhaPorCodigo[*it.PurchaseOrderItemCode]; ok {
 				if it.WarehouseID == nil && l.WarehouseID != nil {
@@ -228,10 +233,13 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 				}
 				// Quantidade na unidade de estoque pelo fator do pedido, quando
 				// o vínculo com o fornecedor não trouxe conversão.
-				if (it.FatorConversao == nil || it.FatorConversao.Equal(umDec)) && l.InternalQty.IsPositive() {
+				// Fator manual ou do vínculo têm precedência; o do pedido é
+				// recalculado a cada preparação (a linha do pedido pode mudar).
+				pode := !fatorFixo(it) || (it.OrigemConversao != nil && *it.OrigemConversao == OrigemPedidoCompra)
+				if pode && l.InternalQty.IsPositive() && !l.FatorEstoque().Equal(umDec) {
 					f := l.FatorEstoque()
-					q := it.Quantity.Mul(f).Round(6)
-					it.FatorConversao, it.QuantidadeEstoque = &f, &q
+					definirFator(it, f, it.Quantity.Mul(f).Round(6), OrigemPedidoCompra,
+						fmt.Sprintf("pedido de compra %d: 1 %s = %s na unidade de estoque", l.OrderNumber, strings.ToUpper(textoUnidade(it.UOM)), f.String()))
 				}
 			}
 		}
@@ -253,118 +261,10 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 			aplicarConversao(it, nil, nil)
 		}
 	}
-	if _, err := s.aplicarConversoesDoCadastro(ctx, e, cadastro); err != nil {
+	if _, err := s.resolverUnidades(ctx, e, cadastro); err != nil {
 		return err
 	}
 	return nil
-}
-
-// unidadeDifere: a unidade da nota não é a de estoque do item.
-func unidadeDifere(daNota *string, doEstoque string) bool {
-	if daNota == nil || strings.TrimSpace(*daNota) == "" || strings.TrimSpace(doEstoque) == "" {
-		return false
-	}
-	return !strings.EqualFold(strings.TrimSpace(*daNota), strings.TrimSpace(doEstoque))
-}
-
-// semFator: a linha não tem conversão própria (nula ou 1, que é o padrão
-// gravado quando nada converteu).
-func semFator(it *entity.FiscalEntryItem) bool {
-	return it.FatorConversao == nil || it.FatorConversao.Equal(umDec)
-}
-
-// aplicarConversoesDoCadastro converte para a unidade de estoque as linhas que
-// vieram em outra unidade e não têm fator — o do vínculo com o fornecedor ou o
-// do pedido têm precedência.
-//
-// Sem isto o cadastro de conversões do item era ignorado na entrada: a nota de
-// 115,8975 KG de um tubo estocado em metros entrava como 115,8975 METROS, ao
-// preço do quilo. O estoque ficava 6,4 vezes maior e o custo do metro 6,4
-// vezes menor, e nada avisava.
-func (s *EntradaServico) aplicarConversoesDoCadastro(ctx context.Context, e *entity.FiscalEntry, cadastro map[int64]repository.ItemCandidate) (bool, error) {
-	mudou := false
-	for _, it := range e.Itens {
-		if it.ItemCode == nil || !semFator(it) {
-			continue
-		}
-		c, ok := cadastro[*it.ItemCode]
-		if !ok || !unidadeDifere(it.UOM, c.UOM) {
-			continue
-		}
-		f, err := s.Docs.FatorDeConversao(ctx, *it.ItemCode, *it.UOM, c.UOM)
-		if err != nil {
-			return false, err
-		}
-		if f == nil || !f.IsPositive() || f.Equal(umDec) {
-			continue
-		}
-		q := it.Quantity.Mul(*f).Round(6)
-		fator := *f
-		it.FatorConversao, it.QuantidadeEstoque = &fator, &q
-		mudou = true
-	}
-	return mudou, nil
-}
-
-// AplicarConversoes reaplica as conversões do cadastro numa nota já gravada
-// (nota importada antes da correção, ou conversão cadastrada depois da
-// importação). Devolve se alguma linha mudou.
-func (s *EntradaServico) AplicarConversoes(ctx context.Context, e *entity.FiscalEntry) (bool, error) {
-	cadastro, err := s.cadastroDosItens(ctx, e)
-	if err != nil {
-		return false, err
-	}
-	return s.aplicarConversoesDoCadastro(ctx, e, cadastro)
-}
-
-func (s *EntradaServico) cadastroDosItens(ctx context.Context, e *entity.FiscalEntry) (map[int64]repository.ItemCandidate, error) {
-	codigos := []int64{}
-	for _, it := range e.Itens {
-		if it.ItemCode != nil {
-			codigos = append(codigos, *it.ItemCode)
-		}
-	}
-	return s.Docs.ItemsByCode(ctx, codigos)
-}
-
-// pendenciasDeUnidade: linha que entra no estoque numa unidade diferente da de
-// estoque, sem conversão, não pode ser aprovada — entraria com o número errado.
-func (s *EntradaServico) pendenciasDeUnidade(ctx context.Context, e *entity.FiscalEntry) ([]entrada.Pendencia, error) {
-	if s.Docs == nil {
-		return nil, nil
-	}
-	cadastro, err := s.cadastroDosItens(ctx, e)
-	if err != nil {
-		return nil, err
-	}
-	var out []entrada.Pendencia
-	for _, it := range e.Itens {
-		if it.ItemCode == nil || !it.MovimentaEstoque || !semFator(it) {
-			continue
-		}
-		c, ok := cadastro[*it.ItemCode]
-		if !ok || !unidadeDifere(it.UOM, c.UOM) {
-			continue
-		}
-		// Conversão cadastrada com fator 1 (PC → UN) é legítima: o que impede é
-		// não haver conversão nenhuma.
-		if f, err := s.Docs.FatorDeConversao(ctx, *it.ItemCode, *it.UOM, c.UOM); err != nil {
-			return nil, err
-		} else if f != nil {
-			continue
-		}
-		codigo := c.BusinessCode
-		if codigo == "" {
-			codigo = fmt.Sprint(c.Code)
-		}
-		out = append(out, entrada.Pendencia{
-			Nivel: entrada.NivelImpede,
-			Campo: fmt.Sprintf("itens[%d].fator_conversao", it.Sequence),
-			Mensagem: fmt.Sprintf("item %d (%s): a nota vem em %s e o item é estocado em %s, sem conversão — cadastre a conversão %s→%s do item (VSUP0110) ou informe o fator na conciliação",
-				it.Sequence, codigo, strings.ToUpper(strings.TrimSpace(*it.UOM)), c.UOM, strings.ToUpper(strings.TrimSpace(*it.UOM)), c.UOM),
-		})
-	}
-	return out, nil
 }
 
 func operacaoDoItem(e *entity.FiscalEntry, it *entity.FiscalEntryItem, linhas map[int64]repository.PurchaseOrderLine) *int64 {

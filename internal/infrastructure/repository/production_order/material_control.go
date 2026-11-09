@@ -17,6 +17,7 @@ import (
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
 	stockrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
@@ -757,15 +758,23 @@ func (r *ProductionOrderRepositoryPGX) addScrapDestinationTx(ctx context.Context
 	}
 	convertedScrap := destination.ScrapQuantity
 	if destination.ScrapQuantity.IsPositive() && destination.SourceUOM != destination.ScrapUOM {
-		var factor decimal.Decimal
-		err := tx.QueryRow(ctx, `SELECT factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$2 AND to_uom=$3 AND is_active
-			   AND NOT EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id<>$4)
-			 UNION ALL SELECT 1/factor FROM item_unit_conversions WHERE item_code=$1 AND from_uom=$3 AND to_uom=$2 AND is_active
-			   AND NOT EXISTS (SELECT 1 FROM items i WHERE i.code=$1 AND i.enterprise_id<>$4) LIMIT 1`, destination.ScrapItemCode, destination.SourceUOM, destination.ScrapUOM, enterpriseID).Scan(&factor)
+		// Mesmo motor de conversão do resto do sistema (cadeia e padrão da
+		// empresa incluídas), lido dentro da transação.
+		caminho, err := uomgraph.Resolver(ctx, tx, enterpriseID, destination.ScrapItemCode, "", "", time.Time{}, destination.SourceUOM, destination.ScrapUOM)
 		if err != nil {
+			return nil, err
+		}
+		if caminho == nil && sourceItem != destination.ScrapItemCode {
+			// A medida costuma estar no material de origem (a chapa sabe
+			// quantos KG tem 1 UN); a sucata nem sempre tem conversão própria.
+			if caminho, err = uomgraph.Resolver(ctx, tx, enterpriseID, sourceItem, "", "", time.Time{}, destination.SourceUOM, destination.ScrapUOM); err != nil {
+				return nil, err
+			}
+		}
+		if caminho == nil {
 			return nil, errorsuc.NewValidationError(fmt.Sprintf("cadastre a conversão de unidade de %s para %s", destination.SourceUOM, destination.ScrapUOM))
 		}
-		convertedScrap = convertedScrap.Mul(factor)
+		convertedScrap = caminho.Converter(convertedScrap)
 	}
 	var limit decimal.Decimal
 	if destination.ProductionOrderMaterialID == nil {

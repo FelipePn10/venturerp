@@ -24,6 +24,8 @@ type UpdateItemUseCase struct {
 	PDM aplicadorDePDM
 	// Uso alimenta a conferência de impacto; sem ele a alteração não é conferida.
 	Uso leitorDeUso
+	// Unidades confere as unidades alteradas no catálogo da empresa. Opcional.
+	Unidades catalogoDeUnidades
 }
 
 type updateItemBusinessRepository interface {
@@ -74,7 +76,23 @@ func (uc *UpdateItemUseCase) ExecuteBusinessCode(ctx context.Context, rawCode st
 
 func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto request.UpdateItemDTO) (*response.ItemResponse, error) {
 	antes := retratoDoItem(item)
+	unidadesAntes := unidadesDoItem(item)
+	segundaAntes, fatorAntes := item.Warehouse.SecondaryUOM, item.Warehouse.SecondaryFactor
+	if segundaAntes != nil {
+		v := *segundaAntes
+		segundaAntes = &v
+	}
+	if fatorAntes != nil {
+		v := *fatorAntes
+		fatorAntes = &v
+	}
 	if err := uc.aplicar(ctx, item, dto); err != nil {
+		return nil, err
+	}
+	if err := validarUnidadesNoCatalogo(ctx, uc.Unidades, item, unidadesAntes); err != nil {
+		return nil, err
+	}
+	if err := validarSegundaUnidade(ctx, uc.Unidades, item, segundaAntes, fatorAntes); err != nil {
 		return nil, err
 	}
 	if uc.Uso != nil {

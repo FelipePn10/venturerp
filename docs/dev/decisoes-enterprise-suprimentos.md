@@ -52,6 +52,9 @@ e [Odoo Subcontracting](https://www.odoo.com/documentation/18.0/applications/inv
   Conversões distinguem UM de estoque, compra e venda, permitem vigência/faixa e
   política de arredondamento, e rejeitam fatores não positivos e ciclos
   inconsistentes.
+  Desde a migração 474: catálogo de unidades por empresa, sinônimos, conversão
+  padrão por grandeza, fração exata, encadeamento e resolução de unidade na nota
+  de entrada — ver `unidades-e-conversoes.md`.
 - O contrato público recebe `item_code` textual e resolve o ID interno dentro do
   tenant; inteiros positivos permanecem aceitos temporariamente com telemetria.
 - Serviço terceirizado é tratado como compra vinculada à OF e à requisição/pedido

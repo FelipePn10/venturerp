@@ -71,5 +71,22 @@ func resolverUnidadeDeEstoque(
 			daEstrutura, doEstoque, doEstoque, daEstrutura,
 			doEstoque, quantidade.InexactFloat64(), daEstrutura, doEstoque))
 	}
+	// A quantidade sai da fração exata (1/85 × 42,5 = 0,5), não do fator já
+	// arredondado em 10 casas (0,0117647059 × 42,5 = 0,5000000008), que a OP
+	// multiplicava pelo lote e levava para o estoque.
+	if exato, ok := conv.(conversorExato); ok {
+		q, achou, err := exato.ConvertQuantityExact(ctx, itemCode, quantidade, daEstrutura, doEstoque)
+		if err != nil {
+			return decimal.Zero, decimal.Zero, fmt.Errorf("convertendo a quantidade do item %d: %w", itemCode, err)
+		}
+		if achou {
+			return q, f, nil
+		}
+	}
 	return quantidade.Mul(f), f, nil
+}
+
+// conversorExato é opcional no conversor (o de produção o tem).
+type conversorExato interface {
+	ConvertQuantityExact(ctx context.Context, itemCode int64, qty decimal.Decimal, fromUOM, toUOM string) (decimal.Decimal, bool, error)
 }

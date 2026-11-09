@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/itemresolution"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/unit_of_measure_uc"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
@@ -21,6 +22,8 @@ type PurchasePriceUseCase struct {
 	auth ports.AuthService
 	// items resolve o código de negócio do item (texto) para a chave legada.
 	items any
+	// Unidades confere a unidade do preço no catálogo da empresa (opcional).
+	Unidades unit_of_measure_uc.Catalogo
 }
 
 func NewPurchasePriceUseCase(repo repository.PurchasePriceRepository, auth ports.AuthService, items ...any) *PurchasePriceUseCase {
@@ -166,7 +169,10 @@ func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurc
 	if err != nil {
 		return nil, err
 	}
-	item.SupplierCode, item.UOM, item.MinQty, item.UpdateReplacementValue = dto.SupplierCode, dto.UOM, dto.MinQty, dto.UpdateReplacementValue
+	item.SupplierCode, item.UOM, item.MinQty, item.UpdateReplacementValue = dto.SupplierCode, unit_of_measure_uc.NormalizarUnidade(dto.UOM), dto.MinQty, dto.UpdateReplacementValue
+	if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.Unidades, "unidade do preço", item.UOM); err != nil {
+		return nil, err
+	}
 	if item.MinQty.IsNegative() {
 		return nil, errorsuc.NewValidationError("a quantidade mínima não pode ser negativa")
 	}

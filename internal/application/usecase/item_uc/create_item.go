@@ -36,6 +36,8 @@ type CreateItemUseCase struct {
 	}
 	// PDM confere o par grupo+modificador e gera a descrição do padrão.
 	PDM aplicadorDePDM
+	// Unidades confere as unidades do item no catálogo da empresa. Opcional.
+	Unidades catalogoDeUnidades
 }
 
 func NewCreateItemUseCase(
@@ -102,6 +104,9 @@ func (uc *CreateItemUseCase) Execute(
 		return nil, err
 	}
 	if err = validateFiscalClassifications(ctx, uc.FiscalCatalog, enterpriseID, item); err != nil {
+		return nil, err
+	}
+	if err = validarUnidadesNoCatalogo(ctx, uc.Unidades, item, nil); err != nil {
 		return nil, err
 	}
 	if item.Engineering.ItemBaseCod != nil {

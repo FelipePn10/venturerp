@@ -14,7 +14,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 )
 
-func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
+func TestIntegration_ItemConversion_CRUDAndUpdate(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := icrepo.New(q, pool)
 	// A conversão é da empresa do item: o teste roda numa empresa e cria o item nela.
@@ -41,14 +41,21 @@ func TestIntegration_ItemConversion_CRUDAndUpsert(t *testing.T) {
 		t.Fatalf("ListByItem = %+v err=%v, want 1", list, err)
 	}
 
-	// Upsert: same (item, from, to) updates the factor in place.
+	// O mesmo fato vigente não é gravado duas vezes (antes o Create sobrescrevia
+	// o fator em silêncio): quem muda o fator usa Update, que grava o histórico.
 	c2, _ := entity.NewItemUnitConversion(itemCode, "", "CX", "UN", decimal.NewFromFloat(6), decimal.NewFromFloat(0), decimal.NewFromFloat(0), "VALUE", uuid.New())
-	if _, err := repo.Create(ctx, c2); err != nil {
-		t.Fatalf("Create upsert: %v", err)
+	if _, err := repo.Create(ctx, c2); err == nil {
+		t.Fatal("Create do mesmo par vigente deveria ser recusado")
+	}
+	if err := got.SetFraction(decimal.NewFromInt(1), decimal.NewFromInt(6)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Update(ctx, got, nil); err != nil {
+		t.Fatalf("Update: %v", err)
 	}
 	got, _ = repo.Get(ctx, itemCode, "CX", "UN")
 	if !got.Factor.Equal(decimal.NewFromFloat(6)) {
-		t.Errorf("upserted factor = %v, want 6", got.Factor)
+		t.Errorf("fator alterado = %v, want 6", got.Factor)
 	}
 
 	// Soft delete → no longer listed.
