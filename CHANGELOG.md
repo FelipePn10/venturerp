@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.14.0] — 2026-11-09
+
+- feat(unidades): catálogo, sinônimos e conversões de unidade em todo o sistema (VSUP0110) (`32d4a3b9`)
+
 ## [v1.13.0] — 2026-11-07
 
 - feat(cadastro-de-item): VENT0200 completa, setores responsáveis e regras de código, lote e IPI (`11864c3d`)
