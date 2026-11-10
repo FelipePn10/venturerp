@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.15.0] — 2026-11-10
+
+- feat(manufatura): roteiro unificado, MRP pelo empenho, custo da OF por componente e ordem impressa (`fe4fa349`)
+
 ## [v1.14.0] — 2026-11-09
 
 - feat(unidades): catálogo, sinônimos e conversões de unidade em todo o sistema (VSUP0110) (`32d4a3b9`)
