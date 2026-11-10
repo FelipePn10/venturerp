@@ -3,6 +3,7 @@ package production_order_uc
 import (
 	"context"
 	"fmt"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"strings"
 	"time"
 
@@ -217,7 +218,8 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	var route *routingentity.ManufacturingRoute
 	if uc.Routing != nil && uc.OrderOps != nil {
 		var routeErr error
-		route, routeErr = uc.Routing.GetRouteForItem(ctx, itemCode, dto.Mask)
+		// A quantidade entra na escolha: roteiro com faixa de lote que casa vence.
+		route, routeErr = routingrepo.RoteiroParaQuantidade(ctx, uc.Routing, itemCode, dto.Mask, dto.PlannedQty)
 		if routeErr != nil {
 			return nil, errorsuc.NewValidationError("o item não possui roteiro de fabricação aprovado; cadastre o roteiro antes de criar a OF")
 		}

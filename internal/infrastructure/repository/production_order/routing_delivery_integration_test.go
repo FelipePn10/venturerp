@@ -101,8 +101,14 @@ func TestFinalDeliveryRequiresCompletedRoutingIntegration(t *testing.T) {
 	if _, err := repo.ExecuteScan(ctx, command(second)); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT produced_qty FROM production_orders WHERE id=$1", order).Scan(&produced); err != nil || produced != 2 {
-		t.Fatalf("produção final incorreta: %v %v", produced, err)
+	// Apontar a última etapa não é entregar: "produzido" da OF é o que entrou no
+	// estoque (a entrega soma). O apontado fica no apontamento.
+	if err := pool.QueryRow(ctx, "SELECT produced_qty FROM production_orders WHERE id=$1", order).Scan(&produced); err != nil || produced != 0 {
+		t.Fatalf("apontamento da última etapa contou como entregue: %v %v", produced, err)
+	}
+	var apontado float64
+	if err := pool.QueryRow(ctx, "SELECT COALESCE(SUM(produced_qty),0) FROM production_appointments WHERE production_order_id=$1 AND operation_id=$2", order, second).Scan(&apontado); err != nil || apontado != 2 {
+		t.Fatalf("apontamento final incorreto: %v %v", apontado, err)
 	}
 	finish := command(second)
 	finish.Action = entity.ScanComplete

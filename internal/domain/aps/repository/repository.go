@@ -62,6 +62,9 @@ type OpRow struct {
 	// encadeava tudo em fila, serializando operações que o roteiro sabe que
 	// correm em paralelo.
 	RouteOperationID *int64
+	// LeadDays: etapa em terceiro (sem centro) — dias corridos do fornecedor
+	// que seguram a etapa seguinte.
+	LeadDays int
 }
 
 // OpEdge é uma aresta da rede de precedências, já traduzida para os ids das

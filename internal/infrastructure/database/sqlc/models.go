@@ -7006,7 +7006,8 @@ type ItemStructure struct {
 	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Dez casas porque a inversa de um fator grande (1/6000) não cabe em seis.
 	ConversionFactor pgtype.Numeric
 	// Componente fornecido pelo cliente (beneficiamento): fora do MRP, da baixa automática e do custo; a OF do pai não dá entrada no estoque próprio.
-	CustomerSupplied bool
+	CustomerSupplied       bool
+	RouteOperationSequence pgtype.Int2
 }
 
 // Quem alterou o quê na estrutura de produto, com o antes e o depois.
@@ -7340,7 +7341,7 @@ type ManufacturingItemParameter struct {
 type ManufacturingRoute struct {
 	ID           int64
 	Code         int64
-	ItemCode     int64
+	ItemCode     *int64
 	Mask         pgtype.Text
 	Alternative  int16
 	Description  pgtype.Text
@@ -7353,6 +7354,9 @@ type ManufacturingRoute struct {
 	ValidFrom    pgtype.Date
 	ValidTo      pgtype.Date
 	EnterpriseID int64
+	IsTemplate   bool
+	LotMin       pgtype.Numeric
+	LotMax       pgtype.Numeric
 }
 
 type ManufacturingSequencingSetting struct {
@@ -8014,7 +8018,9 @@ type Operation struct {
 	ThirdPartyRemittance string
 	EnterpriseID         int64
 	// Refugo padrão da operação, em %. Quanto do que entra não sai bom. Nunca 100: a operação inteira seria perda.
-	ScrapPct pgtype.Numeric
+	ScrapPct           pgtype.Numeric
+	TimeBasis          string
+	TimeBasisAttribute pgtype.Text
 }
 
 // Desenho, instrução de trabalho e ficha de processo da operação. Vinculado à operação de biblioteca (vale em todo roteiro) OU a uma etapa de roteiro (é do item).
@@ -8722,25 +8728,31 @@ type ProductionOrder struct {
 }
 
 type ProductionOrderCost struct {
-	ID                int64
-	ProductionOrderID int64
-	ProducedQty       pgtype.Numeric
-	MaterialCostReal  pgtype.Numeric
-	LaborCostReal     pgtype.Numeric
-	OverheadCostReal  pgtype.Numeric
-	TotalCostReal     pgtype.Numeric
-	UnitCostReal      pgtype.Numeric
-	MaterialCostStd   pgtype.Numeric
-	LaborCostStd      pgtype.Numeric
-	OverheadCostStd   pgtype.Numeric
-	TotalCostStd      pgtype.Numeric
-	MaterialVariance  pgtype.Numeric
-	LaborVariance     pgtype.Numeric
-	OverheadVariance  pgtype.Numeric
-	TotalVariance     pgtype.Numeric
-	Currency          string
-	SettledAt         pgtype.Timestamptz
-	SettledBy         pgtype.UUID
+	ID                  int64
+	ProductionOrderID   int64
+	ProducedQty         pgtype.Numeric
+	MaterialCostReal    pgtype.Numeric
+	LaborCostReal       pgtype.Numeric
+	OverheadCostReal    pgtype.Numeric
+	TotalCostReal       pgtype.Numeric
+	UnitCostReal        pgtype.Numeric
+	MaterialCostStd     pgtype.Numeric
+	LaborCostStd        pgtype.Numeric
+	OverheadCostStd     pgtype.Numeric
+	TotalCostStd        pgtype.Numeric
+	MaterialVariance    pgtype.Numeric
+	LaborVariance       pgtype.Numeric
+	OverheadVariance    pgtype.Numeric
+	TotalVariance       pgtype.Numeric
+	Currency            string
+	SettledAt           pgtype.Timestamptz
+	SettledBy           pgtype.UUID
+	MachineCostReal     pgtype.Numeric
+	MachineCostStd      pgtype.Numeric
+	MachineVariance     pgtype.Numeric
+	SubcontractCostReal pgtype.Numeric
+	SubcontractCostStd  pgtype.Numeric
+	SubcontractVariance pgtype.Numeric
 }
 
 type ProductionOrderLotAllocation struct {
@@ -8757,24 +8769,25 @@ type ProductionOrderLotAllocation struct {
 }
 
 type ProductionOrderMaterial struct {
-	ID                  int64
-	ProductionOrderID   int64
-	EnterpriseID        int64
-	MaterialKind        string
-	ItemCode            int64
-	Mask                string
-	SubstitutedItemCode *int64
-	Quantity            pgtype.Numeric
-	AttendedQuantity    pgtype.Numeric
-	WarehouseID         int64
-	AutomaticIssue      bool
-	Notes               pgtype.Text
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
-	CreatedBy           pgtype.UUID
-	Uom                 string
-	ControlsLot         bool
-	ControlsAddress     bool
+	ID                     int64
+	ProductionOrderID      int64
+	EnterpriseID           int64
+	MaterialKind           string
+	ItemCode               int64
+	Mask                   string
+	SubstitutedItemCode    *int64
+	Quantity               pgtype.Numeric
+	AttendedQuantity       pgtype.Numeric
+	WarehouseID            int64
+	AutomaticIssue         bool
+	Notes                  pgtype.Text
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	CreatedBy              pgtype.UUID
+	Uom                    string
+	ControlsLot            bool
+	ControlsAddress        bool
+	RouteOperationSequence pgtype.Int2
 }
 
 type ProductionOrderNumberCounter struct {
@@ -10183,6 +10196,8 @@ type RouteOperation struct {
 	ScrapPct pgtype.Numeric
 	// Etapa com inspeção de qualidade. A ordem de produção gera o registro de inspeção ao chegar nela.
 	InspectionRequired bool
+	TimeBasis          pgtype.Text
+	TimeBasisAttribute pgtype.Text
 }
 
 type RouteOperationNetwork struct {

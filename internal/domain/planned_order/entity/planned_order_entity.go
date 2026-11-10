@@ -46,3 +46,11 @@ type PlannedOrder struct {
 	UpdatedAt            time.Time
 	CreatedBy            uuid.UUID
 }
+
+// AlertaDoMRP é a exceção do último cálculo, ainda não tratada, sobre a ordem
+// planejada (ex.: CANCEL — "não cobre nenhuma necessidade").
+type AlertaDoMRP struct {
+	Tipo         string
+	Descricao    string
+	DataSugerida *time.Time
+}

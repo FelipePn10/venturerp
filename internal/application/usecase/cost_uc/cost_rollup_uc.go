@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"sort"
 	"time"
 
@@ -125,6 +126,9 @@ func (uc *StandardCostUseCase) UpsertItemPurchaseCost(ctx context.Context, dto r
 	uid, err := uuid.Parse(dto.UpdatedBy)
 	if err != nil {
 		return nil, errorsuc.NewValidationError("não foi possível identificar o usuário que alterou a tarifa")
+	}
+	if dto.UnitCost.IsNegative() {
+		return nil, errorsuc.NewValidationError("o custo de compra não pode ser negativo")
 	}
 	ipc := &entity.ItemPurchaseCost{
 		ItemCode:  dto.ItemCode,
@@ -566,7 +570,9 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 		return comp, horas, nil
 	}
 
-	route, err := uc.routing.GetRouteForItem(ctx, itemCode, mask)
+	// O roteiro do LOTE de custeio: com faixa de lote, o lote grande custa
+	// pelo laser e o pequeno pela guilhotina, como a OP vai fazer.
+	route, err := routingrepo.RoteiroParaQuantidade(ctx, uc.routing, itemCode, mask, lotD)
 	if err != nil || route == nil {
 		return comp, horas, nil // sem roteiro, não há conversão
 	}
@@ -578,8 +584,8 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 	rates := uc.workCenterRates(ctx)
 
 	for _, op := range ops {
-		if op.Situation == routingentity.RouteOpGhost {
-			continue // operação fantasma não custa
+		if !op.ConsomeTempo() {
+			continue // etapa fantasma ou inativa não custa
 		}
 		if (op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart) && uc.thirdParty != nil {
 			serviceCost, priceErr := uc.thirdParty.StandardCostPerUnit(ctx, itemCode, mask, op.OperationID, time.Now())
@@ -590,6 +596,14 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 				// genérica, e a frase que explica tudo ("registro de serviço
 				// terceirizado não encontrado") ficava só no log do servidor.
 				// Ver o contrato em RespondUseCaseError.
+				// Fonte única do preço de serviço é a VTER0100. Sem preço lá,
+				// vale o custo por peça cadastrado no roteiro (etapa ∘ biblioteca)
+				// — antes o custo recusava mesmo com o valor preenchido no
+				// roteiro, e o usuário tinha o mesmo número em dois lugares.
+				if errors.Is(priceErr, thirdpartyentity.ErrNotFound) && op.EffectiveCostPerUnit != nil && op.EffectiveCostPerUnit.IsPositive() {
+					comp.Subcontratacao = comp.Subcontratacao.Add(op.EffectiveCostPerUnit.Mul(lotD))
+					continue
+				}
 				if errors.Is(priceErr, thirdpartyentity.ErrNotFound) {
 					// Sem número de item na mensagem: aqui `itemCode` é o código
 					// INTERNO, e mostrá-lo repetiria o problema dos campos "(ID)" —
@@ -599,6 +613,7 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 					return comp, horas, errorsuc.NewValidationError(fmt.Sprintf(
 						"o roteiro passa pela operação de terceiro %q e não há preço de serviço cadastrado para ela. "+
 							"Cadastre o preço em VTER0100 — Preços de Serviços de Terceiros, "+
+							"informe o custo por peça na etapa do roteiro (VENT0202), "+
 							"ou mude a operação para interna no roteiro do item",
 						op.OperationName))
 				}
@@ -607,6 +622,18 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 			// O preço do terceiro já é por unidade; multiplicar pelo lote e dividir
 			// depois mantém a mesma unidade do resto da soma.
 			comp.Subcontratacao = comp.Subcontratacao.Add(serviceCost.Mul(lotD))
+			continue
+		}
+		if op.EffTime.SemMedida && op.ConsomeTempo() &&
+			op.OperationOrigin != routingentity.OriginExternal && op.OperationOrigin != routingentity.OriginThirdPart {
+			return comp, horas, routingentity.ErroSemMedida(op)
+		}
+		// Etapa de terceiro sem a tabela de preços configurada no caso de uso:
+		// o custo do terceiro é o do roteiro; nunca hora-máquina nossa.
+		if op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart {
+			if op.EffectiveCostPerUnit != nil {
+				comp.Subcontratacao = comp.Subcontratacao.Add(op.EffectiveCostPerUnit.Mul(lotD))
+			}
 			continue
 		}
 		machineRate, laborRate := decimal.Zero, decimal.Zero

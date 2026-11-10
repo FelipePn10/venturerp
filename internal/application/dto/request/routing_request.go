@@ -31,6 +31,11 @@ type CreateOperationDTO struct {
 
 	// ScrapPct é o refugo padrão da operação, em %.
 	ScrapPct float64 `json:"scrap_pct"`
+
+	// TimeBasis: em que medida da peça o tempo de máquina é contado
+	// (PECA | M2 | METRO_LINEAR | PERIMETRO | ATRIBUTO). Vazio = por peça.
+	TimeBasis          string  `json:"time_basis,omitempty"`
+	TimeBasisAttribute *string `json:"time_basis_attribute,omitempty"`
 }
 
 type UpdateOperationDTO struct {
@@ -60,18 +65,27 @@ type UpdateOperationDTO struct {
 
 	// ScrapPct é o refugo padrão da operação, em %.
 	ScrapPct float64 `json:"scrap_pct"`
+
+	// TimeBasis: em que medida da peça o tempo de máquina é contado
+	// (PECA | M2 | METRO_LINEAR | PERIMETRO | ATRIBUTO). Vazio = por peça.
+	TimeBasis          string  `json:"time_basis,omitempty"`
+	TimeBasisAttribute *string `json:"time_basis_attribute,omitempty"`
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
 
 type CreateRouteDTO struct {
-	ItemCode    TextCode      `json:"item_code"`
-	Mask        *string       `json:"mask,omitempty"`
-	Alternative int16         `json:"alternative"`
-	Description *string       `json:"description,omitempty"`
-	IsStandard  bool          `json:"is_standard"`
-	ValidFrom   *DataFlexivel `json:"valid_from,omitempty"` // nil = vale desde sempre
-	ValidTo     *DataFlexivel `json:"valid_to,omitempty"`   // nil = sem fim
+	// IsTemplate cria um roteiro-modelo (sem item). O item é então ignorado.
+	IsTemplate  bool             `json:"is_template"`
+	ItemCode    TextCode         `json:"item_code"`
+	LotMin      *decimal.Decimal `json:"lot_min,omitempty"`
+	LotMax      *decimal.Decimal `json:"lot_max,omitempty"`
+	Mask        *string          `json:"mask,omitempty"`
+	Alternative int16            `json:"alternative"`
+	Description *string          `json:"description,omitempty"`
+	IsStandard  bool             `json:"is_standard"`
+	ValidFrom   *DataFlexivel    `json:"valid_from,omitempty"` // nil = vale desde sempre
+	ValidTo     *DataFlexivel    `json:"valid_to,omitempty"`   // nil = sem fim
 }
 
 type UpdateRouteDTO struct {
@@ -81,6 +95,30 @@ type UpdateRouteDTO struct {
 	IsStandard  bool          `json:"is_standard"`
 	ValidFrom   *DataFlexivel `json:"valid_from,omitempty"`
 	ValidTo     *DataFlexivel `json:"valid_to,omitempty"`
+	// Faixa de lote em que o roteiro vale (nil = sem limite).
+	LotMin *decimal.Decimal `json:"lot_min,omitempty"`
+	LotMax *decimal.Decimal `json:"lot_max,omitempty"`
+}
+
+// CopyRouteDTO copia um roteiro (de item ou modelo) para um item ou para um
+// modelo novo, numa transação só: etapas, rede, centros alternativos,
+// ferramentas, documentos da etapa e — quando o destino é um item — os planos
+// de inspeção com suas características.
+type CopyRouteDTO struct {
+	SourceRouteID int64    `json:"-"`
+	ToTemplate    bool     `json:"to_template"`
+	ItemCode      TextCode `json:"item_code"`
+	Mask          *string  `json:"mask,omitempty"`
+	Alternative   int16    `json:"alternative"`
+	Description   *string  `json:"description,omitempty"`
+	IsStandard    bool     `json:"is_standard"`
+}
+
+// SetMaterialStepDTO diz em que etapa do roteiro um componente da estrutura
+// entra. Sequence nula = no início da ordem.
+type SetMaterialStepDTO struct {
+	StructureID int64  `json:"structure_id"`
+	Sequence    *int16 `json:"sequence"`
 }
 
 // ─── route operations ─────────────────────────────────────────────────────────
@@ -109,6 +147,9 @@ type AddRouteOperationDTO struct {
 	ThirdPartyRemittance *string          `json:"third_party_remittance,omitempty"`
 	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
 	ScrapPct *float64 `json:"scrap_pct,omitempty"`
+	// TimeBasis sobrepõe a base de tempo da operação (nil ⇒ herda).
+	TimeBasis          *string `json:"time_basis,omitempty"`
+	TimeBasisAttribute *string `json:"time_basis_attribute,omitempty"`
 	// InspectionRequired marca a etapa como ponto de inspeção.
 	InspectionRequired bool    `json:"inspection_required"`
 	Situation          string  `json:"situation"` // APROVADA | INATIVA | FANTASMA
@@ -135,6 +176,9 @@ type UpdateRouteOperationDTO struct {
 	ThirdPartyRemittance *string          `json:"third_party_remittance,omitempty"`
 	// ScrapPct sobrepõe o refugo da operação (nil ⇒ herda).
 	ScrapPct *float64 `json:"scrap_pct,omitempty"`
+	// TimeBasis sobrepõe a base de tempo da operação (nil ⇒ herda).
+	TimeBasis          *string `json:"time_basis,omitempty"`
+	TimeBasisAttribute *string `json:"time_basis_attribute,omitempty"`
 	// InspectionRequired marca a etapa como ponto de inspeção.
 	InspectionRequired bool    `json:"inspection_required"`
 	Situation          string  `json:"situation"`

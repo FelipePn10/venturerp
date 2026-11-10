@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -92,13 +93,20 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 	}
 
 	report := &RouteReadinessReport{RouteID: routeID, ItemCode: route.ItemCode}
+	if route.IsTemplate {
+		// Modelo não é planejado: só faz sentido conferir a estrutura do
+		// processo; máquina apta e tarifa dependem do item que receber a cópia.
+		report.Warnings = append(report.Warnings,
+			"roteiro-modelo: não entra no planejamento; copie-o para um item para planejar")
+	}
 	if route.Description != nil {
 		report.Description = *route.Description
 	}
 
 	ativas := make([]*routingentity.RouteOperation, 0, len(ops))
 	for _, op := range ops {
-		if op.Situation == routingentity.RouteOpInactive {
+		// Fantasma e inativa não são executadas: não entram na conferência.
+		if !op.ConsomeTempo() {
 			continue
 		}
 		ativas = append(ativas, op)
@@ -118,16 +126,32 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 	for _, op := range ativas {
 		switch op.OperationOrigin {
 		case routingentity.OriginExternal, routingentity.OriginThirdPart:
-			if op.LeadTimeDays == nil || *op.LeadTimeDays <= 0 {
+			// Prazo e fornecedor valem da etapa OU da operação de biblioteca.
+			// Antes só a etapa contava, e a pendência aparecia com o prazo
+			// preenchido na biblioteca.
+			if op.EffectiveSubcontractDays <= 0 {
 				report.Issues = append(report.Issues, fmt.Sprintf(
 					"etapa %d (%s) sai da fábrica e está sem prazo em dias: o planejamento não sabe quando a peça volta",
 					op.Sequence, op.OperationName))
 			}
-			if op.SupplierID == nil {
+			if op.EffectiveSupplierID == nil {
 				report.Warnings = append(report.Warnings, fmt.Sprintf(
 					"etapa %d (%s) não diz qual fornecedor executa", op.Sequence, op.OperationName))
 			}
 			continue
+		}
+		// A tela antiga gravava o "tempo de máquina" da etapa no campo legado,
+		// que o modelo de tempo não lê: o número ficava no cadastro e nunca
+		// entrava em OP, prazo nem custo.
+		if op.StandardTime != nil && op.RunTime == nil && *op.StandardTime > 0 {
+			report.Warnings = append(report.Warnings, fmt.Sprintf(
+				"etapa %d (%s) tem tempo de máquina %.4g gravado no campo antigo, que o planejamento ignora: abra a etapa e confirme o tempo",
+				op.Sequence, op.OperationName, *op.StandardTime))
+		}
+		if op.EffTime.SemMedida {
+			report.Issues = append(report.Issues, fmt.Sprintf(
+				"etapa %d (%s) conta o tempo %s e o item não informa essa medida: complete as dimensões ou o atributo no cadastro do item",
+				op.Sequence, op.OperationName, routingentity.RotuloDaBase(op.EffectiveTimeBasis, op.EffectiveTimeBasisAttribute)))
 		}
 		if op.EffTime.Run <= 0 && op.EffectiveStdTime <= 0 {
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
@@ -152,6 +176,10 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 
 	// Máquinas do item, agrupadas pelo centro a que pertencem.
 	comMaquina := map[int64]bool{}
+	if route.IsTemplate {
+		report.Ready = len(report.Issues) == 0
+		return report, nil
+	}
 	if uc.Machines != nil && uc.Centers != nil {
 		tempos, err := uc.Machines.ListItemMachineTimes(ctx, route.ItemCode)
 		if err != nil {
@@ -174,12 +202,25 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 
 	for _, check := range centros {
 		check.HasMachine = comMaquina[check.WorkCenterID]
-		if uc.Rates != nil {
+		semTarifaDeMaquina := false
+		if detalhadas, ok := uc.Rates.(tarifasDoCentro); ok {
+			// A mesma regra do custo padrão: tarifa de máquina (ou a hora
+			// geral, quando a de máquina não foi informada) mais a de mão de
+			// obra. Antes valia só a hora geral: centro com tarifa só de mão de
+			// obra aparecia "valendo zero" (mentira) e linha cadastrada com
+			// zero passava como tarifada (outra mentira).
+			maquina, maoDeObra, err := detalhadas.Tarifas(ctx, check.WorkCenterID)
+			if err != nil {
+				return nil, fmt.Errorf("lendo a taxa horária do centro %d: %w", check.WorkCenterID, err)
+			}
+			check.HasRate, check.HourlyRate = maquina > 0 || maoDeObra > 0, maquina+maoDeObra
+			semTarifaDeMaquina = maquina <= 0 && maoDeObra > 0
+		} else if uc.Rates != nil {
 			rate, found, err := uc.Rates.HourlyRate(ctx, check.WorkCenterID)
 			if err != nil {
 				return nil, fmt.Errorf("lendo a taxa horária do centro %d: %w", check.WorkCenterID, err)
 			}
-			check.HasRate, check.HourlyRate = found, rate
+			check.HasRate, check.HourlyRate = found && rate > 0, rate
 		}
 		nome := check.WorkCenterName
 		if nome == "" {
@@ -187,14 +228,19 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 		}
 		if !check.HasMachine {
 			report.Issues = append(report.Issues, fmt.Sprintf(
-				"nenhuma máquina de %s tem a produtividade deste item cadastrada (etapas %v): sem isso o planejamento não tem onde rodar a ordem",
-				nome, check.Steps))
+				"nenhuma máquina de %s tem a produtividade deste item cadastrada (%s): sem isso o planejamento não tem onde rodar a ordem",
+				nome, etapasPorExtenso(check.Steps)))
 		}
-		if !check.HasRate {
+		switch {
+		case uc.Rates == nil:
+		case !check.HasRate:
 			// Não trava o plano — trava o custo, e em silêncio: a operação entra
 			// no cálculo valendo zero e a margem sai maior do que é.
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
-				"%s está sem tarifa por hora (VCUS0100): as etapas %v entram no custo valendo zero", nome, check.Steps))
+				"%s está sem tarifa por hora (VCUS0100): %s no custo valendo zero", nome, etapasEntram(check.Steps)))
+		case semTarifaDeMaquina:
+			report.Warnings = append(report.Warnings, fmt.Sprintf(
+				"%s tem só a tarifa de mão de obra (VCUS0100): a hora-máquina de %s entra no custo valendo zero", nome, etapasPorExtenso(check.Steps)))
 		}
 		report.WorkCenters = append(report.WorkCenters, *check)
 	}
@@ -209,11 +255,39 @@ func (uc *RouteReadinessUseCase) Execute(ctx context.Context, routeID int64) (*R
 		}
 		if len(semPlano) > 0 {
 			report.Warnings = append(report.Warnings, fmt.Sprintf(
-				"as etapas %v são ponto de inspeção e não têm plano ativo: a ordem será criada, mas a conferência não abre até o plano existir",
-				semPlano))
+				"%s %s ponto de inspeção sem plano ativo: a ordem será criada, mas a conferência não abre até o plano existir",
+				etapasPorExtenso(semPlano), map[bool]string{true: "é", false: "são"}[len(semPlano) == 1]))
 		}
 	}
 
 	report.Ready = len(report.Issues) == 0
 	return report, nil
+}
+
+// tarifasDoCentro: leitura das duas tarifas do centro, como o custo as usa.
+type tarifasDoCentro interface {
+	Tarifas(ctx context.Context, workCenterID int64) (maquina, maoDeObra float64, err error)
+}
+
+// etapasPorExtenso: [20 30] → "etapas 20 e 30"; [10] → "etapa 10".
+func etapasPorExtenso(seqs []int16) string {
+	partes := make([]string, len(seqs))
+	for i, s := range seqs {
+		partes[i] = fmt.Sprint(s)
+	}
+	switch len(partes) {
+	case 0:
+		return "nenhuma etapa"
+	case 1:
+		return "etapa " + partes[0]
+	}
+	return "etapas " + strings.Join(partes[:len(partes)-1], ", ") + " e " + partes[len(partes)-1]
+}
+
+// etapasEntram: "a etapa 10 entra" / "as etapas 20 e 30 entram".
+func etapasEntram(seqs []int16) string {
+	if len(seqs) == 1 {
+		return "a " + etapasPorExtenso(seqs) + " entra"
+	}
+	return "as " + etapasPorExtenso(seqs) + " entram"
 }

@@ -581,6 +581,10 @@ WHERE po.item_code = ANY($1::bigint[])
   AND po.enterprise_id = $2
   AND po.is_firm = TRUE
   AND po.is_active = TRUE
+  -- A ordem de SERVIÇO (etapa em terceiro) não traz o item: o item volta pela
+  -- OF da qual a etapa faz parte. Contá-la dobrava o suprimento — firmar a
+  -- sugestão de fabricação e a de serviço da mesma peça dava 2× a peça.
+  AND po.order_type <> 'OUTSOURCING'
   AND NOT COALESCE(prod.encerrada, FALSE)
   AND po.quantity > COALESCE(prod.entregue, 0) + COALESCE(compra.chegou, 0)
 ORDER BY po.item_code, po.need_date
@@ -616,6 +620,282 @@ func (q *Queries) ListFirmPlannedOrdersByItems(ctx context.Context, arg ListFirm
 			&i.ItemCode,
 			&i.Quantity,
 			&i.NeedDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFirmPlannedProductionWithoutOrder = `-- name: ListFirmPlannedProductionWithoutOrder :many
+SELECT po.code, po.item_code, COALESCE(po.mask, '')::text AS mask,
+       COALESCE(NULLIF(po.quantity_corrected, 0), po.quantity)::numeric AS quantity,
+       COALESCE(po.start_date, po.need_date)::date AS start_date,
+       po.need_date
+FROM planned_orders po
+WHERE po.enterprise_id = $1
+  AND po.order_type = 'PRODUCTION'
+  AND po.is_firm AND po.is_active AND po.status <> 'CANCELLED'
+  AND NOT EXISTS (SELECT 1 FROM production_orders o WHERE o.planned_order_id = po.id AND o.enterprise_id = po.enterprise_id)
+`
+
+type ListFirmPlannedProductionWithoutOrderRow struct {
+	Code      int64
+	ItemCode  int64
+	Mask      string
+	Quantity  pgtype.Numeric
+	StartDate pgtype.Date
+	NeedDate  pgtype.Date
+}
+
+// Ordem planejada de fabricação firme que ainda não virou OF: o MRP a conta
+// como suprimento do item, então os componentes dela têm de ser demanda — a
+// estrutura é explodida pelo que falta. Firmar já cria a OF; isto cobre a
+// planejada firmada sem OF (OF cancelada fica de fora: a planejada morreu junto).
+func (q *Queries) ListFirmPlannedProductionWithoutOrder(ctx context.Context, enterpriseID *int64) ([]ListFirmPlannedProductionWithoutOrderRow, error) {
+	rows, err := q.db.Query(ctx, listFirmPlannedProductionWithoutOrder, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFirmPlannedProductionWithoutOrderRow
+	for rows.Next() {
+		var i ListFirmPlannedProductionWithoutOrderRow
+		if err := rows.Scan(
+			&i.Code,
+			&i.ItemCode,
+			&i.Mask,
+			&i.Quantity,
+			&i.StartDate,
+			&i.NeedDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenPlannedOrderExceptions = `-- name: ListOpenPlannedOrderExceptions :many
+SELECT e.source_code, e.message_type, COALESCE(e.description, '')::text AS description, e.suggested_date
+FROM mrp_exception_messages e
+WHERE e.enterprise_id = $1
+  AND e.source_type = 'PLANNED_ORDER'
+  AND e.handling_action IS NULL
+  AND e.source_code IS NOT NULL
+ORDER BY e.source_code, e.created_at DESC
+`
+
+type ListOpenPlannedOrderExceptionsRow struct {
+	SourceCode    *int64
+	MessageType   string
+	Description   string
+	SuggestedDate pgtype.Date
+}
+
+// Mensagens de exceção do MRP ainda não tratadas que apontam uma ordem
+// planejada: a fila do comprador mostra "MRP recomenda cancelar/adiar" na
+// própria sugestão — antes ele só via isso no VMRP0100.
+func (q *Queries) ListOpenPlannedOrderExceptions(ctx context.Context, enterpriseID *int64) ([]ListOpenPlannedOrderExceptionsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenPlannedOrderExceptions, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenPlannedOrderExceptionsRow
+	for rows.Next() {
+		var i ListOpenPlannedOrderExceptionsRow
+		if err := rows.Scan(
+			&i.SourceCode,
+			&i.MessageType,
+			&i.Description,
+			&i.SuggestedDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenProductionOrderAllocations = `-- name: ListOpenProductionOrderAllocations :many
+SELECT o.id AS production_order_id, o.item_code AS parent_item_code, o.mask AS parent_mask, o.planned_qty AS parent_quantity,
+       COALESCE(m.substituted_item_code, m.item_code)::bigint AS item_code, m.mask,
+       (m.quantity - m.attended_quantity)::numeric AS quantity,
+       COALESCE(o.start_date, CURRENT_DATE)::date AS start_date,
+       COALESCE(o.end_date, o.start_date, CURRENT_DATE)::date AS end_date,
+       m.route_operation_sequence
+FROM production_order_materials m
+JOIN production_orders o ON o.id = m.production_order_id AND o.enterprise_id = m.enterprise_id
+WHERE m.enterprise_id = $1
+  AND m.material_kind = 'DEMAND'
+  AND o.status NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED')
+  AND m.quantity > m.attended_quantity
+ORDER BY o.id, m.id
+`
+
+type ListOpenProductionOrderAllocationsRow struct {
+	ProductionOrderID      int64
+	ParentItemCode         int64
+	ParentMask             string
+	ParentQuantity         pgtype.Numeric
+	ItemCode               int64
+	Mask                   string
+	Quantity               pgtype.Numeric
+	StartDate              pgtype.Date
+	EndDate                pgtype.Date
+	RouteOperationSequence pgtype.Int2
+}
+
+// Empenho das OFs abertas: o material da lista que ainda não saiu do estoque
+// (necessário − atendido) é demanda dependente do componente. Sem isto, firmar
+// a ordem fazia a necessidade do componente sumir no MRP seguinte.
+func (q *Queries) ListOpenProductionOrderAllocations(ctx context.Context, enterpriseID int64) ([]ListOpenProductionOrderAllocationsRow, error) {
+	rows, err := q.db.Query(ctx, listOpenProductionOrderAllocations, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenProductionOrderAllocationsRow
+	for rows.Next() {
+		var i ListOpenProductionOrderAllocationsRow
+		if err := rows.Scan(
+			&i.ProductionOrderID,
+			&i.ParentItemCode,
+			&i.ParentMask,
+			&i.ParentQuantity,
+			&i.ItemCode,
+			&i.Mask,
+			&i.Quantity,
+			&i.StartDate,
+			&i.EndDate,
+			&i.RouteOperationSequence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenProductionOrderSupply = `-- name: ListOpenProductionOrderSupply :many
+SELECT o.id, o.item_code,
+       GREATEST(o.planned_qty - o.produced_qty, 0)::numeric AS quantity,
+       COALESCE(o.end_date, o.start_date, CURRENT_DATE)::date AS arrival_date
+FROM production_orders o
+WHERE o.enterprise_id = $1
+  AND o.item_code = ANY($2::bigint[])
+  AND o.status NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED')
+  AND o.planned_qty > o.produced_qty
+  AND NOT EXISTS (SELECT 1 FROM planned_orders p
+                   WHERE p.id = o.planned_order_id AND p.enterprise_id = o.enterprise_id
+                     AND p.is_firm AND p.is_active AND p.status <> 'CANCELLED')
+`
+
+type ListOpenProductionOrderSupplyParams struct {
+	EnterpriseID *int64
+	ItemCodes    []int64
+}
+
+type ListOpenProductionOrderSupplyRow struct {
+	ID          int64
+	ItemCode    int64
+	Quantity    pgtype.Numeric
+	ArrivalDate pgtype.Date
+}
+
+// OF aberta que NÃO está coberta por ordem planejada firme (OF manual, da
+// demanda independente, de ordem planejada não firme): o que falta produzir é
+// suprimento do item na data de término. A OF de ordem firme já entra pela
+// ordem planejada (ListFirmPlannedOrdersByItems) — contar as duas dobrava.
+func (q *Queries) ListOpenProductionOrderSupply(ctx context.Context, arg ListOpenProductionOrderSupplyParams) ([]ListOpenProductionOrderSupplyRow, error) {
+	rows, err := q.db.Query(ctx, listOpenProductionOrderSupply, arg.EnterpriseID, arg.ItemCodes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenProductionOrderSupplyRow
+	for rows.Next() {
+		var i ListOpenProductionOrderSupplyRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemCode,
+			&i.Quantity,
+			&i.ArrivalDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOpenPurchaseOrderSupply = `-- name: ListOpenPurchaseOrderSupply :many
+SELECT i.code, i.item_code,
+       (GREATEST(i.requested_qty - i.received_qty - i.cancelled_qty, 0)
+        * CASE WHEN COALESCE(i.internal_qty, 0) > 0 AND i.requested_qty > 0
+               THEN i.internal_qty / i.requested_qty ELSE 1 END)::numeric AS quantity,
+       COALESCE(i.promised_date, i.delivery_date, pc.delivery_date, CURRENT_DATE)::date AS arrival_date
+FROM purchase_order_items i
+JOIN purchase_orders pc ON pc.code = i.purchase_order_code
+JOIN enterprise emp ON emp.code = pc.enterprise_code
+WHERE emp.id = $1
+  AND i.item_code = ANY($2::bigint[])
+  AND i.is_active
+  AND i.status NOT IN ('CANCELLED', 'RECEIVED')
+  AND pc.status NOT IN ('CANCELLED', 'RECEIVED')
+  AND i.requested_qty > i.received_qty + i.cancelled_qty
+  AND NOT EXISTS (SELECT 1 FROM planned_orders p
+                   WHERE p.code = i.planned_order_code AND p.enterprise_id = emp.id
+                     AND p.is_firm AND p.is_active AND p.status <> 'CANCELLED')
+`
+
+type ListOpenPurchaseOrderSupplyParams struct {
+	EnterpriseID int64
+	ItemCodes    []int64
+}
+
+type ListOpenPurchaseOrderSupplyRow struct {
+	Code        int64
+	ItemCode    int64
+	Quantity    pgtype.Numeric
+	ArrivalDate pgtype.Date
+}
+
+// Item de pedido de compra em aberto que NÃO veio de ordem planejada firme
+// (pedido lançado pelo comprador): o saldo a receber, na unidade de estoque, é
+// suprimento na data prometida. Rascunho conta — o comprador já assumiu a
+// compra; não contar fazia o MRP sugerir de novo.
+func (q *Queries) ListOpenPurchaseOrderSupply(ctx context.Context, arg ListOpenPurchaseOrderSupplyParams) ([]ListOpenPurchaseOrderSupplyRow, error) {
+	rows, err := q.db.Query(ctx, listOpenPurchaseOrderSupply, arg.EnterpriseID, arg.ItemCodes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOpenPurchaseOrderSupplyRow
+	for rows.Next() {
+		var i ListOpenPurchaseOrderSupplyRow
+		if err := rows.Scan(
+			&i.Code,
+			&i.ItemCode,
+			&i.Quantity,
+			&i.ArrivalDate,
 		); err != nil {
 			return nil, err
 		}
@@ -960,6 +1240,39 @@ func (q *Queries) ListPlannedOrdersByType(ctx context.Context, arg ListPlannedOr
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPurchasePlannedOrdersWithOrder = `-- name: ListPurchasePlannedOrdersWithOrder :many
+SELECT DISTINCT po.code
+FROM planned_orders po
+JOIN purchase_order_items poi ON poi.planned_order_code = po.code AND poi.status <> 'CANCELLED'
+JOIN purchase_orders pc ON pc.code = poi.purchase_order_code AND pc.status <> 'CANCELLED'
+JOIN enterprise emp ON emp.code = pc.enterprise_code AND emp.id = po.enterprise_id
+WHERE po.enterprise_id = $1
+  AND po.order_type = 'PURCHASE'
+`
+
+// Ordens planejadas de compra que já viraram pedido (item de pedido não
+// cancelado apontando para elas). A fila do comprador (VPDC0200) é o resto:
+// firmada no MRP ou não, a compra só sai da fila quando vira pedido.
+func (q *Queries) ListPurchasePlannedOrdersWithOrder(ctx context.Context, enterpriseID *int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listPurchasePlannedOrdersWithOrder, enterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var code int64
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		items = append(items, code)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

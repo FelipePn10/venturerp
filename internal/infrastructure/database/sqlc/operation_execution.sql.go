@@ -20,7 +20,7 @@ JOIN production_order_operations prior ON prior.production_order_id=ord.id
 LEFT JOIN route_operations step ON step.id=current.route_operation_id
 WHERE (
  EXISTS(SELECT 1 FROM route_operation_network edge WHERE edge.predecessor_id=prior.route_operation_id AND edge.successor_id=current.route_operation_id)
- OR (NOT EXISTS(SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id=edge.predecessor_id WHERE source.route_id=step.route_id) AND prior.sequence<current.sequence)
+ OR (NOT EXISTS(SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id=edge.predecessor_id AND source.is_active JOIN route_operations target ON target.id=edge.successor_id AND target.is_active WHERE source.route_id=step.route_id) AND prior.sequence<current.sequence)
 ) AND ord.id=$1 AND ord.enterprise_id=$2 AND ord.routing_snapshot_at IS NULL
 ON CONFLICT DO NOTHING
 `
@@ -183,6 +183,33 @@ func (q *Queries) MarkProductionRoutingFrozen(ctx context.Context, arg MarkProdu
 	return err
 }
 
+const openServiceOrderOfOperation = `-- name: OpenServiceOrderOfOperation :one
+SELECT COALESCE((
+  SELECT so.code FROM third_party_service_orders so
+  JOIN production_order_operations op ON op.production_order_id = so.production_order_id
+                                     AND op.route_operation_id = so.route_operation_id
+                                     AND op.enterprise_id = so.enterprise_id
+  WHERE op.id = $1 AND so.enterprise_id = $2
+    AND so.status NOT IN ('COMPLETED', 'CANCELLED')
+  ORDER BY so.id DESC LIMIT 1), 0)::bigint AS code
+`
+
+type OpenServiceOrderOfOperationParams struct {
+	OperationID  int64
+	EnterpriseID int64
+}
+
+// A OS de terceiro ainda aberta da etapa (0 quando não há). Enquanto ela está
+// aberta, a etapa anda pela OS — remessa põe em andamento, o recebimento total
+// conclui (VTPS0100); concluir à mão liberava a etapa seguinte com as peças
+// ainda no fornecedor.
+func (q *Queries) OpenServiceOrderOfOperation(ctx context.Context, arg OpenServiceOrderOfOperationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, openServiceOrderOfOperation, arg.OperationID, arg.EnterpriseID)
+	var code int64
+	err := row.Scan(&code)
+	return code, err
+}
+
 const operationHasSuccessors = `-- name: OperationHasSuccessors :one
 SELECT CASE WHEN (SELECT ord.routing_snapshot_at IS NOT NULL FROM production_orders ord JOIN production_order_operations op ON op.production_order_id=ord.id WHERE op.id=$1) THEN EXISTS(SELECT 1 FROM production_order_operation_dependencies WHERE predecessor_id=$1) ELSE EXISTS (
  SELECT 1 FROM production_order_operations next
@@ -190,7 +217,7 @@ SELECT CASE WHEN (SELECT ord.routing_snapshot_at IS NOT NULL FROM production_ord
  LEFT JOIN route_operations step ON step.id = current.route_operation_id
  WHERE current.id = $1 AND (
   EXISTS (SELECT 1 FROM route_operation_network edge WHERE edge.predecessor_id = current.route_operation_id AND edge.successor_id = next.route_operation_id)
-  OR (NOT EXISTS (SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id=edge.predecessor_id WHERE source.route_id=step.route_id) AND next.sequence > current.sequence)
+  OR (NOT EXISTS (SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id=edge.predecessor_id AND source.is_active JOIN route_operations target ON target.id=edge.successor_id AND target.is_active WHERE source.route_id=step.route_id) AND next.sequence > current.sequence)
  )
 ) END::boolean
 `
@@ -203,6 +230,31 @@ func (q *Queries) OperationHasSuccessors(ctx context.Context, id int64) (bool, e
 }
 
 const operationPredecessorsPending = `-- name: OperationPredecessorsPending :one
+SELECT CASE WHEN (SELECT ord.routing_snapshot_at IS NOT NULL FROM production_orders ord JOIN production_order_operations op ON op.production_order_id=ord.id WHERE op.id=$1) THEN EXISTS(SELECT 1 FROM production_order_operation_dependencies d JOIN production_order_operations prior ON prior.id=d.predecessor_id WHERE d.successor_id=$1 AND prior.status NOT IN ('DONE','SKIPPED')
+   AND NOT EXISTS (SELECT 1 FROM third_party_service_orders so WHERE so.production_order_id=prior.production_order_id AND so.route_operation_id=prior.route_operation_id AND so.enterprise_id=prior.enterprise_id AND so.status <> 'CANCELLED' AND so.fulfilled_quantity > 0)) ELSE EXISTS (
+ SELECT 1 FROM production_order_operations prior
+ JOIN production_order_operations current ON current.production_order_id = prior.production_order_id
+ LEFT JOIN route_operations step ON step.id = current.route_operation_id
+ WHERE current.id = $1 AND prior.status NOT IN ('DONE', 'SKIPPED')
+ AND NOT EXISTS (SELECT 1 FROM third_party_service_orders so WHERE so.production_order_id=prior.production_order_id AND so.route_operation_id=prior.route_operation_id AND so.enterprise_id=prior.enterprise_id AND so.status <> 'CANCELLED' AND so.fulfilled_quantity > 0)
+ AND (
+   (EXISTS (SELECT 1 FROM route_operation_network edge WHERE edge.predecessor_id = prior.route_operation_id AND edge.successor_id = current.route_operation_id))
+   OR (NOT EXISTS (SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id = edge.predecessor_id AND source.is_active JOIN route_operations target ON target.id = edge.successor_id AND target.is_active WHERE source.route_id = step.route_id) AND prior.sequence < current.sequence)
+ )
+) END::boolean AS blocked
+`
+
+// A etapa pode COMEÇAR? Bloqueia predecessora não concluída — exceto a etapa
+// em terceiro que já devolveu parte das peças: as que voltaram podem seguir
+// (sobreposição, como no SAP). Concluir exige todas: OperationPredecessorsUnfinished.
+func (q *Queries) OperationPredecessorsPending(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, operationPredecessorsPending, id)
+	var blocked bool
+	err := row.Scan(&blocked)
+	return blocked, err
+}
+
+const operationPredecessorsUnfinished = `-- name: OperationPredecessorsUnfinished :one
 SELECT CASE WHEN (SELECT ord.routing_snapshot_at IS NOT NULL FROM production_orders ord JOIN production_order_operations op ON op.production_order_id=ord.id WHERE op.id=$1) THEN EXISTS(SELECT 1 FROM production_order_operation_dependencies d JOIN production_order_operations prior ON prior.id=d.predecessor_id WHERE d.successor_id=$1 AND prior.status NOT IN ('DONE','SKIPPED')) ELSE EXISTS (
  SELECT 1 FROM production_order_operations prior
  JOIN production_order_operations current ON current.production_order_id = prior.production_order_id
@@ -210,13 +262,16 @@ SELECT CASE WHEN (SELECT ord.routing_snapshot_at IS NOT NULL FROM production_ord
  WHERE current.id = $1 AND prior.status NOT IN ('DONE', 'SKIPPED')
  AND (
    (EXISTS (SELECT 1 FROM route_operation_network edge WHERE edge.predecessor_id = prior.route_operation_id AND edge.successor_id = current.route_operation_id))
-   OR (NOT EXISTS (SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id = edge.predecessor_id WHERE source.route_id = step.route_id) AND prior.sequence < current.sequence)
+   OR (NOT EXISTS (SELECT 1 FROM route_operation_network edge JOIN route_operations source ON source.id = edge.predecessor_id AND source.is_active JOIN route_operations target ON target.id = edge.successor_id AND target.is_active WHERE source.route_id = step.route_id) AND prior.sequence < current.sequence)
  )
 ) END::boolean AS blocked
 `
 
-func (q *Queries) OperationPredecessorsPending(ctx context.Context, id int64) (bool, error) {
-	row := q.db.QueryRow(ctx, operationPredecessorsPending, id)
+// A etapa pode CONCLUIR? Toda predecessora tem de estar concluída ou pulada —
+// inclusive a do terceiro que devolveu só parte: a etapa não fecha antes de as
+// últimas peças voltarem.
+func (q *Queries) OperationPredecessorsUnfinished(ctx context.Context, id int64) (bool, error) {
+	row := q.db.QueryRow(ctx, operationPredecessorsUnfinished, id)
 	var blocked bool
 	err := row.Scan(&blocked)
 	return blocked, err

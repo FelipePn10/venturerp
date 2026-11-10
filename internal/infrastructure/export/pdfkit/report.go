@@ -381,3 +381,8 @@ func hexNibble(b byte) (uint8, bool) {
 	}
 	return 0, false
 }
+
+// Fit devolve o tamanho da imagem dentro da caixa, mantendo a proporção.
+func (img *Image) Fit(maxW, maxH float64) (float64, float64) {
+	return logoContain(img, maxW, maxH)
+}

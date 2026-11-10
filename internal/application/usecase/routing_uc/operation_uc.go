@@ -85,6 +85,9 @@ func (uc *OperationUseCase) Create(ctx context.Context, dto request.CreateOperat
 		return nil, err
 	}
 	op.ScrapPct = dto.ScrapPct
+	if op.TimeBasis, op.TimeBasisAttribute, err = entity.NormalizaBaseDeTempo(dto.TimeBasis, dto.TimeBasisAttribute); err != nil {
+		return nil, err
+	}
 
 	created, err := uc.repo.CreateOperation(ctx, op)
 	if err != nil {
@@ -139,6 +142,9 @@ func (uc *OperationUseCase) Update(ctx context.Context, dto request.UpdateOperat
 		return nil, err
 	}
 	op.ScrapPct = dto.ScrapPct
+	if op.TimeBasis, op.TimeBasisAttribute, err = entity.NormalizaBaseDeTempo(dto.TimeBasis, dto.TimeBasisAttribute); err != nil {
+		return nil, err
+	}
 
 	updated, err := uc.repo.UpdateOperation(ctx, op)
 	if err != nil {
@@ -266,6 +272,8 @@ func toOperationResponse(op *entity.Operation) *response.OperationResponse {
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: op.ThirdPartyRemittance,
 		ScrapPct:             op.ScrapPct,
+		TimeBasis:            baseOuPeca(op.TimeBasis),
+		TimeBasisAttribute:   op.TimeBasisAttribute,
 		IsActive:             op.IsActive,
 		CreatedAt:            op.CreatedAt,
 	}
@@ -278,4 +286,11 @@ func decimalParaNumero(d *decimal.Decimal) *float64 {
 	}
 	f := d.InexactFloat64()
 	return &f
+}
+
+func baseOuPeca(base string) string {
+	if base == "" {
+		return entity.BasePeca
+	}
+	return base
 }

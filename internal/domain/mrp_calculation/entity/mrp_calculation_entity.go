@@ -120,6 +120,9 @@ type MRPInput struct {
 	// gerou esta necessidade), MPS, ESTOQUE_SEGURANCA, SIMULADA.
 	PegKind string
 	PegCode *int64
+	// ParentStepSequence é a etapa do roteiro do pai em que este componente
+	// entra (nil = no início da ordem do pai). Data a necessidade.
+	ParentStepSequence *int16
 }
 
 // MRPOutput holds the result of MRP calculation for one item
@@ -331,6 +334,10 @@ const (
 	PegDemandMPS         = "MPS"
 	PegDemandSafetyStock = "ESTOQUE_SEGURANCA"
 	PegDemandSuggestion  = "SUGESTAO"
+	// PegDemandProductionOrder: empenho de uma OF aberta (material a sair).
+	PegDemandProductionOrder = "ORDEM_PRODUCAO"
+	// PegDemandFirmPlanned: componente de ordem planejada firme sem OF.
+	PegDemandFirmPlanned = "ORDEM_PLANEJADA"
 	PegDemandSimulated   = "SIMULADA"
 	PegDemandOther       = "OUTRA"
 )

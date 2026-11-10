@@ -26,6 +26,9 @@ type ProductionOrderOperationResponse struct {
 	// ativo. Recusar a ordem por isso pararia a fábrica por uma lacuna de
 	// cadastro de outro módulo; omitir faria o controle sumir em silêncio.
 	Warnings []string `json:"warnings,omitempty"`
+	// ServiceOrderCode: a etapa está com o terceiro (OS aberta no VTPS0100) e
+	// anda pela OS — remessa e recebimento —, não pelos botões do posto.
+	ServiceOrderCode *int64 `json:"service_order_code,omitempty"`
 }
 
 type ProductionOperationEvent struct {

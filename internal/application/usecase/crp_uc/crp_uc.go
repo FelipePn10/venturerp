@@ -158,7 +158,11 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 				// segue o roteiro no tempo, não se amontoa num dia.
 				inicioDaOperacao := day
 				for _, op := range rops {
-					if op.Situation == routingentity.RouteOpGhost || op.EffectiveWorkCenterID == nil {
+					// Fantasma/inativa não é executada, e etapa de terceiro não
+					// ocupa máquina nossa (corre no prazo do fornecedor), mesmo
+					// que a operação tenha centro padrão cadastrado.
+					if !op.ConsomeTempo() || op.EffectiveWorkCenterID == nil ||
+						op.OperationOrigin == routingentity.OriginExternal || op.OperationOrigin == routingentity.OriginThirdPart {
 						continue
 					}
 					wcID := *op.EffectiveWorkCenterID
@@ -194,6 +198,38 @@ func (uc *CRPUseCase) CalculateCRP(ctx context.Context, dto request.CalculateCRP
 			k := wcDateKey{wcID: *op.WorkCenterID, date: day.Format("2006-01-02")}
 			reqMap[k] += op.EffHours * order.Quantity
 			dateMap[k] = day
+		}
+	}
+
+	// OFs abertas: cada etapa que falta, em sequência a partir do início da OF
+	// (ou de hoje), no centro da etapa — a OF já tem os tempos dela.
+	if leitor, ok := uc.repo.(interface {
+		OpenOrderOperationLoads(context.Context) ([]repository.OrderOperationLoad, error)
+	}); ok {
+		etapas, err := leitor.OpenOrderOperationLoads(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("carregando as etapas das OFs abertas: %w", err)
+		}
+		var ordem int64
+		var inicio time.Time
+		for _, etapa := range etapas {
+			if etapa.ProductionOrderID != ordem {
+				ordem, inicio = etapa.ProductionOrderID, truncateToDay(etapa.Start)
+			}
+			if etapa.WorkCenterID == 0 {
+				// Terceiro: as peças estão fora; a próxima etapa espera o prazo.
+				inicio = inicio.AddDate(0, 0, etapa.ExternalDays)
+				continue
+			}
+			if etapa.Hours <= 0 {
+				continue
+			}
+			acumula(etapa.WorkCenterID, inicio, etapa.Hours)
+			cap := capacidade(etapa.WorkCenterID)
+			if cap <= 0 {
+				cap = 8
+			}
+			inicio = inicio.AddDate(0, 0, max(1, int(math.Ceil(etapa.Hours/cap))))
 		}
 	}
 

@@ -172,6 +172,12 @@ func (r *CRPRepositorySQLC) plannedLoads(ctx context.Context, plan int64) ([]dom
 	rows, err := r.pool.Query(ctx, `WITH orders AS (
  SELECT po.id,po.item_code,po.mask,COALESCE(NULLIF(po.quantity_corrected,0),po.quantity)::double precision AS quantity,COALESCE(po.start_date,po.need_date) AS day,(SELECT m.id FROM machines m WHERE m.code=po.machine_code AND m.enterprise_id=po.enterprise_id) AS machine_id,po.production_time AS minutes
  FROM planned_orders po WHERE po.plan_code=$1 AND po.enterprise_id=$2 AND po.is_active AND po.status<>'CANCELLED' AND po.order_type::text='PRODUCTION' AND NOT EXISTS(SELECT 1 FROM mrp_machine_allocation_slots sl WHERE sl.suggestion_code=po.mrp_suggestion_code)
+ -- Ordem que já virou OF: quem carrega é a OF (OpenOrderOperationLoads), só com
+ -- as etapas que faltam. Antes a planejada ficava "liberada" para sempre e o
+ -- CRP seguia carregando o roteiro inteiro de OF já concluída ou cancelada.
+ -- OF cancelada também tira a planejada da carga — a mesma regra do suprimento
+ -- do MRP (ListFirmPlannedOrdersByItems), que já não a conta.
+ AND NOT EXISTS(SELECT 1 FROM production_orders prod WHERE prod.planned_order_id=po.id AND prod.enterprise_id=po.enterprise_id)
  UNION ALL
  SELECT -s.code,s.item_code,s.mask,s.quantity::double precision,COALESCE(s.start_date,s.need_date),a.machine_id,a.production_minutes
  FROM mrp_planned_suggestions s LEFT JOIN mrp_machine_allocations a ON a.suggestion_code=s.code AND a.enterprise_id=s.enterprise_id
@@ -184,7 +190,11 @@ func (r *CRPRepositorySQLC) plannedLoads(ctx context.Context, plan int64) ([]dom
  -- base onde NENHUM roteiro tem mascara (o caso de quem nao usa item
  -- configurado), o calculo de capacidade nao encontrava carga nenhuma e
  -- devolvia todas as ordens como "sem carga".
- LEFT JOIN LATERAL (SELECT id FROM manufacturing_routes r WHERE r.item_code=o.item_code AND r.enterprise_id=$2 AND r.is_standard AND r.is_active AND r.situation='APROVADA' AND (COALESCE(r.mask,'')=COALESCE(o.mask,'') OR COALESCE(r.mask,'')='') AND (r.valid_from IS NULL OR r.valid_from<=o.day) AND (r.valid_to IS NULL OR r.valid_to>=o.day) ORDER BY (COALESCE(r.mask,'')=COALESCE(o.mask,'')) DESC,r.id DESC LIMIT 1) mr ON TRUE
+ -- O roteiro que a OP desta ordem vai usar (regra única erp_roteiro_vigente:
+ -- máscara, vigência na data e faixa de lote). Antes o CRP exigia roteiro
+ -- PADRÃO e desempatava pelo id: alternativo por faixa de lote e roteiro
+ -- vigente não padrão ficavam fora da carga.
+ LEFT JOIN LATERAL (SELECT erp_roteiro_vigente($2,o.item_code,o.mask::text,o.day::date,o.quantity::numeric) AS id) mr ON TRUE
  LEFT JOIN machines m ON m.id=o.machine_id AND m.enterprise_id=$2 AND m.is_active
  LEFT JOIN machine_types mt ON mt.code=m.machine_type_code AND mt.enterprise_id=$2 AND mt.is_active
  ORDER BY o.day,o.id`, plan, e)
@@ -263,6 +273,9 @@ func (r *CRPRepositorySQLC) GetScheduledMachineLoads(ctx context.Context, plan i
  CROSS JOIN LATERAL generate_series(sl.starts_at::date::timestamp,(sl.ends_at-INTERVAL '1 microsecond')::date::timestamp,INTERVAL '1 day') d(day)
  WHERE s.plan_code=$1 AND s.enterprise_id=$2
  AND NOT EXISTS(SELECT 1 FROM planned_orders po WHERE po.enterprise_id=$2 AND po.mrp_suggestion_code=s.code AND (NOT po.is_active OR po.status='CANCELLED'))
+ -- Sugestão firmada que virou OF: a carga é a da OF (OpenOrderOperationLoads).
+ AND NOT EXISTS(SELECT 1 FROM planned_orders po JOIN production_orders prod ON prod.planned_order_id=po.id AND prod.enterprise_id=po.enterprise_id
+                 WHERE po.enterprise_id=$2 AND po.mrp_suggestion_code=s.code AND prod.status<>'CANCELLED')
  GROUP BY mt.id,d.day ORDER BY d.day,mt.id`, plan, e)
 	if err != nil {
 		return nil, err
@@ -272,6 +285,51 @@ func (r *CRPRepositorySQLC) GetScheduledMachineLoads(ctx context.Context, plan i
 	for rows.Next() {
 		var v domainrepo.ScheduledLoad
 		if err := rows.Scan(&v.WorkCenterID, &v.Day, &v.Hours); err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// OpenOrderOperationLoads: a carga das OFs abertas é o que falta das etapas não
+// concluídas (previsto + preparação − apontado), no centro da etapa, a partir
+// do início da OF ou de hoje, o que vier depois. Etapa em terceiro (OS ou sem
+// centro) e etapa pulada não ocupam máquina.
+func (r *CRPRepositorySQLC) OpenOrderOperationLoads(ctx context.Context) ([]domainrepo.OrderOperationLoad, error) {
+	if r.pool == nil {
+		return nil, nil
+	}
+	e, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT op.production_order_id, op.sequence, COALESCE(mt.id, 0),
+		GREATEST(COALESCE(o.start_date, CURRENT_DATE), CURRENT_DATE)::timestamp,
+		CASE WHEN externa.sim THEN 0 ELSE GREATEST(op.planned_hours + op.setup_hours - op.actual_hours, 0) END::double precision,
+		CASE WHEN externa.sim THEN COALESCE(ro.lead_time_days, opr.lead_time_days, 0) ELSE 0 END
+		FROM production_order_operations op
+		JOIN production_orders o ON o.id = op.production_order_id AND o.enterprise_id = op.enterprise_id
+		LEFT JOIN machine_types mt ON mt.id = op.work_center_id AND mt.enterprise_id = op.enterprise_id
+		LEFT JOIN route_operations ro ON ro.id = op.route_operation_id
+		LEFT JOIN operations opr ON opr.id = ro.operation_id AND opr.enterprise_id = op.enterprise_id
+		CROSS JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM third_party_service_orders so
+		                   WHERE so.production_order_id = op.production_order_id AND so.route_operation_id = op.route_operation_id
+		                     AND so.enterprise_id = op.enterprise_id AND so.status <> 'CANCELLED')
+		                OR COALESCE(opr.origin::text IN ('EXTERNA','TERCEIROS'), FALSE) AS sim) externa
+		WHERE op.enterprise_id = $1
+		  AND o.status NOT IN ('COMPLETED','CLOSED','CANCELLED')
+		  AND op.status NOT IN ('DONE','SKIPPED')
+		  AND (externa.sim OR mt.id IS NOT NULL)
+		ORDER BY op.production_order_id, op.sequence`, e)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domainrepo.OrderOperationLoad{}
+	for rows.Next() {
+		var v domainrepo.OrderOperationLoad
+		if err := rows.Scan(&v.ProductionOrderID, &v.Sequence, &v.WorkCenterID, &v.Start, &v.Hours, &v.ExternalDays); err != nil {
 			return nil, err
 		}
 		out = append(out, v)

@@ -463,6 +463,76 @@ Lead Time = max(2h, 5h, 5.4h) = 5.4h   ← 36 minutos a menos
 | PUT | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}` | Atualizar prioridade/fator de tempo |
 | POST | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}/primary` | Tornar recurso o primário (espelha no CT da operação) |
 | DELETE | `/api/routing/route-operations/{routeId}/{opId}/resources/{resourceId}` | Remover recurso |
+| GET | `/api/routing/routes/templates` | Listar roteiros-modelo (`?incluir_inativos=true`) |
+| POST | `/api/routing/routes/{id}/copy` | Copiar roteiro (modelo→item, item→item, item→modelo) numa transação |
+| GET | `/api/routing/routes/{id}/materials` | Componentes da estrutura do item e a etapa em que cada um entra |
+| PUT | `/api/routing/routes/{id}/materials` | Gravar a etapa de um componente (`{structure_id, sequence}`; `null` = início da ordem) |
+| GET | `/api/routing/routes/{id}/performance?days=180` | Tempo padrão × apontado nas OPs concluídas, com sugestão de tempo |
+| GET | `/api/routing/routes/{id}/readiness` | Prontidão do roteiro para o planejamento |
+
+### Roteiro unificado (VENT0202) — regras desde as migrações 476 a 478
+
+**Uma regra de escolha do roteiro.** `erp_roteiro_vigente(empresa, item, máscara,
+data, quantidade)` é a única regra; OP, MRP, capacidade, ordem de serviço de
+terceiro, liberação (parâmetro 45), rateio por centro e custo a usam. Ordem:
+máscara exata > roteiro genérico (sem máscara); faixa de lote que contém a
+quantidade > roteiro sem faixa; padrão; vigência mais recente; menor alternativa.
+Roteiro de outra máscara nunca serve. Antes a OP de uma máscara sem roteiro
+próprio era recusada, e cada consumidor escolhia do seu jeito (alguns sem empresa
+e sem vigência).
+
+**Um padrão por período.** Gravar um roteiro padrão tira o "padrão" dos outros do
+mesmo item/máscara cuja vigência cruza com a dele.
+
+**Tempo: o roteiro manda.** Etapa ∘ operação de biblioteca. A produtividade da
+VMAQ0200 só dimensiona a etapa quando o roteiro não tem tempo; dela vêm máquina
+apta, prioridade, eficiência e paradas. O campo `route_operations.standard_time`
+(legado) não é lido pelo modelo de tempo: a tela antiga gravava nele o "tempo de
+máquina" da etapa; a prontidão avisa e a tela oferece copiá-lo para `run_time`.
+
+**Base do tempo** (`time_basis`): PECA, M2 (comprimento × largura), METRO_LINEAR,
+PERIMETRO ou ATRIBUTO (atributo numérico do PDM). A medida vem de
+`items.engineering_dimensions` (mm). Item sem a medida: a etapa fica sem tempo de
+máquina (`missing_measure`) e a prontidão trava — nunca vale 1 por chute.
+
+**Etapa FANTASMA/INATIVA** não consome prazo, capacidade nem custo; entra na OP já
+dispensada (SKIPPED), para a cadeia de dependências não se partir.
+
+**Remover etapa** liga as predecessoras às sucessoras (A→B→C sem B = A→C) e apaga
+as dependências da etapa, numa instrução só. A sequência é única só entre etapas
+ativas (`uq_route_operations_sequencia_ativa`).
+
+**Centro da etapa = recurso principal.** Mudar o centro na etapa sincroniza o
+recurso principal; a lista de recursos guarda os alternativos.
+
+**Terceiro.** Prazo e fornecedor valem da etapa OU da biblioteca (prontidão,
+capacidade e MRP). O prazo do MRP soma os dias corridos no terceiro convertidos
+em dias úteis (× 5/7). O fornecedor é resolvido pelo CÓDIGO (o que a tela grava),
+sempre dentro da empresa. Custo: preço da VTER0100; sem preço lá, o custo por peça
+do roteiro.
+
+**Componente por etapa.** `item_structures.route_operation_sequence` diz em que
+etapa do roteiro do pai o componente entra. O MRP aplica a FRAÇÃO do processo em
+que a etapa começa (início mais cedo ÷ duração do caminho crítico, para a
+quantidade da ordem) à janela que deu ao pai (início → entrega, em dias úteis);
+nunca passa da entrega do pai. A OP guarda a etapa em
+`production_order_materials.route_operation_sequence`.
+
+**Prazo do fabricado pelo lote.** Sem regra configurada nem cenário mandando no
+prazo, o MRP usa o caminho crítico do roteiro que a ordem vai usar (faixa de
+lote), calculado para a quantidade da ordem (a maior parte, quando o lote máximo
+divide a necessidade) — 60 armários não levam o prazo de um. O prazo do cadastro
+continua valendo quando é maior.
+
+**Tempo padrão legado da operação.** `operations.standard_time` vale como tempo de
+máquina quando `run_time` é zero (operações cadastradas antes do modelo de
+tempo). A migração 478 copiou o legado para `run_time` nas etapas e operações
+em que ele estava vazio (sem sobrescrever tempo informado). Se algum legado
+voltar a ser gravado sem `run_time` (integração antiga), a prontidão avisa e a
+tela oferece copiá-lo.
+
+**Roteiro-modelo.** `manufacturing_routes.is_template` com `item_code` nulo: nunca
+é planejado; serve de origem para `POST /routes/{id}/copy`.
 
 **Empresa.** Etapas, recursos, precedências e ferramentas da etapa não têm coluna
 de empresa: valem pela empresa do roteiro (`manufacturing_routes.enterprise_id`).
@@ -470,6 +540,106 @@ Toda consulta e gravação desses filhos filtra por ela no próprio SQL; etapa,
 recurso ou precedência de outra empresa responde **404**. Incluir etapa exige
 operação e centro de trabalho da empresa; incluir recurso, centro da empresa;
 ligar precedência, as duas etapas no mesmo roteiro da empresa.
+
+**Etapa em terceiro anda pela OS.** Enquanto a ordem de serviço da etapa
+(VTPS0100) está aberta, nem o botão do posto (`POST /operations/advance`) nem o
+leitor de código de barras movem a etapa — a resposta aponta a OS. A primeira
+remessa põe a etapa em andamento; o recebimento de todas as peças conclui e
+libera a etapa seguinte. `GET /{id}/operations` devolve `service_order_code` nessa
+etapa, e a tela mostra "Com o terceiro — OS n" no lugar de Iniciar/Concluir. OS
+cancelada devolve a etapa ao posto.
+
+**Ordem de serviço não é suprimento da peça.** A ordem planejada `OUTSOURCING`
+(sugestão SERVIÇO firmada) fica fora de `ListFirmPlannedOrdersByItems`: a peça
+volta pela OF de que a etapa faz parte. Contá-la dobrava o suprimento.
+
+**Sobreposição no terceiro.** Recebimento parcial libera o INÍCIO da etapa
+seguinte (as peças que voltaram seguem); CONCLUIR exige a predecessora concluída
+(`OperationPredecessorsPending` × `OperationPredecessorsUnfinished`). Concluir a OS
+à mão é "encerrar com saldo": recusado com nada recebido (receba ou cancele); com
+algo recebido, fecha a etapa da OF junto.
+
+### MRP: o que conta como suprimento e como demanda (desde a migração 479)
+
+Como o MD04 do SAP:
+
+| Elemento | Entra como | Origem |
+|---|---|---|
+| Estoque disponível | suprimento | `stock_snapshots` |
+| Ordem planejada firme (menos o entregue/recebido) | suprimento | `ListFirmPlannedOrdersByItems` — **sem** `OUTSOURCING` |
+| OF aberta **sem** ordem planejada firme (manual, VPLA0102…) | suprimento na data de término | `ListOpenProductionOrderSupply` |
+| Item de pedido de compra em aberto **sem** ordem planejada firme | suprimento na data prometida, na unidade de estoque | `ListOpenPurchaseOrderSupply` (rascunho conta) |
+| Empenho da OF aberta (`quantity − attended_quantity`, só `DEMAND`) | demanda dependente na data da etapa do componente | `ListOpenProductionOrderAllocations` → `empenhoDasOrdensAbertas` |
+
+Antes só estoque e ordem planejada firme contavam: a OF manual era sugerida de novo
+e, depois de firmar, a necessidade dos componentes sumia no cálculo seguinte.
+Exceções sobre OF/pedido saem com `source_type` `PRODUCTION_ORDER`/`PURCHASE_ORDER`;
+só ordem planejada aceita reprogramar/cancelar pela tela de exceções.
+
+**Atendido da OF.** Gatilho `atendido_da_op_pelo_consumo` (migração 479) mantém
+`production_order_materials.attended_quantity` pelo consumo lançado (inclusive
+estorno): distribui pelas linhas do item na ordem das etapas; o excedente fica na
+última.
+
+**Compra firmada no MRP.** Firmar a sugestão de COMPRA no VMRP0100 deixa a ordem
+planejada firme na fila do comprador (VPDC0200 → Sugestões do MRP, "Firmada no
+MRP") até virar pedido. Antes ela sumia: sem pedido, sem fila — e o MRP a contava
+como suprimento. Aprovar gera o pedido vinculado (`planned_order_code`); o que já
+virou pedido sai da fila e não é aprovado nem rejeitado de novo.
+
+**CRP.** A OF manda na carga: ordem planejada que já virou OF (inclusive
+cancelada) sai; cada OF aberta carrega só as etapas não concluídas, com as horas
+que faltam, a partir do início da OF ou de hoje. Etapa em terceiro não ocupa
+centro, mas empurra as seguintes pelo prazo do fornecedor.
+
+**APS.** Precedência igual à da execução: dependências do retrato da OF; sem
+retrato, a rede do roteiro; sem rede, a sequência (antes não havia aresta e todas
+as etapas começavam no mesmo instante). Etapa em andamento entra com o que falta,
+sem nova preparação; etapa em terceiro segura a seguinte pelo prazo do fornecedor
+(para frente e regressivo).
+
+**Planejada firme sem OF** (rara: firmar já cria a OF) tem a estrutura
+explodida como demanda dos componentes (`ListFirmPlannedProductionWithoutOrder`),
+porque o MRP já a conta como suprimento do item.
+
+### Custo da OF (desde a migração 480)
+
+A liquidação (`POST /{id}/settle-cost`) tem os componentes do custo-padrão:
+material; máquina (preparação + máquina); mão de obra; terceiros; indiretos.
+Real: material = baixas OUT/REP da OF − devoluções; máquina e mão de obra = horas
+das ETAPAS (`production_order_operations.actual_hours`) × taxas de máquina e de
+mão de obra do centro (`work_center_costs`) — OF sem horas em etapa usa o
+apontamento com início/fim e máquina; terceiros = recebido na OS × preço (pedido
+da OS → VTER0100 do fornecedor, sem imposto recuperável → custo por peça do
+roteiro); indiretos absorvidos sobre a conversão real na razão
+indireto ÷ (preparação + máquina + mão de obra) do padrão. A entrada do acabado no
+estoque é valorizada pela mesma conta. `GET /{id}/cost` filtra pela empresa da OF.
+"Produzido" da OF = entregue ao estoque: apontar a última etapa (tela ou leitor)
+não soma; o refugo apontado soma em `scrapped_qty` pelos dois caminhos.
+
+**Cancelar e encerrar.** Cancelar exige a OF sem apontamento, consumo, movimento
+de estoque e sem peças com o terceiro; cancela junto a OS que não saiu (histórico
+com o status anterior e quem cancelou) e o lote de inspeção aberto. Encerrar só
+vale para OF concluída e apura o custo. Recusas dizem o motivo (antes: "registro
+não encontrado"). OF fechada não tem saldo a produzir no resumo.
+`POST /costs/resettle` (ADMIN) reapura pela regra atual todas as OFs já apuradas.
+
+**Perfil OPERATOR na VPRO0900.** Lê a OF que aponta (ordem, apontamentos,
+consumos, materiais, disponibilidade, PDF) e usa `GET /shop-floor-lookups`
+(máquina, operador e depósito: código e nome) — o cadastro completo de
+funcionário não é exposto. Criar, iniciar, entregar, encerrar, cancelar e custo
+continuam só para ADMIN/USER, e a tela não oferece esses botões ao operador.
+
+**Ordem impressa.** `GET /api/production-order/{id}/pdf` (botão "Imprimir OP" no
+VPRO0900), A4 retrato no formato das fichas de OP dos ERPs de manufatura:
+cabeçalho com empresa, número da OF e código de barras (`OF000607`); dados da
+ordem em grade; observações; roteiro com a ficha de apontamento de cada operação
+(interna: início, término, boas, refugo, operador, horas, visto; externa:
+fornecedor, OS, prazo, NF de remessa e de retorno); lista de separação por etapa
+com lote, separado e conferência; ferramentas; serviços de terceiros; liberação da
+qualidade e assinaturas (PCP, almoxarifado, produção, qualidade). Campos já
+conhecidos pelo sistema saem preenchidos. `MontarOrdemImpressa` formata (testado);
+`RenderFichaDaOrdem` desenha com paginação e cabeçalho de continuação.
 
 > **Nota (CRP/custo).** As colunas legadas `standard_time` são mantidas espelhadas a
 > `run_time` para os consumidores que ainda as leem (roll-up de custo interino,

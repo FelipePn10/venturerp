@@ -156,6 +156,27 @@ func (q *Queries) GetRouteOpsForExplode(ctx context.Context, routeID int64) ([]D
 	return items, rows.Err()
 }
 
+// SetProductionOrderRoute grava na OP o roteiro que ela explodiu. Sem isso,
+// quem precisasse do roteiro depois (ordens de serviço de terceiro) refazia a
+// escolha e, se o cadastro mudasse no meio, pegava outro roteiro.
+func (q *Queries) SetProductionOrderRoute(ctx context.Context, orderID, routeID, enterpriseID int64) error {
+	_, err := q.db.Exec(ctx, `UPDATE production_orders SET route_id = $2, updated_at = NOW()
+		WHERE id = $1 AND enterprise_id = $3 AND route_id IS NULL`, orderID, routeID, enterpriseID)
+	return err
+}
+
+// MarkProductionOrderOperationSkipped dispensa, já na geração, a etapa que o
+// roteiro marca como FANTASMA ou INATIVA: ela fica na ordem para a cadeia de
+// dependências não se partir, mas não é executada nem trava a entrega.
+func (q *Queries) MarkProductionOrderOperationSkipped(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, `UPDATE production_order_operations
+		SET status = 'SKIPPED', completed_at = NOW(), planned_hours = 0, setup_hours = 0,
+		    notes = concat_ws(E'\n', notes, 'Etapa não executada: marcada no roteiro como fantasma ou inativa'),
+		    updated_at = NOW()
+		WHERE id = $1`, id)
+	return err
+}
+
 // ─── scanners ─────────────────────────────────────────────────────────────────
 
 type pooScanner interface {
@@ -181,7 +202,8 @@ func scanPOORow(rows interface{ Scan(...any) error }) (DBProductionOrderOperatio
 const getRouteNetworkForExplode = `
 SELECT ron.predecessor_id, ron.successor_id, ron.overlap_pct
 FROM route_operation_network ron
-JOIN route_operations ro ON ro.id = ron.predecessor_id
+JOIN route_operations ro ON ro.id = ron.predecessor_id AND ro.is_active
+JOIN route_operations sucessora ON sucessora.id = ron.successor_id AND sucessora.is_active
 WHERE ro.route_id = $1`
 
 type DBRouteEdgeForExplode struct {

@@ -36,6 +36,19 @@ type RouteOpRow struct {
 }
 
 // ScheduledLoad is an exact reservation created by finite machine planning.
+// OrderOperationLoad é uma etapa ainda não concluída de uma OF aberta: o que
+// falta de horas no centro dela. Etapa em terceiro e fantasma não entram.
+type OrderOperationLoad struct {
+	ProductionOrderID int64
+	Sequence          int16
+	WorkCenterID      int64
+	Start             time.Time
+	Hours             float64
+	// ExternalDays: etapa em terceiro — não ocupa centro nosso, mas empurra as
+	// seguintes pelo prazo do fornecedor (dias corridos).
+	ExternalDays int
+}
+
 type ScheduledLoad struct {
 	WorkCenterID int64
 	Day          time.Time

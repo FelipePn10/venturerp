@@ -338,6 +338,12 @@ func (r *ProductionOrderRepositoryPGX) CurrentEnterpriseCode(ctx context.Context
 }
 
 func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Context, itemCode int64) error {
+	return r.ValidateProductionReleaseForOrder(ctx, itemCode, "", decimal.Zero)
+}
+
+// ValidateProductionReleaseForOrder valida contra o roteiro que a OP desta
+// máscara e quantidade vai usar.
+func (r *ProductionOrderRepositoryPGX) ValidateProductionReleaseForOrder(ctx context.Context, itemCode int64, mask string, qty decimal.Decimal) error {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return err
@@ -363,7 +369,10 @@ func (r *ProductionOrderRepositoryPGX) ValidateProductionRelease(ctx context.Con
 		FROM manufacturing_routes route
 		JOIN route_operations route_operation ON route_operation.route_id=route.id AND route_operation.is_active
 		JOIN operations operation ON operation.id=route_operation.operation_id AND operation.is_active
-		WHERE route.item_code=$1 AND route.is_active AND route.is_standard`, itemCode)
+		-- O mesmo roteiro que a OP explode (erp_roteiro_vigente). Antes valia
+		-- qualquer roteiro padrão do item, de qualquer empresa e fora da vigência.
+		WHERE route.id = erp_roteiro_vigente($2, $1, $3::text, CURRENT_DATE, NULLIF($4::numeric, 0))
+		  AND route_operation.situation NOT IN ('INATIVA','FANTASMA')`, itemCode, enterpriseID, mask, qty)
 	if err != nil {
 		return err
 	}
@@ -591,14 +600,23 @@ func (r *ProductionOrderRepositoryPGX) AddAppointment(ctx context.Context, a *en
 	if order.Status != entity.StatusInProgress {
 		return nil, errorsuc.NewValidationError("a ordem de produção precisa estar em andamento para receber apontamento")
 	}
+	// O refugo apontado vai para a OF na mesma instrução: o leitor do posto já
+	// somava e a tela não — a OF mostrava refugo diferente conforme por onde
+	// se apontou.
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO public.production_appointments
+		`WITH apontamento AS (
+		   INSERT INTO public.production_appointments
 			(production_order_id, machine_id, employee_id, appointment_date,
 			 start_time, end_time, produced_qty, scrapped_qty, scrap_reason, notes, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-		 RETURNING id, production_order_id, machine_id, employee_id, appointment_date,
+		   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		   RETURNING id, production_order_id, machine_id, employee_id, appointment_date,
 		           start_time, end_time, produced_qty, scrapped_qty, scrap_reason, notes,
-		           created_at, updated_at, created_by`,
+		           created_at, updated_at, created_by
+		 ), refugo AS (
+		   UPDATE public.production_orders o SET scrapped_qty = o.scrapped_qty + a.scrapped_qty, updated_at = NOW()
+		     FROM apontamento a WHERE o.id = a.production_order_id AND a.scrapped_qty > 0
+		 )
+		 SELECT * FROM apontamento`,
 		a.ProductionOrderID, a.MachineID, a.EmployeeID, a.AppointmentDate,
 		a.StartTime, a.EndTime,
 		pgutil.ToPgNumericFromDecimal(a.ProducedQty),
@@ -715,27 +733,121 @@ func (r *ProductionOrderRepositoryPGX) Close(ctx context.Context, id int64) (*en
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
 		id, enterpriseID,
 	)
-	return scanProductionOrder(row)
+	order, err := scanProductionOrder(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Antes a recusa voltava "registro não encontrado" mesmo com a OF ali.
+		return nil, r.porQueNao(ctx, id, enterpriseID, "encerrar", map[string]string{
+			"OPEN": "a ordem ainda não foi iniciada", "IN_PROGRESS": "a ordem está em produção: entregue ao estoque e conclua antes de encerrar",
+			"CLOSED": "a ordem já está encerrada", "CANCELLED": "a ordem está cancelada",
+		})
+	}
+	return order, err
 }
 
+// porQueNao explica a recusa pela situação da OF (ou diz que ela não existe na empresa).
+func (r *ProductionOrderRepositoryPGX) porQueNao(ctx context.Context, id, enterpriseID int64, acao string, motivos map[string]string) error {
+	var status string
+	if err := r.pool.QueryRow(ctx, `SELECT status FROM production_orders WHERE id=$1 AND enterprise_id=$2`, id, enterpriseID).Scan(&status); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errorsuc.NewNotFoundError(fmt.Sprintf("ordem de produção %d não encontrada", id))
+		}
+		return err
+	}
+	if m, ok := motivos[status]; ok {
+		return errorsuc.NewValidationError(fmt.Sprintf("não é possível %s a OF %d: %s", acao, id, m))
+	}
+	return errorsuc.NewValidationError(fmt.Sprintf("não é possível %s a OF %d na situação %s", acao, id, status))
+}
+
+// Cancel cancela a OF que ainda não movimentou nada e fecha o que ficou
+// pendurado nela, na mesma transação: a OS de terceiro que não saiu (sem
+// remessa) é cancelada e o lote de inspeção aberto da OF é cancelado. Antes a
+// OF cancelava sozinha — a OS seguia "Firme" no VTPS0100 e o lote seguia na fila
+// da qualidade de uma ordem que não existe mais.
 func (r *ProductionOrderRepositoryPGX) Cancel(ctx context.Context, id int64) (*entity.ProductionOrder, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	row := r.pool.QueryRow(ctx,
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var status, origem string
+	if err := tx.QueryRow(ctx, `SELECT status, COALESCE(origin_type,'') FROM production_orders WHERE id=$1 AND enterprise_id=$2 FOR UPDATE`, id, enterpriseID).Scan(&status, &origem); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("ordem de produção %d não encontrada", id))
+		}
+		return nil, err
+	}
+	recusa := func(m string) (*entity.ProductionOrder, error) {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("não é possível cancelar a OF %d: %s", id, m))
+	}
+	switch status {
+	case "COMPLETED", "CLOSED":
+		return recusa("a ordem já foi concluída")
+	case "CANCELLED":
+		return recusa("a ordem já está cancelada")
+	}
+	if origem == "KANBAN" || origem == "COMMERCIAL" {
+		return recusa("a ordem nasceu do kanban ou do pedido de venda e é cancelada pela origem")
+	}
+	var apontamentos, consumos, movimentos, remessas int
+	if err := tx.QueryRow(ctx, `SELECT
+		(SELECT COUNT(*) FROM production_appointments WHERE production_order_id=$1),
+		(SELECT COUNT(*) FROM production_consumptions WHERE production_order_id=$1),
+		(SELECT COUNT(*) FROM stock_movements WHERE enterprise_id=$2 AND reference_type='PRODUCTION_ORDER' AND reference_code=$1 AND reversed_by_movement_id IS NULL),
+		(SELECT COUNT(*) FROM third_party_service_movements m JOIN third_party_service_orders so ON so.id=m.service_order_id
+		  WHERE so.production_order_id=$1 AND so.enterprise_id=$2)`, id, enterpriseID).Scan(&apontamentos, &consumos, &movimentos, &remessas); err != nil {
+		return nil, err
+	}
+	switch {
+	case remessas > 0:
+		return recusa("há peças movimentadas com o terceiro (VTPS0100): receba ou devolva antes")
+	case apontamentos > 0:
+		return recusa(fmt.Sprintf("há %d apontamento(s) de produção; conclua a ordem com o que foi produzido", apontamentos))
+	case consumos > 0 || movimentos > 0:
+		return recusa("há material ou produto movimentado no estoque para esta ordem; estorne os movimentos antes")
+	}
+
+	row := tx.QueryRow(ctx,
 		`UPDATE public.production_orders
 		 SET status='CANCELLED', is_active=FALSE, updated_at=NOW()
-		 WHERE id=$1 AND enterprise_id=$2 AND origin_type NOT IN ('KANBAN','COMMERCIAL')
-		 AND NOT EXISTS(SELECT 1 FROM production_appointments a WHERE a.production_order_id=production_orders.id)
-		 AND NOT EXISTS(SELECT 1 FROM production_consumptions c WHERE c.production_order_id=production_orders.id)
-		 AND NOT EXISTS(SELECT 1 FROM stock_movements m WHERE m.enterprise_id=$2 AND m.reference_type='PRODUCTION_ORDER' AND m.reference_code=production_orders.id)
+		 WHERE id=$1 AND enterprise_id=$2
 		 RETURNING id, order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
 		id, enterpriseID,
 	)
-	return scanProductionOrder(row)
+	order, err := scanProductionOrder(row)
+	if err != nil {
+		return nil, err
+	}
+	// Quem cancela a OF assina o cancelamento da OS; sem sessão (rotina), o
+	// autor da OS.
+	if _, err := tx.Exec(ctx, `WITH alvo AS (
+		SELECT id, status FROM third_party_service_orders
+		 WHERE production_order_id=$1 AND enterprise_id=$2 AND status NOT IN ('COMPLETED','CANCELLED') FOR UPDATE
+	), canceladas AS (
+		UPDATE third_party_service_orders so SET status='CANCELLED', updated_at=NOW()
+		  FROM alvo WHERE so.id=alvo.id
+		RETURNING so.id, alvo.status AS anterior, so.created_by
+	) INSERT INTO third_party_service_order_history(enterprise_id,service_order_id,event_type,previous_status,new_status,actor_id)
+	  SELECT $2, c.id, 'STATUS_CHANGE', c.anterior, 'CANCELLED', COALESCE(NULLIF($3,'')::uuid, c.created_by)
+	    FROM canceladas c`, id, enterpriseID, tenant.Ator(ctx)); err != nil {
+		return nil, fmt.Errorf("cancelando as ordens de serviço da OF: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE quality_inspection_lots SET status='CANCELADO',
+		motivo_cancelamento=COALESCE(motivo_cancelamento, 'OF cancelada'), updated_at=NOW()
+		WHERE production_order_id=$1 AND enterprise_id=$2 AND status='ABERTO'`, id, enterpriseID); err != nil {
+		return nil, fmt.Errorf("cancelando os lotes de inspeção da OF: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return order, nil
 }
 
 func (r *ProductionOrderRepositoryPGX) GetAppointments(ctx context.Context, productionOrderID int64) ([]*entity.ProductionAppointment, error) {
@@ -847,6 +959,15 @@ func (r *ProductionOrderRepositoryPGX) GetConsumptions(ctx context.Context, prod
 // durations × the cost/hour of the work center the appointment's machine belongs
 // to (a work center is a machine_type, which is what work_center_costs keys on).
 func (r *ProductionOrderRepositoryPGX) ComputeActualCostInputs(ctx context.Context, productionOrderID int64) (decimal.Decimal, decimal.Decimal, error) {
+	real, err := custoRealDaOrdem(ctx, r.pool, productionOrderID)
+	if err != nil {
+		return decimal.Zero, decimal.Zero, err
+	}
+	return real.MaterialCostReal, real.MachineCostReal.Add(real.LaborCostReal).Add(real.SubcontractCostReal), nil
+}
+
+// CustoRealDaOrdem é o custo real da OF aberto pelos componentes do padrão.
+func (r *ProductionOrderRepositoryPGX) CustoRealDaOrdem(ctx context.Context, productionOrderID int64) (entity.ActualCostInputs, error) {
 	return custoRealDaOrdem(ctx, r.pool, productionOrderID)
 }
 
@@ -855,8 +976,22 @@ type leitorDeLinha interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
-func custoRealDaOrdem(ctx context.Context, q leitorDeLinha, productionOrderID int64) (decimal.Decimal, decimal.Decimal, error) {
-	var materialReal decimal.Decimal
+// custoRealDaOrdem junta o que a OF gastou de fato, nos componentes do
+// custo-padrão:
+//
+//   - material: o que saiu do estoque para a OF (OUT/REP) menos o que voltou
+//     (IN de item que não é o produto), mais consumo lançado sem almoxarifado
+//     valorizado pelo médio;
+//   - máquina e mão de obra: horas apontadas nas ETAPAS × taxa de máquina e de
+//     mão de obra do centro da etapa (VCUS0100). OF sem horas em etapa (sem
+//     roteiro) usa o apontamento com início/fim na máquina, como antes. Antes só
+//     o apontamento com início/fim e máquina contava — as horas das etapas, que
+//     é como a fábrica aponta, davam custo zero;
+//   - terceiros: peças recebidas de volta na OS × preço do serviço — o do pedido
+//     de compra da OS; sem pedido, o da VTER0100 (fornecedor da OS, sem o
+//     imposto recuperável); sem preço, o custo por peça do roteiro.
+func custoRealDaOrdem(ctx context.Context, q leitorDeLinha, productionOrderID int64) (entity.ActualCostInputs, error) {
+	var real entity.ActualCostInputs
 	err := q.QueryRow(ctx,
 		`SELECT COALESCE((SELECT SUM(m.total_price) FROM public.stock_movements m
 		                   JOIN public.production_orders o ON o.id = m.reference_code AND o.enterprise_id = m.enterprise_id
@@ -868,33 +1003,67 @@ func custoRealDaOrdem(ctx context.Context, q leitorDeLinha, productionOrderID in
 		                    AND m.movement_type = 'IN' AND m.item_code <> o.item_code AND m.reversed_by_movement_id IS NULL), 0)
 		      + COALESCE((SELECT SUM(c.consumed_qty * COALESCE(sb.avg_cost, 0))
 		                    FROM public.production_consumptions c
+		                    JOIN public.production_orders o ON o.id = c.production_order_id
 		                    LEFT JOIN LATERAL (
 		                        SELECT b.avg_cost FROM public.stock_balances b
-		                         WHERE b.item_code = c.item_code
+		                         WHERE b.item_code = c.item_code AND b.enterprise_id = o.enterprise_id
 		                         ORDER BY b.updated_at DESC LIMIT 1
 		                    ) sb ON TRUE
-		                   WHERE c.production_order_id = $1 AND c.warehouse_id IS NULL), 0)`, productionOrderID).Scan(&materialReal)
+		                   WHERE c.production_order_id = $1 AND c.warehouse_id IS NULL), 0)`, productionOrderID).Scan(&real.MaterialCostReal)
 	if err != nil {
-		return decimal.Zero, decimal.Zero, fmt.Errorf("computing actual material cost: %w", err)
+		return real, fmt.Errorf("computing actual material cost: %w", err)
 	}
 
-	var laborReal decimal.Decimal
+	var horasNasEtapas decimal.Decimal
 	err = q.QueryRow(ctx,
-		`SELECT COALESCE(SUM(
-		     EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * wcc.cost_per_hour
-		 ), 0)
-		 FROM public.production_appointments a
-		 JOIN public.machines m ON m.id = a.machine_id
-		 JOIN public.machine_types mt ON mt.code = m.machine_type_code
-		 JOIN public.production_orders o ON o.id = a.production_order_id
-		 JOIN public.work_center_costs wcc ON wcc.work_center_id = mt.id AND wcc.enterprise_id = o.enterprise_id
-		 WHERE a.production_order_id = $1
-		   AND a.start_time IS NOT NULL AND a.end_time IS NOT NULL`, productionOrderID).Scan(&laborReal)
+		`SELECT COALESCE(SUM(op.actual_hours), 0),
+		        COALESCE(SUM(op.actual_hours * COALESCE(NULLIF(w.machine_cost_per_hour, 0), w.cost_per_hour, 0)), 0),
+		        COALESCE(SUM(op.actual_hours * COALESCE(w.labor_cost_per_hour, 0)), 0)
+		   FROM public.production_order_operations op
+		   JOIN public.production_orders o ON o.id = op.production_order_id AND o.enterprise_id = op.enterprise_id
+		   LEFT JOIN public.work_center_costs w ON w.work_center_id = op.work_center_id AND w.enterprise_id = op.enterprise_id
+		  WHERE op.production_order_id = $1 AND op.work_center_id IS NOT NULL`, productionOrderID).
+		Scan(&horasNasEtapas, &real.MachineCostReal, &real.LaborCostReal)
 	if err != nil {
-		return decimal.Zero, decimal.Zero, fmt.Errorf("computing actual labor cost: %w", err)
+		return real, fmt.Errorf("computing actual conversion cost: %w", err)
+	}
+	if !horasNasEtapas.IsPositive() {
+		err = q.QueryRow(ctx,
+			`SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * COALESCE(NULLIF(wcc.machine_cost_per_hour, 0), wcc.cost_per_hour, 0)), 0),
+			        COALESCE(SUM(EXTRACT(EPOCH FROM (a.end_time - a.start_time)) / 3600.0 * COALESCE(wcc.labor_cost_per_hour, 0)), 0)
+			   FROM public.production_appointments a
+			   JOIN public.machines m ON m.id = a.machine_id
+			   JOIN public.production_orders o ON o.id = a.production_order_id
+			   JOIN public.machine_types mt ON mt.code = m.machine_type_code AND mt.enterprise_id = o.enterprise_id
+			   JOIN public.work_center_costs wcc ON wcc.work_center_id = mt.id AND wcc.enterprise_id = o.enterprise_id
+			  WHERE a.production_order_id = $1
+			    AND a.start_time IS NOT NULL AND a.end_time IS NOT NULL`, productionOrderID).Scan(&real.MachineCostReal, &real.LaborCostReal)
+		if err != nil {
+			return real, fmt.Errorf("computing actual labor cost: %w", err)
+		}
 	}
 
-	return materialReal, laborReal, nil
+	err = q.QueryRow(ctx,
+		`SELECT COALESCE(SUM(so.fulfilled_quantity * COALESCE(
+		     (SELECT COALESCE(NULLIF(poi.internal_price, 0), poi.unit_price) FROM public.purchase_order_items poi
+		       WHERE poi.purchase_order_code = so.purchase_order_code AND poi.item_code = so.service_item_code
+		         AND poi.status <> 'CANCELLED' ORDER BY poi.code LIMIT 1),
+		     (SELECT p.unit_price * (1 - COALESCE(p.tax_percent, 0) / 100) / NULLIF(COALESCE(p.conversion_factor, 1), 0)
+		        FROM public.third_party_service_prices p
+		       WHERE p.enterprise_id = so.enterprise_id AND p.is_active AND p.item_code = so.item_code
+		         AND p.operation_id = so.operation_id AND p.supplier_code = so.supplier_code
+		         AND (p.mask = '' OR p.mask = so.mask) AND p.reference_date <= COALESCE(so.due_date, CURRENT_DATE)
+		       ORDER BY (p.mask = so.mask) DESC, p.preferred DESC, p.reference_date DESC LIMIT 1),
+		     ro.cost_per_unit, opr.cost_per_unit, 0)), 0)
+		   FROM public.third_party_service_orders so
+		   JOIN public.production_orders o ON o.id = so.production_order_id AND o.enterprise_id = so.enterprise_id
+		   LEFT JOIN public.route_operations ro ON ro.id = so.route_operation_id
+		   LEFT JOIN public.operations opr ON opr.id = so.operation_id AND opr.enterprise_id = so.enterprise_id
+		  WHERE so.production_order_id = $1 AND so.status <> 'CANCELLED'`, productionOrderID).Scan(&real.SubcontractCostReal)
+	if err != nil {
+		return real, fmt.Errorf("computing actual third-party cost: %w", err)
+	}
+	return real, nil
 }
 
 // SettleCost upserts the cost settlement of a production order (one row per OF).
@@ -905,8 +1074,10 @@ func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity
 			 material_cost_real, labor_cost_real, overhead_cost_real, total_cost_real, unit_cost_real,
 			 material_cost_std, labor_cost_std, overhead_cost_std, total_cost_std,
 			 material_variance, labor_variance, overhead_variance, total_variance,
-			 currency, settled_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+			 currency, settled_by,
+			 machine_cost_real, machine_cost_std, machine_variance,
+			 subcontract_cost_real, subcontract_cost_std, subcontract_variance)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
 		 ON CONFLICT (production_order_id) DO UPDATE SET
 			 produced_qty       = EXCLUDED.produced_qty,
 			 material_cost_real = EXCLUDED.material_cost_real,
@@ -923,6 +1094,12 @@ func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity
 			 overhead_variance  = EXCLUDED.overhead_variance,
 			 total_variance     = EXCLUDED.total_variance,
 			 currency           = EXCLUDED.currency,
+			 machine_cost_real     = EXCLUDED.machine_cost_real,
+			 machine_cost_std      = EXCLUDED.machine_cost_std,
+			 machine_variance      = EXCLUDED.machine_variance,
+			 subcontract_cost_real = EXCLUDED.subcontract_cost_real,
+			 subcontract_cost_std  = EXCLUDED.subcontract_cost_std,
+			 subcontract_variance  = EXCLUDED.subcontract_variance,
 			 settled_at         = NOW(),
 			 settled_by         = EXCLUDED.settled_by
 		 RETURNING id, settled_at`,
@@ -935,6 +1112,8 @@ func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity
 		pgutil.ToPgNumericFromDecimal(c.MaterialVariance), pgutil.ToPgNumericFromDecimal(c.LaborVariance),
 		pgutil.ToPgNumericFromDecimal(c.OverheadVariance), pgutil.ToPgNumericFromDecimal(c.TotalVariance),
 		c.Currency, pgutil.ToPgUUID(c.SettledBy),
+		pgutil.ToPgNumericFromDecimal(c.MachineCostReal), pgutil.ToPgNumericFromDecimal(c.MachineCostStd), pgutil.ToPgNumericFromDecimal(c.MachineVariance),
+		pgutil.ToPgNumericFromDecimal(c.SubcontractCostReal), pgutil.ToPgNumericFromDecimal(c.SubcontractCostStd), pgutil.ToPgNumericFromDecimal(c.SubcontractVariance),
 	)
 	if err := row.Scan(&c.ID, &c.SettledAt); err != nil {
 		return nil, fmt.Errorf("settling production order cost: %w", err)
@@ -943,19 +1122,31 @@ func (r *ProductionOrderRepositoryPGX) SettleCost(ctx context.Context, c *entity
 }
 
 func (r *ProductionOrderRepositoryPGX) GetCost(ctx context.Context, productionOrderID int64) (*entity.ProductionOrderCost, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var c entity.ProductionOrderCost
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, production_order_id, produced_qty,
-		        material_cost_real, labor_cost_real, overhead_cost_real, total_cost_real, unit_cost_real,
-		        material_cost_std, labor_cost_std, overhead_cost_std, total_cost_std,
-		        material_variance, labor_variance, overhead_variance, total_variance,
-		        currency, settled_at, settled_by
-		 FROM public.production_order_costs WHERE production_order_id = $1`, productionOrderID,
+	err = r.pool.QueryRow(ctx,
+		`SELECT c.id, c.production_order_id, c.produced_qty,
+		        c.material_cost_real, c.labor_cost_real, c.overhead_cost_real, c.total_cost_real, c.unit_cost_real,
+		        c.material_cost_std, c.labor_cost_std, c.overhead_cost_std, c.total_cost_std,
+		        c.material_variance, c.labor_variance, c.overhead_variance, c.total_variance,
+		        c.currency, c.settled_at, c.settled_by,
+		        c.machine_cost_real, c.machine_cost_std, c.machine_variance,
+		        c.subcontract_cost_real, c.subcontract_cost_std, c.subcontract_variance
+		 FROM public.production_order_costs c
+		 -- A apuração não tem empresa: vale a da OF. Sem o filtro, o custo de
+		 -- OF de outra empresa era lido pelo id.
+		 JOIN public.production_orders o ON o.id = c.production_order_id AND o.enterprise_id = $2
+		 WHERE c.production_order_id = $1`, productionOrderID, enterpriseID,
 	).Scan(&c.ID, &c.ProductionOrderID, &c.ProducedQty,
 		&c.MaterialCostReal, &c.LaborCostReal, &c.OverheadCostReal, &c.TotalCostReal, &c.UnitCostReal,
 		&c.MaterialCostStd, &c.LaborCostStd, &c.OverheadCostStd, &c.TotalCostStd,
 		&c.MaterialVariance, &c.LaborVariance, &c.OverheadVariance, &c.TotalVariance,
-		&c.Currency, &c.SettledAt, &c.SettledBy)
+		&c.Currency, &c.SettledAt, &c.SettledBy,
+		&c.MachineCostReal, &c.MachineCostStd, &c.MachineVariance,
+		&c.SubcontractCostReal, &c.SubcontractCostStd, &c.SubcontractVariance)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("apuração de custo não encontrada para a ordem de produção %d", productionOrderID))
@@ -1107,10 +1298,23 @@ func custoUnitarioDaEntrega(ctx context.Context, q leitorDeLinha, enterpriseID, 
 	if !qty.IsPositive() {
 		return decimal.Zero, nil
 	}
-	material, mao, err := custoRealDaOrdem(ctx, q, ordem)
+	real, err := custoRealDaOrdem(ctx, q, ordem)
 	if err != nil {
 		return decimal.Zero, err
 	}
+	// O indireto entra na peça como na liquidação: absorvido sobre a conversão
+	// real, na razão do padrão do item.
+	var stdConv, stdIndireto decimal.Decimal
+	if err := q.QueryRow(ctx,
+		`SELECT COALESCE(setup_cost,0)+COALESCE(machine_cost,0)+COALESCE(labor_cost,0), COALESCE(overhead_cost,0)
+		   FROM public.item_standard_costs WHERE item_code=$1 AND mask=$2`, item, mask).Scan(&stdConv, &stdIndireto); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return decimal.Zero, fmt.Errorf("lendo o indireto padrão do item: %w", err)
+	}
+	indireto := decimal.Zero
+	if stdConv.IsPositive() {
+		indireto = real.Conversion().Mul(stdIndireto).Div(stdConv)
+	}
+	gasto := real.MaterialCostReal.Add(real.Conversion()).Add(real.SubcontractCostReal).Add(indireto)
 	var entregue decimal.Decimal
 	if err := q.QueryRow(ctx,
 		`SELECT COALESCE(SUM(total_price), 0) FROM public.stock_movements
@@ -1118,7 +1322,7 @@ func custoUnitarioDaEntrega(ctx context.Context, q leitorDeLinha, enterpriseID, 
 		    AND movement_type IN ('EP','EPP','EPE') AND reversed_by_movement_id IS NULL`, enterpriseID, ordem).Scan(&entregue); err != nil {
 		return decimal.Zero, fmt.Errorf("lendo o valor já entregue da ordem: %w", err)
 	}
-	if restante := material.Add(mao).Sub(entregue); restante.IsPositive() {
+	if restante := gasto.Sub(entregue); restante.IsPositive() {
 		base := qty
 		if !final && falta.GreaterThan(qty) {
 			base = falta

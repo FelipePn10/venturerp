@@ -307,21 +307,22 @@ func (r *ItemStructureRepositorySQLC) LoadBOMForRoots(
 	adjacency := make(map[int64][]*entity.ItemStructure, len(edges))
 	for _, e := range edges {
 		child := &entity.ItemStructure{
-			ParentCode:         e.ParentCode,
-			ChildCode:          e.ChildCode,
-			Quantity:           pgutil.FromPgNumericToDecimal(e.Quantity),
-			LossPercentage:     pgutil.FromPgNumericToDecimal(e.LossPercentage),
-			IsCoproduct:        e.IsCoproduct,
-			CustomerSupplied:   e.CustomerSupplied,
-			IsFixedQty:         e.IsFixedQty,
-			SubstituteGroup:    e.SubstituteGroup,
-			SubstitutePriority: e.SubstitutePriority,
-			IsActive:           true,
-			StartDate:          pgutil.FromPgDateToPtr(e.StartDate),
-			EndDate:            pgutil.FromPgDateToPtr(e.EndDate),
-			ConversionFactor:   pgutil.FromPgNumericToDecimal(e.ConversionFactor),
-			QuantityRounding:   e.QuantityRounding,
-			QuantityScale:      e.QuantityScale,
+			ParentCode:             e.ParentCode,
+			ChildCode:              e.ChildCode,
+			Quantity:               pgutil.FromPgNumericToDecimal(e.Quantity),
+			LossPercentage:         pgutil.FromPgNumericToDecimal(e.LossPercentage),
+			IsCoproduct:            e.IsCoproduct,
+			CustomerSupplied:       e.CustomerSupplied,
+			IsFixedQty:             e.IsFixedQty,
+			SubstituteGroup:        e.SubstituteGroup,
+			SubstitutePriority:     e.SubstitutePriority,
+			IsActive:               true,
+			StartDate:              pgutil.FromPgDateToPtr(e.StartDate),
+			EndDate:                pgutil.FromPgDateToPtr(e.EndDate),
+			ConversionFactor:       pgutil.FromPgNumericToDecimal(e.ConversionFactor),
+			QuantityRounding:       e.QuantityRounding,
+			QuantityScale:          e.QuantityScale,
+			RouteOperationSequence: e.RouteOperationSequence,
 		}
 		if e.QuantityFormula.Valid && e.QuantityFormula.String != "" {
 			f := e.QuantityFormula.String

@@ -52,7 +52,7 @@ INSERT INTO item_structures (
              $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $33
       WHERE EXISTS (SELECT 1 FROM items pi WHERE pi.code = $1 AND pi.enterprise_id = $32)
         AND EXISTS (SELECT 1 FROM items ci WHERE ci.code = $2 AND ci.enterprise_id = $32)
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied, route_operation_sequence
 `
 
 type CreateStructureComponentParams struct {
@@ -167,6 +167,7 @@ func (q *Queries) CreateStructureComponent(ctx context.Context, arg CreateStruct
 		&i.QuantityStockUom,
 		&i.ConversionFactor,
 		&i.CustomerSupplied,
+		&i.RouteOperationSequence,
 	)
 	return i, err
 }
@@ -633,7 +634,7 @@ func (q *Queries) GetItemCodeAndDescription(ctx context.Context, arg GetItemCode
 }
 
 const getStructureComponentByID = `-- name: GetStructureComponentByID :one
-SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied
+SELECT id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied, route_operation_sequence
 FROM item_structures
 WHERE item_structures.id = $1
   AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $2)
@@ -684,6 +685,7 @@ func (q *Queries) GetStructureComponentByID(ctx context.Context, arg GetStructur
 		&i.QuantityStockUom,
 		&i.ConversionFactor,
 		&i.CustomerSupplied,
+		&i.RouteOperationSequence,
 	)
 	return i, err
 }
@@ -787,7 +789,7 @@ WHERE parent_code = $1
     )
   AND is_active = TRUE
   AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $30)
-    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied
+    RETURNING id, parent_mask, quantity, unit_of_measurement, loss_percentage, sequence, notes, is_active, created_by, created_at, updated_at, parent_code, child_code, health, inherit, start_date, end_date, loss_formula, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, quantity_formula, quantity_rounding, quantity_scale, warehouse_code, line_warehouse_code, setup_loss, cost_loss_type, cost_loss, cost_center_code, is_critical_mps, generates_inspection, quantity_stock_uom, conversion_factor, customer_supplied, route_operation_sequence
 `
 
 type UpdateStructureComponentParams struct {
@@ -896,6 +898,7 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		&i.QuantityStockUom,
 		&i.ConversionFactor,
 		&i.CustomerSupplied,
+		&i.RouteOperationSequence,
 	)
 	return i, err
 }

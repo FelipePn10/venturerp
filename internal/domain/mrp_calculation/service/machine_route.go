@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	routing "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	"github.com/shopspring/decimal"
 	"sort"
 	"time"
 )
@@ -27,13 +28,26 @@ type machineRouteReader interface {
 	MachineRoute(context.Context, int64, string) ([]*routing.RouteOperation, []*routing.NetworkEdge, error)
 }
 
+// machineRouteQtyReader escolhe o roteiro considerando a faixa de lote.
+type machineRouteQtyReader interface {
+	MachineRouteQty(context.Context, int64, string, decimal.Decimal) ([]*routing.RouteOperation, []*routing.NetworkEdge, error)
+}
+
 // Route-specific times take precedence. Otherwise the measured item/machine
 // productivity supplies the operation's processing time. Every internal step
 // needs an eligible machine; missing data must not produce a partial schedule.
 func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOrderSuggestion, profiles []*entity.MachineTimeInfo) ([]machineStep, error) {
 	var ops []*routing.RouteOperation
 	var edges []*routing.NetworkEdge
-	if reader, ok := s.MRPRepo.(machineRouteReader); ok {
+	if reader, ok := s.MRPRepo.(machineRouteQtyReader); ok {
+		// Com a quantidade da sugestão, a faixa de lote dos roteiros entra na
+		// escolha — a capacidade reserva a máquina do roteiro que a OP vai usar.
+		var err error
+		ops, edges, err = reader.MachineRouteQty(ctx, sug.ItemCode, sug.Mask, sug.Quantity)
+		if err != nil {
+			return nil, err
+		}
+	} else if reader, ok := s.MRPRepo.(machineRouteReader); ok {
 		var err error
 		ops, edges, err = reader.MachineRoute(ctx, sug.ItemCode, sug.Mask)
 		if err != nil {
@@ -78,10 +92,16 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 			continue
 		}
 		if op.OperationOrigin == routing.OriginExternal || op.OperationOrigin == routing.OriginThirdPart {
-			if op.LeadTimeDays == nil || *op.LeadTimeDays <= 0 {
-				return nil, domainerr.NewValidation(fmt.Sprintf("informe o prazo da operação externa %d antes de planejar a capacidade", op.ID))
+			// O prazo vale da etapa OU da operação de biblioteca (o mesmo
+			// COALESCE do resto do sistema). Antes só a etapa contava: com o
+			// prazo cadastrado na biblioteca, a capacidade recusava pedindo um
+			// prazo que estava preenchido.
+			if op.EffectiveSubcontractDays <= 0 {
+				return nil, domainerr.NewValidation(fmt.Sprintf(
+					"informe o prazo do terceiro na etapa %d (%s) do roteiro do item antes de planejar a capacidade",
+					op.Sequence, op.OperationName))
 			}
-			delay += time.Duration(*op.LeadTimeDays) * 24 * time.Hour
+			delay += time.Duration(op.EffectiveSubcontractDays) * 24 * time.Hour
 			continue
 		}
 		if op.EffectiveWorkCenterID == nil {
@@ -102,12 +122,21 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 		if err != nil {
 			return nil, err
 		}
-		peloRoteiro := op.RunTime != nil || op.StandardTime != nil
+		// Regra única de tempo: o ROTEIRO manda (sobreposição da etapa ∘
+		// operação de biblioteca). A produtividade da VMAQ0200 só dimensiona a
+		// etapa quando o roteiro não tem tempo. Antes só a sobreposição da etapa
+		// contava: o tempo cadastrado na biblioteca era ignorado aqui, enquanto
+		// a OP, o CRP e o custo o usavam — e a VMAQ0200 avisava o usuário que
+		// "o roteiro prevalece".
+		if op.EffTime.SemMedida {
+			return nil, routing.ErroSemMedida(op)
+		}
+		peloRoteiro := op.EffTime.Run > 0
 		if peloRoteiro {
 			minutes = minutosDoRoteiro(mt, op.EffTime, qtdeDaEtapa)
 		}
 		if minutes <= 0 {
-			return nil, domainerr.NewValidation(fmt.Sprintf("tempo inválido na operação %d", op.ID))
+			return nil, domainerr.NewValidation(fmt.Sprintf("tempo inválido na etapa %d (%s) do roteiro", op.Sequence, op.OperationName))
 		}
 		id := op.ID
 		step := measuredMachineStep(mt, qtdeDaEtapa, minutes)

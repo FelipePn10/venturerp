@@ -95,6 +95,13 @@ func TestSuprimentoFirmeEhOQueFaltaChegar(t *testing.T) {
 	if got := suprimento(a); !got.IsZero() {
 		t.Fatalf("OF cancelada ainda é suprimento: %s", got)
 	}
+	// A ordem de serviço (etapa em terceiro) da mesma peça não é peça a chegar:
+	// a peça volta pela OF. Contá-la dobrava o suprimento.
+	servico, _ := a.ordemFirme(t, item, "5")
+	testutil.Exec(t, a.pool, `UPDATE planned_orders SET order_type = 'OUTSOURCING' WHERE id = $1`, servico)
+	if got := suprimento(a); !got.IsZero() {
+		t.Fatalf("ordem de serviço em terceiro contou como suprimento da peça: %s", got)
+	}
 }
 
 // TestProducaoAguardandoRetorno: a peça pronta do cliente conta até a nota levar;

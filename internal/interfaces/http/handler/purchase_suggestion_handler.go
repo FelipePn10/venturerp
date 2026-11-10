@@ -33,7 +33,12 @@ func (h *PurchaseSuggestionHandler) List(w http.ResponseWriter, r *http.Request)
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, purchase_order_uc.ParaSugestoes(result))
+	alertas, err := h.listUC.Alertas(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, purchase_order_uc.ComAlertas(purchase_order_uc.ParaSugestoes(result), alertas))
 }
 
 func (h *PurchaseSuggestionHandler) Approve(w http.ResponseWriter, r *http.Request) {

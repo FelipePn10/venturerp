@@ -22,8 +22,26 @@ import (
 // (is_firm = false, status PLANNED). The PCP/Compras approves it (→ purchase
 // order, origin MRP) or rejects it (→ cancelled).
 
+// isPurchaseSuggestion: ordem planejada de compra ativa, ainda planejada ou
+// firmada pelo planejador (VMRP0100 → RELEASED). Firmar no MRP é o planejador
+// assumir a necessidade; quem compra é o comprador. Antes só a não firme entrava
+// e a firmada sumia: nem pedido, nem fila — e o MRP a contava como suprimento.
 func isPurchaseSuggestion(o *plannedentity.PlannedOrder) bool {
-	return o.IsActive && o.OrderType == types.OrderPurchase && !o.IsFirm && o.Status == types.StatusPlanned
+	return o.IsActive && o.OrderType == types.OrderPurchase &&
+		(o.Status == types.StatusPlanned || o.Status == types.StatusReleased)
+}
+
+// comPedido diz que ordens planejadas de compra já viraram pedido: essas saem
+// da fila do comprador. Opcional no repositório (dublês de teste não têm).
+type comPedido interface {
+	OrdensDeCompraComPedido(ctx context.Context) (map[int64]bool, error)
+}
+
+func jaPedidas(ctx context.Context, repo plannedrepo.PlannedOrderRepository) (map[int64]bool, error) {
+	if r, ok := repo.(comPedido); ok {
+		return r.OrdensDeCompraComPedido(ctx)
+	}
+	return map[int64]bool{}, nil
 }
 
 // ─── List suggestions ──────────────────────────────────────────────────────
@@ -41,9 +59,13 @@ func (uc *ListPurchaseSuggestionsUseCase) Execute(ctx context.Context) ([]*plann
 	if err != nil {
 		return nil, err
 	}
+	pedidas, err := jaPedidas(ctx, uc.Planned)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]*plannedentity.PlannedOrder, 0, len(all))
 	for _, o := range all {
-		if isPurchaseSuggestion(o) {
+		if isPurchaseSuggestion(o) && !pedidas[o.Code] {
 			out = append(out, o)
 		}
 	}
@@ -91,6 +113,11 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	}
 	if !isPurchaseSuggestion(planned) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("ordem %d não é uma sugestão de compra aprovável (tipo/status/firme inválidos)", dto.PlannedOrderCode))
+	}
+	if pedidas, err := jaPedidas(ctx, uc.Planned); err != nil {
+		return nil, err
+	} else if pedidas[planned.Code] {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a sugestão %d já virou pedido de compra", planned.Code))
 	}
 
 	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)
@@ -203,6 +230,11 @@ func (uc *RejectPurchaseSuggestionUseCase) Execute(ctx context.Context, code int
 	if !isPurchaseSuggestion(planned) {
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("ordem %d não é uma sugestão de compra rejeitável", code))
 	}
+	if pedidas, err := jaPedidas(ctx, uc.Planned); err != nil {
+		return nil, err
+	} else if pedidas[planned.Code] {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a sugestão %d já virou pedido: cancele o pedido em vez de rejeitar", planned.Code))
+	}
 	updated, err := uc.Planned.UpdateStatus(ctx, code, string(types.StatusCancelled))
 	if err != nil {
 		return nil, err
@@ -213,6 +245,21 @@ func (uc *RejectPurchaseSuggestionUseCase) Execute(ctx context.Context, code int
 	}
 	updated.IsActive = false
 	return updated, nil
+}
+
+// alertasDoMRP: a exceção não tratada de cada ordem planejada (opcional).
+type alertasDoMRP interface {
+	AlertasDoMRP(ctx context.Context) (map[int64]plannedentity.AlertaDoMRP, error)
+}
+
+// Alertas devolve, por ordem planejada, o que o MRP recomenda (cancelar,
+// adiantar, adiar). O comprador vê na fila antes de comprar o que o
+// planejamento já não precisa.
+func (uc *ListPurchaseSuggestionsUseCase) Alertas(ctx context.Context) (map[int64]plannedentity.AlertaDoMRP, error) {
+	if r, ok := uc.Planned.(alertasDoMRP); ok {
+		return r.AlertasDoMRP(ctx)
+	}
+	return nil, nil
 }
 
 // SugestaoResponse é a sugestão como a tela lê. O código do item sai com a
@@ -227,6 +274,20 @@ type SugestaoResponse struct {
 	Status        string    `json:"status"`
 	OrderType     string    `json:"order_type"`
 	WarehouseCode *int64    `json:"warehouse_code,omitempty"`
+	// O que o MRP recomenda para esta compra (CANCEL, RESCHEDULE_IN/OUT…).
+	AlertaMRP     string     `json:"mrp_alert,omitempty"`
+	AlertaMRPText string     `json:"mrp_alert_text,omitempty"`
+	AlertaMRPData *time.Time `json:"mrp_alert_date,omitempty"`
+}
+
+// ComAlertas junta à fila o que o MRP recomenda para cada compra.
+func ComAlertas(lista []SugestaoResponse, alertas map[int64]plannedentity.AlertaDoMRP) []SugestaoResponse {
+	for i := range lista {
+		if a, ok := alertas[lista[i].Code]; ok {
+			lista[i].AlertaMRP, lista[i].AlertaMRPText, lista[i].AlertaMRPData = a.Tipo, a.Descricao, a.DataSugerida
+		}
+	}
+	return lista
 }
 
 // ParaSugestoes converte as ordens planejadas de compra para a resposta.

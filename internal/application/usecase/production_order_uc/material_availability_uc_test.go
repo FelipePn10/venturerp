@@ -15,6 +15,7 @@ import (
 type disponibilidadeAuth struct{ ports.AuthService }
 
 func (disponibilidadeAuth) CanGetSalesOrder(context.Context) bool { return true }
+func (disponibilidadeAuth) CanListOrder(context.Context) bool     { return true }
 
 type disponibilidadeRepo struct {
 	repository.ProductionOrderRepository

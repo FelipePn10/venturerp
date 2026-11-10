@@ -265,9 +265,13 @@ func (r *StandardCostRepositorySQLC) CentrosDoRoteiro(ctx context.Context, itemC
 	rows, err := r.pool.Query(ctx, `
 SELECT DISTINCT COALESCE(ro.work_center_id, o.default_work_center_id)
 FROM manufacturing_routes mr
-JOIN route_operations ro ON ro.route_id = mr.id
+JOIN route_operations ro ON ro.route_id = mr.id AND ro.is_active
+  AND ro.situation NOT IN ('INATIVA','FANTASMA')
 LEFT JOIN operations o ON o.id = ro.operation_id
-WHERE mr.item_code = $1 AND COALESCE(mr.mask,'') = COALESCE($2,'') AND mr.is_active
+-- Só o roteiro que o custo usa. Antes entravam todos os roteiros ativos da
+-- máscara exata (inclusive alternativos e etapas removidas), e o item sem
+-- roteiro da máscara perdia o rateio do roteiro genérico.
+WHERE mr.id = erp_roteiro_vigente($3, $1, $2, CURRENT_DATE)
   AND mr.enterprise_id = $3
   AND COALESCE(ro.work_center_id, o.default_work_center_id) IS NOT NULL`, itemCode, mask, empresa)
 	if err != nil {

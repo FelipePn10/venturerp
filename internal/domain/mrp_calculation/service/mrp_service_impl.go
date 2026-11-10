@@ -294,6 +294,15 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 		demandInputs = append(demandInputs, previsao...)
 	}
 
+	// Empenho das OFs abertas: o material que ainda não saiu é demanda
+	// dependente do componente. O cálculo de um item de pedido específico não
+	// recebe outras fontes (é exclusivo); os demais planos, sim.
+	if plan.OrderItemCode == nil {
+		empenho, errEmpenho := s.empenhoDasOrdensAbertas(ctx)
+		registrarErro(errs, "load_order_allocations", errEmpenho)
+		demandInputs = append(demandInputs, empenho...)
+	}
+
 	allowedItems, err := s.resolveAllowedItemSet(ctx, plan)
 	if err != nil {
 		errs["resolve_classification"] = err.Error()
@@ -322,15 +331,33 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 		}
 	}
 
-	// Se nenhum item tem demanda, termina cedo.
-	noMRPDemand := len(demands) == 0 && len(demandInputs) == 0
+	// Planejada firme de fabricação sem OF: a estrutura dela entra na carga
+	// da árvore para explodir os componentes (o item em si não é demanda).
+	var planejadasSemOF []ports.FirmPlannedWithoutOrder
+	if plan.OrderItemCode == nil {
+		var errPlanejadas error
+		planejadasSemOF, errPlanejadas = s.planejadasFirmesSemOF(ctx)
+		registrarErro(errs, "load_firm_planned_without_order", errPlanejadas)
+	}
+	raizesDaArvore := rootItems
+	for _, p := range planejadasSemOF {
+		if !seen[p.ItemCode] {
+			raizesDaArvore = append(raizesDaArvore, p.ItemCode)
+		}
+	}
 
 	// Bulk load 1: entire BOM tree.
-	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, rootItems)
+	bomMap, err := s.StructRepo.LoadBOMForRoots(ctx, raizesDaArvore)
 	if err != nil {
 		bomMap = make(map[int64][]*structentity.ItemStructure)
 	}
-	llcMap := buildLLCFromBOM(bomMap, rootItems)
+	llcMap := buildLLCFromBOM(bomMap, raizesDaArvore)
+	if len(planejadasSemOF) > 0 {
+		demandInputs = append(demandInputs, s.demandaDasPlanejadasSemOF(ctx, planejadasSemOF, bomMap, params.FormulaPerdasEstrutura, newMaskVarCache(s.MaskVars))...)
+	}
+
+	// Se nenhum item tem demanda, termina cedo.
+	noMRPDemand := len(demands) == 0 && len(demandInputs) == 0
 
 	// Bulk load 2 & 3: snapshots and configured rules.
 	snapshotMap, err := s.MRPRepo.ListAllStockSnapshots(ctx)
@@ -350,7 +377,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 	}
 
 	// Expande allCodes para incluir itens de todas as fontes.
-	allCodesFromBOM := collectAllItemCodes(bomMap, rootItems)
+	allCodesFromBOM := collectAllItemCodes(bomMap, raizesDaArvore)
 	allCodes := make(map[int64]bool, len(allCodesFromBOM))
 	for _, c := range allCodesFromBOM {
 		allCodes[c] = true
@@ -536,9 +563,10 @@ func (s *MRPServiceImpl) ExplodeStructure(ctx context.Context, parentCode int64,
 		perUnit, _ := child.ResolvedQuantity(vars)
 		adjustedQty := applyLossFormula(quantity, perUnit, child.LossPercentage, params.FormulaPerdasEstrutura)
 		inputs = append(inputs, &entity.MRPInput{
-			ItemCode: child.ChildCode,
-			Quantity: adjustedQty,
-			LLC:      level,
+			ItemCode:           child.ChildCode,
+			Quantity:           adjustedQty,
+			LLC:                level,
+			ParentStepSequence: child.RouteOperationSequence,
 		})
 	}
 	return inputs, nil
@@ -608,6 +636,7 @@ func (s *MRPServiceImpl) calculateMRP(
 	// Cache das variáveis de configuração usadas pelas fórmulas de quantidade,
 	// compartilhado por toda a explosão deste plano.
 	maskVars := newMaskVarCache(s.MaskVars)
+	etapasCache := map[string]map[int16]float64{}
 
 	// An order-item calculation must not introduce any additional independent source.
 	var safetyInputs []*entity.MRPInput
@@ -808,7 +837,11 @@ func (s *MRPServiceImpl) calculateMRP(
 				pai := suggestion.Code
 				for _, child := range children {
 					child.PlanCode = planCode
-					child.NeedDate = *suggestion.StartDate
+					// Componente alocado a uma etapa do roteiro do pai é
+					// necessário quando a etapa começa, não no início da ordem.
+					necessidadeDoFilho, errEtapa := s.necessidadeNaEtapa(ctx, etapasCache, input.ItemCode, input.Mask, suggestion, child.ParentStepSequence)
+					registrarErro(errs, "etapa_do_componente", errEtapa)
+					child.NeedDate = necessidadeDoFilho
 					child.ParentItemCode = &input.ItemCode
 					// A necessidade do componente nasce desta sugestão: é a
 					// ponte do pegging entre os níveis.
@@ -1338,6 +1371,24 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	if err != nil {
 		return nil, err
 	}
+	// Fabricado cujo prazo vem do ROTEIRO: o prazo é o do lote desta ordem, no
+	// roteiro que esta quantidade usa (faixa de lote). O prazo do cadastro é
+	// por unidade — 60 armários levariam o prazo de um.
+	if orderType == "FABRICACAO" && !s.temPrazoInformado(rulesMap, input.ItemCode, input.Mask) {
+		maiorParte := decimal.Zero
+		for _, q := range entity.DividirPorLoteMaximo(netReq, params.Politica(input.ItemCode).LoteMaximo, cachedItem.multipleLot) {
+			if q.GreaterThan(maiorParte) {
+				maiorParte = q
+			}
+		}
+		doLote, errLote := s.prazoDoRoteiroParaQuantidade(ctx, input.ItemCode, input.Mask, maiorParte)
+		if errLote != nil {
+			return nil, errLote
+		}
+		if doLote > leadTimeDays {
+			leadTimeDays = doLote
+		}
+	}
 
 	// 7. Datas: recebimento = necessidade − tempo de segurança; início =
 	// recebimento − prazo; o horizonte firme empurra o início para o fim dele.
@@ -1382,11 +1433,14 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	if orderType == "FABRICACAO" && s.RoutingRepo != nil {
 		// Falha ao ler as operações externas não pode virar "não há operação
 		// externa": o MRP deixaria de sugerir a ordem de serviço em silêncio.
-		extOps, err := s.RoutingRepo.GetExternalOpsByItem(ctx, input.ItemCode)
-		if err != nil {
-			return nil, fmt.Errorf("lendo as operações externas do item %d: %w", input.ItemCode, err)
-		}
+		// Por PARTE: com faixa de lote, cada ordem pode cair num roteiro
+		// alternativo diferente, e a ordem de serviço tem de nascer do roteiro
+		// que aquela ordem vai usar.
 		for _, parte := range partes {
+			extOps, err := routingrepo.OperacoesExternasDaOrdem(ctx, s.RoutingRepo, input.ItemCode, input.Mask, parte)
+			if err != nil {
+				return nil, fmt.Errorf("lendo as operações externas do item %d: %w", input.ItemCode, err)
+			}
 			for _, op := range extOps {
 				note := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
 				remittance := op.RemittanceType
@@ -1629,11 +1683,77 @@ func (s *MRPServiceImpl) prazoDoRoteiro(ctx context.Context, itemCode int64) (in
 	}
 	// qty=1: prazo de planejamento do item (por unidade / lote base), a mesma
 	// conta de caminho crítico do caso de uso de prazo do roteiro.
-	totalHours := routingentity.CriticalPath(ops, edges, 1.0).TotalHours
-	if totalHours <= 0 {
+	caminho := routingentity.CriticalPath(ops, edges, 1.0)
+	return prazoEmDiasUteis(caminho.TotalHours, caminho.SubcontractDays), nil
+}
+
+// temPrazoInformado: o prazo do item vem de cenário ou de regra configurada
+// (ajuste fino de quem planeja) — aí ele manda, e o roteiro não o recalcula.
+func (s *MRPServiceImpl) temPrazoInformado(rulesMap map[int64][]*entity.ConfiguredItemRule, itemCode int64, mask string) bool {
+	for _, rule := range rulesMap[itemCode] {
+		if rule.FieldName != entity.CampoRegraPrazo {
+			continue
+		}
+		if rule.TableType == scenarioRuleTable || rule.CasaComMascara(mask) {
+			return true
+		}
+	}
+	return false
+}
+
+// prazoDoRoteiroParaQuantidade: caminho crítico do roteiro que a ordem desta
+// quantidade vai usar, para essa quantidade, em dias úteis (com os dias do
+// terceiro). Item sem roteiro: zero (vale o prazo do cadastro).
+func (s *MRPServiceImpl) prazoDoRoteiroParaQuantidade(ctx context.Context, itemCode int64, mask string, qtd decimal.Decimal) (int, error) {
+	if s.RoutingRepo == nil || !qtd.IsPositive() {
 		return 0, nil
 	}
-	return int(math.Ceil(totalHours / 8.0)), nil
+	route, err := routingrepo.RoteiroParaQuantidade(ctx, s.RoutingRepo, itemCode, mask, qtd)
+	if err != nil {
+		if domainerr.EhNaoEncontrado(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("lendo o roteiro do item %d: %w", itemCode, err)
+	}
+	if route == nil {
+		return 0, nil
+	}
+	ops, err := s.RoutingRepo.GetRouteOperations(ctx, route.ID)
+	if err != nil {
+		return 0, fmt.Errorf("lendo as etapas do roteiro do item %d: %w", itemCode, err)
+	}
+	if len(ops) == 0 {
+		return 0, nil
+	}
+	edges, err := s.RoutingRepo.GetNetworkEdges(ctx, route.ID)
+	if err != nil {
+		return 0, fmt.Errorf("lendo a rede do roteiro do item %d: %w", itemCode, err)
+	}
+	caminho := routingentity.CriticalPath(ops, edges, qtd.InexactFloat64())
+	if caminho.HasCycle() {
+		return 0, nil
+	}
+	return prazoEmDiasUteis(caminho.TotalHours, caminho.SubcontractDays), nil
+}
+
+// prazoEmDiasUteis junta os dois relógios do roteiro num prazo do MRP, que é
+// contado em dias ÚTEIS e depois descontado no calendário da fábrica.
+//
+// As horas são de trabalho nosso (8 h por dia útil). Os dias do terceiro são
+// CORRIDOS — o fornecedor trabalha no calendário dele — e viram dias úteis na
+// proporção de 5 por 7. Antes esses dias eram ignorados: a bucha que passa 9
+// dias na cementação era planejada como se não saísse da fábrica, e a OP da
+// balança começava sem a bucha. A proporção é aproximada de propósito (não se
+// sabe a data em que a peça vai ao terceiro); erra por um dia, não por nove.
+func prazoEmDiasUteis(horas float64, diasCorridosNoTerceiro int32) int {
+	dias := 0
+	if horas > 0 {
+		dias = int(math.Ceil(horas / 8.0))
+	}
+	if diasCorridosNoTerceiro > 0 {
+		dias += int(math.Ceil(float64(diasCorridosNoTerceiro) * 5.0 / 7.0))
+	}
+	return dias
 }
 
 // =============================================================================
@@ -1877,6 +1997,9 @@ func explode(
 			ItemCode: child.ChildCode,
 			Quantity: adjustedQty,
 			LLC:      level,
+			// Etapa do roteiro do pai em que o componente entra: é ela que
+			// data a necessidade (necessidadeNaEtapa).
+			ParentStepSequence: child.RouteOperationSequence,
 		})
 	}
 	return inputs

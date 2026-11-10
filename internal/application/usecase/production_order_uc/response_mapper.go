@@ -125,6 +125,13 @@ func ToProductionOrderCostResponse(c *entity.ProductionOrderCost) *response.Prod
 		OverheadVariance:  c.OverheadVariance.InexactFloat64(),
 		TotalVariance:     c.TotalVariance.InexactFloat64(),
 		Currency:          c.Currency,
+
+		MachineCostReal:     c.MachineCostReal.InexactFloat64(),
+		MachineCostStd:      c.MachineCostStd.InexactFloat64(),
+		MachineVariance:     c.MachineVariance.InexactFloat64(),
+		SubcontractCostReal: c.SubcontractCostReal.InexactFloat64(),
+		SubcontractCostStd:  c.SubcontractCostStd.InexactFloat64(),
+		SubcontractVariance: c.SubcontractVariance.InexactFloat64(),
 	}
 	if !c.TotalCostStd.IsZero() {
 		out.VariancePct = c.TotalVariance.Div(c.TotalCostStd).Mul(decimal.NewFromInt(100)).InexactFloat64()

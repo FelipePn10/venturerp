@@ -199,6 +199,7 @@ func (r *APSRepositorySQLC) GetOrderOperations(ctx context.Context, orderID int6
 			Sequence:     int(row.Sequence),
 			PlannedHours: pgutil.FromPgNumericToFloat64(row.PlannedHours),
 			SetupHours:   pgutil.FromPgNumericToFloat64(row.SetupHours),
+			LeadDays:     int(row.LeadDays),
 		}
 		if row.WorkCenterID.Valid {
 			v := row.WorkCenterID.Int64

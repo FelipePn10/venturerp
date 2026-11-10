@@ -15,7 +15,9 @@ type GetProductionOrderUseCase struct {
 }
 
 func (uc *GetProductionOrderUseCase) Execute(ctx context.Context, id int64) (*response.ProductionOrderResponse, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
@@ -37,7 +39,9 @@ type GetAppointmentsUseCase struct {
 }
 
 func (uc *GetAppointmentsUseCase) Execute(ctx context.Context, productionOrderID int64) ([]*response.ProductionAppointmentResponse, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 
@@ -54,7 +58,9 @@ type GetConsumptionsUseCase struct {
 }
 
 func (uc *GetConsumptionsUseCase) Execute(ctx context.Context, productionOrderID int64) ([]*response.ProductionConsumptionResponse, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 

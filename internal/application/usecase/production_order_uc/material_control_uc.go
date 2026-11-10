@@ -44,7 +44,9 @@ func (uc *ProductionMaterialControlUseCase) phase4() (phase4MaterialRepository, 
 }
 
 func (uc *ProductionMaterialControlUseCase) List(ctx context.Context, orderID int64, kind string) ([]*entity.ProductionOrderMaterial, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	return uc.Repo.ListMaterials(ctx, orderID, entity.MaterialKind(strings.ToUpper(strings.TrimSpace(kind))))

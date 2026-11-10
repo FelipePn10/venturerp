@@ -35,10 +35,18 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 		qty = order.PlannedQty
 	}
 
-	materialReal, laborReal, err := uc.Repo.ComputeActualCostInputs(ctx, productionOrderID)
+	// O real aberto pelos componentes do padrão (máquina, mão de obra,
+	// terceiros); repositório antigo só sabe material e conversão somada.
+	var real entity.ActualCostInputs
+	if r, ok := uc.Repo.(custoRealPorComponente); ok {
+		real, err = r.CustoRealDaOrdem(ctx, productionOrderID)
+	} else {
+		real.MaterialCostReal, real.LaborCostReal, err = uc.Repo.ComputeActualCostInputs(ctx, productionOrderID)
+	}
 	if err != nil {
 		return nil, err
 	}
+	real.ProducedQty = qty
 
 	// Standard unit cost is optional: items without a calculated standard simply
 	// settle with zero standard (variance equals the full actual cost).
@@ -52,10 +60,15 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 			return nil, fmt.Errorf("lendo o custo-padrão do item: %w", scErr)
 		}
 		if scErr == nil && sc != nil {
+			// Todos os componentes do padrão: antes preparação, máquina e
+			// terceiros ficavam de fora e a variação comparava com um padrão menor.
 			std = entity.StandardUnitCost{
-				Material: sc.MaterialCost,
-				Labor:    sc.LaborCost,
-				Overhead: sc.OverheadCost,
+				Material:    sc.MaterialCost,
+				Setup:       sc.SetupCost,
+				Machine:     sc.MachineCost,
+				Labor:       sc.LaborCost,
+				Subcontract: sc.SubcontractCost,
+				Overhead:    sc.OverheadCost,
 			}
 			if sc.Currency != "" {
 				currency = sc.Currency
@@ -69,7 +82,7 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 	}
 	settlement := entity.BuildSettlement(
 		productionOrderID,
-		entity.ActualCostInputs{ProducedQty: qty, MaterialCostReal: materialReal, LaborCostReal: laborReal},
+		real,
 		std, currency, settledBy,
 	)
 
@@ -86,6 +99,10 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 	return custo, nil
 }
 
+type custoRealPorComponente interface {
+	CustoRealDaOrdem(ctx context.Context, productionOrderID int64) (entity.ActualCostInputs, error)
+}
+
 // GetProductionCostUseCase reads the cost settlement of a production order.
 type GetProductionCostUseCase struct {
 	Repo repository.ProductionOrderRepository
@@ -97,4 +114,42 @@ func (uc *GetProductionCostUseCase) Execute(ctx context.Context, productionOrder
 		return nil, errorsuc.ErrUnauthorized
 	}
 	return uc.Repo.GetCost(ctx, productionOrderID)
+}
+
+// ordensApuradas lista as OFs da empresa que já têm apuração de custo.
+type ordensApuradas interface {
+	OrdensComCustoApurado(ctx context.Context) ([]int64, error)
+}
+
+// ReapuracaoResultado é o resumo da reapuração em lote.
+type ReapuracaoResultado struct {
+	Reapuradas int      `json:"reapuradas"`
+	Falhas     []string `json:"falhas,omitempty"`
+}
+
+// ReapurarTodas refaz a apuração de todas as OFs já apuradas da empresa pela
+// regra atual (componentes do padrão, migração 480). A apuração antiga não tinha
+// máquina nem terceiros: sem reapurar, a OF antiga mostrava zero nesses
+// componentes. Falha numa OF não interrompe as outras; volta no resumo.
+func (uc *SettleProductionCostUseCase) ReapurarTodas(ctx context.Context) (*ReapuracaoResultado, error) {
+	if !uc.Auth.CanUpdateSalesOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	leitor, ok := uc.Repo.(ordensApuradas)
+	if !ok {
+		return nil, errorsuc.NewValidationError("a reapuração em lote não está disponível")
+	}
+	ids, err := leitor.OrdensComCustoApurado(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := &ReapuracaoResultado{}
+	for _, id := range ids {
+		if _, err := uc.Execute(ctx, id); err != nil {
+			out.Falhas = append(out.Falhas, fmt.Sprintf("OF %d: %s", id, err.Error()))
+			continue
+		}
+		out.Reapuradas++
+	}
+	return out, nil
 }
