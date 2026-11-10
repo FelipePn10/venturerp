@@ -52,6 +52,15 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 	for _, op := range ops {
 		opByID[op.ID] = op
 	}
+	// A etapa fantasma/inativa continua no grafo (as dependências passam por
+	// ela), mas com duração zero.
+	duracao := func(id int64) float64 {
+		op := opByID[id]
+		if op == nil || !op.ConsomeTempo() {
+			return 0
+		}
+		return op.EffTime.LeadTimeHours(qtdeDe(id))
+	}
 
 	successors := make(map[int64][]int64)
 	predecessors := make(map[int64][]int64)
@@ -75,14 +84,14 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 	}
 
 	earlyFinish := make(map[int64]float64, len(ops))
+	inicio := make(map[int64]float64, len(ops))
 	prev := make(map[int64]int64)
 
 	for len(queue) > 0 {
 		cur := queue[0]
 		queue = queue[1:]
 
-		op := opByID[cur]
-		opTime := op.EffTime.LeadTimeHours(qtdeDe(cur))
+		opTime := duracao(cur)
 
 		ef := opTime // no predecessors → earlyStart = 0
 		bestPred := int64(0)
@@ -91,7 +100,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 			if opByID[predID].RequiresOperator {
 				overlap = 0
 			}
-			predDuration := opByID[predID].EffTime.LeadTimeHours(qtdeDe(predID))
+			predDuration := duracao(predID)
 			earlyStart := earlyFinish[predID] - overlap*predDuration
 			if earlyStart+opTime > ef {
 				ef = earlyStart + opTime
@@ -99,6 +108,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 			}
 		}
 		earlyFinish[cur] = ef
+		inicio[cur] = ef - opTime
 		if bestPred != 0 {
 			prev[cur] = bestPred
 		}
@@ -157,7 +167,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 	// um serviço externo num ramo paralelo mais curto não atrasa a entrega.
 	var diasEmTerceiro int32
 	for _, id := range path {
-		if op := opByID[id]; op != nil {
+		if op := opByID[id]; op != nil && op.ConsomeTempo() {
 			diasEmTerceiro += op.EffectiveSubcontractDays
 		}
 	}
@@ -167,6 +177,7 @@ func CriticalPath(ops []*RouteOperation, edges []*NetworkEdge, qty float64) Lead
 		SubcontractDays: diasEmTerceiro,
 		CriticalPath:    path,
 		CycleOperations: emCiclo,
+		EarlyStartHours: inicio,
 	}
 }
 

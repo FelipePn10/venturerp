@@ -34,6 +34,7 @@ func (f fakeAuth) CanCreatePlannedOrder(context.Context) bool { return f.canPlan
 func (f fakeAuth) CanReportProduction(context.Context) bool   { return f.canPlanned }
 func (f fakeAuth) CanUpdateSalesOrder(context.Context) bool   { return f.canSales }
 func (f fakeAuth) CanGetSalesOrder(context.Context) bool      { return f.canSales }
+func (f fakeAuth) CanListOrder(context.Context) bool          { return f.canSales }
 func (f fakeAuth) UserID(context.Context) (uuid.UUID, error) {
 	return uuid.MustParse("11111111-1111-1111-1111-111111111111"), nil
 }

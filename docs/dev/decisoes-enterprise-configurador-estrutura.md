@@ -119,18 +119,17 @@ mutação de estado confere a existência antes e o estado depois**, devolvendo 
 quando o registro não existe, 409 quando já está no estado pedido e erro explícito
 quando a atualização não surtiu efeito.
 
-## Fronteira operação → roteiro → OF (VPRO0100 × VENT0115 × VENT0202)
+## Fronteira operação → roteiro → OF (VENT0202)
 
-A tela canônica de roteiro é `/api/routing`, com três papéis distintos:
+O cadastro de roteiro vive numa tela só, a VENT0202, sobre `/api/routing`:
 
-| Papel | Tela | Contrato |
+| Papel | Modo da VENT0202 | Contrato |
 | --- | --- | --- |
-| Biblioteca de operações | VENT0115 | `/api/routing/operations` |
-| Roteiro por item/máscara | VENT0202 | `/api/routing/routes` |
-| Consulta operacional do roteiro na produção | VPRO0100 | leitura de `/api/routing` |
+| Biblioteca de operações | Biblioteca de operações | `/api/routing/operations` |
+| Roteiro por item/máscara | Roteiros do item | `/api/routing/routes` |
+| Roteiro-modelo (sem item) | Modelos | `/api/routing/routes/templates` + `/routes/{id}/copy` |
 
-VPRO0100 não tem contrato próprio: é uma visão de produção sobre o mesmo cadastro.
-O cadastro vive em VENT0115 (modelos de operação) e VENT0202 (roteiro do item); a
+VPRO0100 e VENT0115 deixaram de existir (eram a mesma tela com outros títulos). A
 produção lê. O ciclo completo é operação → roteiro → ordem planejada (MRP) → OF
 firmada (com fotografia de operações e materiais) → CRP/APS → apontamento.
 

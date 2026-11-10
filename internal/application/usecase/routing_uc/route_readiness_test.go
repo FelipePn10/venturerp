@@ -131,13 +131,15 @@ func TestProntidaoExigePrazoDaEtapaExterna(t *testing.T) {
 		t.Fatalf("mensagem não explica o que falta: %v", rel.Issues)
 	}
 
-	prazo := int32(5)
-	externa.LeadTimeDays = &prazo
+	// Prazo e fornecedor cadastrados SÓ na operação de biblioteca: a etapa não
+	// sobrepõe nada, e o repositório devolve o efetivo (etapa ∘ biblioteca).
+	// Antes a prontidão olhava só a sobreposição e acusava um prazo que existia.
 	fornecedor := int64(10)
-	externa.SupplierID = &fornecedor
+	externa.EffectiveSubcontractDays = 5
+	externa.EffectiveSupplierID = &fornecedor
 	rel, _ = uc.Execute(context.Background(), 7)
 	if !rel.Ready {
-		t.Fatalf("com prazo e fornecedor o roteiro está pronto: %v", rel.Issues)
+		t.Fatalf("com prazo e fornecedor na biblioteca o roteiro está pronto: %v", rel.Issues)
 	}
 }
 
@@ -187,5 +189,52 @@ func TestProntidaoAvisaInspecaoSemPlanoSemBloquear(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(rel.Warnings, " "), "plano ativo") {
 		t.Fatalf("o aviso precisa aparecer: %v", rel.Warnings)
+	}
+}
+
+// tarifasDetalhadas: máquina e mão de obra separadas, como o custo lê.
+type tarifasDetalhadas struct{ maquina, maoDeObra map[int64]float64 }
+
+func (t tarifasDetalhadas) HourlyRate(context.Context, int64) (float64, bool, error) {
+	return 0, false, nil
+}
+func (t tarifasDetalhadas) Tarifas(_ context.Context, centro int64) (float64, float64, error) {
+	return t.maquina[centro], t.maoDeObra[centro], nil
+}
+
+// O aviso de tarifa tem de dizer a verdade: centro só com mão de obra não
+// "entra valendo zero"; centro com tarifa zerada não está tarifado; e a lista de
+// etapas sai por extenso.
+func TestAvisoDeTarifaDizAVerdade(t *testing.T) {
+	c1, c2, c3 := i64(1), i64(2), i64(3)
+	uc := &RouteReadinessUseCase{
+		Routes: rotasFalsas{
+			rota: &routingentity.ManufacturingRoute{ID: 7, ItemCode: 1},
+			etapas: []*routingentity.RouteOperation{
+				etapa(10, "Cortar", c1, routingentity.OriginInternal),
+				etapa(20, "Montar", c2, routingentity.OriginInternal),
+				etapa(30, "Embalar", c2, routingentity.OriginInternal),
+				etapa(40, "Pintar", c3, routingentity.OriginInternal),
+			},
+		},
+		Rates: tarifasDetalhadas{
+			maquina:   map[int64]float64{1: 120, 3: 0},
+			maoDeObra: map[int64]float64{2: 45},
+		},
+		Auth: authSempre{},
+	}
+	rel, err := uc.Execute(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	avisos := strings.Join(rel.Warnings, " | ")
+	if strings.Contains(avisos, "centro 1") {
+		t.Fatalf("centro com tarifa de máquina não pode ser avisado: %s", avisos)
+	}
+	if !strings.Contains(avisos, "só a tarifa de mão de obra") || !strings.Contains(avisos, "etapas 20 e 30") {
+		t.Fatalf("centro só com mão de obra: o aviso tem de dizer isso, com as etapas por extenso: %s", avisos)
+	}
+	if !strings.Contains(avisos, "a etapa 40 entra no custo valendo zero") {
+		t.Fatalf("tarifa zerada é sem tarifa: %s", avisos)
 	}
 }

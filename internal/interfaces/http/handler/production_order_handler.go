@@ -33,6 +33,8 @@ type ProductionOrderHandler struct {
 	maintainUC           *production_order_uc.MaintainProductionOrderUseCase
 	deliveryCandidatesUC *production_order_uc.ListDeliveryCandidatesUseCase
 	scannerUC            *production_order_uc.ProductionScannerUseCase
+	fichaUC              *production_order_uc.FichaDaOrdemUseCase
+	cadastrosDoPostoUC   *production_order_uc.CadastrosDoPostoUseCase
 }
 
 func (h *ProductionOrderHandler) CreateScanToken(w http.ResponseWriter, r *http.Request) {

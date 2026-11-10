@@ -17,9 +17,11 @@ func createThirdPartyOrdersTx(ctx context.Context, tx pgx.Tx, enterpriseID int64
 	_, err := tx.Exec(ctx, `WITH external_operations AS (
 		SELECT ro.id route_operation_id,ro.operation_id,
 			COALESCE((SELECT supplier.code FROM suppliers supplier
-				WHERE supplier.id=COALESCE(ro.supplier_id,op.supplier_id)
-				   OR supplier.code=COALESCE(ro.supplier_id,op.supplier_id)
-				ORDER BY (supplier.id=COALESCE(ro.supplier_id,op.supplier_id)) DESC LIMIT 1),
+				WHERE supplier.enterprise_id=$1
+				  AND (supplier.id=COALESCE(ro.supplier_id,op.supplier_id)
+				   OR supplier.code=COALESCE(ro.supplier_id,op.supplier_id))
+				-- a tela grava o CÓDIGO do fornecedor: o código vence o id
+				ORDER BY (supplier.code=COALESCE(ro.supplier_id,op.supplier_id)) DESC LIMIT 1),
 				COALESCE(ro.supplier_id,op.supplier_id)) supplier_code,
 			COALESCE(ro.service_item_code,op.service_item_code) service_item_code,
 			COALESCE(ro.lead_time_days,op.lead_time_days,0) lead_days,
@@ -28,7 +30,10 @@ func createThirdPartyOrdersTx(ctx context.Context, tx pgx.Tx, enterpriseID int64
 		FROM manufacturing_routes route
 		JOIN route_operations ro ON ro.route_id=route.id AND ro.is_active
 		JOIN operations op ON op.id=ro.operation_id AND op.is_active AND op.origin IN ('EXTERNA','TERCEIROS')
-		WHERE route.item_code=$3 AND route.is_active AND route.is_standard
+		-- O roteiro que a OP usa (o vigente da máscara, ou o genérico), não
+		-- "qualquer padrão do item" de qualquer empresa.
+		WHERE route.id=erp_roteiro_vigente($1,$3,$4::text,COALESCE($6::date,CURRENT_DATE),$5::numeric)
+		  AND ro.situation NOT IN ('INATIVA','FANTASMA')
 	), code_base AS (
 		SELECT COALESCE(MAX(code),0) value FROM third_party_service_orders WHERE enterprise_id=$1
 	)

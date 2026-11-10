@@ -109,20 +109,27 @@ type ProductionOrderCostResponse struct {
 	ProducedQty       float64 `json:"produced_qty"`
 
 	MaterialCostReal float64 `json:"material_cost_real"`
-	LaborCostReal    float64 `json:"labor_cost_real"`
-	OverheadCostReal float64 `json:"overhead_cost_real"`
-	TotalCostReal    float64 `json:"total_cost_real"`
-	UnitCostReal     float64 `json:"unit_cost_real"`
+	// Máquina = preparação + máquina; terceiros = serviço externo recebido.
+	MachineCostReal     float64 `json:"machine_cost_real"`
+	SubcontractCostReal float64 `json:"subcontract_cost_real"`
+	LaborCostReal       float64 `json:"labor_cost_real"`
+	OverheadCostReal    float64 `json:"overhead_cost_real"`
+	TotalCostReal       float64 `json:"total_cost_real"`
+	UnitCostReal        float64 `json:"unit_cost_real"`
 
-	MaterialCostStd float64 `json:"material_cost_std"`
-	LaborCostStd    float64 `json:"labor_cost_std"`
-	OverheadCostStd float64 `json:"overhead_cost_std"`
-	TotalCostStd    float64 `json:"total_cost_std"`
+	MaterialCostStd    float64 `json:"material_cost_std"`
+	MachineCostStd     float64 `json:"machine_cost_std"`
+	SubcontractCostStd float64 `json:"subcontract_cost_std"`
+	LaborCostStd       float64 `json:"labor_cost_std"`
+	OverheadCostStd    float64 `json:"overhead_cost_std"`
+	TotalCostStd       float64 `json:"total_cost_std"`
 
-	MaterialVariance float64 `json:"material_variance"`
-	LaborVariance    float64 `json:"labor_variance"`
-	OverheadVariance float64 `json:"overhead_variance"`
-	TotalVariance    float64 `json:"total_variance"`
+	MaterialVariance    float64 `json:"material_variance"`
+	MachineVariance     float64 `json:"machine_variance"`
+	SubcontractVariance float64 `json:"subcontract_variance"`
+	LaborVariance       float64 `json:"labor_variance"`
+	OverheadVariance    float64 `json:"overhead_variance"`
+	TotalVariance       float64 `json:"total_variance"`
 	// VariancePct é a diferença em porcentagem do padrão. É por ela que o
 	// custo olha primeiro: R$ 500 de desvio pesam diferente numa ordem de
 	// R$ 2.000 e numa de R$ 200.000.

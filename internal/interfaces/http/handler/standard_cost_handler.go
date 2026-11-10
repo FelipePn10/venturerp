@@ -66,6 +66,7 @@ func (h *StandardCostHandler) UpsertItemPurchaseCost(w http.ResponseWriter, r *h
 		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
 		return
 	}
+	dto.UpdatedBy = actingUser(r).String()
 	result, err := h.uc.UpsertItemPurchaseCost(r.Context(), dto)
 	if err != nil {
 		security.RespondUseCaseError(w, err)

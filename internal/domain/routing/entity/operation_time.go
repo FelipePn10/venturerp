@@ -43,6 +43,18 @@ type TimeComponents struct {
 	Unit       string  // MIN | HORA | DIA
 }
 
+// TempoDeMaquinaDaOperacao é o tempo de máquina padrão da operação de
+// biblioteca: `run_time`, ou o tempo padrão LEGADO quando ele é zero — como a
+// tela sempre prometeu ("usado só quando o tempo de máquina é zero"). Operações
+// cadastradas antes do modelo de tempo têm só o legado; sem este fallback elas
+// entravam com zero hora de máquina na OP, no custo e no prazo.
+func TempoDeMaquinaDaOperacao(run, legado float64) float64 {
+	if run <= 0 && legado > 0 {
+		return legado
+	}
+	return run
+}
+
 // TimeOverrides holds a route-operation's per-component overrides.
 // A nil pointer means "inherit the operation default".
 type TimeOverrides struct {
@@ -70,6 +82,16 @@ type OperationTime struct {
 	Wait       float64 `json:"wait_hours"`
 	Move       float64 `json:"move_hours"`
 	CrewSize   float64 `json:"crew_size"`
+	// UnitsPerPiece é quanto da BASE do tempo cada peça tem: a área em m² na
+	// base M2, o comprimento em metros na METRO_LINEAR etc. (ver FatorDaBase).
+	// O tempo de máquina vale por RunBaseQty unidades da base. Zero = 1 (por
+	// peça), que é o caso de sempre.
+	UnitsPerPiece float64 `json:"units_per_piece"`
+	// SemMedida marca a etapa com base de tempo que a peça não informa (m² sem
+	// comprimento e largura no item, atributo de PDM ausente). Ela fica sem
+	// tempo de máquina — chutar 1 daria um tempo errado em silêncio — e a
+	// prontidão do roteiro trava o planejamento até o cadastro ser completado.
+	SemMedida bool `json:"missing_measure,omitempty"`
 }
 
 // ResolveOperationTime merges route-op overrides over operation defaults and
@@ -128,7 +150,19 @@ func (t OperationTime) Batches(qty float64) float64 {
 	if qty <= 0 {
 		return 0
 	}
-	return math.Ceil(qty / base)
+	// Precisão de 1e-9 antes do teto: 0,36 m² × 100 peças dá 36,000000000000004
+	// em float e viraria 37 ciclos.
+	return math.Ceil(math.Round(qty*t.unidadesPorPeca()/base*1e9) / 1e9)
+}
+
+func (t OperationTime) unidadesPorPeca() float64 {
+	if t.SemMedida {
+		return 0
+	}
+	if t.UnitsPerPiece <= 0 {
+		return 1
+	}
+	return t.UnitsPerPiece
 }
 
 // SetupMachineHours é a parcela de PREPARAÇÃO dentro da ocupação de máquina.

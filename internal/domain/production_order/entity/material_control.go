@@ -33,6 +33,9 @@ type ProductionOrderMaterial struct {
 	CreatedAt           time.Time       `json:"created_at"`
 	UpdatedAt           time.Time       `json:"updated_at"`
 	CreatedBy           uuid.UUID       `json:"created_by"`
+	// RouteOperationSequence: etapa do roteiro em que o material entra (nil =
+	// no início da ordem). Copiada da estrutura na criação da OP.
+	RouteOperationSequence *int16 `json:"route_operation_sequence,omitempty"`
 }
 
 type LotAllocation struct {

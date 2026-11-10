@@ -51,8 +51,14 @@ func (r *APSRepositorySQLC) GetSelectedOrderOperations(ctx context.Context, orde
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT op.id,op.sequence,op.work_center_id,op.planned_hours,op.setup_hours
-		FROM production_order_operations op WHERE op.enterprise_id=$1 AND op.production_order_id=$2 AND op.status NOT IN ('DONE','SKIPPED')
+	rows, err := r.pool.Query(ctx, `SELECT op.id,op.sequence,op.work_center_id,
+		CASE WHEN op.status='IN_PROGRESS' THEN GREATEST(op.planned_hours+op.setup_hours-op.actual_hours,0) ELSE op.planned_hours END,
+		CASE WHEN op.status='IN_PROGRESS' THEN 0 ELSE op.setup_hours END,
+		op.route_operation_id, COALESCE(ro.lead_time_days, o.lead_time_days, 0)::int
+		FROM production_order_operations op
+		LEFT JOIN route_operations ro ON ro.id = op.route_operation_id
+		LEFT JOIN operations o ON o.id = ro.operation_id AND o.enterprise_id = op.enterprise_id
+		WHERE op.enterprise_id=$1 AND op.production_order_id=$2 AND op.status NOT IN ('DONE','SKIPPED')
 		AND ($3::bigint[] IS NULL OR op.work_center_id=ANY($3)) AND ($4::bigint[] IS NULL OR op.id=ANY($4))
 		AND ($5::bigint[] IS NULL OR EXISTS(SELECT 1 FROM machines m JOIN machine_types mt ON mt.code=m.machine_type_code WHERE m.id=ANY($5) AND mt.id=op.work_center_id AND m.enterprise_id=$1)) ORDER BY op.sequence`,
 		enterpriseID, orderID, nullIDs(f.WorkCenterIDs), nullIDs(f.OperationIDs), nullIDs(f.MachineIDs))
@@ -63,7 +69,7 @@ func (r *APSRepositorySQLC) GetSelectedOrderOperations(ctx context.Context, orde
 	out := []domainrepo.OpRow{}
 	for rows.Next() {
 		var v domainrepo.OpRow
-		if err := rows.Scan(&v.ID, &v.Sequence, &v.WorkCenterID, &v.PlannedHours, &v.SetupHours); err != nil {
+		if err := rows.Scan(&v.ID, &v.Sequence, &v.WorkCenterID, &v.PlannedHours, &v.SetupHours, &v.RouteOperationID, &v.LeadDays); err != nil {
 			return nil, err
 		}
 		out = append(out, v)

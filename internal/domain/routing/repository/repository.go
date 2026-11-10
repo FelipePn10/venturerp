@@ -5,6 +5,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type RoutingRepository interface {
@@ -50,6 +51,11 @@ type RoutingRepository interface {
 
 	// MRP
 	GetRouteForItem(ctx context.Context, itemCode int64, mask string) (*entity.ManufacturingRoute, error)
+	// CopyRoute cria `destino` e copia as etapas da origem e tudo o que pende
+	// delas, numa transação só.
+	CopyRoute(ctx context.Context, sourceRouteID int64, destino *entity.ManufacturingRoute) (*entity.ManufacturingRoute, entity.RouteCopyResult, error)
+	// ListRouteTemplates lista os roteiros-modelo (sem item).
+	ListRouteTemplates(ctx context.Context, incluirInativos bool) ([]*entity.ManufacturingRoute, error)
 	ItemHasRoute(ctx context.Context, itemCode int64) (bool, error)
 	NextRouteCode(ctx context.Context) (int64, error)
 	NextOperationCode(ctx context.Context) (int64, error)
@@ -77,4 +83,44 @@ type RoutingRepository interface {
 	// GetExternalOpsByItem returns external/third-party operations from the
 	// standard route of the given item. Returns empty slice when no route exists.
 	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*entity.ExternalOp, error)
+}
+
+// escolhePorQuantidade é o pedaço do repositório que considera a faixa de lote.
+type escolhePorQuantidade interface {
+	GetRouteForItemQty(ctx context.Context, itemCode int64, mask string, qty *decimal.Decimal) (*entity.ManufacturingRoute, error)
+}
+
+type escolheSemQuantidade interface {
+	GetRouteForItem(ctx context.Context, itemCode int64, mask string) (*entity.ManufacturingRoute, error)
+}
+
+type externasPorOrdem interface {
+	GetExternalOpsForOrder(ctx context.Context, itemCode int64, mask string, qty decimal.Decimal) ([]*entity.ExternalOp, error)
+}
+
+type externasPorItem interface {
+	GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*entity.ExternalOp, error)
+}
+
+// OperacoesExternasDaOrdem: etapas externas do roteiro que a OP da máscara e
+// quantidade vai usar — a ordem de serviço nasce do mesmo roteiro que a OP
+// explode. Repositório que não conhece máscara/quantidade cai no genérico.
+func OperacoesExternasDaOrdem(ctx context.Context, repo externasPorItem, itemCode int64, mask string, qty decimal.Decimal) ([]*entity.ExternalOp, error) {
+	if r, ok := repo.(externasPorOrdem); ok {
+		return r.GetExternalOpsForOrder(ctx, itemCode, mask, qty)
+	}
+	return repo.GetExternalOpsByItem(ctx, itemCode)
+}
+
+// RoteiroParaQuantidade escolhe o roteiro do item para a quantidade da ordem:
+// (GetRouteForItemQty fica FORA de RoutingRepository de propósito: fakes que
+// embutem a interface responderiam à asserção e chamariam um método nil.)
+// com a faixa de lote quando o repositório sabe considerá-la, senão pela regra
+// sem quantidade. Existe para os consumidores com interfaces estreitas (OP,
+// ordem planejada, capacidade, custo) não precisarem mudar de contrato.
+func RoteiroParaQuantidade(ctx context.Context, repo escolheSemQuantidade, itemCode int64, mask string, qty decimal.Decimal) (*entity.ManufacturingRoute, error) {
+	if r, ok := repo.(escolhePorQuantidade); ok && qty.IsPositive() {
+		return r.GetRouteForItemQty(ctx, itemCode, mask, &qty)
+	}
+	return repo.GetRouteForItem(ctx, itemCode, mask)
 }

@@ -27,6 +27,26 @@ func NewReadinessAdapters(pool *pgxpool.Pool) *ReadinessAdapters {
 // HourlyRate devolve a tarifa por hora do centro e se ela existe. Tarifa
 // ausente não é zero: zero é uma tarifa cadastrada como zero, e o checklist
 // precisa distinguir "de graça" de "ninguém cadastrou".
+// Tarifas devolve a tarifa de máquina (a de máquina ou, sem ela, a hora geral
+// do centro) e a de mão de obra — a mesma leitura do custo padrão
+// (WorkCenterCost.MachineRate / LaborRate). Centro sem linha: zero e zero.
+func (a *ReadinessAdapters) Tarifas(ctx context.Context, workCenterID int64) (float64, float64, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	var maquina, maoDeObra float64
+	err = a.pool.QueryRow(ctx,
+		`SELECT COALESCE(NULLIF(machine_cost_per_hour, 0), cost_per_hour, 0)::float8,
+		        COALESCE(labor_cost_per_hour, 0)::float8
+		 FROM work_center_costs WHERE work_center_id = $1 AND enterprise_id = $2`,
+		workCenterID, empresa).Scan(&maquina, &maoDeObra)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, nil
+	}
+	return maquina, maoDeObra, err
+}
+
 func (a *ReadinessAdapters) HourlyRate(ctx context.Context, workCenterID int64) (float64, bool, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {

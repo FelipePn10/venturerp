@@ -13,6 +13,8 @@ const (
 	SupplySourcePlannedOrder  SupplySourceType = "PLANNED_ORDER"
 	SupplySourcePurchaseOrder SupplySourceType = "PURCHASE_ORDER"
 	SupplySourceInTransit     SupplySourceType = "IN_TRANSIT"
+	// SupplySourceProductionOrder: OF aberta sem ordem planejada firme.
+	SupplySourceProductionOrder SupplySourceType = "PRODUCTION_ORDER"
 )
 
 // SupplyEntry represents one unit of firm (approved) supply used in
@@ -35,4 +37,43 @@ type PlannedOrderSupplyPort interface {
 	// the given item codes, grouped by item_code.
 	// Only approved / firm orders must be returned — draft suggestions must not.
 	ListFirmSupplyForItems(ctx context.Context, itemCodes []int64) (map[int64][]SupplyEntry, error)
+}
+
+// OrderAllocation é o empenho de uma OF aberta: material da lista que ainda
+// não saiu do estoque. Para o MRP é demanda dependente do componente — como a
+// reserva da ordem de produção no MD04 do SAP.
+type OrderAllocation struct {
+	ProductionOrderID int64
+	ParentItemCode    int64
+	ParentMask        string
+	ParentQuantity    decimal.Decimal
+	ItemCode          int64
+	Mask              string
+	Quantity          decimal.Decimal
+	OrderStart        time.Time
+	OrderEnd          time.Time
+	// Step: etapa do roteiro do pai em que o componente entra (nil = início).
+	Step *int16
+}
+
+// OrderAllocationsPort é opcional: o adaptador de suprimento que a implementa
+// faz o MRP planejar o componente das ordens já abertas.
+type OrderAllocationsPort interface {
+	ListOpenOrderAllocations(ctx context.Context) ([]OrderAllocation, error)
+}
+
+// FirmPlannedWithoutOrder é a ordem planejada de fabricação firme que ainda não
+// virou OF: suprimento do item e, portanto, demanda dos componentes.
+type FirmPlannedWithoutOrder struct {
+	Code     int64
+	ItemCode int64
+	Mask     string
+	Quantity decimal.Decimal
+	Start    time.Time
+	Need     time.Time
+}
+
+// FirmPlannedWithoutOrderPort é opcional no adaptador de suprimento.
+type FirmPlannedWithoutOrderPort interface {
+	ListFirmPlannedProductionWithoutOrder(ctx context.Context) ([]FirmPlannedWithoutOrder, error)
 }

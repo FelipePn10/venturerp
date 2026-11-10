@@ -3,6 +3,8 @@ package planned_order_uc
 import (
 	"context"
 	"fmt"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
+	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
 	"time"
@@ -141,7 +143,7 @@ func (uc *FirmPlannedOrderUseCase) ExecuteTransition(ctx context.Context, dto re
 			if order.Mask != nil {
 				mask = *order.Mask
 			}
-			if _, routeErr := uc.Routing.GetRouteForItem(ctx, order.ItemCode, mask); routeErr != nil {
+			if _, routeErr := routingrepo.RoteiroParaQuantidade(ctx, uc.Routing, order.ItemCode, mask, order.Quantity); routeErr != nil {
 				return nil, errorsuc.NewValidationError("o item planejado não possui roteiro de fabricação aprovado")
 			}
 		}
@@ -210,7 +212,19 @@ func (uc *FirmPlannedOrderUseCase) validateTransition(ctx context.Context, order
 		return ErrInvalidPlanningTransition
 	}
 	if target != "PLANNED" && uc.ReleaseValidator != nil {
-		if err := uc.ReleaseValidator.ValidateProductionRelease(ctx, order.ItemCode); err != nil {
+		// Com máscara e quantidade, a validação olha o roteiro que a OP vai
+		// usar; o validador antigo (só item) fica para quem não os conhece.
+		if v, ok := uc.ReleaseValidator.(interface {
+			ValidateProductionReleaseForOrder(context.Context, int64, string, decimal.Decimal) error
+		}); ok {
+			mascara := ""
+			if order.Mask != nil {
+				mascara = *order.Mask
+			}
+			if err := v.ValidateProductionReleaseForOrder(ctx, order.ItemCode, mascara, order.Quantity); err != nil {
+				return err
+			}
+		} else if err := uc.ReleaseValidator.ValidateProductionRelease(ctx, order.ItemCode); err != nil {
 			return err
 		}
 	}
@@ -269,7 +283,11 @@ func (uc *FirmPlannedOrderUseCase) validateTransition(ctx context.Context, order
 // items of the firmed order's external/third-party operations. Returns nil when the
 // item has no external operations with a service item configured.
 func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Context, order *entity.PlannedOrder) (int64, error) {
-	ext, err := uc.ExternalOps.GetExternalOpsByItem(ctx, order.ItemCode)
+	mascara := ""
+	if order.Mask != nil {
+		mascara = *order.Mask
+	}
+	ext, err := routingrepo.OperacoesExternasDaOrdem(ctx, uc.ExternalOps, order.ItemCode, mascara, order.Quantity)
 	if err != nil || len(ext) == 0 {
 		return 0, err
 	}
@@ -427,7 +445,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 		return nil, err
 	}
 	if uc.Routing != nil && uc.OrderOps != nil {
-		route, routeErr := uc.Routing.GetRouteForItem(ctx, order.ItemCode, mask)
+		route, routeErr := routingrepo.RoteiroParaQuantidade(ctx, uc.Routing, order.ItemCode, mask, order.Quantity)
 		if routeErr != nil {
 			return nil, errorsuc.NewValidationError("o item planejado não possui roteiro de fabricação aprovado")
 		}

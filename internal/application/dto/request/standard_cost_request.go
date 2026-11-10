@@ -15,10 +15,13 @@ type UpsertWorkCenterCostDTO struct {
 }
 
 type UpsertItemPurchaseCostDTO struct {
-	ItemCode  int64           `json:"item_code"`
-	UnitCost  decimal.Decimal `json:"unit_cost"`
-	Currency  string          `json:"currency"`
-	UpdatedBy string          `json:"updated_by"`
+	ItemCode int64           `json:"item_code"`
+	UnitCost decimal.Decimal `json:"unit_cost"`
+	Currency string          `json:"currency"`
+	// UpdatedBy vem do JWT (handler), como na tarifa do centro: aceitar do
+	// corpo deixava assinar a alteração como outra pessoa — e, sem ele, a tela
+	// recebia "não foi possível identificar o usuário".
+	UpdatedBy string `json:"-"`
 }
 
 type CostRollupDTO struct {

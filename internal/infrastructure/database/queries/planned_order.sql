@@ -136,6 +136,10 @@ WHERE po.item_code = ANY(@item_codes::bigint[])
   AND po.enterprise_id = @enterprise_id
   AND po.is_firm = TRUE
   AND po.is_active = TRUE
+  -- A ordem de SERVIÇO (etapa em terceiro) não traz o item: o item volta pela
+  -- OF da qual a etapa faz parte. Contá-la dobrava o suprimento — firmar a
+  -- sugestão de fabricação e a de serviço da mesma peça dava 2× a peça.
+  AND po.order_type <> 'OUTSOURCING'
   AND NOT COALESCE(prod.encerrada, FALSE)
   AND po.quantity > COALESCE(prod.entregue, 0) + COALESCE(compra.chegou, 0)
 ORDER BY po.item_code, po.need_date;
@@ -167,3 +171,100 @@ SELECT po.order_number
    AND po.status NOT IN ('CANCELLED')
  ORDER BY po.id DESC
  LIMIT 1;
+
+-- name: ListPurchasePlannedOrdersWithOrder :many
+-- Ordens planejadas de compra que já viraram pedido (item de pedido não
+-- cancelado apontando para elas). A fila do comprador (VPDC0200) é o resto:
+-- firmada no MRP ou não, a compra só sai da fila quando vira pedido.
+SELECT DISTINCT po.code
+FROM planned_orders po
+JOIN purchase_order_items poi ON poi.planned_order_code = po.code AND poi.status <> 'CANCELLED'
+JOIN purchase_orders pc ON pc.code = poi.purchase_order_code AND pc.status <> 'CANCELLED'
+JOIN enterprise emp ON emp.code = pc.enterprise_code AND emp.id = po.enterprise_id
+WHERE po.enterprise_id = sqlc.arg(enterprise_id)
+  AND po.order_type = 'PURCHASE';
+
+-- name: ListOpenProductionOrderSupply :many
+-- OF aberta que NÃO está coberta por ordem planejada firme (OF manual, da
+-- demanda independente, de ordem planejada não firme): o que falta produzir é
+-- suprimento do item na data de término. A OF de ordem firme já entra pela
+-- ordem planejada (ListFirmPlannedOrdersByItems) — contar as duas dobrava.
+SELECT o.id, o.item_code,
+       GREATEST(o.planned_qty - o.produced_qty, 0)::numeric AS quantity,
+       COALESCE(o.end_date, o.start_date, CURRENT_DATE)::date AS arrival_date
+FROM production_orders o
+WHERE o.enterprise_id = sqlc.arg(enterprise_id)
+  AND o.item_code = ANY(sqlc.arg(item_codes)::bigint[])
+  AND o.status NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED')
+  AND o.planned_qty > o.produced_qty
+  AND NOT EXISTS (SELECT 1 FROM planned_orders p
+                   WHERE p.id = o.planned_order_id AND p.enterprise_id = o.enterprise_id
+                     AND p.is_firm AND p.is_active AND p.status <> 'CANCELLED');
+
+-- name: ListOpenPurchaseOrderSupply :many
+-- Item de pedido de compra em aberto que NÃO veio de ordem planejada firme
+-- (pedido lançado pelo comprador): o saldo a receber, na unidade de estoque, é
+-- suprimento na data prometida. Rascunho conta — o comprador já assumiu a
+-- compra; não contar fazia o MRP sugerir de novo.
+SELECT i.code, i.item_code,
+       (GREATEST(i.requested_qty - i.received_qty - i.cancelled_qty, 0)
+        * CASE WHEN COALESCE(i.internal_qty, 0) > 0 AND i.requested_qty > 0
+               THEN i.internal_qty / i.requested_qty ELSE 1 END)::numeric AS quantity,
+       COALESCE(i.promised_date, i.delivery_date, pc.delivery_date, CURRENT_DATE)::date AS arrival_date
+FROM purchase_order_items i
+JOIN purchase_orders pc ON pc.code = i.purchase_order_code
+JOIN enterprise emp ON emp.code = pc.enterprise_code
+WHERE emp.id = sqlc.arg(enterprise_id)
+  AND i.item_code = ANY(sqlc.arg(item_codes)::bigint[])
+  AND i.is_active
+  AND i.status NOT IN ('CANCELLED', 'RECEIVED')
+  AND pc.status NOT IN ('CANCELLED', 'RECEIVED')
+  AND i.requested_qty > i.received_qty + i.cancelled_qty
+  AND NOT EXISTS (SELECT 1 FROM planned_orders p
+                   WHERE p.code = i.planned_order_code AND p.enterprise_id = emp.id
+                     AND p.is_firm AND p.is_active AND p.status <> 'CANCELLED');
+
+-- name: ListOpenProductionOrderAllocations :many
+-- Empenho das OFs abertas: o material da lista que ainda não saiu do estoque
+-- (necessário − atendido) é demanda dependente do componente. Sem isto, firmar
+-- a ordem fazia a necessidade do componente sumir no MRP seguinte.
+SELECT o.id AS production_order_id, o.item_code AS parent_item_code, o.mask AS parent_mask, o.planned_qty AS parent_quantity,
+       COALESCE(m.substituted_item_code, m.item_code)::bigint AS item_code, m.mask,
+       (m.quantity - m.attended_quantity)::numeric AS quantity,
+       COALESCE(o.start_date, CURRENT_DATE)::date AS start_date,
+       COALESCE(o.end_date, o.start_date, CURRENT_DATE)::date AS end_date,
+       m.route_operation_sequence
+FROM production_order_materials m
+JOIN production_orders o ON o.id = m.production_order_id AND o.enterprise_id = m.enterprise_id
+WHERE m.enterprise_id = sqlc.arg(enterprise_id)
+  AND m.material_kind = 'DEMAND'
+  AND o.status NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED')
+  AND m.quantity > m.attended_quantity
+ORDER BY o.id, m.id;
+
+-- name: ListFirmPlannedProductionWithoutOrder :many
+-- Ordem planejada de fabricação firme que ainda não virou OF: o MRP a conta
+-- como suprimento do item, então os componentes dela têm de ser demanda — a
+-- estrutura é explodida pelo que falta. Firmar já cria a OF; isto cobre a
+-- planejada firmada sem OF (OF cancelada fica de fora: a planejada morreu junto).
+SELECT po.code, po.item_code, COALESCE(po.mask, '')::text AS mask,
+       COALESCE(NULLIF(po.quantity_corrected, 0), po.quantity)::numeric AS quantity,
+       COALESCE(po.start_date, po.need_date)::date AS start_date,
+       po.need_date
+FROM planned_orders po
+WHERE po.enterprise_id = sqlc.arg(enterprise_id)
+  AND po.order_type = 'PRODUCTION'
+  AND po.is_firm AND po.is_active AND po.status <> 'CANCELLED'
+  AND NOT EXISTS (SELECT 1 FROM production_orders o WHERE o.planned_order_id = po.id AND o.enterprise_id = po.enterprise_id);
+
+-- name: ListOpenPlannedOrderExceptions :many
+-- Mensagens de exceção do MRP ainda não tratadas que apontam uma ordem
+-- planejada: a fila do comprador mostra "MRP recomenda cancelar/adiar" na
+-- própria sugestão — antes ele só via isso no VMRP0100.
+SELECT e.source_code, e.message_type, COALESCE(e.description, '')::text AS description, e.suggested_date
+FROM mrp_exception_messages e
+WHERE e.enterprise_id = sqlc.arg(enterprise_id)
+  AND e.source_type = 'PLANNED_ORDER'
+  AND e.handling_action IS NULL
+  AND e.source_code IS NOT NULL
+ORDER BY e.source_code, e.created_at DESC;

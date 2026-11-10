@@ -42,7 +42,7 @@ Detalhe técnico, com as decisões e limites: `docs/dev/maquinas-capacidade-mrp.
 O Dia 1 foi revisto para acompanhar as telas de engenharia:
 
 - **Roteiro de fabricação** mudou de código: `VPRO0100` deixou de existir e a tela é a **VENT0202**
-  (roteiro por item) / **VENT0115** (roteiros padrão).
+  (roteiro por item, modelos de roteiro e biblioteca de operações).
 - **Modelo de tempo completo** na operação — preparação por lote, tempo de máquina, mão de obra,
   peças por ciclo, operadores, fila, espera e movimentação — e a unidade dos tempos passou a aceitar
   minutos, o que dispensa converter a ficha para horas.

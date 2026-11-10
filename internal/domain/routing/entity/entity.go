@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
@@ -56,6 +57,11 @@ type Operation struct {
 	// sai bom. Uma etapa de roteiro pode sobrepor.
 	ScrapPct float64
 
+	// TimeBasis é a medida da peça em que o tempo de máquina é contado (PECA,
+	// M2, METRO_LINEAR, PERIMETRO, ATRIBUTO); ver base_de_tempo.go.
+	TimeBasis          string
+	TimeBasisAttribute *string
+
 	// Subcontracting defaults (EXTERNA / TERCEIROS). Nil for internal operations.
 	SupplierID           *int64
 	ServiceItemCode      *int64
@@ -73,7 +79,7 @@ type Operation struct {
 func (o *Operation) DefaultTime() TimeComponents {
 	return TimeComponents{
 		Setup:      o.SetupTime,
-		Run:        o.RunTime,
+		Run:        TempoDeMaquinaDaOperacao(o.RunTime, o.StandardTime),
 		Labor:      o.LaborTime,
 		RunBaseQty: o.RunBaseQty,
 		Queue:      o.QueueTime,
@@ -134,10 +140,18 @@ type ManufacturingRoute struct {
 	IsStandard  bool
 	ValidFrom   *time.Time // nil = valid from the beginning
 	ValidTo     *time.Time // nil = open-ended
-	IsActive    bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	CreatedBy   uuid.UUID
+	// IsTemplate marca o roteiro-modelo: sem item, só serve de ponto de partida
+	// para criar o roteiro de um item por cópia. Nunca é planejado.
+	IsTemplate bool
+	// LotMin/LotMax: faixa de quantidade em que este roteiro vale (nil = sem
+	// limite). É como o laser fica com os lotes grandes e a guilhotina com os
+	// pequenos sem ninguém escolher à mão.
+	LotMin    *decimal.Decimal
+	LotMax    *decimal.Decimal
+	IsActive  bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	CreatedBy uuid.UUID
 }
 
 func NewManufacturingRoute(
@@ -176,6 +190,40 @@ func NewManufacturingRoute(
 	}, nil
 }
 
+// NewRouteTemplate cria um roteiro-modelo: sem item, sem máscara, nunca padrão.
+func NewRouteTemplate(code int64, description string, createdBy uuid.UUID) (*ManufacturingRoute, error) {
+	if code <= 0 {
+		return nil, domainerr.NewValidation("o código do roteiro deve ser maior que zero")
+	}
+	if strings.TrimSpace(description) == "" {
+		return nil, domainerr.NewValidation("dê um nome ao modelo (ex.: \"Chapa cortada, dobrada e pintada\")")
+	}
+	d := strings.TrimSpace(description)
+	return &ManufacturingRoute{
+		Code:        code,
+		Alternative: 1,
+		Description: &d,
+		Situation:   RouteSituationApproved,
+		IsTemplate:  true,
+		IsActive:    true,
+		CreatedBy:   createdBy,
+	}, nil
+}
+
+// ValidaFaixaDeLote recusa faixa invertida ou com zero/negativo.
+func ValidaFaixaDeLote(min, max *decimal.Decimal) error {
+	if min != nil && !min.IsPositive() {
+		return domainerr.NewValidation("o lote mínimo do roteiro deve ser maior que zero")
+	}
+	if max != nil && !max.IsPositive() {
+		return domainerr.NewValidation("o lote máximo do roteiro deve ser maior que zero")
+	}
+	if min != nil && max != nil && max.LessThan(*min) {
+		return domainerr.NewValidation("o lote máximo do roteiro não pode ser menor que o mínimo")
+	}
+	return nil
+}
+
 // RouteOperation is one step inside a manufacturing route.
 type RouteOperation struct {
 	ID              int64
@@ -204,6 +252,12 @@ type RouteOperation struct {
 
 	// ScrapPct sobrepõe o refugo da operação de biblioteca (nil ⇒ herda).
 	ScrapPct *float64
+	// TimeBasis sobrepõe a base de tempo da operação (nil ⇒ herda).
+	TimeBasis          *string
+	TimeBasisAttribute *string
+	// Base que vale de fato (etapa ∘ operação), resolvida na leitura.
+	EffectiveTimeBasis          string
+	EffectiveTimeBasisAttribute *string
 	// InspectionRequired marca que esta etapa tem inspeção de qualidade; a
 	// ordem de produção gera o registro de inspeção ao chegar nela.
 	InspectionRequired bool
@@ -227,7 +281,18 @@ type RouteOperation struct {
 	// da operação), em DIAS CORRIDOS. Não é tempo de máquina: enquanto a peça
 	// está no terceiro, nenhum recurso nosso está ocupado.
 	EffectiveSubcontractDays int32
-	RequiresOperator         bool // herdado de machine_types; quando true o CPM ignora overlap_pct
+	// Terceirização que vale de fato (etapa ∘ biblioteca).
+	EffectiveCostPerUnit *decimal.Decimal
+	EffectiveSupplierID  *int64
+	RequiresOperator     bool // herdado de machine_types; quando true o CPM ignora overlap_pct
+}
+
+// ConsomeTempo diz se a etapa ocupa prazo, capacidade e custo. Etapa FANTASMA
+// (documental: aparece no roteiro, ninguém a executa) e INATIVA ficam fora —
+// é a regra que custo, CRP e capacidade já seguiam e que o caminho crítico não
+// seguia: o lead time do roteiro e o prazo do MRP contavam a etapa fantasma.
+func (ro *RouteOperation) ConsomeTempo() bool {
+	return ro.Situation != RouteOpGhost && ro.Situation != RouteOpInactive
 }
 
 // Overrides returns the route-operation's time overrides for resolution.
@@ -337,6 +402,11 @@ type LeadTimeResult struct {
 	// topológico não processava esses nós e o roteiro parecia instantâneo —
 	// inclusive para o MRP, que usa o mesmo cálculo.
 	CycleOperations []int64
+
+	// EarlyStartHours é o início mais cedo de cada etapa (id → horas desde o
+	// começo da ordem). É o que data a necessidade de um componente alocado a
+	// uma etapa: a ferragem da montagem não precisa estar lá no dia do corte.
+	EarlyStartHours map[int64]float64
 }
 
 // HasCycle diz se a rede de precedências tem ciclo. Com ciclo, TotalHours não
@@ -385,4 +455,14 @@ type RouteInspection struct {
 	IsActive            bool
 	CreatedAt           time.Time
 	CreatedBy           uuid.UUID
+}
+
+// RouteCopyResult conta o que uma cópia de roteiro levou.
+type RouteCopyResult struct {
+	Steps        int64 `json:"steps"`
+	Dependencies int64 `json:"dependencies"`
+	Resources    int64 `json:"resources"`
+	Tools        int64 `json:"tools"`
+	Documents    int64 `json:"documents"`
+	Inspections  int64 `json:"inspections"`
 }

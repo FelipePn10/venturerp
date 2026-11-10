@@ -634,7 +634,8 @@ func (app *application) mount() chi.Router {
 		Inspection: routingReadinessAdapters,
 		Auth:       authService,
 	}
-	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC, routingReadinessUC)
+	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC, routingReadinessUC).
+		WithMateriaisEDesempenho(&routing_uc.MateriaisEDesempenhoUseCase{Repo: rRepo.(*routingRepo.RoutingRepositorySQLC)})
 	thirdPartyServiceRepository := thirdPartyServiceRepo.New(app.db.Pool)
 	thirdPartyServiceHandler := handler.NewThirdPartyServiceHandler(thirdPartyServiceUC.New(thirdPartyServiceRepository, itemRepo))
 
@@ -1242,6 +1243,9 @@ func (app *application) mount() chi.Router {
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
+	// Ordem de fabricação impressa: o timbre vem da configuração fiscal.
+	prodOrderHandler.WithFicha(&productionOrderUc.FichaDaOrdemUseCase{Repo: prodOrderRepo, Marca: fiscalRepository, Auth: authService})
+	prodOrderHandler.WithCadastrosDoPosto(&productionOrderUc.CadastrosDoPostoUseCase{Repo: prodOrderRepo, Auth: authService})
 	// CIAP: o crédito do ICMS do ativo imobilizado, em parcelas (VFIS0345).
 	ciapHandler := &handler.CIAPHandler{UC: &fiscalUC.CIAPUseCase{Repo: fiscalRepo.NewCIAPPG(app.db.Pool), Fiscal: fiscalRepository, Auth: authService}}
 	// Parâmetros e vínculos da contabilização automática (entrada, pagamentos,
@@ -2022,22 +2026,25 @@ func (app *application) mount() chi.Router {
 			// O posto precisa ACHAR a ordem antes de apontar nela; sem a lista, a
 			// tela do operador abre vazia e o perfil não serve para nada.
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/list", prodOrderHandler.List)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Get("/shop-floor-lookups", prodOrderHandler.CadastrosDoPosto)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/maintenance", prodOrderHandler.Maintenance)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/delivery-candidates", prodOrderHandler.DeliveryCandidates)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/material-availability", prodOrderHandler.MaterialAvailabilitySummary)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}", prodOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", prodOrderHandler.Maintain)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operational", prodOrderHandler.Operational)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/pdf", prodOrderHandler.PDF)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/start", prodOrderHandler.Start)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport), httpmw.RequireIdempotencyKey).Post("/appointment", prodOrderHandler.AddAppointment)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/consumption", prodOrderHandler.AddConsumption)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/complete", prodOrderHandler.Complete)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/close", prodOrderHandler.Close)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancel", prodOrderHandler.Cancel)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/appointments", prodOrderHandler.GetAppointments)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/consumptions", prodOrderHandler.GetConsumptions)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/appointments", prodOrderHandler.GetAppointments)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/consumptions", prodOrderHandler.GetConsumptions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/settle-cost", prodOrderHandler.SettleCost)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/cost", prodOrderHandler.GetCost)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/costs/resettle", prodOrderHandler.ReapurarCustos)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/{id}/scrap-return", prodOrderHandler.ReturnScrap)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/operations/explode", prodOrderHandler.ExplodeRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operations", prodOrderHandler.ListOrderOperations)
@@ -3024,7 +3031,13 @@ func (app *application) mount() chi.Router {
 			r.Route("/routes", func(r chi.Router) {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", routingHandler.CreateRoute)
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", routingHandler.ListRoutesByItem)
+				// Roteiros-modelo (sem item): ponto de partida para criar o roteiro de um item por cópia.
+				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/templates", routingHandler.ListRouteTemplates)
 				r.Route("/{id}", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/copy", routingHandler.CopyRoute)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/materials", routingHandler.ListRouteMaterials)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/materials", routingHandler.SetRouteMaterialStep)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/performance", routingHandler.RoutePerformance)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", routingHandler.GetRouteDetail)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", routingHandler.UpdateRoute)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/", routingHandler.DeactivateRoute)

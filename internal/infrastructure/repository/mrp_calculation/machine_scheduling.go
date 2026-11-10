@@ -8,9 +8,11 @@ import (
 	machine "github.com/FelipePn10/panossoerp/internal/domain/machine/service"
 	domainrepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	routing "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 	"time"
 )
 
@@ -151,8 +153,13 @@ func (r *MRPCalculationRepositorySQLC) SuggestionHasOrder(ctx context.Context, c
 }
 
 func (r *MRPCalculationRepositorySQLC) MachineRoute(ctx context.Context, item int64, mask string) ([]*routingentity.RouteOperation, []*routingentity.NetworkEdge, error) {
+	return r.MachineRouteQty(ctx, item, mask, decimal.Zero)
+}
+
+// MachineRouteQty: o roteiro que a OP desta quantidade vai usar.
+func (r *MRPCalculationRepositorySQLC) MachineRouteQty(ctx context.Context, item int64, mask string, qty decimal.Decimal) ([]*routingentity.RouteOperation, []*routingentity.NetworkEdge, error) {
 	repo := routing.New(r.q)
-	route, err := repo.GetRouteForItem(ctx, item, mask)
+	route, err := routingrepo.RoteiroParaQuantidade(ctx, repo, item, mask, qty)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, nil
 	}

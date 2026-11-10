@@ -115,6 +115,14 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 			if current.Status != "PENDING" && current.Status != "IN_PROGRESS" {
 				return nil, errorsuc.NewValidationError("retome a etapa pausada ou interrompida antes de apontar; etapas concluídas não aceitam novos apontamentos")
 			}
+			// A etapa em terceiro anda pela OS, também pelo leitor do posto.
+			os, err := q.OpenServiceOrderOfOperation(ctx, sqlc.OpenServiceOrderOfOperationParams{OperationID: *operationID, EnterpriseID: command.EnterpriseID})
+			if err != nil {
+				return nil, err
+			}
+			if os != 0 {
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("esta etapa é feita pelo terceiro: ela anda pela OS %d (VTPS0100), não pelo apontamento", os))
+			}
 			blocked, err := q.OperationPredecessorsPending(ctx, *operationID)
 			if err != nil {
 				return nil, err
@@ -137,7 +145,11 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 			finalOperation = !successors
 		}
 		if finalOperation {
-			_, err = tx.Exec(ctx, `UPDATE production_orders SET produced_qty=produced_qty+$2::numeric,scrapped_qty=scrapped_qty+$3::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$4`, orderID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.EnterpriseID)
+			// "Produzido" da OF é o que ENTROU no estoque (a entrega soma). Somar
+			// aqui o apontamento da última etapa fazia a OF parecer entregue — na
+			// lista, no MRP (falta chegar) e no custo — sem nada no estoque. O
+			// refugo, sim, é do apontamento.
+			_, err = tx.Exec(ctx, `UPDATE production_orders SET scrapped_qty=scrapped_qty+$2::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$3`, orderID, command.ScrapQuantity.String(), command.EnterpriseID)
 			if err != nil {
 				return nil, err
 			}
@@ -146,6 +158,13 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 			dbStatus := "IN_PROGRESS"
 			publicStatus := "EM_ANDAMENTO"
 			if command.CompleteOperation {
+				pendente, err := q.OperationPredecessorsUnfinished(ctx, *operationID)
+				if err != nil {
+					return nil, err
+				}
+				if pendente {
+					return nil, errorsuc.NewValidationError("a etapa anterior ainda não terminou (o terceiro não devolveu todas as peças): conclua esta etapa depois")
+				}
 				dbStatus = "DONE"
 				publicStatus = "CONCLUIDA"
 			}

@@ -143,6 +143,15 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		opEndTime := startFrom
 		for _, op := range ordenadas {
 			if op.WorkCenterID == nil {
+				// Etapa em terceiro: não ocupa recurso nosso, mas as peças só
+				// voltam depois do prazo do fornecedor — a seguinte espera.
+				pronto := startFrom
+				for _, e := range predecessores[op.ID] {
+					if fim, ok := fimDaOperacao[e.PredecessorID]; ok {
+						pronto = maxTime(pronto, fim)
+					}
+				}
+				fimDaOperacao[op.ID] = pronto.AddDate(0, 0, op.LeadDays)
 				continue
 			}
 			wcID := *op.WorkCenterID
@@ -1054,6 +1063,15 @@ func (uc *APSUseCase) sequenciaRegressivo(
 		for i := len(ordenadas) - 1; i >= 0; i-- {
 			op := ordenadas[i]
 			if op.WorkCenterID == nil {
+				// Etapa em terceiro: as predecessoras têm de terminar antes do
+				// prazo do fornecedor, contado da sucessora mais cedo.
+				fim := order.PlannedDate
+				for _, e := range sucessores[op.ID] {
+					if inicioSuc, ok := inicioDaOperacao[e.SuccessorID]; ok {
+						fim = minTime(fim, inicioSuc)
+					}
+				}
+				inicioDaOperacao[op.ID] = fim.AddDate(0, 0, -op.LeadDays)
 				continue
 			}
 			wcID := *op.WorkCenterID

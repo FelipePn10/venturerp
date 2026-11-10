@@ -17,19 +17,22 @@ import (
 //   - Um item não pode ser componente de si mesmo
 //   - A adição de um componente não pode criar um ciclo na árvore
 type ItemStructure struct {
-	ID                int64
-	ParentCode        int64
-	ChildCode         int64
-	ChildDescription  string
-	Inherit           bool
-	ParentMask        *string // nil = genérico
-	Quantity          decimal.Decimal
-	LossPercentage    decimal.Decimal // 0–100 (%)
-	LossFormula       *string         // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
-	QuantityFormula   *string         // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
-	QuantityRounding  string          // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
-	QuantityScale     int16           // casas decimais do arredondamento (0–6)
-	UnitOfMeasurement types.TypeUnitOfMeasurementItem
+	// RouteOperationSequence é a etapa do roteiro do PAI em que o componente
+	// entra (nil = no início da ordem).
+	RouteOperationSequence *int16
+	ID                     int64
+	ParentCode             int64
+	ChildCode              int64
+	ChildDescription       string
+	Inherit                bool
+	ParentMask             *string // nil = genérico
+	Quantity               decimal.Decimal
+	LossPercentage         decimal.Decimal // 0–100 (%)
+	LossFormula            *string         // expressão matemática com variáveis de perguntas; substitui LossPercentage quando avaliável
+	QuantityFormula        *string         // expressão que calcula a quantidade a partir das variáveis do configurador (ex.: 2*(COMPRIMENTO/1000))
+	QuantityRounding       string          // NONE | UP | DOWN | NEAREST, aplicado ao resultado da fórmula
+	QuantityScale          int16           // casas decimais do arredondamento (0–6)
+	UnitOfMeasurement      types.TypeUnitOfMeasurementItem
 
 	// QuantityStockUOM é a mesma quantidade na unidade de ESTOQUE do filho, e
 	// é o número que MRP, ordem, custo e apontamento leem. ConversionFactor é o

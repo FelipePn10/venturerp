@@ -118,8 +118,11 @@ SELECT po.id, po.item_code,
        COALESCE(po.start_date, po.need_date) AS planned_date,
        mr.id AS route_id
 FROM planned_orders po
-LEFT JOIN manufacturing_routes mr ON mr.item_code = po.item_code
-    AND mr.is_standard = TRUE AND mr.is_active = TRUE
+-- Um roteiro por ordem (erp_roteiro_vigente). O JOIN antigo por "qualquer
+-- padrão do item" repetia a ordem quando o item tinha mais de um padrão (por
+-- máscara ou vigência) e a carga era contada em dobro.
+LEFT JOIN manufacturing_routes mr ON mr.id = erp_roteiro_vigente(po.enterprise_id, po.item_code, po.mask::text,
+    COALESCE(po.start_date, po.need_date)::date, COALESCE(po.quantity_corrected, po.quantity)::numeric)
 WHERE po.plan_code = $1
   AND po.is_active = TRUE
   AND po.status NOT IN ('CANCELLED')

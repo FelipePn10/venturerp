@@ -34,6 +34,8 @@ type StructureBOMEdge struct {
 	QuantityFormula  pgtype.Text
 	QuantityRounding string
 	QuantityScale    int16
+	// RouteOperationSequence: etapa do roteiro do pai em que o componente entra.
+	RouteOperationSequence *int16
 }
 
 // loadBOMForRoots fetches the complete BOM tree for a set of root items in a
@@ -41,18 +43,18 @@ type StructureBOMEdge struct {
 // cycle accidentally exists in the data.
 const loadBOMForRoots = `
 WITH RECURSIVE bom_tree AS (
-    SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied
+    SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied, route_operation_sequence
     FROM item_structures
     WHERE parent_code = ANY($1::bigint[]) AND is_active = TRUE
 
     UNION
 
-    SELECT s.parent_code, s.child_code, s.quantity, s.loss_percentage, s.parent_mask, s.is_coproduct, s.is_fixed_qty, s.substitute_group, s.substitute_priority, s.start_date, s.end_date, s.conversion_factor, s.quantity_formula, s.quantity_rounding, s.quantity_scale, s.customer_supplied
+    SELECT s.parent_code, s.child_code, s.quantity, s.loss_percentage, s.parent_mask, s.is_coproduct, s.is_fixed_qty, s.substitute_group, s.substitute_priority, s.start_date, s.end_date, s.conversion_factor, s.quantity_formula, s.quantity_rounding, s.quantity_scale, s.customer_supplied, s.route_operation_sequence
     FROM item_structures s
     INNER JOIN bom_tree bt ON s.parent_code = bt.child_code
     WHERE s.is_active = TRUE
 )
-SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied FROM bom_tree
+SELECT parent_code, child_code, quantity, loss_percentage, parent_mask, is_coproduct, is_fixed_qty, substitute_group, substitute_priority, start_date, end_date, conversion_factor, quantity_formula, quantity_rounding, quantity_scale, customer_supplied, route_operation_sequence FROM bom_tree
 `
 
 func (q *Queries) LoadBOMForRoots(ctx context.Context, rootCodes []int64) ([]StructureBOMEdge, error) {
@@ -82,6 +84,7 @@ func (q *Queries) LoadBOMForRoots(ctx context.Context, rootCodes []int64) ([]Str
 			&e.QuantityRounding,
 			&e.QuantityScale,
 			&e.CustomerSupplied,
+			&e.RouteOperationSequence,
 		); err != nil {
 			return nil, err
 		}

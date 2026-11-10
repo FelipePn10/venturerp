@@ -22,9 +22,9 @@ import (
 )
 
 const materialColumns = `id,production_order_id,material_kind,item_code,mask,substituted_item_code,
-	quantity,attended_quantity,warehouse_id,automatic_issue,notes,created_at,updated_at,created_by`
+	quantity,attended_quantity,warehouse_id,automatic_issue,notes,created_at,updated_at,created_by,route_operation_sequence`
 const qualifiedMaterialColumns = `material.id,material.production_order_id,material.material_kind,material.item_code,material.mask,material.substituted_item_code,
-	material.quantity,material.attended_quantity,material.warehouse_id,material.automatic_issue,material.notes,material.created_at,material.updated_at,material.created_by`
+	material.quantity,material.attended_quantity,material.warehouse_id,material.automatic_issue,material.notes,material.created_at,material.updated_at,material.created_by,material.route_operation_sequence`
 
 func (r *ProductionOrderRepositoryPGX) GetManualOrderPlanner(ctx context.Context, itemCode int64) (*int64, error) {
 	enterpriseID, err := tenant.ID(ctx)
@@ -108,6 +108,20 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 			return nil, err
 		}
 	}
+	// Em que etapa do roteiro cada material entra: cópia da estrutura no
+	// momento da criação (como o resto da OP, não muda se a estrutura mudar).
+	if _, err = tx.Exec(ctx, `UPDATE production_order_materials material
+		SET route_operation_sequence = linha.route_operation_sequence
+		FROM (SELECT DISTINCT ON (s.child_code) s.child_code, s.route_operation_sequence
+		      FROM item_structures s
+		      WHERE s.parent_code = $2 AND s.is_active AND s.route_operation_sequence IS NOT NULL
+		        AND (s.parent_mask IS NULL OR s.parent_mask = '' OR s.parent_mask = $4)
+		      ORDER BY s.child_code, (s.parent_mask = $4) DESC NULLS LAST, s.id) linha
+		WHERE material.production_order_id = $1 AND material.enterprise_id = $3
+		  AND linha.child_code = COALESCE(material.substituted_item_code, material.item_code)`,
+		created.ID, order.ItemCode, enterpriseID, order.Mask); err != nil {
+		return nil, fmt.Errorf("gravando a etapa dos materiais: %w", err)
+	}
 	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
 		return nil, err
 	}
@@ -129,7 +143,8 @@ func scanMaterial(row pgx.Row) (*entity.ProductionOrderMaterial, error) {
 	material := &entity.ProductionOrderMaterial{}
 	err := row.Scan(&material.ID, &material.ProductionOrderID, &material.Kind, &material.ItemCode, &material.Mask,
 		&material.SubstitutedItemCode, &material.Quantity, &material.AttendedQuantity, &material.WarehouseID,
-		&material.AutomaticIssue, &material.Notes, &material.CreatedAt, &material.UpdatedAt, &material.CreatedBy)
+		&material.AutomaticIssue, &material.Notes, &material.CreatedAt, &material.UpdatedAt, &material.CreatedBy,
+		&material.RouteOperationSequence)
 	return material, err
 }
 

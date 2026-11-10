@@ -65,7 +65,9 @@ func (uc *ProductionMaterialControlUseCase) availabilityRepo() (materialAvailabi
 // material, quanto falta baixar, quanto está livre no depósito depois das OFs
 // que estão na frente, e quanto falta.
 func (uc *ProductionMaterialControlUseCase) Availability(ctx context.Context, orderID int64) (*MaterialAvailabilitySummary, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	// OF inexistente ou de outra empresa é "não encontrada", não "sem lista".
@@ -85,7 +87,9 @@ func (uc *ProductionMaterialControlUseCase) Availability(ctx context.Context, or
 // AvailabilitySummary resume as faltas de várias OFs (o selo da lista). Com
 // detalhe, traz as linhas.
 func (uc *ProductionMaterialControlUseCase) AvailabilitySummary(ctx context.Context, orderIDs []int64, detalhe bool) ([]MaterialAvailabilitySummary, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if len(orderIDs) == 0 {

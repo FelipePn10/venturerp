@@ -10,6 +10,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqltypes"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 )
 
 const addRouteOpResource = `-- name: AddRouteOpResource :one
@@ -67,7 +68,8 @@ INSERT INTO route_operations (
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
     scrap_pct, inspection_required,
-    situation, notes, is_active
+    situation, notes, is_active,
+    time_basis, time_basis_attribute
 )
 SELECT
     $1, $2, $3, $4,
@@ -76,11 +78,12 @@ SELECT
     $10, $11, $12, $13, $14,
     $15, $16, $17, $18, $19,
     $22, $23,
-    $20, $21, TRUE
-WHERE EXISTS (SELECT 1 FROM manufacturing_routes mr WHERE mr.id = $1 AND mr.enterprise_id = $24)
-  AND EXISTS (SELECT 1 FROM operations op WHERE op.id = $3 AND op.enterprise_id = $24)
-  AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $4 AND mt.enterprise_id = $24))
-RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
+    $20, $21, TRUE,
+    $24, $25
+WHERE EXISTS (SELECT 1 FROM manufacturing_routes mr WHERE mr.id = $1 AND mr.enterprise_id = $26)
+  AND EXISTS (SELECT 1 FROM operations op WHERE op.id = $3 AND op.enterprise_id = $26)
+  AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $4 AND mt.enterprise_id = $26))
+RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required, time_basis, time_basis_attribute
 `
 
 type AddRouteOperationParams struct {
@@ -107,6 +110,8 @@ type AddRouteOperationParams struct {
 	Notes                pgtype.Text
 	ScrapPct             pgtype.Numeric
 	InspectionRequired   bool
+	TimeBasis            pgtype.Text
+	TimeBasisAttribute   pgtype.Text
 	EnterpriseID         int64
 }
 
@@ -138,6 +143,8 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		arg.Notes,
 		arg.ScrapPct,
 		arg.InspectionRequired,
+		arg.TimeBasis,
+		arg.TimeBasisAttribute,
 		arg.EnterpriseID,
 	)
 	var i RouteOperation
@@ -169,8 +176,36 @@ func (q *Queries) AddRouteOperation(ctx context.Context, arg AddRouteOperationPa
 		&i.ThirdPartyRemittance,
 		&i.ScrapPct,
 		&i.InspectionRequired,
+		&i.TimeBasis,
+		&i.TimeBasisAttribute,
 	)
 	return i, err
+}
+
+const clearOverlappingStandardRoutes = `-- name: ClearOverlappingStandardRoutes :exec
+UPDATE manufacturing_routes o SET is_standard = FALSE, updated_at = NOW()
+FROM manufacturing_routes r
+WHERE r.id = $1 AND r.enterprise_id = $2
+  AND o.enterprise_id = r.enterprise_id
+  AND o.id <> r.id
+  AND o.item_code IS NOT DISTINCT FROM r.item_code
+  AND COALESCE(o.mask, '') = COALESCE(r.mask, '')
+  AND o.is_active AND o.is_standard
+  AND COALESCE(o.valid_from, DATE '0001-01-01') <= COALESCE(r.valid_to, DATE '9999-12-31')
+  AND COALESCE(r.valid_from, DATE '0001-01-01') <= COALESCE(o.valid_to, DATE '9999-12-31')
+`
+
+type ClearOverlappingStandardRoutesParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+// Um item/máscara tem UM roteiro padrão por período. Gravar um padrão tira o
+// "padrão" dos outros cuja vigência cruza com a dele — padrões em janelas
+// diferentes (um até junho, outro a partir de julho) continuam valendo.
+func (q *Queries) ClearOverlappingStandardRoutes(ctx context.Context, arg ClearOverlappingStandardRoutesParams) error {
+	_, err := q.db.Exec(ctx, clearOverlappingStandardRoutes, arg.ID, arg.EnterpriseID)
+	return err
 }
 
 const clearPrimaryResources = `-- name: ClearPrimaryResources :exec
@@ -190,6 +225,208 @@ func (q *Queries) ClearPrimaryResources(ctx context.Context, arg ClearPrimaryRes
 	return err
 }
 
+const copyInspectionCharacteristics = `-- name: CopyInspectionCharacteristics :execrows
+INSERT INTO inspection_plan_characteristics (plan_id, name, nominal, tolerance_upper, tolerance_lower, unit, is_critical)
+SELECT $1, c.name, c.nominal, c.tolerance_upper, c.tolerance_lower, c.unit, c.is_critical
+FROM inspection_plan_characteristics c
+WHERE c.plan_id = $2
+ORDER BY c.id
+`
+
+type CopyInspectionCharacteristicsParams struct {
+	TargetPlanID int64
+	SourcePlanID int64
+}
+
+func (q *Queries) CopyInspectionCharacteristics(ctx context.Context, arg CopyInspectionCharacteristicsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyInspectionCharacteristics, arg.TargetPlanID, arg.SourcePlanID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const copyRouteInspectionPlan = `-- name: CopyRouteInspectionPlan :one
+INSERT INTO inspection_plans (item_code, route_operation_id, point_type, description, sample_size,
+                              acceptance_level, instructions, is_active, created_by, sampling_procedure_id)
+SELECT $1, novo.id, p.point_type, p.description, p.sample_size,
+       p.acceptance_level, p.instructions, TRUE, $2, p.sampling_procedure_id
+FROM inspection_plans p
+JOIN route_operations velho ON velho.id = p.route_operation_id AND velho.is_active
+JOIN manufacturing_routes origem ON origem.id = velho.route_id AND origem.enterprise_id = $3
+JOIN route_operations novo ON novo.route_id = $4 AND novo.is_active AND novo.sequence = velho.sequence
+WHERE p.id = $5 AND p.is_active
+RETURNING id
+`
+
+type CopyRouteInspectionPlanParams struct {
+	TargetItemCode int64
+	CreatedBy      pgtype.UUID
+	EnterpriseID   int64
+	TargetRouteID  int64
+	SourcePlanID   int64
+}
+
+// Um plano por chamada: as características vão em seguida, apontando para o
+// plano novo que esta instrução devolve.
+func (q *Queries) CopyRouteInspectionPlan(ctx context.Context, arg CopyRouteInspectionPlanParams) (int64, error) {
+	row := q.db.QueryRow(ctx, copyRouteInspectionPlan,
+		arg.TargetItemCode,
+		arg.CreatedBy,
+		arg.EnterpriseID,
+		arg.TargetRouteID,
+		arg.SourcePlanID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const copyRouteNetwork = `-- name: CopyRouteNetwork :execrows
+INSERT INTO route_operation_network (predecessor_id, successor_id, overlap_pct)
+SELECT np.id, ns.id, e.overlap_pct
+FROM route_operation_network e
+JOIN route_operations sp ON sp.id = e.predecessor_id AND sp.is_active AND sp.route_id = $1
+JOIN route_operations ss ON ss.id = e.successor_id AND ss.is_active
+JOIN route_operations np ON np.route_id = $2 AND np.is_active AND np.sequence = sp.sequence
+JOIN route_operations ns ON ns.route_id = $2 AND ns.is_active AND ns.sequence = ss.sequence
+JOIN manufacturing_routes origem ON origem.id = sp.route_id AND origem.enterprise_id = $3
+ON CONFLICT (predecessor_id, successor_id) DO NOTHING
+`
+
+type CopyRouteNetworkParams struct {
+	SourceRouteID int64
+	TargetRouteID int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) CopyRouteNetwork(ctx context.Context, arg CopyRouteNetworkParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyRouteNetwork, arg.SourceRouteID, arg.TargetRouteID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const copyRouteResources = `-- name: CopyRouteResources :execrows
+INSERT INTO route_operation_resources (route_operation_id, work_center_id, priority, time_factor, is_primary)
+SELECT novo.id, r.work_center_id, r.priority, r.time_factor, r.is_primary
+FROM route_operation_resources r
+JOIN route_operations velho ON velho.id = r.route_operation_id AND velho.is_active AND velho.route_id = $1
+JOIN route_operations novo ON novo.route_id = $2 AND novo.is_active AND novo.sequence = velho.sequence
+JOIN manufacturing_routes origem ON origem.id = velho.route_id AND origem.enterprise_id = $3
+ON CONFLICT DO NOTHING
+`
+
+type CopyRouteResourcesParams struct {
+	SourceRouteID int64
+	TargetRouteID int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) CopyRouteResources(ctx context.Context, arg CopyRouteResourcesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyRouteResources, arg.SourceRouteID, arg.TargetRouteID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const copyRouteStepDocuments = `-- name: CopyRouteStepDocuments :execrows
+INSERT INTO operation_documents (route_operation_id, kind, title, reference, revision, instructions, is_active, enterprise_id, created_by)
+SELECT novo.id, d.kind, d.title, d.reference, d.revision, d.instructions, TRUE, d.enterprise_id, $1
+FROM operation_documents d
+JOIN route_operations velho ON velho.id = d.route_operation_id AND velho.is_active AND velho.route_id = $2
+JOIN route_operations novo ON novo.route_id = $3 AND novo.is_active AND novo.sequence = velho.sequence
+WHERE d.is_active AND d.enterprise_id = $4
+`
+
+type CopyRouteStepDocumentsParams struct {
+	CreatedBy     pgtype.UUID
+	SourceRouteID int64
+	TargetRouteID int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) CopyRouteStepDocuments(ctx context.Context, arg CopyRouteStepDocumentsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyRouteStepDocuments,
+		arg.CreatedBy,
+		arg.SourceRouteID,
+		arg.TargetRouteID,
+		arg.EnterpriseID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const copyRouteSteps = `-- name: CopyRouteSteps :execrows
+
+INSERT INTO route_operations (
+    route_id, sequence, operation_id, work_center_id,
+    standard_time, setup_time, run_time, labor_time, run_time_base_qty,
+    queue_time, wait_time, move_time, crew_size, time_unit,
+    supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
+    scrap_pct, inspection_required, situation, notes, is_active,
+    time_basis, time_basis_attribute
+)
+SELECT $1, ro.sequence, ro.operation_id, ro.work_center_id,
+    ro.standard_time, ro.setup_time, ro.run_time, ro.labor_time, ro.run_time_base_qty,
+    ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit,
+    ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days, ro.third_party_remittance,
+    ro.scrap_pct, ro.inspection_required, ro.situation, ro.notes, TRUE,
+    ro.time_basis, ro.time_basis_attribute
+FROM route_operations ro
+JOIN manufacturing_routes origem ON origem.id = ro.route_id
+JOIN manufacturing_routes destino ON destino.id = $1
+WHERE ro.route_id = $2 AND ro.is_active
+  AND origem.enterprise_id = $3
+  AND destino.enterprise_id = $3
+ORDER BY ro.sequence
+`
+
+type CopyRouteStepsParams struct {
+	TargetRouteID int64
+	SourceRouteID int64
+	EnterpriseID  int64
+}
+
+// ─── cópia de roteiro (uma transação, ver RoutingRepositorySQLC.CopyRoute) ──
+// A correspondência etapa de origem → etapa nova é pela SEQUÊNCIA, que é única
+// entre as etapas ativas de um roteiro.
+func (q *Queries) CopyRouteSteps(ctx context.Context, arg CopyRouteStepsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyRouteSteps, arg.TargetRouteID, arg.SourceRouteID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const copyRouteTools = `-- name: CopyRouteTools :execrows
+INSERT INTO route_operation_tools (route_operation_id, tool_id, qty_required)
+SELECT novo.id, t.tool_id, t.qty_required
+FROM route_operation_tools t
+JOIN route_operations velho ON velho.id = t.route_operation_id AND velho.is_active AND velho.route_id = $1
+JOIN route_operations novo ON novo.route_id = $2 AND novo.is_active AND novo.sequence = velho.sequence
+JOIN manufacturing_routes origem ON origem.id = velho.route_id AND origem.enterprise_id = $3
+ON CONFLICT DO NOTHING
+`
+
+type CopyRouteToolsParams struct {
+	SourceRouteID int64
+	TargetRouteID int64
+	EnterpriseID  int64
+}
+
+func (q *Queries) CopyRouteTools(ctx context.Context, arg CopyRouteToolsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, copyRouteTools, arg.SourceRouteID, arg.TargetRouteID, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createOperation = `-- name: CreateOperation :one
 
 INSERT INTO operations (
@@ -198,7 +435,7 @@ INSERT INTO operations (
     run_time, labor_time, run_time_base_qty,
     queue_time, wait_time, move_time, crew_size, time_unit,
     supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance,
-    scrap_pct,
+    scrap_pct, time_basis, time_basis_attribute,
     is_active, created_by, enterprise_id
 ) VALUES (
     $1, $2, $3, $4, $5,
@@ -206,9 +443,9 @@ INSERT INTO operations (
     $9, $10, $11,
     $12, $13, $14, $15, $16,
     $17, $18, $19, $20, $21,
-    $23,
-    TRUE, $22, $24
-) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct
+    $23, $24, $25,
+    TRUE, $22, $26
+) RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct, time_basis, time_basis_attribute
 `
 
 type CreateOperationParams struct {
@@ -235,6 +472,8 @@ type CreateOperationParams struct {
 	ThirdPartyRemittance string
 	CreatedBy            pgtype.UUID
 	ScrapPct             pgtype.Numeric
+	TimeBasis            string
+	TimeBasisAttribute   pgtype.Text
 	EnterpriseID         int64
 }
 
@@ -264,6 +503,8 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		arg.ThirdPartyRemittance,
 		arg.CreatedBy,
 		arg.ScrapPct,
+		arg.TimeBasis,
+		arg.TimeBasisAttribute,
 		arg.EnterpriseID,
 	)
 	var i Operation
@@ -296,6 +537,8 @@ func (q *Queries) CreateOperation(ctx context.Context, arg CreateOperationParams
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
 		&i.ScrapPct,
+		&i.TimeBasis,
+		&i.TimeBasisAttribute,
 	)
 	return i, err
 }
@@ -357,16 +600,18 @@ const createRoute = `-- name: CreateRoute :one
 
 INSERT INTO manufacturing_routes (
     code, item_code, mask, alternative, description,
-    situation, is_standard, valid_from, valid_to, is_active, created_by, enterprise_id
+    situation, is_standard, valid_from, valid_to, is_active, created_by, enterprise_id,
+    is_template, lot_min, lot_max
 ) VALUES (
     $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, TRUE, $10, $11
-) RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id
+    $6, $7, $8, $9, TRUE, $10, $11,
+    $12, $13, $14
+) RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max
 `
 
 type CreateRouteParams struct {
 	Code         int64
-	ItemCode     int64
+	ItemCode     *int64
 	Mask         pgtype.Text
 	Alternative  int16
 	Description  pgtype.Text
@@ -376,6 +621,9 @@ type CreateRouteParams struct {
 	ValidTo      pgtype.Date
 	CreatedBy    pgtype.UUID
 	EnterpriseID int64
+	IsTemplate   bool
+	LotMin       pgtype.Numeric
+	LotMax       pgtype.Numeric
 }
 
 // ─── manufacturing_routes ─────────────────────────────────────────────────────
@@ -392,6 +640,9 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Manuf
 		arg.ValidTo,
 		arg.CreatedBy,
 		arg.EnterpriseID,
+		arg.IsTemplate,
+		arg.LotMin,
+		arg.LotMax,
 	)
 	var i ManufacturingRoute
 	err := row.Scan(
@@ -410,6 +661,9 @@ func (q *Queries) CreateRoute(ctx context.Context, arg CreateRouteParams) (Manuf
 		&i.ValidFrom,
 		&i.ValidTo,
 		&i.EnterpriseID,
+		&i.IsTemplate,
+		&i.LotMin,
+		&i.LotMax,
 	)
 	return i, err
 }
@@ -479,34 +733,43 @@ func (q *Queries) DeleteNetworkEdge(ctx context.Context, arg DeleteNetworkEdgePa
 	return result.RowsAffected(), nil
 }
 
-const getExternalRouteOpsForItem = `-- name: GetExternalRouteOpsForItem :many
+const getExternalRouteOpsForRoute = `-- name: GetExternalRouteOpsForRoute :many
 SELECT
     ro.id,
     ro.operation_id,
     ro.work_center_id,
     op.name AS operation_name,
     op.origin,
-    COALESCE(ro.standard_time, op.standard_time) AS effective_hours,
+    COALESCE(ro.run_time, ro.standard_time, NULLIF(op.run_time, 0), op.standard_time) AS effective_hours,
     COALESCE((SELECT supplier.code FROM suppliers supplier
-              WHERE supplier.id = COALESCE(ro.supplier_id, op.supplier_id)
-                 OR supplier.code = COALESCE(ro.supplier_id, op.supplier_id)
-              ORDER BY (supplier.id = COALESCE(ro.supplier_id, op.supplier_id)) DESC
-              LIMIT 1), COALESCE(ro.supplier_id, op.supplier_id), 0)::bigint AS supplier_id,
+              WHERE supplier.enterprise_id = mr.enterprise_id
+                AND (supplier.id = COALESCE(ro.supplier_id, op.supplier_id)
+                     OR supplier.code = COALESCE(ro.supplier_id, op.supplier_id))
+              -- A tela grava o CÓDIGO do fornecedor (loadSuppliers): o código vence;
+              -- o id fica só para vínculo antigo gravado por id.
+              ORDER BY (supplier.code = COALESCE(ro.supplier_id, op.supplier_id)) DESC
+              LIMIT 1), 0)::bigint AS supplier_id,
     COALESCE(ro.service_item_code, op.service_item_code) AS service_item_code,
     COALESCE(ro.cost_per_unit, op.cost_per_unit, 0) AS cost_per_unit,
     COALESCE(ro.lead_time_days, op.lead_time_days, 0) AS lead_time_days,
     COALESCE(ro.third_party_remittance, op.third_party_remittance, 'DEMAND_ITEMS') AS remittance_type
 FROM manufacturing_routes mr
 JOIN route_operations ro ON ro.route_id = mr.id
-JOIN operations op ON op.id = ro.operation_id
-WHERE mr.item_code = $1
-  AND mr.is_active = TRUE
-  AND mr.is_standard = TRUE
+JOIN operations op ON op.id = ro.operation_id AND op.enterprise_id = mr.enterprise_id
+WHERE mr.id = $1
+  AND mr.enterprise_id = $2
   AND ro.is_active = TRUE
+  AND ro.situation NOT IN ('INATIVA', 'FANTASMA')
   AND op.origin IN ('EXTERNA', 'TERCEIROS')
+ORDER BY ro.sequence
 `
 
-type GetExternalRouteOpsForItemRow struct {
+type GetExternalRouteOpsForRouteParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+type GetExternalRouteOpsForRouteRow struct {
 	ID              int64
 	OperationID     int64
 	WorkCenterID    *int64
@@ -520,15 +783,20 @@ type GetExternalRouteOpsForItemRow struct {
 	RemittanceType  string
 }
 
-func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64) ([]GetExternalRouteOpsForItemRow, error) {
-	rows, err := q.db.Query(ctx, getExternalRouteOpsForItem, itemCode)
+// Etapas externas do roteiro JÁ ESCOLHIDO (GetStandardRouteForItem). Antes a
+// consulta escolhia sozinha — `is_standard` sem vigência, sem máscara e sem
+// empresa — e o MRP gerava a ordem de serviço de um roteiro diferente do que a
+// OP explodia. O fornecedor também era procurado por id OU código em todas as
+// empresas; agora só na empresa do roteiro.
+func (q *Queries) GetExternalRouteOpsForRoute(ctx context.Context, arg GetExternalRouteOpsForRouteParams) ([]GetExternalRouteOpsForRouteRow, error) {
+	rows, err := q.db.Query(ctx, getExternalRouteOpsForRoute, arg.ID, arg.EnterpriseID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []GetExternalRouteOpsForItemRow
+	var items []GetExternalRouteOpsForRouteRow
 	for rows.Next() {
-		var i GetExternalRouteOpsForItemRow
+		var i GetExternalRouteOpsForRouteRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OperationID,
@@ -555,7 +823,8 @@ func (q *Queries) GetExternalRouteOpsForItem(ctx context.Context, itemCode int64
 const getNetworkEdges = `-- name: GetNetworkEdges :many
 SELECT ron.id, ron.predecessor_id, ron.successor_id, ron.overlap_pct, ron.created_at
 FROM route_operation_network ron
-JOIN route_operations ro ON ro.id = ron.predecessor_id
+JOIN route_operations ro ON ro.id = ron.predecessor_id AND ro.is_active
+JOIN route_operations sucessora ON sucessora.id = ron.successor_id AND sucessora.is_active
 JOIN manufacturing_routes mr ON mr.id = ro.route_id
 WHERE ro.route_id = $1 AND mr.enterprise_id = $2
 ORDER BY ron.predecessor_id, ron.successor_id
@@ -566,6 +835,8 @@ type GetNetworkEdgesParams struct {
 	EnterpriseID int64
 }
 
+// As duas pontas precisam estar ativas: uma dependência que sobrou de etapa
+// removida apontaria para um nó que o caminho crítico não conhece.
 func (q *Queries) GetNetworkEdges(ctx context.Context, arg GetNetworkEdgesParams) ([]RouteOperationNetwork, error) {
 	rows, err := q.db.Query(ctx, getNetworkEdges, arg.RouteID, arg.EnterpriseID)
 	if err != nil {
@@ -593,7 +864,7 @@ func (q *Queries) GetNetworkEdges(ctx context.Context, arg GetNetworkEdgesParams
 }
 
 const getOperationByID = `-- name: GetOperationByID :one
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct FROM operations WHERE id = $1 AND enterprise_id = $2
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct, time_basis, time_basis_attribute FROM operations WHERE id = $1 AND enterprise_id = $2
 `
 
 type GetOperationByIDParams struct {
@@ -633,12 +904,14 @@ func (q *Queries) GetOperationByID(ctx context.Context, arg GetOperationByIDPara
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
 		&i.ScrapPct,
+		&i.TimeBasis,
+		&i.TimeBasisAttribute,
 	)
 	return i, err
 }
 
 const getRouteByID = `-- name: GetRouteByID :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes WHERE id = $1 AND enterprise_id = $2
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes WHERE id = $1 AND enterprise_id = $2
 `
 
 type GetRouteByIDParams struct {
@@ -665,12 +938,15 @@ func (q *Queries) GetRouteByID(ctx context.Context, arg GetRouteByIDParams) (Man
 		&i.ValidFrom,
 		&i.ValidTo,
 		&i.EnterpriseID,
+		&i.IsTemplate,
+		&i.LotMin,
+		&i.LotMax,
 	)
 	return i, err
 }
 
 const getRouteByItemAndAlternative = `-- name: GetRouteByItemAndAlternative :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes
 WHERE item_code = $1
   AND enterprise_id = $4
   AND COALESCE(mask, '') = COALESCE($2, '')
@@ -679,7 +955,7 @@ WHERE item_code = $1
 `
 
 type GetRouteByItemAndAlternativeParams struct {
-	ItemCode     int64
+	ItemCode     *int64
 	Mask         pgtype.Text
 	Alternative  int16
 	EnterpriseID int64
@@ -709,6 +985,9 @@ func (q *Queries) GetRouteByItemAndAlternative(ctx context.Context, arg GetRoute
 		&i.ValidFrom,
 		&i.ValidTo,
 		&i.EnterpriseID,
+		&i.IsTemplate,
+		&i.LotMin,
+		&i.LotMax,
 	)
 	return i, err
 }
@@ -743,7 +1022,7 @@ func (q *Queries) GetRouteOpResource(ctx context.Context, arg GetRouteOpResource
 
 const getRouteOperations = `-- name: GetRouteOperations :many
 SELECT
-    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at, ro.run_time, ro.labor_time, ro.run_time_base_qty, ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit, ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days, ro.third_party_remittance, ro.scrap_pct, ro.inspection_required,
+    ro.id, ro.route_id, ro.sequence, ro.operation_id, ro.work_center_id, ro.standard_time, ro.setup_time, ro.situation, ro.notes, ro.is_active, ro.created_at, ro.updated_at, ro.run_time, ro.labor_time, ro.run_time_base_qty, ro.queue_time, ro.wait_time, ro.move_time, ro.crew_size, ro.time_unit, ro.supplier_id, ro.service_item_code, ro.cost_per_unit, ro.lead_time_days, ro.third_party_remittance, ro.scrap_pct, ro.inspection_required, ro.time_basis, ro.time_basis_attribute,
     op.name AS operation_name,
     op.origin AS operation_origin,
     op.standard_time AS op_standard_time,
@@ -757,7 +1036,13 @@ SELECT
     op.crew_size AS op_crew_size,
     op.time_unit AS op_time_unit,
     op.scrap_pct AS op_scrap_pct,
+    op.time_basis AS op_time_basis,
+    op.time_basis_attribute AS op_time_basis_attribute,
+    COALESCE(item.engineering_dimensions, '{}'::jsonb) AS item_dimensions,
+    COALESCE(item.pdm_attributes, '[]'::jsonb) AS item_pdm_attributes,
     COALESCE(ro.lead_time_days, op.lead_time_days, 0)::int AS effective_lead_time_days,
+    COALESCE(ro.cost_per_unit, op.cost_per_unit) AS effective_cost_per_unit,
+    COALESCE(ro.supplier_id, op.supplier_id) AS effective_supplier_id,
     COALESCE(ro.work_center_id, op.default_work_center_id) AS effective_work_center_id,
     mt.name AS work_center_name,
     COALESCE(mt.requires_operator, TRUE) AS requires_operator
@@ -765,6 +1050,7 @@ FROM route_operations ro
 JOIN manufacturing_routes mr ON mr.id = ro.route_id
 JOIN operations op ON op.id = ro.operation_id
 LEFT JOIN machine_types mt ON mt.id = COALESCE(ro.work_center_id, op.default_work_center_id)
+LEFT JOIN items item ON item.code = mr.item_code
 WHERE ro.route_id = $1 AND ro.is_active = TRUE
   AND mr.enterprise_id = $2
 ORDER BY ro.sequence
@@ -803,6 +1089,8 @@ type GetRouteOperationsRow struct {
 	ThirdPartyRemittance  pgtype.Text
 	ScrapPct              pgtype.Numeric
 	InspectionRequired    bool
+	TimeBasis             pgtype.Text
+	TimeBasisAttribute    pgtype.Text
 	OperationName         string
 	OperationOrigin       sqltypes.OperationOriginEnum
 	OpStandardTime        pgtype.Numeric
@@ -816,7 +1104,13 @@ type GetRouteOperationsRow struct {
 	OpCrewSize            pgtype.Numeric
 	OpTimeUnit            string
 	OpScrapPct            pgtype.Numeric
+	OpTimeBasis           string
+	OpTimeBasisAttribute  pgtype.Text
+	ItemDimensions        []byte
+	ItemPdmAttributes     []byte
 	EffectiveLeadTimeDays int32
+	EffectiveCostPerUnit  pgtype.Numeric
+	EffectiveSupplierID   *int64
 	EffectiveWorkCenterID *int64
 	WorkCenterName        pgtype.Text
 	RequiresOperator      bool
@@ -859,6 +1153,8 @@ func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperations
 			&i.ThirdPartyRemittance,
 			&i.ScrapPct,
 			&i.InspectionRequired,
+			&i.TimeBasis,
+			&i.TimeBasisAttribute,
 			&i.OperationName,
 			&i.OperationOrigin,
 			&i.OpStandardTime,
@@ -872,7 +1168,13 @@ func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperations
 			&i.OpCrewSize,
 			&i.OpTimeUnit,
 			&i.OpScrapPct,
+			&i.OpTimeBasis,
+			&i.OpTimeBasisAttribute,
+			&i.ItemDimensions,
+			&i.ItemPdmAttributes,
 			&i.EffectiveLeadTimeDays,
+			&i.EffectiveCostPerUnit,
+			&i.EffectiveSupplierID,
 			&i.EffectiveWorkCenterID,
 			&i.WorkCenterName,
 			&i.RequiresOperator,
@@ -888,33 +1190,33 @@ func (q *Queries) GetRouteOperations(ctx context.Context, arg GetRouteOperations
 }
 
 const getStandardRouteForItem = `-- name: GetStandardRouteForItem :one
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes
-WHERE item_code = $1
-  AND enterprise_id = $4
-  AND COALESCE(mask, '') = COALESCE($2, '')
-  AND is_active = TRUE
-  AND (valid_from IS NULL OR valid_from <= COALESCE($3::DATE, CURRENT_DATE))
-  AND (valid_to   IS NULL OR valid_to   >= COALESCE($3::DATE, CURRENT_DATE))
-ORDER BY is_standard DESC, valid_from DESC NULLS LAST, alternative
-LIMIT 1
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes
+WHERE id = erp_roteiro_vigente($1::bigint, $2::bigint,
+                               $3::text, $4::date, $5::numeric)
 `
 
 type GetStandardRouteForItemParams struct {
+	EnterpriseID int64
 	ItemCode     int64
 	Mask         pgtype.Text
-	Column3      pgtype.Date
-	EnterpriseID int64
+	RefDate      pgtype.Date
+	Quantity     pgtype.Numeric
 }
 
-// Picks the route effective on the reference date (defaults to today when $3 is NULL):
-// APROVADA/active, within its validity window; prefers standard, then the most
-// recently-effective revision.
+// A escolha mora numa função só (erp_roteiro_vigente, migrações 476/477), que
+// OP, MRP, ordem de serviço de terceiro, liberação e rateio usam:
+//
+//	máscara exata vence o genérico; faixa de lote que casa vence o roteiro sem
+//	faixa; depois padrão, vigência mais recente, menor alternativa.
+//
+// Quantidade nula ignora as faixas (prazo do item por unidade, telas).
 func (q *Queries) GetStandardRouteForItem(ctx context.Context, arg GetStandardRouteForItemParams) (ManufacturingRoute, error) {
 	row := q.db.QueryRow(ctx, getStandardRouteForItem,
+		arg.EnterpriseID,
 		arg.ItemCode,
 		arg.Mask,
-		arg.Column3,
-		arg.EnterpriseID,
+		arg.RefDate,
+		arg.Quantity,
 	)
 	var i ManufacturingRoute
 	err := row.Scan(
@@ -933,6 +1235,9 @@ func (q *Queries) GetStandardRouteForItem(ctx context.Context, arg GetStandardRo
 		&i.ValidFrom,
 		&i.ValidTo,
 		&i.EnterpriseID,
+		&i.IsTemplate,
+		&i.LotMin,
+		&i.LotMax,
 	)
 	return i, err
 }
@@ -945,7 +1250,7 @@ SELECT EXISTS(
 `
 
 type ItemHasRouteParams struct {
-	ItemCode     int64
+	ItemCode     *int64
 	EnterpriseID int64
 }
 
@@ -954,6 +1259,67 @@ func (q *Queries) ItemHasRoute(ctx context.Context, arg ItemHasRouteParams) (boo
 	var has_route bool
 	err := row.Scan(&has_route)
 	return has_route, err
+}
+
+const keepStepCenterAsAlternative = `-- name: KeepStepCenterAsAlternative :exec
+INSERT INTO route_operation_resources (route_operation_id, work_center_id, priority, time_factor, is_primary)
+SELECT ro.id, COALESCE(ro.work_center_id, op.default_work_center_id), promovido.priority, 1, FALSE
+FROM route_operations ro
+JOIN operations op ON op.id = ro.operation_id
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+JOIN route_operation_resources promovido ON promovido.id = $1 AND promovido.route_operation_id = ro.id
+WHERE ro.id = $2 AND mr.enterprise_id = $3
+  AND COALESCE(ro.work_center_id, op.default_work_center_id) IS NOT NULL
+  AND COALESCE(ro.work_center_id, op.default_work_center_id) <> promovido.work_center_id
+ON CONFLICT DO NOTHING
+`
+
+type KeepStepCenterAsAlternativeParams struct {
+	ResourceID       int64
+	RouteOperationID int64
+	EnterpriseID     int64
+}
+
+// Antes de outro centro virar o principal, o centro atual da etapa (o dela ou o
+// herdado da operação) entra na lista de alternativos, com a prioridade que o
+// promovido tinha. Sem isso o centro antigo sumia da etapa na troca.
+func (q *Queries) KeepStepCenterAsAlternative(ctx context.Context, arg KeepStepCenterAsAlternativeParams) error {
+	_, err := q.db.Exec(ctx, keepStepCenterAsAlternative, arg.ResourceID, arg.RouteOperationID, arg.EnterpriseID)
+	return err
+}
+
+const listActiveInspectionPlanIDsByRoute = `-- name: ListActiveInspectionPlanIDsByRoute :many
+SELECT p.id
+FROM inspection_plans p
+JOIN route_operations ro ON ro.id = p.route_operation_id AND ro.is_active
+JOIN manufacturing_routes mr ON mr.id = ro.route_id
+WHERE ro.route_id = $1 AND p.is_active AND mr.enterprise_id = $2
+ORDER BY ro.sequence, p.id
+`
+
+type ListActiveInspectionPlanIDsByRouteParams struct {
+	RouteID      int64
+	EnterpriseID int64
+}
+
+func (q *Queries) ListActiveInspectionPlanIDsByRoute(ctx context.Context, arg ListActiveInspectionPlanIDsByRouteParams) ([]int64, error) {
+	rows, err := q.db.Query(ctx, listActiveInspectionPlanIDsByRoute, arg.RouteID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listDocumentsByOperation = `-- name: ListDocumentsByOperation :many
@@ -1274,7 +1640,7 @@ func (q *Queries) ListInspectionStepsForOrderRoute(ctx context.Context, arg List
 }
 
 const listOperations = `-- name: ListOperations :many
-SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct FROM operations
+SELECT id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct, time_basis, time_basis_attribute FROM operations
 WHERE enterprise_id = $2
   AND ($1::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
@@ -1323,6 +1689,8 @@ func (q *Queries) ListOperations(ctx context.Context, arg ListOperationsParams) 
 			&i.ThirdPartyRemittance,
 			&i.EnterpriseID,
 			&i.ScrapPct,
+			&i.TimeBasis,
+			&i.TimeBasisAttribute,
 		); err != nil {
 			return nil, err
 		}
@@ -1492,14 +1860,128 @@ func (q *Queries) ListResourcesByRouteOp(ctx context.Context, arg ListResourcesB
 	return items, nil
 }
 
+const listRouteMaterials = `-- name: ListRouteMaterials :many
+
+SELECT s.id AS structure_id, s.child_code, i.business_code AS child_business_code,
+       COALESCE(i.name, '')::text AS child_name, s.quantity, s.unit_of_measurement,
+       s.route_operation_sequence, s.parent_mask, s.is_coproduct
+FROM item_structures s
+JOIN manufacturing_routes mr ON mr.item_code = s.parent_code
+JOIN items i ON i.code = s.child_code
+WHERE mr.id = $1 AND mr.enterprise_id = $2 AND s.is_active
+  AND (s.parent_mask IS NULL OR s.parent_mask = '' OR COALESCE(mr.mask, '') = '' OR s.parent_mask = mr.mask)
+ORDER BY s.sequence, s.id
+`
+
+type ListRouteMaterialsParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+type ListRouteMaterialsRow struct {
+	StructureID            int64
+	ChildCode              int64
+	ChildBusinessCode      string
+	ChildName              string
+	Quantity               decimal.Decimal
+	UnitOfMeasurement      string
+	RouteOperationSequence pgtype.Int2
+	ParentMask             pgtype.Text
+	IsCoproduct            bool
+}
+
+// ─── componentes por etapa ───────────────────────────────────────────────────
+// Componentes da estrutura do item do roteiro (os que valem para a máscara do
+// roteiro) e a etapa em que cada um entra.
+func (q *Queries) ListRouteMaterials(ctx context.Context, arg ListRouteMaterialsParams) ([]ListRouteMaterialsRow, error) {
+	rows, err := q.db.Query(ctx, listRouteMaterials, arg.ID, arg.EnterpriseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRouteMaterialsRow
+	for rows.Next() {
+		var i ListRouteMaterialsRow
+		if err := rows.Scan(
+			&i.StructureID,
+			&i.ChildCode,
+			&i.ChildBusinessCode,
+			&i.ChildName,
+			&i.Quantity,
+			&i.UnitOfMeasurement,
+			&i.RouteOperationSequence,
+			&i.ParentMask,
+			&i.IsCoproduct,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRouteTemplates = `-- name: ListRouteTemplates :many
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes
+WHERE is_template AND enterprise_id = $1
+  AND ($2::boolean OR is_active)
+ORDER BY is_active DESC, description, code
+`
+
+type ListRouteTemplatesParams struct {
+	EnterpriseID    int64
+	IncludeInactive bool
+}
+
+func (q *Queries) ListRouteTemplates(ctx context.Context, arg ListRouteTemplatesParams) ([]ManufacturingRoute, error) {
+	rows, err := q.db.Query(ctx, listRouteTemplates, arg.EnterpriseID, arg.IncludeInactive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ManufacturingRoute
+	for rows.Next() {
+		var i ManufacturingRoute
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.ItemCode,
+			&i.Mask,
+			&i.Alternative,
+			&i.Description,
+			&i.Situation,
+			&i.IsStandard,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatedBy,
+			&i.ValidFrom,
+			&i.ValidTo,
+			&i.EnterpriseID,
+			&i.IsTemplate,
+			&i.LotMin,
+			&i.LotMax,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoutesByItem = `-- name: ListRoutesByItem :many
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes
 WHERE item_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY alternative
 `
 
 type ListRoutesByItemParams struct {
-	ItemCode     int64
+	ItemCode     *int64
 	EnterpriseID int64
 }
 
@@ -1528,6 +2010,9 @@ func (q *Queries) ListRoutesByItem(ctx context.Context, arg ListRoutesByItemPara
 			&i.ValidFrom,
 			&i.ValidTo,
 			&i.EnterpriseID,
+			&i.IsTemplate,
+			&i.LotMin,
+			&i.LotMax,
 		); err != nil {
 			return nil, err
 		}
@@ -1540,13 +2025,13 @@ func (q *Queries) ListRoutesByItem(ctx context.Context, arg ListRoutesByItemPara
 }
 
 const listRoutesByItemWithInactive = `-- name: ListRoutesByItemWithInactive :many
-SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id FROM manufacturing_routes
+SELECT id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max FROM manufacturing_routes
 WHERE item_code = $1 AND enterprise_id = $2
 ORDER BY is_active DESC, alternative
 `
 
 type ListRoutesByItemWithInactiveParams struct {
-	ItemCode     int64
+	ItemCode     *int64
 	EnterpriseID int64
 }
 
@@ -1575,6 +2060,9 @@ func (q *Queries) ListRoutesByItemWithInactive(ctx context.Context, arg ListRout
 			&i.ValidFrom,
 			&i.ValidTo,
 			&i.EnterpriseID,
+			&i.IsTemplate,
+			&i.LotMin,
+			&i.LotMax,
 		); err != nil {
 			return nil, err
 		}
@@ -1672,10 +2160,26 @@ func (q *Queries) RemoveRouteOpResource(ctx context.Context, arg RemoveRouteOpRe
 }
 
 const removeRouteOperation = `-- name: RemoveRouteOperation :execrows
+WITH alvo AS (
+    SELECT eo.id FROM route_operations eo
+    JOIN manufacturing_routes emr ON emr.id = eo.route_id
+    WHERE eo.id = $1 AND eo.is_active AND emr.enterprise_id = $2
+), ponte AS (
+    INSERT INTO route_operation_network (predecessor_id, successor_id, overlap_pct)
+    SELECT antes.predecessor_id, depois.successor_id, 0
+    FROM route_operation_network antes
+    JOIN route_operation_network depois ON depois.predecessor_id = antes.successor_id
+    WHERE antes.successor_id IN (SELECT id FROM alvo)
+      AND antes.predecessor_id <> depois.successor_id
+    ON CONFLICT (predecessor_id, successor_id) DO NOTHING
+    RETURNING 1
+), apaga AS (
+    DELETE FROM route_operation_network
+    WHERE predecessor_id IN (SELECT id FROM alvo) OR successor_id IN (SELECT id FROM alvo)
+    RETURNING 1
+)
 UPDATE route_operations SET is_active = FALSE, updated_at = NOW()
-WHERE route_operations.id = $1 AND EXISTS (
-      SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
-       WHERE eo.id = route_operations.id AND emr.enterprise_id = $2)
+WHERE route_operations.id IN (SELECT id FROM alvo)
 `
 
 type RemoveRouteOperationParams struct {
@@ -1683,6 +2187,15 @@ type RemoveRouteOperationParams struct {
 	EnterpriseID int64
 }
 
+// Tira a etapa do roteiro sem partir a rede. Numa instrução só (atômica):
+//  1. quem vinha antes dela passa a ligar direto em quem vinha depois
+//     (A→B→C sem B vira A→C, e não "C livre para começar junto com A");
+//  2. as dependências da etapa são apagadas;
+//  3. a etapa é desativada.
+//
+// Antes as dependências ficavam apontando para a etapa desativada, o caminho
+// crítico via uma predecessora que não existia mais e acusava CICLO — a OP do
+// item passava a ser recusada com "o roteiro contém um ciclo de dependências".
 func (q *Queries) RemoveRouteOperation(ctx context.Context, arg RemoveRouteOperationParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeRouteOperation, arg.ID, arg.EnterpriseID)
 	if err != nil {
@@ -1711,6 +2224,71 @@ func (q *Queries) RouteIDOfOperation(ctx context.Context, arg RouteIDOfOperation
 	var route_id int64
 	err := row.Scan(&route_id)
 	return route_id, err
+}
+
+const routeStepActuals = `-- name: RouteStepActuals :many
+
+SELECT poo.route_operation_id,
+       count(*)::int AS orders,
+       COALESCE(sum(poo.actual_hours), 0)::numeric AS actual_hours,
+       COALESCE(sum(poo.planned_hours), 0)::numeric AS planned_hours,
+       COALESCE(sum(poo.setup_hours), 0)::numeric AS setup_hours,
+       COALESCE(sum(poo.planned_qty), 0)::numeric AS quantity,
+       max(poo.completed_at)::timestamptz AS last_completed
+FROM production_order_operations poo
+JOIN route_operations ro ON ro.id = poo.route_operation_id AND ro.route_id = $1
+JOIN manufacturing_routes mr ON mr.id = ro.route_id AND mr.enterprise_id = $2
+WHERE poo.enterprise_id = $2
+  AND poo.status = 'DONE' AND poo.actual_hours > 0
+  AND poo.completed_at >= NOW() - make_interval(days => $3::int)
+GROUP BY poo.route_operation_id
+`
+
+type RouteStepActualsParams struct {
+	RouteID      int64
+	EnterpriseID int64
+	Days         int32
+}
+
+type RouteStepActualsRow struct {
+	RouteOperationID *int64
+	Orders           int32
+	ActualHours      pgtype.Numeric
+	PlannedHours     pgtype.Numeric
+	SetupHours       pgtype.Numeric
+	Quantity         pgtype.Numeric
+	LastCompleted    pgtype.Timestamptz
+}
+
+// ─── tempo padrão × real apontado ────────────────────────────────────────────
+// Por etapa do roteiro: o que as OPs concluídas no período planejaram e o que
+// de fato apontaram. Só etapa concluída e com hora apontada entra.
+func (q *Queries) RouteStepActuals(ctx context.Context, arg RouteStepActualsParams) ([]RouteStepActualsRow, error) {
+	rows, err := q.db.Query(ctx, routeStepActuals, arg.RouteID, arg.EnterpriseID, arg.Days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RouteStepActualsRow
+	for rows.Next() {
+		var i RouteStepActualsRow
+		if err := rows.Scan(
+			&i.RouteOperationID,
+			&i.Orders,
+			&i.ActualHours,
+			&i.PlannedHours,
+			&i.SetupHours,
+			&i.Quantity,
+			&i.LastCompleted,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setResourcePrimary = `-- name: SetResourcePrimary :one
@@ -1760,6 +2338,57 @@ func (q *Queries) SetRouteOpWorkCenter(ctx context.Context, arg SetRouteOpWorkCe
 	return err
 }
 
+const setStructureRouteStep = `-- name: SetStructureRouteStep :execrows
+UPDATE item_structures s SET route_operation_sequence = $1, updated_at = NOW()
+FROM manufacturing_routes mr
+WHERE s.id = $2 AND mr.id = $3
+  AND mr.enterprise_id = $4 AND s.parent_code = mr.item_code AND s.is_active
+`
+
+type SetStructureRouteStepParams struct {
+	StepSequence pgtype.Int2
+	StructureID  int64
+	RouteID      int64
+	EnterpriseID int64
+}
+
+func (q *Queries) SetStructureRouteStep(ctx context.Context, arg SetStructureRouteStepParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setStructureRouteStep,
+		arg.StepSequence,
+		arg.StructureID,
+		arg.RouteID,
+		arg.EnterpriseID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const syncPrimaryResourceWithStep = `-- name: SyncPrimaryResourceWithStep :exec
+UPDATE route_operation_resources r
+SET is_primary = (r.work_center_id IS NOT DISTINCT FROM step.work_center_id), updated_at = NOW()
+FROM route_operations step
+JOIN manufacturing_routes mr ON mr.id = step.route_id
+WHERE step.id = $1 AND r.route_operation_id = step.id
+  AND mr.enterprise_id = $2
+  AND r.is_primary <> (r.work_center_id IS NOT DISTINCT FROM step.work_center_id)
+`
+
+type SyncPrimaryResourceWithStepParams struct {
+	ID           int64
+	EnterpriseID int64
+}
+
+// O centro da etapa É o recurso principal. Quando a etapa muda de centro, o
+// recurso principal acompanha: o do novo centro passa a ser o principal (se
+// estiver na lista de alternativos) e nenhum outro fica marcado. Antes a etapa
+// dizia um centro e a lista de recursos dizia outro.
+func (q *Queries) SyncPrimaryResourceWithStep(ctx context.Context, arg SyncPrimaryResourceWithStepParams) error {
+	_, err := q.db.Exec(ctx, syncPrimaryResourceWithStep, arg.ID, arg.EnterpriseID)
+	return err
+}
+
 const updateOperation = `-- name: UpdateOperation :one
 UPDATE operations SET
     name = $2,
@@ -1783,9 +2412,11 @@ UPDATE operations SET
     lead_time_days = $20,
     third_party_remittance = $21,
     scrap_pct = $22,
+    time_basis = $23,
+    time_basis_attribute = $24,
     updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $23
-RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct
+WHERE id = $1 AND enterprise_id = $25
+RETURNING id, code, name, description, origin, situation, default_work_center_id, standard_time, setup_time, is_active, created_at, updated_at, created_by, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, enterprise_id, scrap_pct, time_basis, time_basis_attribute
 `
 
 type UpdateOperationParams struct {
@@ -1811,6 +2442,8 @@ type UpdateOperationParams struct {
 	LeadTimeDays         *int32
 	ThirdPartyRemittance string
 	ScrapPct             pgtype.Numeric
+	TimeBasis            string
+	TimeBasisAttribute   pgtype.Text
 	EnterpriseID         int64
 }
 
@@ -1838,6 +2471,8 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		arg.LeadTimeDays,
 		arg.ThirdPartyRemittance,
 		arg.ScrapPct,
+		arg.TimeBasis,
+		arg.TimeBasisAttribute,
 		arg.EnterpriseID,
 	)
 	var i Operation
@@ -1870,6 +2505,8 @@ func (q *Queries) UpdateOperation(ctx context.Context, arg UpdateOperationParams
 		&i.ThirdPartyRemittance,
 		&i.EnterpriseID,
 		&i.ScrapPct,
+		&i.TimeBasis,
+		&i.TimeBasisAttribute,
 	)
 	return i, err
 }
@@ -1928,9 +2565,11 @@ UPDATE manufacturing_routes SET
     is_standard = $4,
     valid_from = $5,
     valid_to = $6,
+    lot_min = $7,
+    lot_max = $8,
     updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $7
-RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id
+WHERE id = $1 AND enterprise_id = $9
+RETURNING id, code, item_code, mask, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by, valid_from, valid_to, enterprise_id, is_template, lot_min, lot_max
 `
 
 type UpdateRouteParams struct {
@@ -1940,6 +2579,8 @@ type UpdateRouteParams struct {
 	IsStandard   bool
 	ValidFrom    pgtype.Date
 	ValidTo      pgtype.Date
+	LotMin       pgtype.Numeric
+	LotMax       pgtype.Numeric
 	EnterpriseID int64
 }
 
@@ -1951,6 +2592,8 @@ func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Manuf
 		arg.IsStandard,
 		arg.ValidFrom,
 		arg.ValidTo,
+		arg.LotMin,
+		arg.LotMax,
 		arg.EnterpriseID,
 	)
 	var i ManufacturingRoute
@@ -1970,6 +2613,9 @@ func (q *Queries) UpdateRoute(ctx context.Context, arg UpdateRouteParams) (Manuf
 		&i.ValidFrom,
 		&i.ValidTo,
 		&i.EnterpriseID,
+		&i.IsTemplate,
+		&i.LotMin,
+		&i.LotMax,
 	)
 	return i, err
 }
@@ -2035,13 +2681,14 @@ UPDATE route_operations SET
     inspection_required = $21,
     situation = $18,
     notes = $19,
+    time_basis = $22,
+    time_basis_attribute = $23,
     updated_at = NOW()
 WHERE route_operations.id = $1
   AND EXISTS (
       SELECT 1 FROM route_operations eo JOIN manufacturing_routes emr ON emr.id = eo.route_id
-       WHERE eo.id = route_operations.id AND emr.enterprise_id = $22)
-  AND ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $2 AND mt.enterprise_id = $22))
-RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required
+       WHERE eo.id = route_operations.id AND emr.enterprise_id = $24)
+RETURNING id, route_id, sequence, operation_id, work_center_id, standard_time, setup_time, situation, notes, is_active, created_at, updated_at, run_time, labor_time, run_time_base_qty, queue_time, wait_time, move_time, crew_size, time_unit, supplier_id, service_item_code, cost_per_unit, lead_time_days, third_party_remittance, scrap_pct, inspection_required, time_basis, time_basis_attribute
 `
 
 type UpdateRouteOperationParams struct {
@@ -2066,6 +2713,8 @@ type UpdateRouteOperationParams struct {
 	Notes                pgtype.Text
 	ScrapPct             pgtype.Numeric
 	InspectionRequired   bool
+	TimeBasis            pgtype.Text
+	TimeBasisAttribute   pgtype.Text
 	EnterpriseID         int64
 }
 
@@ -2092,6 +2741,8 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		arg.Notes,
 		arg.ScrapPct,
 		arg.InspectionRequired,
+		arg.TimeBasis,
+		arg.TimeBasisAttribute,
 		arg.EnterpriseID,
 	)
 	var i RouteOperation
@@ -2123,6 +2774,8 @@ func (q *Queries) UpdateRouteOperation(ctx context.Context, arg UpdateRouteOpera
 		&i.ThirdPartyRemittance,
 		&i.ScrapPct,
 		&i.InspectionRequired,
+		&i.TimeBasis,
+		&i.TimeBasisAttribute,
 	)
 	return i, err
 }
@@ -2166,4 +2819,24 @@ func (q *Queries) UpsertNetworkEdge(ctx context.Context, arg UpsertNetworkEdgePa
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const workCenterOfEnterprise = `-- name: WorkCenterOfEnterprise :one
+
+SELECT EXISTS (SELECT 1 FROM machine_types mt WHERE mt.id = $1 AND mt.enterprise_id = $2)
+`
+
+type WorkCenterOfEnterpriseParams struct {
+	ID           int64
+	EnterpriseID *int64
+}
+
+// O centro da etapa é conferido antes, na mesma transação
+// (WorkCenterOfEnterprise): repetir o parâmetro do centro no WHERE é o padrão que
+// TestWhereNaoReusaParametroDoSet proíbe.
+func (q *Queries) WorkCenterOfEnterprise(ctx context.Context, arg WorkCenterOfEnterpriseParams) (bool, error) {
+	row := q.db.QueryRow(ctx, workCenterOfEnterprise, arg.ID, arg.EnterpriseID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }

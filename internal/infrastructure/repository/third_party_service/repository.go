@@ -529,8 +529,8 @@ func (r *Repo) CreateOrdersForProduction(ctx context.Context, productionID int64
 		return nil, e
 	}
 	rows, e := tx.Query(ctx, `SELECT po.item_code,po.mask,po.planned_qty,COALESCE(po.start_date,CURRENT_DATE),COALESCE(po.end_date,CURRENT_DATE),ro.id,ro.operation_id,
-		COALESCE((SELECT supplier.code FROM suppliers supplier WHERE supplier.id=COALESCE(ro.supplier_id,op.supplier_id) OR supplier.code=COALESCE(ro.supplier_id,op.supplier_id) ORDER BY (supplier.id=COALESCE(ro.supplier_id,op.supplier_id)) DESC LIMIT 1),COALESCE(ro.supplier_id,op.supplier_id)),
-		COALESCE(ro.service_item_code,op.service_item_code),COALESCE(ro.lead_time_days,op.lead_time_days,0),COALESCE(ro.third_party_remittance,op.third_party_remittance,'DEMAND_ITEMS') FROM production_orders po JOIN manufacturing_routes mr ON mr.id=COALESCE(po.route_id,(SELECT id FROM manufacturing_routes x WHERE x.item_code=po.item_code AND x.is_standard AND x.is_active ORDER BY id LIMIT 1)) JOIN route_operations ro ON ro.route_id=mr.id AND ro.is_active JOIN operations op ON op.id=ro.operation_id AND op.origin IN ('EXTERNA','TERCEIROS') WHERE po.id=$1 AND po.enterprise_id=$2`, productionID, eid)
+		COALESCE((SELECT supplier.code FROM suppliers supplier WHERE supplier.enterprise_id=po.enterprise_id AND (supplier.id=COALESCE(ro.supplier_id,op.supplier_id) OR supplier.code=COALESCE(ro.supplier_id,op.supplier_id)) ORDER BY (supplier.code=COALESCE(ro.supplier_id,op.supplier_id)) DESC LIMIT 1),COALESCE(ro.supplier_id,op.supplier_id)),
+		COALESCE(ro.service_item_code,op.service_item_code),COALESCE(ro.lead_time_days,op.lead_time_days,0),COALESCE(ro.third_party_remittance,op.third_party_remittance,'DEMAND_ITEMS') FROM production_orders po JOIN manufacturing_routes mr ON mr.enterprise_id=po.enterprise_id AND mr.id=COALESCE(po.route_id,erp_roteiro_vigente(po.enterprise_id,po.item_code,po.mask,COALESCE(po.start_date,CURRENT_DATE),po.planned_qty)) JOIN route_operations ro ON ro.route_id=mr.id AND ro.is_active AND ro.situation NOT IN ('INATIVA','FANTASMA') JOIN operations op ON op.id=ro.operation_id AND op.origin IN ('EXTERNA','TERCEIROS') WHERE po.id=$1 AND po.enterprise_id=$2`, productionID, eid)
 	if e != nil {
 		return nil, e
 	}
@@ -886,6 +886,19 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id int64, status string, r
 	if status == "RELEASED_WITH_PO" && po == nil {
 		return nil, errorsuc.NewValidationError("informe o pedido de compra")
 	}
+	// Concluir à mão é "encerrar com saldo": o terceiro devolveu parte e o resto
+	// não volta. Com nada recebido não há o que encerrar — as peças ainda estão
+	// lá (ou nem foram): registre o recebimento ou cancele a OS. Antes a OS
+	// fechava vazia e a etapa da OF ficava solta, sem peças e sem controle.
+	if status == "COMPLETED" && current != "COMPLETED" {
+		var recebido, pedido decimal.Decimal
+		if e = tx.QueryRow(ctx, `SELECT fulfilled_quantity, quantity FROM third_party_service_orders WHERE id=$1 AND enterprise_id=$2`, id, eid).Scan(&recebido, &pedido); e != nil {
+			return nil, e
+		}
+		if !recebido.IsPositive() {
+			return nil, errorsuc.NewValidationError("nenhuma peça voltou do terceiro: registre o recebimento em Remessa/retorno (a OS conclui sozinha quando tudo voltar) ou cancele a OS")
+		}
+	}
 	tag, e := tx.Exec(ctx, `UPDATE third_party_service_orders SET status=$3,purchase_requisition_code=COALESCE($4,purchase_requisition_code),purchase_order_code=COALESCE($5,purchase_order_code),updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, id, eid, status, req, po)
 	if e != nil {
 		return nil, e
@@ -895,6 +908,12 @@ func (r *Repo) UpdateOrderStatus(ctx context.Context, id int64, status string, r
 	}
 	if status != current {
 		if _, e = tx.Exec(ctx, `INSERT INTO third_party_service_order_history(enterprise_id,service_order_id,event_type,previous_status,new_status,actor_id) VALUES($1,$2,'STATUS_CHANGE',$3,$4,$5)`, eid, id, current, status, by); e != nil {
+			return nil, e
+		}
+	}
+	if status == "COMPLETED" && current != "COMPLETED" {
+		// Encerrada com saldo: a etapa da OF fecha com o que voltou.
+		if e = sincronizarEtapaDaOrdem(ctx, tx, eid, id, domain.Movement{CreatedBy: by}, "COMPLETED"); e != nil {
 			return nil, e
 		}
 	}
@@ -983,7 +1002,50 @@ func (r *Repo) AddMovement(ctx context.Context, id int64, v domain.Movement) (*d
 	if _, e = tx.Exec(ctx, `INSERT INTO third_party_service_order_history(enterprise_id,service_order_id,event_type,previous_status,new_status,quantity,reference_type,reference_code,actor_id,occurred_at) VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,''),NULLIF($8,''),$9,$10)`, eid, id, v.MovementType, status, nextStatus, v.Quantity, v.ReferenceType, v.ReferenceCode, v.CreatedBy, v.OccurredAt); e != nil {
 		return nil, e
 	}
+	if e = sincronizarEtapaDaOrdem(ctx, tx, eid, id, v, nextStatus); e != nil {
+		return nil, e
+	}
 	return &v, tx.Commit(ctx)
+}
+
+// sincronizarEtapaDaOrdem leva o andamento do terceiro para a etapa da OP.
+//
+// A ordem de serviço nasce de uma etapa do roteiro (route_operation_id) dentro
+// de uma OP. Antes o ciclo do terceiro — remessa, retorno, recebimento — não
+// tocava a OP: a etapa de terceiro ficava PENDENTE para sempre e a etapa
+// interna seguinte (pintar depois de zincar) não podia começar, porque a
+// predecessora nunca concluía. Agora, na mesma transação do movimento:
+//
+//	primeira remessa                  → etapa EM ANDAMENTO (a peça saiu)
+//	recebimento que completa a ordem  → etapa CONCLUÍDA (libera a próxima)
+//
+// Etapa já concluída ou dispensada não é tocada.
+func sincronizarEtapaDaOrdem(ctx context.Context, tx pgx.Tx, eid, serviceOrderID int64, v domain.Movement, nextStatus string) error {
+	var novo, anotacao string
+	switch {
+	case nextStatus == "COMPLETED":
+		novo, anotacao = "DONE", "Concluída: o terceiro devolveu a quantidade da ordem de serviço"
+	case v.MovementType == "REMITTANCE":
+		novo, anotacao = "IN_PROGRESS", "Em andamento: peças remetidas ao terceiro"
+	default:
+		return nil
+	}
+	if _, e := tx.Exec(ctx, `SELECT set_config('venture.execution_actor',$1::text,true),set_config('venture.execution_source','TERCEIRO',true)`, v.CreatedBy.String()); e != nil {
+		return e
+	}
+	_, e := tx.Exec(ctx, `UPDATE production_order_operations op
+		SET status = $3,
+		    started_at = COALESCE(op.started_at, NOW()),
+		    completed_at = CASE WHEN $3 = 'DONE' THEN NOW() ELSE op.completed_at END,
+		    notes = concat_ws(E'\n', op.notes, to_char(NOW(), 'YYYY-MM-DD HH24:MI:SS TZ') || ' · ' || $4 || ' (OS ' || so.code || ')'),
+		    updated_at = NOW()
+		FROM third_party_service_orders so
+		WHERE so.id = $2 AND so.enterprise_id = $1
+		  AND op.production_order_id = so.production_order_id
+		  AND op.route_operation_id = so.route_operation_id
+		  AND op.status NOT IN ('DONE', 'SKIPPED')
+		  AND ($3 = 'DONE' OR op.status = 'PENDING')`, eid, serviceOrderID, novo, anotacao)
+	return e
 }
 func (r *Repo) ListMovements(ctx context.Context, id int64) ([]domain.Movement, error) {
 	eid, e := tenant.ID(ctx)

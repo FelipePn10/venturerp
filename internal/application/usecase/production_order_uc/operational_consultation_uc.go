@@ -22,7 +22,9 @@ type OperationalConsultationUseCase struct {
 }
 
 func (uc *OperationalConsultationUseCase) Execute(ctx context.Context, id int64) (*response.ProductionOrderOperationalResponse, error) {
-	if !uc.Auth.CanGetSalesOrder(ctx) {
+	// O posto (OPERATOR) lê a ordem em que vai apontar: sem isso a VPRO0900,
+	// uma das três telas do perfil, não abria nenhuma OF.
+	if !uc.Auth.CanListOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
 	order, err := uc.Repo.GetByCode(ctx, id)
@@ -62,6 +64,14 @@ func (uc *OperationalConsultationUseCase) Execute(ctx context.Context, id int64)
 				WarehouseID: movement.WarehouseID, MovementType: movement.MovementType, Quantity: movement.Quantity.InexactFloat64(), Lot: movement.Lot})
 		}
 	}
-	result.Totals["pending"] = order.PlannedQty.Sub(result.Totals["delivered"])
+	// Ordem concluída, encerrada ou cancelada não tem saldo a produzir: o que
+	// faltou é refugo ou foi encerrado com saldo. Antes o resumo mostrava a
+	// diferença como "a produzir" numa OF fechada.
+	pendente := decimal.Max(decimal.Zero, order.PlannedQty.Sub(result.Totals["delivered"]))
+	switch order.Status {
+	case "COMPLETED", "CLOSED", "CANCELLED":
+		pendente = decimal.Zero
+	}
+	result.Totals["pending"] = pendente
 	return result, nil
 }

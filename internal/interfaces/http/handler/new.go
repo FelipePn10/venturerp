@@ -480,6 +480,12 @@ func NewRoutingHandler(
 	}
 }
 
+// WithMateriaisEDesempenho liga componentes por etapa e padrão × real.
+func (h *RoutingHandler) WithMateriaisEDesempenho(uc *routing_uc.MateriaisEDesempenhoUseCase) *RoutingHandler {
+	h.materiaisUC = uc
+	return h
+}
+
 func NewCuttingPlanHandler(uc *cutting_plan_uc.CuttingPlanUseCase, demand *cutting_plan_uc.DemandUseCase) *CuttingPlanHandler {
 	return &CuttingPlanHandler{uc: uc, demand: demand}
 }

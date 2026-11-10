@@ -1,9 +1,13 @@
 package routing
 
 import (
+	"encoding/json"
+	"strings"
+
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/jackc/pgx/v5"
@@ -27,6 +31,12 @@ func semLinha(err error, msg string) error {
 		return errorsuc.NewNotFoundError(msg)
 	}
 	return err
+}
+
+// sequenciaRepetida: a etapa bateu no índice único de sequência ativa.
+func sequenciaRepetida(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "uq_route_operations_sequencia_ativa"
 }
 
 // afetou: gravação que não pegou linha nenhuma é registro de outra empresa
@@ -86,6 +96,8 @@ func (r *RoutingRepositorySQLC) CreateOperation(ctx context.Context, op *entity.
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
+		TimeBasis:            baseOuPeca(op.TimeBasis),
+		TimeBasisAttribute:   pgutil.ToPgTextFromPtr(op.TimeBasisAttribute),
 		CreatedBy:            pgutil.ToPgUUID(op.CreatedBy),
 		EnterpriseID:         enterpriseID,
 	})
@@ -123,12 +135,21 @@ func (r *RoutingRepositorySQLC) UpdateOperation(ctx context.Context, op *entity.
 		LeadTimeDays:         op.LeadTimeDays,
 		ThirdPartyRemittance: operationRemittance(op.ThirdPartyRemittance),
 		ScrapPct:             pgutil.ToPgNumericFromFloat64(op.ScrapPct),
+		TimeBasis:            baseOuPeca(op.TimeBasis),
+		TimeBasisAttribute:   pgutil.ToPgTextFromPtr(op.TimeBasisAttribute),
 		EnterpriseID:         enterpriseID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating operation: %w", err)
 	}
 	return operationRowToEntity(row), nil
+}
+
+func baseOuPeca(base string) string {
+	if base == "" {
+		return entity.BasePeca
+	}
+	return base
 }
 
 func operationRemittance(value string) string {
@@ -198,18 +219,29 @@ func (r *RoutingRepositorySQLC) CreateRoute(ctx context.Context, rt *entity.Manu
 	if err != nil {
 		return nil, err
 	}
-	row, err := r.q.CreateRoute(ctx, sqlc.CreateRouteParams{
-		Code:         rt.Code,
-		ItemCode:     rt.ItemCode,
-		Mask:         pgutil.ToPgTextFromPtr(rt.Mask),
-		Alternative:  rt.Alternative,
-		Description:  pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:    sqltypes.RouteSituationEnum(rt.Situation),
-		IsStandard:   rt.IsStandard,
-		ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
-		ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
-		CreatedBy:    pgutil.ToPgUUID(rt.CreatedBy),
-		EnterpriseID: enterpriseID,
+	var row sqlc.ManufacturingRoute
+	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		var errGrava error
+		row, errGrava = q.CreateRoute(ctx, sqlc.CreateRouteParams{
+			Code:         rt.Code,
+			ItemCode:     itemDoRoteiro(rt),
+			IsTemplate:   rt.IsTemplate,
+			LotMin:       pgutil.ToPgNumericFromDecimalPtr(rt.LotMin),
+			LotMax:       pgutil.ToPgNumericFromDecimalPtr(rt.LotMax),
+			Mask:         pgutil.ToPgTextFromPtr(rt.Mask),
+			Alternative:  rt.Alternative,
+			Description:  pgutil.ToPgTextFromPtr(rt.Description),
+			Situation:    sqltypes.RouteSituationEnum(rt.Situation),
+			IsStandard:   rt.IsStandard,
+			ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
+			ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
+			CreatedBy:    pgutil.ToPgUUID(rt.CreatedBy),
+			EnterpriseID: enterpriseID,
+		})
+		if errGrava != nil || !row.IsStandard {
+			return errGrava
+		}
+		return q.ClearOverlappingStandardRoutes(ctx, sqlc.ClearOverlappingStandardRoutesParams{ID: row.ID, EnterpriseID: enterpriseID})
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -227,17 +259,27 @@ func (r *RoutingRepositorySQLC) UpdateRoute(ctx context.Context, rt *entity.Manu
 	if err != nil {
 		return nil, err
 	}
-	row, err := r.q.UpdateRoute(ctx, sqlc.UpdateRouteParams{
-		ID:           rt.ID,
-		Description:  pgutil.ToPgTextFromPtr(rt.Description),
-		Situation:    sqltypes.RouteSituationEnum(rt.Situation),
-		IsStandard:   rt.IsStandard,
-		ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
-		ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
-		EnterpriseID: enterpriseID,
+	var row sqlc.ManufacturingRoute
+	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		var errGrava error
+		row, errGrava = q.UpdateRoute(ctx, sqlc.UpdateRouteParams{
+			ID:           rt.ID,
+			Description:  pgutil.ToPgTextFromPtr(rt.Description),
+			Situation:    sqltypes.RouteSituationEnum(rt.Situation),
+			IsStandard:   rt.IsStandard,
+			ValidFrom:    pgutil.ToPgDateFromPtr(rt.ValidFrom),
+			ValidTo:      pgutil.ToPgDateFromPtr(rt.ValidTo),
+			LotMin:       pgutil.ToPgNumericFromDecimalPtr(rt.LotMin),
+			LotMax:       pgutil.ToPgNumericFromDecimalPtr(rt.LotMax),
+			EnterpriseID: enterpriseID,
+		})
+		if errGrava != nil || !row.IsStandard {
+			return errGrava
+		}
+		return q.ClearOverlappingStandardRoutes(ctx, sqlc.ClearOverlappingStandardRoutesParams{ID: row.ID, EnterpriseID: enterpriseID})
 	})
 	if err != nil {
-		return nil, fmt.Errorf("updating route: %w", err)
+		return nil, fmt.Errorf("updating route: %w", semLinha(err, "roteiro não encontrado nesta empresa"))
 	}
 	return routeRowToEntity(row), nil
 }
@@ -260,7 +302,7 @@ func (r *RoutingRepositorySQLC) GetRouteByItemCode(ctx context.Context, itemCode
 		return nil, err
 	}
 	row, err := r.q.GetRouteByItemAndAlternative(ctx, sqlc.GetRouteByItemAndAlternativeParams{
-		ItemCode:     itemCode,
+		ItemCode:     &itemCode,
 		Mask:         pgutil.ToPgText(mask),
 		Alternative:  alternative,
 		EnterpriseID: enterpriseID,
@@ -276,7 +318,7 @@ func (r *RoutingRepositorySQLC) ListRoutesByItem(ctx context.Context, itemCode i
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListRoutesByItem(ctx, sqlc.ListRoutesByItemParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
+	rows, err := r.q.ListRoutesByItem(ctx, sqlc.ListRoutesByItemParams{ItemCode: &itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os roteiros do item %d: %w", itemCode, err)
 	}
@@ -292,7 +334,7 @@ func (r *RoutingRepositorySQLC) ListRoutesByItemWithInactive(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListRoutesByItemWithInactive(ctx, sqlc.ListRoutesByItemWithInactiveParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
+	rows, err := r.q.ListRoutesByItemWithInactive(ctx, sqlc.ListRoutesByItemWithInactiveParams{ItemCode: &itemCode, EnterpriseID: enterpriseID})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao listar os roteiros do item %d: %w", itemCode, err)
 	}
@@ -337,23 +379,55 @@ func (r *RoutingRepositorySQLC) ItemHasRoute(ctx context.Context, itemCode int64
 	if err != nil {
 		return false, err
 	}
-	return r.q.ItemHasRoute(ctx, sqlc.ItemHasRouteParams{ItemCode: itemCode, EnterpriseID: enterpriseID})
+	return r.q.ItemHasRoute(ctx, sqlc.ItemHasRouteParams{ItemCode: &itemCode, EnterpriseID: enterpriseID})
 }
 
 func (r *RoutingRepositorySQLC) GetRouteForItem(ctx context.Context, itemCode int64, mask string) (*entity.ManufacturingRoute, error) {
+	return r.GetRouteForItemQty(ctx, itemCode, mask, nil)
+}
+
+// GetRouteForItemQty escolhe o roteiro pela regra única (erp_roteiro_vigente):
+// com a quantidade, a faixa de lote do roteiro entra na escolha.
+func (r *RoutingRepositorySQLC) GetRouteForItemQty(ctx context.Context, itemCode int64, mask string, qty *decimal.Decimal) (*entity.ManufacturingRoute, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	row, err := r.q.GetStandardRouteForItem(ctx, sqlc.GetStandardRouteForItemParams{
+		EnterpriseID: enterpriseID,
 		ItemCode:     itemCode,
 		Mask:         pgutil.ToPgText(mask),
-		EnterpriseID: enterpriseID,
+		Quantity:     pgutil.ToPgNumericFromDecimalPtr(qty),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao buscar o roteiro padrão do item %d: %w", itemCode, err)
 	}
 	return routeRowToEntity(row), nil
+}
+
+// ListRouteTemplates lista os roteiros-modelo da empresa.
+func (r *RoutingRepositorySQLC) ListRouteTemplates(ctx context.Context, incluirInativos bool) ([]*entity.ManufacturingRoute, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListRouteTemplates(ctx, sqlc.ListRouteTemplatesParams{EnterpriseID: enterpriseID, IncludeInactive: incluirInativos})
+	if err != nil {
+		return nil, fmt.Errorf("listando os roteiros-modelo: %w", err)
+	}
+	out := make([]*entity.ManufacturingRoute, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, routeRowToEntity(row))
+	}
+	return out, nil
+}
+
+func itemDoRoteiro(rt *entity.ManufacturingRoute) *int64 {
+	if rt.IsTemplate || rt.ItemCode <= 0 {
+		return nil
+	}
+	v := rt.ItemCode
+	return &v
 }
 
 // ─── route_operations ────────────────────────────────────────────────────────
@@ -388,8 +462,14 @@ func (r *RoutingRepositorySQLC) AddRouteOperation(ctx context.Context, op *entit
 		InspectionRequired:   op.InspectionRequired,
 		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
 		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
+		TimeBasis:            pgutil.ToPgTextFromPtr(op.TimeBasis),
+		TimeBasisAttribute:   pgutil.ToPgTextFromPtr(op.TimeBasisAttribute),
 	})
 	if err != nil {
+		if sequenciaRepetida(err) {
+			return nil, errorsuc.NewConflictError(fmt.Sprintf(
+				"o roteiro já tem uma etapa na sequência %d; use outra sequência ou edite a etapa existente", op.Sequence))
+		}
 		return nil, fmt.Errorf("adding route operation: %w", semLinha(err, "roteiro, operação ou centro de trabalho não encontrado"))
 	}
 	return routeOpRowToEntity(row), nil
@@ -400,29 +480,48 @@ func (r *RoutingRepositorySQLC) UpdateRouteOperation(ctx context.Context, op *en
 	if err != nil {
 		return nil, err
 	}
-	row, err := r.q.UpdateRouteOperation(ctx, sqlc.UpdateRouteOperationParams{
-		EnterpriseID:         empresa,
-		ID:                   op.ID,
-		WorkCenterID:         op.WorkCenterID,
-		StandardTime:         pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
-		SetupTime:            pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
-		RunTime:              pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
-		LaborTime:            pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
-		RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
-		QueueTime:            pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
-		WaitTime:             pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
-		MoveTime:             pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
-		CrewSize:             pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
-		TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
-		SupplierID:           op.SupplierID,
-		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
-		LeadTimeDays:         op.LeadTimeDays,
-		ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
-		ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
-		InspectionRequired:   op.InspectionRequired,
-		Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
-		Notes:                pgutil.ToPgTextFromPtr(op.Notes),
+	var row sqlc.RouteOperation
+	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		if op.WorkCenterID != nil {
+			daEmpresa, errCentro := q.WorkCenterOfEnterprise(ctx, sqlc.WorkCenterOfEnterpriseParams{ID: *op.WorkCenterID, EnterpriseID: &empresa})
+			if errCentro != nil {
+				return errCentro
+			}
+			if !daEmpresa {
+				return errorsuc.NewNotFoundError("centro de trabalho não encontrado nesta empresa")
+			}
+		}
+		var errGrava error
+		row, errGrava = q.UpdateRouteOperation(ctx, sqlc.UpdateRouteOperationParams{
+			EnterpriseID:         empresa,
+			ID:                   op.ID,
+			WorkCenterID:         op.WorkCenterID,
+			StandardTime:         pgutil.ToPgNumericFromFloat64Ptr(op.StandardTime),
+			SetupTime:            pgutil.ToPgNumericFromFloat64Ptr(op.SetupTime),
+			RunTime:              pgutil.ToPgNumericFromFloat64Ptr(op.RunTime),
+			LaborTime:            pgutil.ToPgNumericFromFloat64Ptr(op.LaborTime),
+			RunTimeBaseQty:       pgutil.ToPgNumericFromFloat64Ptr(op.RunBaseQty),
+			QueueTime:            pgutil.ToPgNumericFromFloat64Ptr(op.QueueTime),
+			WaitTime:             pgutil.ToPgNumericFromFloat64Ptr(op.WaitTime),
+			MoveTime:             pgutil.ToPgNumericFromFloat64Ptr(op.MoveTime),
+			CrewSize:             pgutil.ToPgNumericFromFloat64Ptr(op.CrewSize),
+			TimeUnit:             pgutil.ToPgTextFromPtr(op.TimeUnit),
+			SupplierID:           op.SupplierID,
+			ServiceItemCode:      op.ServiceItemCode,
+			CostPerUnit:          pgutil.ToPgNumericFromDecimalPtr(op.CostPerUnit),
+			LeadTimeDays:         op.LeadTimeDays,
+			ThirdPartyRemittance: pgutil.ToPgTextFromPtr(op.ThirdPartyRemittance),
+			ScrapPct:             pgutil.ToPgNumericFromFloat64Ptr(op.ScrapPct),
+			InspectionRequired:   op.InspectionRequired,
+			Situation:            sqltypes.RouteOpSituationEnum(op.Situation),
+			Notes:                pgutil.ToPgTextFromPtr(op.Notes),
+			TimeBasis:            pgutil.ToPgTextFromPtr(op.TimeBasis),
+			TimeBasisAttribute:   pgutil.ToPgTextFromPtr(op.TimeBasisAttribute),
+		})
+		if errGrava != nil {
+			return errGrava
+		}
+		return q.SyncPrimaryResourceWithStep(ctx, sqlc.SyncPrimaryResourceWithStepParams{ID: row.ID, EnterpriseID: empresa})
 	})
 	if err != nil {
 		return nil, fmt.Errorf("updating route operation: %w", semLinha(err, "etapa do roteiro ou centro de trabalho não encontrado"))
@@ -531,6 +630,10 @@ func (r *RoutingRepositorySQLC) AddRouteOpResource(ctx context.Context, res *ent
 		IsPrimary:        res.IsPrimary,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, errorsuc.NewConflictError("este centro já está na lista de centros desta etapa")
+		}
 		return nil, fmt.Errorf("adding route op resource: %w", semLinha(err, "etapa do roteiro ou centro de trabalho não encontrado"))
 	}
 	return resourceRowToEntity(row), nil
@@ -586,6 +689,11 @@ func (r *RoutingRepositorySQLC) SetRouteOpResourcePrimary(ctx context.Context, i
 	// meio deixava a etapa sem recurso principal (ou com o centro desatualizado).
 	var row sqlc.RouteOperationResource
 	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		if err := q.KeepStepCenterAsAlternative(ctx, sqlc.KeepStepCenterAsAlternativeParams{
+			ResourceID: id, RouteOperationID: routeOperationID, EnterpriseID: empresa,
+		}); err != nil {
+			return fmt.Errorf("guardando o centro atual como alternativo: %w", err)
+		}
 		if err := q.ClearPrimaryResources(ctx, sqlc.ClearPrimaryResourcesParams{RouteOperationID: routeOperationID, EnterpriseID: empresa}); err != nil {
 			return fmt.Errorf("clearing primary resources: %w", err)
 		}
@@ -718,6 +826,8 @@ func operationRowToEntity(row sqlc.Operation) *entity.Operation {
 		v := row.Description.String
 		e.Description = &v
 	}
+	e.TimeBasis = row.TimeBasis
+	e.TimeBasisAttribute = textToPtr(row.TimeBasisAttribute)
 	return e
 }
 
@@ -743,8 +853,10 @@ func routeRowToEntity(row sqlc.ManufacturingRoute) *entity.ManufacturingRoute {
 	e := &entity.ManufacturingRoute{
 		ID:          row.ID,
 		Code:        row.Code,
-		ItemCode:    row.ItemCode,
 		Alternative: row.Alternative,
+		IsTemplate:  row.IsTemplate,
+		LotMin:      pgutil.FromPgNumericToDecimalPtr(row.LotMin),
+		LotMax:      pgutil.FromPgNumericToDecimalPtr(row.LotMax),
 		Situation:   entity.RouteSituation(row.Situation),
 		IsStandard:  row.IsStandard,
 		IsActive:    row.IsActive,
@@ -753,6 +865,9 @@ func routeRowToEntity(row sqlc.ManufacturingRoute) *entity.ManufacturingRoute {
 		CreatedBy:   pgutil.FromPgUUID(row.CreatedBy),
 		ValidFrom:   pgutil.FromPgDateToPtr(row.ValidFrom),
 		ValidTo:     pgutil.FromPgDateToPtr(row.ValidTo),
+	}
+	if row.ItemCode != nil {
+		e.ItemCode = *row.ItemCode
 	}
 	if row.Mask.Valid {
 		v := row.Mask.String
@@ -799,6 +914,8 @@ func routeOpRowToEntity(row sqlc.RouteOperation) *entity.RouteOperation {
 	e.LeadTimeDays = row.LeadTimeDays
 	e.ThirdPartyRemittance = textToPtr(row.ThirdPartyRemittance)
 	e.ScrapPct = numToPtr(row.ScrapPct)
+	e.TimeBasis = textToPtr(row.TimeBasis)
+	e.TimeBasisAttribute = textToPtr(row.TimeBasisAttribute)
 	e.InspectionRequired = row.InspectionRequired
 	if row.Notes.Valid {
 		v := row.Notes.String
@@ -836,6 +953,8 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 		ThirdPartyRemittance: row.ThirdPartyRemittance,
 		ScrapPct:             row.ScrapPct,
 		InspectionRequired:   row.InspectionRequired,
+		TimeBasis:            row.TimeBasis,
+		TimeBasisAttribute:   row.TimeBasisAttribute,
 	})
 	e.OperationName = row.OperationName
 	e.OperationOrigin = entity.OperationOrigin(row.OperationOrigin)
@@ -849,7 +968,7 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 	// normalised to hours.
 	def := entity.TimeComponents{
 		Setup:      pgutil.FromPgNumericToFloat64(row.OpSetupTime),
-		Run:        pgutil.FromPgNumericToFloat64(row.OpRunTime),
+		Run:        entity.TempoDeMaquinaDaOperacao(pgutil.FromPgNumericToFloat64(row.OpRunTime), pgutil.FromPgNumericToFloat64(row.OpStandardTime)),
 		Labor:      pgutil.FromPgNumericToFloat64(row.OpLaborTime),
 		RunBaseQty: pgutil.FromPgNumericToFloat64(row.OpRunTimeBaseQty),
 		Queue:      pgutil.FromPgNumericToFloat64(row.OpQueueTime),
@@ -859,15 +978,57 @@ func routeOpRowWithNamesToEntity(row sqlc.GetRouteOperationsRow) *entity.RouteOp
 		Unit:       row.OpTimeUnit,
 	}
 	e.EffTime = entity.ResolveOperationTime(e.Overrides(), def)
+
+	// Base do tempo (etapa ∘ operação) e quanto dela a peça do roteiro tem.
+	e.EffectiveTimeBasis = row.OpTimeBasis
+	e.EffectiveTimeBasisAttribute = textToPtr(row.OpTimeBasisAttribute)
+	if e.TimeBasis != nil && *e.TimeBasis != "" {
+		e.EffectiveTimeBasis = *e.TimeBasis
+		e.EffectiveTimeBasisAttribute = e.TimeBasisAttribute
+	}
+	if e.EffectiveTimeBasis != "" && e.EffectiveTimeBasis != entity.BasePeca {
+		if fator, ok := entity.FatorDaBase(e.EffectiveTimeBasis, e.EffectiveTimeBasisAttribute,
+			medidasDoItem(row.ItemDimensions, row.ItemPdmAttributes)); ok {
+			e.EffTime.UnitsPerPiece = fator
+		} else {
+			e.EffTime.SemMedida = true
+		}
+	}
 	e.EffectiveStdTime = e.EffTime.Run
 	e.EffectiveSetup = e.EffTime.Setup
 	e.EffectiveScrap = e.EffectiveScrapPct(pgutil.FromPgNumericToFloat64(row.OpScrapPct))
 	e.EffectiveSubcontractDays = row.EffectiveLeadTimeDays
+	e.EffectiveCostPerUnit = pgutil.FromPgNumericToDecimalPtr(row.EffectiveCostPerUnit)
+	e.EffectiveSupplierID = row.EffectiveSupplierID
 	return e
 }
 
+// GetExternalOpsByItem devolve as etapas externas do MESMO roteiro que a OP e
+// o MRP usam (o vigente, com a máscara genérica como alternativa). Item sem
+// roteiro vigente não tem etapa externa: devolve lista vazia.
 func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCode int64) ([]*entity.ExternalOp, error) {
-	rows, err := r.q.GetExternalRouteOpsForItem(ctx, itemCode)
+	return r.GetExternalOpsForOrder(ctx, itemCode, "", decimal.Zero)
+}
+
+// GetExternalOpsForOrder: as etapas externas do roteiro que a OP desta máscara
+// e quantidade vai usar (com faixa de lote, o alternativo pode ser outro).
+func (r *RoutingRepositorySQLC) GetExternalOpsForOrder(ctx context.Context, itemCode int64, mask string, qty decimal.Decimal) ([]*entity.ExternalOp, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var q *decimal.Decimal
+	if qty.IsPositive() {
+		q = &qty
+	}
+	route, err := r.GetRouteForItemQty(ctx, itemCode, mask, q)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*entity.ExternalOp{}, nil
+		}
+		return nil, err
+	}
+	rows, err := r.q.GetExternalRouteOpsForRoute(ctx, sqlc.GetExternalRouteOpsForRouteParams{ID: route.ID, EnterpriseID: empresa})
 	if err != nil {
 		return nil, fmt.Errorf("falha ao buscar as operações externas do item %d: %w", itemCode, err)
 	}
@@ -894,4 +1055,113 @@ func (r *RoutingRepositorySQLC) GetExternalOpsByItem(ctx context.Context, itemCo
 		out = append(out, op)
 	}
 	return out, nil
+}
+
+// medidasDoItem lê as dimensões de engenharia (mm) e os atributos do PDM do
+// item do roteiro. Cadastro ilegível vira "sem medida", nunca erro: a etapa
+// por medida aparece na prontidão como pendência, e o resto do roteiro segue.
+func medidasDoItem(dimensoes, pdm []byte) entity.MedidasDaPeca {
+	m := entity.MedidasDaPeca{Atributos: map[string]string{}}
+	var d struct{ Length, Width json.Number }
+	if json.Unmarshal(dimensoes, &d) == nil {
+		m.ComprimentoMM, _ = d.Length.Float64()
+		m.LarguraMM, _ = d.Width.Float64()
+	}
+	var atributos []struct{ Name, Value string }
+	if json.Unmarshal(pdm, &atributos) == nil {
+		for _, a := range atributos {
+			m.Atributos[strings.ToUpper(strings.TrimSpace(a.Name))] = strings.TrimSpace(a.Value)
+		}
+	}
+	return m
+}
+
+// CopyRoute cria o roteiro de destino e copia tudo o que pende das etapas da
+// origem numa transação só. Antes a tela copiava etapa por etapa pela API: uma
+// falha no meio deixava um roteiro pela metade, e centros alternativos,
+// ferramentas, documentos e inspeções ficavam para trás.
+func (r *RoutingRepositorySQLC) CopyRoute(ctx context.Context, sourceRouteID int64, destino *entity.ManufacturingRoute) (*entity.ManufacturingRoute, entity.RouteCopyResult, error) {
+	var res entity.RouteCopyResult
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, res, err
+	}
+	var criado sqlc.ManufacturingRoute
+	err = r.q.InTx(ctx, func(q *sqlc.Queries) error {
+		var errTx error
+		criado, errTx = q.CreateRoute(ctx, sqlc.CreateRouteParams{
+			Code:         destino.Code,
+			ItemCode:     itemDoRoteiro(destino),
+			Mask:         pgutil.ToPgTextFromPtr(destino.Mask),
+			Alternative:  destino.Alternative,
+			Description:  pgutil.ToPgTextFromPtr(destino.Description),
+			Situation:    sqltypes.RouteSituationEnum(destino.Situation),
+			IsStandard:   destino.IsStandard,
+			ValidFrom:    pgutil.ToPgDateFromPtr(destino.ValidFrom),
+			ValidTo:      pgutil.ToPgDateFromPtr(destino.ValidTo),
+			CreatedBy:    pgutil.ToPgUUID(destino.CreatedBy),
+			EnterpriseID: empresa,
+			IsTemplate:   destino.IsTemplate,
+			LotMin:       pgutil.ToPgNumericFromDecimalPtr(destino.LotMin),
+			LotMax:       pgutil.ToPgNumericFromDecimalPtr(destino.LotMax),
+		})
+		if errTx != nil {
+			return errTx
+		}
+		if criado.IsStandard {
+			if errTx = q.ClearOverlappingStandardRoutes(ctx, sqlc.ClearOverlappingStandardRoutesParams{ID: criado.ID, EnterpriseID: empresa}); errTx != nil {
+				return errTx
+			}
+		}
+		ids := struct{ src, dst int64 }{sourceRouteID, criado.ID}
+		if res.Steps, errTx = q.CopyRouteSteps(ctx, sqlc.CopyRouteStepsParams{TargetRouteID: ids.dst, SourceRouteID: ids.src, EnterpriseID: empresa}); errTx != nil {
+			return fmt.Errorf("copiando as etapas: %w", errTx)
+		}
+		if res.Steps == 0 {
+			return errorsuc.NewValidationError("o roteiro de origem não tem etapas para copiar (ou não é desta empresa)")
+		}
+		if res.Dependencies, errTx = q.CopyRouteNetwork(ctx, sqlc.CopyRouteNetworkParams{TargetRouteID: ids.dst, SourceRouteID: ids.src, EnterpriseID: empresa}); errTx != nil {
+			return fmt.Errorf("copiando a rede: %w", errTx)
+		}
+		if res.Resources, errTx = q.CopyRouteResources(ctx, sqlc.CopyRouteResourcesParams{TargetRouteID: ids.dst, SourceRouteID: ids.src, EnterpriseID: empresa}); errTx != nil {
+			return fmt.Errorf("copiando os centros alternativos: %w", errTx)
+		}
+		if res.Tools, errTx = q.CopyRouteTools(ctx, sqlc.CopyRouteToolsParams{TargetRouteID: ids.dst, SourceRouteID: ids.src, EnterpriseID: empresa}); errTx != nil {
+			return fmt.Errorf("copiando as ferramentas: %w", errTx)
+		}
+		if res.Documents, errTx = q.CopyRouteStepDocuments(ctx, sqlc.CopyRouteStepDocumentsParams{TargetRouteID: ids.dst, SourceRouteID: ids.src, EnterpriseID: empresa, CreatedBy: pgutil.ToPgUUID(destino.CreatedBy)}); errTx != nil {
+			return fmt.Errorf("copiando os documentos: %w", errTx)
+		}
+		// Plano de inspeção é do ITEM: modelo não tem item, então não leva.
+		if destino.IsTemplate || destino.ItemCode <= 0 {
+			return nil
+		}
+		planos, errTx := q.ListActiveInspectionPlanIDsByRoute(ctx, sqlc.ListActiveInspectionPlanIDsByRouteParams{RouteID: ids.src, EnterpriseID: empresa})
+		if errTx != nil {
+			return fmt.Errorf("lendo os planos de inspeção: %w", errTx)
+		}
+		for _, plano := range planos {
+			novo, errPlano := q.CopyRouteInspectionPlan(ctx, sqlc.CopyRouteInspectionPlanParams{
+				TargetItemCode: destino.ItemCode, CreatedBy: pgutil.ToPgUUID(destino.CreatedBy),
+				EnterpriseID: empresa, TargetRouteID: ids.dst, SourcePlanID: plano,
+			})
+			if errPlano != nil {
+				return fmt.Errorf("copiando o plano de inspeção %d: %w", plano, errPlano)
+			}
+			if _, errPlano = q.CopyInspectionCharacteristics(ctx, sqlc.CopyInspectionCharacteristicsParams{TargetPlanID: novo, SourcePlanID: plano}); errPlano != nil {
+				return fmt.Errorf("copiando as características do plano %d: %w", plano, errPlano)
+			}
+			res.Inspections++
+		}
+		return nil
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_mfg_routes_unique" {
+			return nil, res, errorsuc.NewConflictError(
+				"o item de destino já tem um roteiro com esta alternativa e máscara; escolha outra alternativa")
+		}
+		return nil, res, err
+	}
+	return routeRowToEntity(criado), res, nil
 }

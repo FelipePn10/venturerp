@@ -6,6 +6,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	orderentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"github.com/shopspring/decimal"
 	"math"
 	"strings"
@@ -75,7 +76,11 @@ func (uc *OrderOperationsUseCase) ExplodeRoute(ctx context.Context, orderID, rou
 			if uc.Routing == nil {
 				return errorsuc.NewValidationError("selecione o roteiro do item")
 			}
-			route, err := uc.Routing.GetRouteForItem(ctx, order.ItemCode, order.Mask)
+			qtdOrdem, _, errQtd := q.GetProductionOrderQty(ctx, orderID)
+			if errQtd != nil {
+				return fmt.Errorf("lendo a quantidade da ordem: %w", errQtd)
+			}
+			route, err := routingrepo.RoteiroParaQuantidade(ctx, uc.Routing, order.ItemCode, order.Mask, decimal.NewFromFloat(qtdOrdem))
 			if err != nil {
 				return errorsuc.NewValidationError("o item não possui roteiro aprovado para esta máscara")
 			}
@@ -110,6 +115,8 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 	if err != nil {
 		return nil, err
 	}
+	// Etapas FANTASMA/INATIVA do roteiro: entram na ordem já dispensadas.
+	naoExecutadas := map[int64]bool{}
 	if uc.Routing != nil {
 		route, err := uc.Routing.GetRouteByID(ctx, routeID)
 		if err != nil {
@@ -139,6 +146,11 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 		entraPorEtapa = routingentity.QuantidadePorOperacao(resolved, edges, qty)
 		ops = make([]sqlc.DBRouteOpForExplode, 0, len(resolved))
 		for _, op := range resolved {
+			if !op.ConsomeTempo() {
+				naoExecutadas[op.ID] = true
+			} else if op.EffTime.SemMedida {
+				return nil, routingentity.ErroSemMedida(op)
+			}
 			ops = append(ops, sqlc.DBRouteOpForExplode{ID: op.ID, Sequence: op.Sequence, OperationName: op.OperationName,
 				WorkCenterID: pgutil.ToPgInt8Ptr(op.EffectiveWorkCenterID),
 				PlannedHours: op.EffTime.Run * op.EffTime.Batches(entraPorEtapa[op.ID]), SetupHours: op.EffTime.Setup,
@@ -161,12 +173,21 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 		if err != nil {
 			return nil, fmt.Errorf("creating order operation seq %d: %w", op.Sequence, err)
 		}
+		if naoExecutadas[op.ID] {
+			if err := uc.Q.MarkProductionOrderOperationSkipped(ctx, poo.ID); err != nil {
+				return nil, fmt.Errorf("dispensando a etapa fantasma seq %d: %w", op.Sequence, err)
+			}
+			poo.Status = "SKIPPED"
+		}
 		out = append(out, pooToResponse(poo))
 	}
 
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if err := uc.Q.SetProductionOrderRoute(ctx, orderID, routeID, enterpriseID); err != nil {
+		return nil, fmt.Errorf("gravando o roteiro da ordem: %w", err)
 	}
 	if err := uc.Q.FreezeProductionRoutingDependencies(ctx, sqlc.FreezeProductionRoutingDependenciesParams{ID: orderID, EnterpriseID: &enterpriseID}); err != nil {
 		return nil, err
@@ -177,7 +198,13 @@ func (uc *OrderOperationsUseCase) explodeRoute(ctx context.Context, orderID, rou
 
 	// A inspeção é um controle SOBRE a ordem, não um pré-requisito dela: falta de
 	// plano vira aviso na etapa, não recusa da ordem.
-	avisos, err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, ops, entraPorEtapa)
+	executadas := make([]sqlc.DBRouteOpForExplode, 0, len(ops))
+	for _, op := range ops {
+		if !naoExecutadas[op.ID] {
+			executadas = append(executadas, op)
+		}
+	}
+	avisos, err := uc.abrirInspecoesDaOrdem(ctx, orderID, routeID, executadas, entraPorEtapa)
 	if err != nil {
 		return nil, err
 	}
@@ -364,6 +391,15 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 			return nil, err
 		}
 		r.CanStart = !blocked && (poo.Status == "PENDING" || poo.Status == "PAUSED" || poo.Status == "INTERRUPTED")
+		os, err := uc.Q.OpenServiceOrderOfOperation(ctx, sqlc.OpenServiceOrderOfOperationParams{OperationID: poo.ID, EnterpriseID: empresa})
+		if err != nil {
+			return nil, err
+		}
+		if os != 0 {
+			// Anda pela OS do terceiro: o posto não inicia nem conclui.
+			r.ServiceOrderCode = &os
+			r.CanStart = false
+		}
 		events, err := uc.Q.ListProductionExecutionEvents(ctx, sqlc.ListProductionExecutionEventsParams{OperationID: poo.ID, EnterpriseID: empresa})
 		if err != nil {
 			return nil, err
@@ -404,6 +440,13 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 			return errorsuc.NewValidationError("inicie a ordem antes de executar suas etapas; ordens encerradas não podem ser alteradas")
 		}
 		reason := strings.TrimSpace(dto.Reason)
+		os, err := q.OpenServiceOrderOfOperation(ctx, sqlc.OpenServiceOrderOfOperationParams{OperationID: dto.OperationID, EnterpriseID: empresa})
+		if err != nil {
+			return err
+		}
+		if os != 0 {
+			return errorsuc.NewValidationError(fmt.Sprintf("esta etapa é feita pelo terceiro: ela anda pela OS %d (VTPS0100) — a remessa põe em andamento e o recebimento de todas as peças conclui", os))
+		}
 		if err := orderentity.ValidateOperationTransition(prior.Status, dto.Status, reason); err != nil {
 			return errorsuc.NewValidationError(err.Error())
 		}
@@ -414,6 +457,17 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 			}
 			if blocked {
 				return errorsuc.NewValidationError("conclua as etapas predecessoras antes de iniciar esta etapa")
+			}
+		}
+		if dto.Status == "DONE" {
+			// Começar com parte das peças do terceiro pode; fechar a etapa
+			// só depois de todas voltarem.
+			pendente, err := q.OperationPredecessorsUnfinished(ctx, dto.OperationID)
+			if err != nil {
+				return err
+			}
+			if pendente {
+				return errorsuc.NewValidationError("a etapa anterior ainda não terminou (o terceiro não devolveu todas as peças): esta etapa pode seguir com as peças que voltaram, mas só conclui depois")
 			}
 		}
 		actor, err := uc.Auth.UserID(ctx)

@@ -38,14 +38,17 @@ type OperationResponse struct {
 	LeadTimeDays         *int32    `json:"lead_time_days,omitempty"`
 	ThirdPartyRemittance string    `json:"third_party_remittance"`
 	ScrapPct             float64   `json:"scrap_pct"`
+	TimeBasis            string    `json:"time_basis"`
+	TimeBasisAttribute   *string   `json:"time_basis_attribute,omitempty"`
 	IsActive             bool      `json:"is_active"`
 	CreatedAt            time.Time `json:"created_at"`
 }
 
 type ManufacturingRouteResponse struct {
-	ID          int64      `json:"id"`
-	Code        int64      `json:"code"`
-	ItemCode    int64      `json:"item_code"`
+	ID   int64 `json:"id"`
+	Code int64 `json:"code"`
+	// ItemCode fica fora da resposta do roteiro-modelo (que não tem item).
+	ItemCode    int64      `json:"item_code,omitempty"`
 	Mask        *string    `json:"mask,omitempty"`
 	Alternative int16      `json:"alternative"`
 	Description *string    `json:"description,omitempty"`
@@ -53,6 +56,9 @@ type ManufacturingRouteResponse struct {
 	IsStandard  bool       `json:"is_standard"`
 	ValidFrom   *time.Time `json:"valid_from,omitempty"`
 	ValidTo     *time.Time `json:"valid_to,omitempty"`
+	IsTemplate  bool       `json:"is_template"`
+	LotMin      *float64   `json:"lot_min,omitempty"`
+	LotMax      *float64   `json:"lot_max,omitempty"`
 	IsActive    bool       `json:"is_active"`
 	CreatedAt   time.Time  `json:"created_at"`
 }
@@ -76,6 +82,34 @@ type RouteOperationResponse struct {
 	EffectiveSetup        float64  `json:"effective_setup"`
 	// EffTime is the resolved, quantity-aware time model in hours (setup/run/labor/queue/wait/move).
 	EffTime OperationTimeBreakdown `json:"eff_time"`
+	// Sobreposições do modelo de tempo NESTA etapa (nil ⇒ herda da operação),
+	// na unidade `time_unit` (nil ⇒ a da operação). Sem elas a tela não tinha
+	// como editar a etapa nem copiá-la: lia vazio e regravava vazio, e a
+	// cópia de roteiro perdia mão de obra, peças por ciclo, fila e equipe.
+	RunTime    *float64 `json:"run_time,omitempty"`
+	LaborTime  *float64 `json:"labor_time,omitempty"`
+	RunBaseQty *float64 `json:"run_base_qty,omitempty"`
+	QueueTime  *float64 `json:"queue_time,omitempty"`
+	WaitTime   *float64 `json:"wait_time,omitempty"`
+	MoveTime   *float64 `json:"move_time,omitempty"`
+	CrewSize   *float64 `json:"crew_size,omitempty"`
+	TimeUnit   *string  `json:"time_unit,omitempty"`
+	// Base de tempo informada NESTA etapa (nil ⇒ herda) e a que vale de fato.
+	TimeBasis                   *string `json:"time_basis,omitempty"`
+	TimeBasisAttribute          *string `json:"time_basis_attribute,omitempty"`
+	EffectiveTimeBasis          string  `json:"effective_time_basis"`
+	EffectiveTimeBasisAttribute *string `json:"effective_time_basis_attribute,omitempty"`
+	// UnitsPerPiece: quanto da base cada peça tem (m², metros…); MissingMeasure:
+	// o item não informa a medida que a base pede.
+	UnitsPerPiece  float64 `json:"units_per_piece"`
+	MissingMeasure bool    `json:"missing_measure"`
+	// Origin é a origem da operação de biblioteca (INTERNA/EXTERNA/TERCEIROS).
+	Origin string `json:"origin,omitempty"`
+	// EffectiveLeadDays é o prazo do terceiro que vale (etapa ∘ biblioteca),
+	// em dias corridos.
+	EffectiveLeadDays int32 `json:"effective_lead_time_days"`
+	// EffectiveSupplierID é o fornecedor que vale (etapa ∘ biblioteca).
+	EffectiveSupplierID *int64 `json:"effective_supplier_id,omitempty"`
 	// Subcontracting overrides (nil ⇒ inherit from the operation).
 	SupplierID           *int64   `json:"supplier_id,omitempty"`
 	ServiceItemCode      *int64   `json:"service_item_code,omitempty"`

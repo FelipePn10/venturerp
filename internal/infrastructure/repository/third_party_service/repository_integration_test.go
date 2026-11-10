@@ -11,6 +11,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/security"
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	repoimpl "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
@@ -157,6 +158,51 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	if _, e = repo.UpdateOrderStatus(ctx, orders[0].ID, "RELEASED_WITH_PO", nil, &poCode, uid); e != nil {
 		t.Fatal(e)
 	}
+	// A etapa de terceiro da OP acompanha a ordem de serviço.
+	var etapaDaOP int64
+	if e = pool.QueryRow(base, `INSERT INTO production_order_operations(production_order_id,route_operation_id,sequence,operation_name,enterprise_id)
+		VALUES($1,$2,10,'Zincagem',$3) RETURNING id`, productionID, routeOpID, enterpriseID).Scan(&etapaDaOP); e != nil {
+		t.Fatal(e)
+	}
+	situacaoDaEtapa := func() string {
+		var st string
+		if err := pool.QueryRow(base, `SELECT status FROM production_order_operations WHERE id=$1`, etapaDaOP).Scan(&st); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	// Enquanto a OS está aberta, a etapa anda por ela: o posto não a move.
+	osDaEtapa := func() int64 {
+		code, err := sqlc.New(pool).OpenServiceOrderOfOperation(base, sqlc.OpenServiceOrderOfOperationParams{OperationID: etapaDaOP, EnterpriseID: enterpriseID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return code
+	}
+	// Etapa seguinte (interna), para a sobreposição: com parte das peças de
+	// volta ela pode começar, mas só conclui quando o terceiro devolver tudo.
+	var pintura int64
+	if e = pool.QueryRow(base, `INSERT INTO production_order_operations(production_order_id,sequence,operation_name,enterprise_id)
+		VALUES($1,20,'Pintura',$2) RETURNING id`, productionID, enterpriseID).Scan(&pintura); e != nil {
+		t.Fatal(e)
+	}
+	travas := func() (comecar, concluir bool) {
+		q := sqlc.New(pool)
+		var err error
+		if comecar, err = q.OperationPredecessorsPending(base, pintura); err != nil {
+			t.Fatal(err)
+		}
+		if concluir, err = q.OperationPredecessorsUnfinished(base, pintura); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if c, f := travas(); !c || !f {
+		t.Fatalf("nada voltou do terceiro: a pintura não começa nem conclui (começar=%v concluir=%v)", c, f)
+	}
+	if got := osDaEtapa(); got != orders[0].Code {
+		t.Fatalf("a etapa com OS aberta tem de apontar para a OS %d; veio %d", orders[0].Code, got)
+	}
 	if _, e = repo.AddMovement(ctx, orders[0].ID, domain.Movement{MovementType: "RETURN", Quantity: decimal.NewFromInt(1), OccurredAt: time.Now(), IdempotencyKey: fmt.Sprintf("invalid-return-%d", suffix), CreatedBy: uid}); e == nil {
 		t.Fatal("return without remittance must fail")
 	}
@@ -165,6 +211,13 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	}
 	if _, e = repo.AddMovement(ctx, orders[0].ID, domain.Movement{MovementType: "RETURN", Quantity: decimal.NewFromInt(4), OccurredAt: time.Now(), IdempotencyKey: fmt.Sprintf("return-%d", suffix), CreatedBy: uid}); e != nil {
 		t.Fatal(e)
+	}
+	if st := situacaoDaEtapa(); st != "IN_PROGRESS" {
+		t.Fatalf("depois da remessa a etapa de terceiro da OP está em andamento; veio %s", st)
+	}
+	// Concluir à mão com nada recebido é recusado: as peças ainda estão fora.
+	if _, e = repo.UpdateOrderStatus(ctx, orders[0].ID, "COMPLETED", nil, nil, uid); e == nil {
+		t.Fatal("a OS não pode ser concluída à mão sem nenhuma peça recebida")
 	}
 	returnedOrder, e := repo.GetOrder(ctx, orders[0].ID)
 	if e != nil || !returnedOrder.FulfilledQuantity.IsZero() {
@@ -181,6 +234,24 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	gotOrder, e := repo.GetOrder(ctx, orders[0].ID)
 	if e != nil || !gotOrder.FulfilledQuantity.Equal(decimal.NewFromInt(4)) {
 		t.Fatalf("order=%+v err=%v", gotOrder, e)
+	}
+	if st := situacaoDaEtapa(); st != "IN_PROGRESS" {
+		t.Fatalf("recebimento parcial (4 de 10) não conclui a etapa; veio %s", st)
+	}
+	if c, f := travas(); c || !f {
+		t.Fatalf("4 de 10 de volta: a pintura começa com elas e não conclui (bloqueia começar=%v concluir=%v)", c, f)
+	}
+	if _, e = repo.AddMovement(ctx, orders[0].ID, domain.Movement{MovementType: "RECEIPT", Quantity: decimal.NewFromInt(6), OccurredAt: time.Now(), IdempotencyKey: fmt.Sprintf("receipt-rest-%d", suffix), CreatedBy: uid}); e != nil {
+		t.Fatal(e)
+	}
+	if st := situacaoDaEtapa(); st != "DONE" {
+		t.Fatalf("recebida a quantidade toda, a etapa de terceiro da OP conclui e libera a próxima; veio %s", st)
+	}
+	if c, f := travas(); c || f {
+		t.Fatalf("tudo de volta: a pintura começa e conclui (bloqueia começar=%v concluir=%v)", c, f)
+	}
+	if got := osDaEtapa(); got != 0 {
+		t.Fatalf("OS concluída solta a etapa; veio OS %d", got)
 	}
 	orderHistory, e := repo.OrderHistory(ctx, orders[0].ID)
 	if e != nil || len(orderHistory) < 3 {

@@ -47,20 +47,37 @@ func TestBuildSettlement_VariancesAndOverheadApplication(t *testing.T) {
 	}
 }
 
-func TestBuildSettlement_NoStandardLaborSkipsOverhead(t *testing.T) {
-	in := ActualCostInputs{ProducedQty: decimal.RequireFromString("5"), MaterialCostReal: decimal.RequireFromString("500"), LaborCostReal: decimal.RequireFromString("100")}
-	std := StandardUnitCost{Material: decimal.RequireFromString("90"), Labor: decimal.RequireFromString("0"), Overhead: decimal.RequireFromString("40")}
+// Centro só com taxa de máquina: o indireto é absorvido sobre a conversão real
+// (máquina), na razão do padrão. Antes a base era só mão de obra e dava zero.
+func TestBuildSettlement_IndiretoSobreAConversao(t *testing.T) {
+	d := decimal.RequireFromString
+	in := ActualCostInputs{ProducedQty: d("10"), MaterialCostReal: d("1000"), MachineCostReal: d("400"), SubcontractCostReal: d("150")}
+	std := StandardUnitCost{Material: d("90"), Setup: d("5"), Machine: d("25"), Subcontract: d("12"), Overhead: d("15")}
 
 	c := BuildSettlement(1, in, std, "USD", uuid.Nil)
 
-	if !c.OverheadCostReal.IsZero() {
-		t.Fatalf("overhead real = %v, want 0 when std labor is 0", c.OverheadCostReal)
+	// 400 × 15 / (5 + 25) = 200.
+	if !almostEqual(c.OverheadCostReal, 200) {
+		t.Fatalf("indireto real = %v, quer 200", c.OverheadCostReal)
 	}
-	if !almostEqual(c.TotalCostReal, 600) {
-		t.Fatalf("total real = %v, want 600", c.TotalCostReal)
+	// Padrão: máquina = (preparação + máquina) × 10 = 300; terceiros 120.
+	if !almostEqual(c.MachineCostStd, 300) || !almostEqual(c.SubcontractCostStd, 120) || !almostEqual(c.MaterialCostStd, 900) {
+		t.Fatalf("padrão por componente: %+v", c)
+	}
+	if !almostEqual(c.TotalCostStd, 900+300+120+150) || !almostEqual(c.TotalCostReal, 1000+400+150+200) {
+		t.Fatalf("totais: std %v real %v", c.TotalCostStd, c.TotalCostReal)
+	}
+	if !almostEqual(c.MachineVariance, 100) || !almostEqual(c.SubcontractVariance, 30) || !almostEqual(c.TotalVariance, 280) {
+		t.Fatalf("variações: %+v", c)
 	}
 	if c.Currency != "USD" {
 		t.Fatalf("currency = %q, want USD", c.Currency)
+	}
+
+	// Padrão sem conversão, mas com indireto: absorve pelo padrão.
+	so := BuildSettlement(1, ActualCostInputs{ProducedQty: d("5"), MaterialCostReal: d("500")}, StandardUnitCost{Material: d("90"), Overhead: d("40")}, "", uuid.Nil)
+	if !almostEqual(so.OverheadCostReal, 200) {
+		t.Fatalf("indireto sem conversão no padrão = %v, quer 200 (40 × 5)", so.OverheadCostReal)
 	}
 }
 

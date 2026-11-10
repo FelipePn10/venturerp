@@ -518,3 +518,50 @@ func (r *PlannedOrderRepositorySQLC) ResolveMachineID(ctx context.Context, code 
 	}
 	return m.ID, nil
 }
+
+// OrdensDeCompraComPedido: as ordens planejadas de compra da empresa que já
+// viraram pedido. A fila do comprador é o resto.
+func (r *PlannedOrderRepositorySQLC) OrdensDeCompraComPedido(ctx context.Context) (map[int64]bool, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	codes, err := r.q.ListPurchasePlannedOrdersWithOrder(ctx, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("lendo ordens planejadas de compra já pedidas: %w", err)
+	}
+	out := make(map[int64]bool, len(codes))
+	for _, c := range codes {
+		out[c] = true
+	}
+	return out, nil
+}
+
+// AlertasDoMRP: a mensagem de exceção mais recente, não tratada, de cada ordem
+// planejada da empresa (cancelar, adiantar, adiar…).
+func (r *PlannedOrderRepositorySQLC) AlertasDoMRP(ctx context.Context) (map[int64]entity.AlertaDoMRP, error) {
+	enterpriseID, err := tenant.IDPtr(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.q.ListOpenPlannedOrderExceptions(ctx, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as exceções do MRP das ordens planejadas: %w", err)
+	}
+	out := map[int64]entity.AlertaDoMRP{}
+	for _, row := range rows {
+		if row.SourceCode == nil {
+			continue
+		}
+		if _, ja := out[*row.SourceCode]; ja {
+			continue // a mais recente vem primeiro
+		}
+		a := entity.AlertaDoMRP{Tipo: row.MessageType, Descricao: row.Description}
+		if row.SuggestedDate.Valid {
+			d := row.SuggestedDate.Time
+			a.DataSugerida = &d
+		}
+		out[*row.SourceCode] = a
+	}
+	return out, nil
+}

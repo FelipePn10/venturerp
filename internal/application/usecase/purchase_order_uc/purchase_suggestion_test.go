@@ -20,15 +20,22 @@ func TestIsPurchaseSuggestion(t *testing.T) {
 	if !isPurchaseSuggestion(base()) {
 		t.Error("a PURCHASE planned order, PLANNED, not firm and active should be a suggestion")
 	}
+	// Firmada no MRP (VMRP0100 → RELEASED, firme): continua na fila do
+	// comprador até virar pedido. Antes sumia sem pedido nem requisição.
+	firmada := base()
+	firmada.IsFirm, firmada.Status = true, types.StatusReleased
+	if !isPurchaseSuggestion(firmada) {
+		t.Error("compra firmada pelo planejador tem de continuar na fila do comprador")
+	}
 
 	cases := []struct {
 		name   string
 		mutate func(*plannedentity.PlannedOrder)
 	}{
 		{"not active", func(o *plannedentity.PlannedOrder) { o.IsActive = false }},
-		{"already firm", func(o *plannedentity.PlannedOrder) { o.IsFirm = true }},
 		{"not purchase", func(o *plannedentity.PlannedOrder) { o.OrderType = types.OrderProduction }},
-		{"not planned status", func(o *plannedentity.PlannedOrder) { o.Status = types.StatusReleased }},
+		{"cancelled", func(o *plannedentity.PlannedOrder) { o.Status = types.StatusCancelled }},
+		{"finished", func(o *plannedentity.PlannedOrder) { o.Status = types.StatusFinished }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -35,6 +35,12 @@ func NewRouteUseCase(repo repository.RoutingRepository, items ...any) *RouteUseC
 }
 
 func (uc *RouteUseCase) Create(ctx context.Context, dto request.CreateRouteDTO) (*response.ManufacturingRouteResponse, error) {
+	if dto.IsTemplate {
+		return uc.createTemplate(ctx, dto)
+	}
+	if err := entity.ValidaFaixaDeLote(dto.LotMin, dto.LotMax); err != nil {
+		return nil, err
+	}
 	itemCode, err := uc.resolveItemCode(ctx, dto.ItemCode)
 	if err != nil {
 		return nil, err
@@ -59,6 +65,7 @@ func (uc *RouteUseCase) Create(ctx context.Context, dto request.CreateRouteDTO) 
 	if err != nil {
 		return nil, err
 	}
+	rt.LotMin, rt.LotMax = dto.LotMin, dto.LotMax
 
 	created, err := uc.repo.CreateRoute(ctx, rt)
 	if err != nil {
@@ -73,10 +80,28 @@ func (uc *RouteUseCase) Update(ctx context.Context, dto request.UpdateRouteDTO) 
 		return nil, fmt.Errorf("roteiro não encontrado: %w", err)
 	}
 	rt.Description = dto.Description
-	rt.Situation = entity.RouteSituation(dto.Situation)
+	// Situação em branco mantém a atual: o vazio ia para a coluna enum e voltava
+	// erro do banco na primeira edição feita pela tela.
+	switch entity.RouteSituation(dto.Situation) {
+	case "":
+	case entity.RouteSituationApproved, entity.RouteSituationInactive:
+		rt.Situation = entity.RouteSituation(dto.Situation)
+	default:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("situação %q inválida: use APROVADA ou INATIVA", dto.Situation))
+	}
+	if rt.IsTemplate && dto.IsStandard {
+		return nil, errorsuc.NewValidationError("um roteiro-modelo não é planejado e não pode ser o padrão de item nenhum")
+	}
+	if err := entity.ValidaFaixaDeLote(dto.LotMin, dto.LotMax); err != nil {
+		return nil, err
+	}
+	rt.LotMin, rt.LotMax = dto.LotMin, dto.LotMax
 	rt.IsStandard = dto.IsStandard
 	rt.ValidFrom = dto.ValidFrom.Ponteiro()
 	rt.ValidTo = dto.ValidTo.Ponteiro()
+	if rt.ValidFrom != nil && rt.ValidTo != nil && rt.ValidTo.Before(*rt.ValidFrom) {
+		return nil, errorsuc.NewValidationError("o fim da vigência não pode ser anterior ao início")
+	}
 
 	updated, err := uc.repo.UpdateRoute(ctx, rt)
 	if err != nil {
@@ -368,6 +393,9 @@ func (uc *RouteUseCase) AddOperation(ctx context.Context, dto request.AddRouteOp
 	}
 	op.ScrapPct = dto.ScrapPct
 	op.InspectionRequired = dto.InspectionRequired
+	if op.TimeBasis, op.TimeBasisAttribute, err = baseDaEtapa(dto.TimeBasis, dto.TimeBasisAttribute); err != nil {
+		return nil, err
+	}
 
 	created, err := uc.repo.AddRouteOperation(ctx, op)
 	if err != nil {
@@ -447,6 +475,9 @@ func (uc *RouteUseCase) UpdateOperation(ctx context.Context, dto request.UpdateR
 		Notes:                dto.Notes,
 	}
 	if err := validaRefugo(dto.ScrapPct); err != nil {
+		return nil, err
+	}
+	if op.TimeBasis, op.TimeBasisAttribute, err = baseDaEtapa(dto.TimeBasis, dto.TimeBasisAttribute); err != nil {
 		return nil, err
 	}
 	// Situação não informada mantém a atual. Antes o vazio ia para a coluna
@@ -590,6 +621,9 @@ func toRouteResponse(rt *entity.ManufacturingRoute) *response.ManufacturingRoute
 		IsStandard:  rt.IsStandard,
 		ValidFrom:   rt.ValidFrom,
 		ValidTo:     rt.ValidTo,
+		IsTemplate:  rt.IsTemplate,
+		LotMin:      decimalParaNumero(rt.LotMin),
+		LotMax:      decimalParaNumero(rt.LotMax),
 		IsActive:    rt.IsActive,
 		CreatedAt:   rt.CreatedAt,
 	}
@@ -619,16 +653,33 @@ func toRouteOpResponse(op *entity.RouteOperation) response.RouteOperationRespons
 			Move:       op.EffTime.Move,
 			CrewSize:   op.EffTime.CrewSize,
 		},
-		SupplierID:           op.SupplierID,
-		ServiceItemCode:      op.ServiceItemCode,
-		CostPerUnit:          decimalParaNumero(op.CostPerUnit),
-		LeadTimeDays:         op.LeadTimeDays,
-		ThirdPartyRemittance: op.ThirdPartyRemittance,
-		ScrapPct:             op.ScrapPct,
-		EffectiveScrap:       op.EffectiveScrap,
-		InspectionRequired:   op.InspectionRequired,
-		Situation:            string(op.Situation),
-		Notes:                op.Notes,
+		RunTime:                     op.RunTime,
+		LaborTime:                   op.LaborTime,
+		RunBaseQty:                  op.RunBaseQty,
+		QueueTime:                   op.QueueTime,
+		WaitTime:                    op.WaitTime,
+		MoveTime:                    op.MoveTime,
+		CrewSize:                    op.CrewSize,
+		TimeUnit:                    op.TimeUnit,
+		SupplierID:                  op.SupplierID,
+		ServiceItemCode:             op.ServiceItemCode,
+		CostPerUnit:                 decimalParaNumero(op.CostPerUnit),
+		LeadTimeDays:                op.LeadTimeDays,
+		EffectiveLeadDays:           op.EffectiveSubcontractDays,
+		EffectiveSupplierID:         op.EffectiveSupplierID,
+		TimeBasis:                   op.TimeBasis,
+		TimeBasisAttribute:          op.TimeBasisAttribute,
+		EffectiveTimeBasis:          baseOuPeca(op.EffectiveTimeBasis),
+		EffectiveTimeBasisAttribute: op.EffectiveTimeBasisAttribute,
+		UnitsPerPiece:               unidadesPorPeca(op.EffTime),
+		MissingMeasure:              op.EffTime.SemMedida,
+		Origin:                      string(op.OperationOrigin),
+		ThirdPartyRemittance:        op.ThirdPartyRemittance,
+		ScrapPct:                    op.ScrapPct,
+		EffectiveScrap:              op.EffectiveScrap,
+		InspectionRequired:          op.InspectionRequired,
+		Situation:                   string(op.Situation),
+		Notes:                       op.Notes,
 	}
 }
 
@@ -648,4 +699,146 @@ func (uc *RouteUseCase) situacaoAtual(ctx context.Context, opID int64) (entity.R
 		}
 	}
 	return "", errorsuc.NewNotFoundError("operação do roteiro não encontrada")
+}
+
+// baseDaEtapa: base vazia na etapa = herda da operação (nil).
+func baseDaEtapa(base *string, atributo *string) (*string, *string, error) {
+	if base == nil || *base == "" {
+		return nil, nil, nil
+	}
+	b, a, err := entity.NormalizaBaseDeTempo(*base, atributo)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &b, a, nil
+}
+
+func unidadesPorPeca(t entity.OperationTime) float64 {
+	if t.SemMedida {
+		return 0
+	}
+	if t.UnitsPerPiece <= 0 {
+		return 1
+	}
+	return t.UnitsPerPiece
+}
+
+// createTemplate cria um roteiro-modelo: sem item, sem máscara, nunca padrão.
+func (uc *RouteUseCase) createTemplate(ctx context.Context, dto request.CreateRouteDTO) (*response.ManufacturingRouteResponse, error) {
+	var actor uuid.UUID
+	if uc.auth != nil {
+		var err error
+		actor, err = uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
+	}
+	code, err := uc.repo.NextRouteCode(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("generating route code: %w", err)
+	}
+	descricao := ""
+	if dto.Description != nil {
+		descricao = *dto.Description
+	}
+	rt, err := entity.NewRouteTemplate(code, descricao, actor)
+	if err != nil {
+		return nil, err
+	}
+	created, err := uc.repo.CreateRoute(ctx, rt)
+	if err != nil {
+		return nil, err
+	}
+	return toRouteResponse(created), nil
+}
+
+// ListTemplates lista os roteiros-modelo da empresa.
+func (uc *RouteUseCase) ListTemplates(ctx context.Context, incluirInativos bool) ([]*response.ManufacturingRouteResponse, error) {
+	modelos, err := uc.repo.ListRouteTemplates(ctx, incluirInativos)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.ManufacturingRouteResponse, 0, len(modelos))
+	for _, rt := range modelos {
+		out = append(out, toRouteResponse(rt))
+	}
+	return out, nil
+}
+
+// CopyRouteResponse devolve o roteiro criado e o que foi levado.
+type CopyRouteResponse struct {
+	Route  *response.ManufacturingRouteResponse `json:"route"`
+	Copied entity.RouteCopyResult               `json:"copied"`
+}
+
+// Copy cria um roteiro a partir de outro — de um modelo para um item, de um
+// item para outro, ou de um item para um modelo novo.
+//
+// É o que faz o modelo valer a pena: em vez de redigitar quinze etapas para
+// cada peça parecida, copia-se e ajusta-se a diferença. Vai tudo numa
+// transação; a vigência e a faixa de lote NÃO vão (são decisões do destino).
+func (uc *RouteUseCase) Copy(ctx context.Context, dto request.CopyRouteDTO) (*CopyRouteResponse, error) {
+	origem, err := uc.repo.GetRouteByID(ctx, dto.SourceRouteID)
+	if err != nil {
+		return nil, errorsuc.NewNotFoundError("roteiro de origem não encontrado nesta empresa")
+	}
+	var actor uuid.UUID
+	if uc.auth != nil {
+		actor, err = uc.auth.UserID(ctx)
+		if err != nil {
+			return nil, errorsuc.ErrUnauthorized
+		}
+	}
+	code, err := uc.repo.NextRouteCode(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("generating route code: %w", err)
+	}
+
+	var destino *entity.ManufacturingRoute
+	if dto.ToTemplate {
+		nome := ""
+		if dto.Description != nil {
+			nome = *dto.Description
+		} else if origem.Description != nil {
+			nome = *origem.Description
+		}
+		if destino, err = entity.NewRouteTemplate(code, nome, actor); err != nil {
+			return nil, err
+		}
+	} else {
+		itemCode, errItem := uc.resolveItemCode(ctx, dto.ItemCode)
+		if errItem != nil {
+			return nil, errItem
+		}
+		if !origem.IsTemplate && itemCode == origem.ItemCode && mascaraIgual(dto.Mask, origem.Mask) && dto.Alternative == origem.Alternative {
+			return nil, errorsuc.NewValidationError("o destino é o próprio roteiro de origem; escolha outro item ou outra alternativa")
+		}
+		descricao := dto.Description
+		if descricao == nil || *descricao == "" {
+			descricao = origem.Description
+		}
+		alt := dto.Alternative
+		if alt <= 0 {
+			alt = 1
+		}
+		if destino, err = entity.NewManufacturingRoute(code, itemCode, dto.Mask, alt, descricao, dto.IsStandard, nil, nil, actor); err != nil {
+			return nil, err
+		}
+	}
+	criado, copiado, err := uc.repo.CopyRoute(ctx, origem.ID, destino)
+	if err != nil {
+		return nil, err
+	}
+	return &CopyRouteResponse{Route: toRouteResponse(criado), Copied: copiado}, nil
+}
+
+func mascaraIgual(a, b *string) bool {
+	va, vb := "", ""
+	if a != nil {
+		va = *a
+	}
+	if b != nil {
+		vb = *b
+	}
+	return va == vb
 }
