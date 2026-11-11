@@ -39,6 +39,10 @@ var rotasPorModulo = []struct {
 	{"/api/suppliers", acesso.Suprimentos},
 	{"/api/item-suppliers", acesso.Suprimentos},
 	{"/api/item-conversions", acesso.Suprimentos},
+	// Catálogo de unidades (VSUP0110, v1.14): nasceu fora do catálogo de rotas,
+	// e o perfil de acesso restrito recebia 403 no seletor de unidade de
+	// qualquer tela. A gravação é de Suprimentos; a leitura é referência.
+	{"/api/units-of-measure", acesso.Suprimentos},
 	{"/api/third-party-services", acesso.Suprimentos},
 	{"/api/shipping-carriers", acesso.Suprimentos},
 	{"/api/procurement", acesso.Suprimentos},
@@ -102,8 +106,14 @@ var rotasPorModulo = []struct {
 	{"/api/fiscal", acesso.Fiscal},
 	{"/api/fiscal-classifications", acesso.Fiscal},
 	{"/api/entry-operations", acesso.Fiscal},
+	// A apuração de impostos é rotina fiscal: a tela (VFIN0400) fica na pasta
+	// Fiscal, junto do resumo do ICMS, embora a rota more em /api/financial.
+	{"/api/financial/apuracao-impostos", acesso.Fiscal},
 	// Financeiro
 	{"/api/financial", acesso.Financeiro},
+	// A condição de pagamento é cadastrada na VFIN0110 (Financeiro); a rota mora no
+	// apoio do cliente. A leitura segue livre como referência (pedido, cliente…).
+	{"/api/customers/support/payment-conditions", acesso.Financeiro},
 	// Contabilidade
 	{"/api/accounting", acesso.Contabilidade},
 	{"/api/cost-center", acesso.Contabilidade},
@@ -139,7 +149,7 @@ var leituraDeReferencia = []string{
 	"/api/industrial-calendar", "/api/order-priority", "/api/estoque/tipos-movimento", "/api/lot-masks",
 	"/api/cost-center", "/api/financial/condicoes-pagamento", "/api/financial/centros-custo", "/api/financial/plano-contas",
 	"/api/notifications/alerts", "/api/cnpj", "/api/stock/balances", "/api/routing", "/api/machine",
-	"/api/setores", "/api/delivery-promise/lines",
+	"/api/setores", "/api/delivery-promise/lines", "/api/units-of-measure",
 }
 
 // rotasLivres valem para qualquer usuário autenticado, com ou sem perfil: o

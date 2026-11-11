@@ -446,6 +446,14 @@ func calendarResponse(v repository.MachineCalendar) response.MachineCalendarResp
 	}
 	return out
 }
+func (uc *APSUseCase) SequencingSettings(ctx context.Context) (request.SequencingSettingsDTO, error) {
+	repo, err := uc.configurationRepo()
+	if err != nil {
+		return request.SequencingSettingsDTO{}, err
+	}
+	active, err := repo.SequencingSettings(ctx)
+	return request.SequencingSettingsDTO{ListOnlyActiveResources: active}, err
+}
 func (uc *APSUseCase) UpdateSequencingSettings(ctx context.Context, dto request.SequencingSettingsDTO) error {
 	repo, err := uc.configurationRepo()
 	if err != nil {
@@ -591,7 +599,13 @@ func (uc *APSUseCase) UpsertMachineIndustrialProfile(ctx context.Context, id int
 		}
 		p.Services = append(p.Services, service)
 	}
+	vistos := map[string]bool{}
 	for _, v := range dto.SpecialValues {
+		nome := strings.ToLower(strings.TrimSpace(v.Name))
+		if vistos[nome] {
+			return errorsuc.NewValidationError(fmt.Sprintf("o campo especial %q aparece mais de uma vez", strings.TrimSpace(v.Name)))
+		}
+		vistos[nome] = true
 		p.SpecialValues = append(p.SpecialValues, repository.SpecialValue{Name: v.Name, ValueType: strings.ToUpper(v.ValueType), TextValue: v.TextValue, NumericValue: v.NumericValue, MaxLength: v.MaxLength})
 	}
 	return repo.UpsertMachineIndustrialProfile(ctx, id, p)

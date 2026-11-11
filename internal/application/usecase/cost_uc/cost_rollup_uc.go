@@ -612,7 +612,7 @@ func (uc *StandardCostUseCase) conversaoDoRoteiro(ctx context.Context, itemCode 
 					// deste módulo ("custo de compra não cadastrado para o item").
 					return comp, horas, errorsuc.NewValidationError(fmt.Sprintf(
 						"o roteiro passa pela operação de terceiro %q e não há preço de serviço cadastrado para ela. "+
-							"Cadastre o preço em VTER0100 — Preços de Serviços de Terceiros, "+
+							"Cadastre o preço em VTPS0100 — Serviços de Terceiros, "+
 							"informe o custo por peça na etapa do roteiro (VENT0202), "+
 							"ou mude a operação para interna no roteiro do item",
 						op.OperationName))

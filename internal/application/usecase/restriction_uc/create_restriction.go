@@ -30,9 +30,19 @@ func (uc *CreateRestrictionUseCase) Execute(
 
 	// Conferir antes de gravar: uma cláusula inválida deixava a restrição
 	// criada sem as condições, e o usuário recebia 500 em inglês.
+	if err := exigirClausulas(dto.Dominants, dto.Determinants); err != nil {
+		return nil, err
+	}
 	if err := validarClausulas(dto.Dominants, dto.Determinants); err != nil {
 		return nil, err
 	}
+
+	// O autor é quem está logado, não o que vier no corpo.
+	autor, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.CreatedBy = autor
 
 	itemCode, err := resolverCodigoDoItem(ctx, uc.Items, dto.ItemCode)
 	if err != nil {

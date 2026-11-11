@@ -101,9 +101,13 @@ func parseIntSafe(s string) int {
 }
 
 // parseBRDecimal parses "12,50" or "12.50" into 12.5.
+// O CSV oficial do IBPT usa ponto decimal ("13.45"); planilhas salvas de novo em pt-BR
+// usam vírgula ("13,45"). Só com vírgula o ponto é separador de milhar.
 func parseBRDecimal(s string) float64 {
-	s = strings.TrimSpace(strings.ReplaceAll(s, ".", ""))
-	s = strings.ReplaceAll(s, ",", ".")
+	s = strings.TrimSpace(s)
+	if strings.Contains(s, ",") {
+		s = strings.ReplaceAll(strings.ReplaceAll(s, ".", ""), ",", ".")
+	}
 	v, _ := strconv.ParseFloat(s, 64)
 	return v
 }

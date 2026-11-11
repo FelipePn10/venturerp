@@ -282,6 +282,18 @@ func (uc *UseCase) GetReceivingInspectionRoute(ctx context.Context, id int64) (*
 	return toReceivingInspectionRouteResponse(route), nil
 }
 
+func (uc *UseCase) ListReceivingInspectionRoutes(ctx context.Context) ([]*response.ReceivingInspectionRouteResponse, error) {
+	routes, err := uc.Repo.ListReceivingInspectionRoutes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*response.ReceivingInspectionRouteResponse, 0, len(routes))
+	for _, route := range routes {
+		out = append(out, toReceivingInspectionRouteResponse(route))
+	}
+	return out, nil
+}
+
 func (uc *UseCase) LinkReceivingInspectionQualityReport(ctx context.Context, orderID int64, dto request.LinkReceivingInspectionQualityReportDTO) (*response.ReceivingInspectionQualityReportResponse, error) {
 	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized

@@ -206,6 +206,9 @@ type ConfigurationRepository interface {
 	ListResourceGroups(context.Context) ([]ResourceGroup, error)
 	UpsertMachineCalendar(context.Context, int64, string, []MachineCalendarInterval) (MachineCalendar, error)
 	ListMachineCalendars(context.Context) ([]MachineCalendar, error)
+	// SequencingSettings devolve o parâmetro da empresa; sem linha gravada vale
+	// o padrão da seleção (só recursos ativos).
+	SequencingSettings(context.Context) (bool, error)
 	UpdateSequencingSettings(context.Context, bool) error
 	UpdateWorkCenterSequencing(context.Context, int64, *int64, *int64, string) error
 	UpdateResourceSequencing(context.Context, int64, *int64, *int64, string, bool, bool) error

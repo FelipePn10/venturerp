@@ -18,6 +18,8 @@ type Repository interface {
 	ListSupplierScorecards(ctx context.Context, supplierCode int64) ([]*entity.SupplierScorecard, error)
 	CreateReceivingInspectionRoute(ctx context.Context, route *entity.ReceivingInspectionRoute) (*entity.ReceivingInspectionRoute, error)
 	GetReceivingInspectionRoute(ctx context.Context, id int64) (*entity.ReceivingInspectionRoute, error)
+	// ListReceivingInspectionRoutes: os roteiros da empresa, só o cabeçalho.
+	ListReceivingInspectionRoutes(ctx context.Context) ([]*entity.ReceivingInspectionRoute, error)
 	FindReceivingInspectionRoute(ctx context.Context, enterpriseCode int64, itemCode int64, mask string, classificationCode *string) (*entity.ReceivingInspectionRoute, error)
 	LinkReceivingInspectionQualityReport(ctx context.Context, enterpriseID, orderID, reportID int64, linkedBy uuid.UUID) (*entity.ReceivingInspectionQualityReport, error)
 	ListReceivingInspectionQualityReports(ctx context.Context, enterpriseID, orderID int64) ([]*entity.ReceivingInspectionQualityReport, error)

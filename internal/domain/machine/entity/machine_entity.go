@@ -15,9 +15,13 @@ type MachineType struct {
 	Type             types.MachineTypeEnum
 	RequiresOperator bool // true = operador humano controla a máquina; overlap ignorado no CPM
 	IsActive         bool
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	CreatedBy        uuid.UUID
+	// Custeio e capacidade do centro (gravados pelo sequenciamento).
+	MachineCostCenterID *int64
+	LaborCostCenterID   *int64
+	CapacityHours       string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CreatedBy           uuid.UUID
 }
 
 type Machine struct {

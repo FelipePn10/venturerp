@@ -96,6 +96,17 @@ func (r *APSRepositorySQLC) ListMachineCalendars(ctx context.Context) ([]domainr
 	}
 	return out, rows.Err()
 }
+func (r *APSRepositorySQLC) SequencingSettings(ctx context.Context) (bool, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	// O mesmo padrão da seleção de recursos (COALESCE(..., true)): a empresa
+	// que nunca gravou o parâmetro lista só os recursos ativos.
+	active := true
+	err = r.pool.QueryRow(ctx, `SELECT COALESCE((SELECT list_only_active_resources FROM manufacturing_sequencing_settings WHERE enterprise_id=$1), true)`, enterpriseID).Scan(&active)
+	return active, err
+}
 func (r *APSRepositorySQLC) UpdateSequencingSettings(ctx context.Context, active bool) error {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {

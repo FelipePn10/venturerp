@@ -21,4 +21,18 @@ type BomHeaderResponse struct {
 	ValidFrom   *time.Time `json:"valid_from,omitempty"`
 	IsActive    bool       `json:"is_active"`
 	CreatedAt   time.Time  `json:"created_at"`
+	// Aprovação: quem e quando; ObsoletedAt quando deixou de valer.
+	ApprovedBy  *string    `json:"approved_by,omitempty"`
+	ApprovedAt  *time.Time `json:"approved_at,omitempty"`
+	ObsoletedAt *time.Time `json:"obsoleted_at,omitempty"`
+}
+
+// BomHeaderChangeResponse é uma diferença entre a versão e a estrutura atual.
+type BomHeaderChangeResponse struct {
+	Kind            string `json:"kind"` // INCLUIDO | REMOVIDO | ALTERADO
+	ChildCode       string `json:"child_code,omitempty"`
+	ChildName       string `json:"child_name,omitempty"`
+	LegacyChildCode int64  `json:"legacy_child_code"`
+	Sequence        int32  `json:"sequence"`
+	Detail          string `json:"detail"`
 }

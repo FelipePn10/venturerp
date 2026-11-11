@@ -176,7 +176,7 @@ func TestPrecoDeTerceiroAusenteEhPendenciaDeCadastroENaoFalhaDoSistema(t *testin
 
 	msg := err.Error()
 	// A mensagem precisa dizer QUAL operação e ONDE resolver.
-	for _, esperado := range []string{"GALVANIZAÇÃO A FRIO EXTERNA", "VTER0100"} {
+	for _, esperado := range []string{"GALVANIZAÇÃO A FRIO EXTERNA", "VTPS0100"} {
 		if !strings.Contains(msg, esperado) {
 			t.Errorf("mensagem não menciona %q: %s", esperado, msg)
 		}

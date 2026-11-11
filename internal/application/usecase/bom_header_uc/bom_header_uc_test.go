@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -61,14 +62,29 @@ func (r *fakeHeaderRepo) ListByItem(_ context.Context, itemCode int64) ([]*entit
 	}
 	return out, nil
 }
-func (r *fakeHeaderRepo) UpdateStatus(_ context.Context, id int64, status string) (*entity.BomHeader, error) {
+func (r *fakeHeaderRepo) mudar(id int64, status string) (*entity.BomHeader, error) {
 	for _, h := range r.headers {
 		if h.ID == id {
+			if err := h.PodeIrPara(status); err != nil {
+				return nil, err
+			}
 			h.Status = status
 			return h, nil
 		}
 	}
 	return nil, errorsuc.NewNotFoundError("cabeçalho de estrutura não encontrado nesta empresa")
+}
+func (r *fakeHeaderRepo) Approve(_ context.Context, id int64, _ uuid.UUID, _ time.Time) (*entity.BomHeader, error) {
+	return r.mudar(id, entity.StatusApproved)
+}
+func (r *fakeHeaderRepo) Obsolete(_ context.Context, id int64) (*entity.BomHeader, error) {
+	return r.mudar(id, entity.StatusObsolete)
+}
+func (r *fakeHeaderRepo) ApprovedLines(context.Context, int64) ([]entity.Line, error) {
+	return nil, nil
+}
+func (r *fakeHeaderRepo) CurrentLines(context.Context, int64, string) ([]entity.Line, error) {
+	return nil, nil
 }
 func (r *fakeHeaderRepo) NextVersion(_ context.Context, itemCode int64, mask string) (int32, error) {
 	var max int32
@@ -204,5 +220,26 @@ func TestUpdateStatus_NormalizesCase(t *testing.T) {
 	}
 	if got.Status != entity.StatusApproved || got.StatusLabel != "Aprovado" {
 		t.Fatalf("situação = %q / %q", got.Status, got.StatusLabel)
+	}
+}
+
+func TestUpdateStatus_CicloFechado(t *testing.T) {
+	uc, _, _ := newHeaderUC(t)
+	ctx := context.Background()
+	created, err := uc.Create(ctx, request.CreateBomHeaderDTO{ItemCode: "CH-1000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.UpdateStatus(ctx, request.UpdateBomHeaderStatusDTO{ID: created.ID, Status: "APPROVED"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.UpdateStatus(ctx, request.UpdateBomHeaderStatusDTO{ID: created.ID, Status: "DRAFT"}); err == nil {
+		t.Fatal("versão aprovada voltou a rascunho")
+	}
+	if _, err := uc.UpdateStatus(ctx, request.UpdateBomHeaderStatusDTO{ID: created.ID, Status: "OBSOLETE"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uc.UpdateStatus(ctx, request.UpdateBomHeaderStatusDTO{ID: created.ID, Status: "APPROVED"}); err == nil {
+		t.Fatal("versão obsoleta foi reaprovada")
 	}
 }

@@ -147,4 +147,34 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 	if imported.UOM == nil || *imported.UOM != "UN" || !imported.Price.Equal(decimal.RequireFromString("13.500001")) {
 		t.Fatalf("unexpected invoice overwrite: %+v", imported)
 	}
+
+	// Tabela genérica (sem fornecedor): a busca não pode quebrar e vale para todos os fornecedores.
+	genericCode := testutil.UniqueCode()
+	generic, err := entity.NewPurchasePriceTable(enterpriseID, genericCode, nil, "Tabela genérica", "BRL", testutil.Actor(t, pool))
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdGeneric, err := repo.CreateTable(ctx, generic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM purchase_price_tables WHERE id=$1", createdGeneric.ID) })
+	fromGeneric, err := repo.ListSourcePrices(ctx, priceRepo.SourceFilter{EnterpriseID: enterpriseID, TableCode: &genericCode, Start: today.AddDate(0, 0, -1), End: today.AddDate(0, 0, 1), Source: "BOTH"})
+	if err != nil {
+		t.Fatalf("generic table sources: %v", err)
+	}
+	found = false
+	for _, source := range fromGeneric {
+		found = found || source.ItemCode == sourceItem
+	}
+	if !found {
+		t.Fatal("generic table should list purchases of any supplier")
+	}
+	// Na tabela genérica, o preço aplicado fica com o fornecedor do pedido.
+	if applied, err = repo.ApplySourcePrices(ctx, enterpriseID, genericCode, false, []priceRepo.ApplySourceSelection{{SourceType: "PURCHASE_ORDER", SourceID: lineID}}); err != nil || applied != 1 {
+		t.Fatalf("generic apply=%d err=%v", applied, err)
+	}
+	if _, err = repo.GetItemPrice(ctx, enterpriseID, genericCode, sourceItem, &supplier); err != nil {
+		t.Fatalf("generic table price should carry the order supplier: %v", err)
+	}
 }

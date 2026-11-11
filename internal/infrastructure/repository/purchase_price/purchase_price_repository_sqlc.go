@@ -245,11 +245,14 @@ func (r *PurchasePriceRepositorySQLC) CopyAdjustments(ctx context.Context, e, sr
 
 func (r *PurchasePriceRepositorySQLC) ListSourcePrices(ctx context.Context, f domainrepo.SourceFilter) ([]entity.SourcePrice, error) {
 	if f.TableCode != nil {
-		var supplier int64
+		// Tabela sem fornecedor (genérica) vale para todos: não restringe a busca.
+		var supplier *int64
 		if err := r.pool.QueryRow(ctx, `SELECT supplier_code FROM purchase_price_tables WHERE enterprise_id=$1 AND code=$2 AND is_active`, f.EnterpriseID, *f.TableCode).Scan(&supplier); err != nil {
 			return nil, err
 		}
-		f.SupplierCode = &supplier
+		if supplier != nil {
+			f.SupplierCode = supplier
+		}
 	}
 	source := strings.ToUpper(f.Source)
 	if source == "" {
@@ -282,20 +285,23 @@ func (r *PurchasePriceRepositorySQLC) ApplySourcePrices(ctx context.Context, e, 
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
-	var tableID, supplier int64
-	if err = tx.QueryRow(ctx, `SELECT id,supplier_code FROM purchase_price_tables WHERE enterprise_id=$1 AND code=$2 AND is_active FOR UPDATE`, e, code).Scan(&tableID, &supplier); err != nil {
+	// Tabela genérica (sem fornecedor) aceita compra de qualquer fornecedor, e a
+	// linha leva o fornecedor do documento de origem.
+	var tableID int64
+	var tableSupplier *int64
+	if err = tx.QueryRow(ctx, `SELECT id,supplier_code FROM purchase_price_tables WHERE enterprise_id=$1 AND code=$2 AND is_active FOR UPDATE`, e, code).Scan(&tableID, &tableSupplier); err != nil {
 		return 0, err
 	}
 	var applied int64
 	for _, s := range selections {
-		var item int64
+		var item, supplier int64
 		var uom string
 		var price decimal.Decimal
 		switch s.SourceType {
 		case "PURCHASE_ORDER":
-			err = tx.QueryRow(ctx, `SELECT poi.item_code,COALESCE(poi.purchase_uom,poi.internal_uom,''),poi.unit_price FROM purchase_order_items poi JOIN purchase_orders po ON po.code=poi.purchase_order_code JOIN enterprise en ON en.code=po.enterprise_code WHERE en.id=$1 AND po.supplier_code=$2 AND po.order_type<>'OSL' AND poi.code=$3 AND po.is_active AND poi.is_active AND poi.unit_price>0`, e, supplier, s.SourceID).Scan(&item, &uom, &price)
+			err = tx.QueryRow(ctx, `SELECT poi.item_code,po.supplier_code,COALESCE(poi.purchase_uom,poi.internal_uom,''),poi.unit_price FROM purchase_order_items poi JOIN purchase_orders po ON po.code=poi.purchase_order_code JOIN enterprise en ON en.code=po.enterprise_code WHERE en.id=$1 AND po.supplier_code=COALESCE($2,po.supplier_code) AND po.order_type<>'OSL' AND poi.code=$3 AND po.is_active AND poi.is_active AND poi.unit_price>0`, e, tableSupplier, s.SourceID).Scan(&item, &supplier, &uom, &price)
 		case "ENTRY_INVOICE":
-			err = tx.QueryRow(ctx, `SELECT fi.item_code,COALESCE(fi.uom,ips.uom,i.warehouse_unit_of_measurement::text,''),fi.unit_price FROM fiscal_entry_items fi JOIN fiscal_entries fe ON fe.id=fi.fiscal_entry_id LEFT JOIN item_preferred_suppliers ips ON ips.enterprise_id=fe.enterprise_id AND ips.supplier_code=fe.supplier_code AND ips.item_code=fi.item_code AND ips.is_active LEFT JOIN items i ON i.code=fi.item_code WHERE fe.enterprise_id=$1 AND fe.supplier_code=$2 AND fi.id=$3 AND fi.unit_price>0 AND fe.is_active`, e, supplier, s.SourceID).Scan(&item, &uom, &price)
+			err = tx.QueryRow(ctx, `SELECT fi.item_code,fe.supplier_code,COALESCE(fi.uom,ips.uom,i.warehouse_unit_of_measurement::text,''),fi.unit_price FROM fiscal_entry_items fi JOIN fiscal_entries fe ON fe.id=fi.fiscal_entry_id LEFT JOIN item_preferred_suppliers ips ON ips.enterprise_id=fe.enterprise_id AND ips.supplier_code=fe.supplier_code AND ips.item_code=fi.item_code AND ips.is_active LEFT JOIN items i ON i.code=fi.item_code WHERE fe.enterprise_id=$1 AND fe.supplier_code=COALESCE($2,fe.supplier_code) AND fi.id=$3 AND fi.unit_price>0 AND fe.is_active`, e, tableSupplier, s.SourceID).Scan(&item, &supplier, &uom, &price)
 		default:
 			return 0, errorsuc.NewValidationError(fmt.Sprintf("tipo de origem %q inválido", s.SourceType))
 		}

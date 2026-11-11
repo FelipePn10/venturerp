@@ -3595,6 +3595,28 @@ type BomHeader struct {
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
 	EnterpriseID int64
+	ApprovedBy   pgtype.UUID
+	ApprovedAt   pgtype.Timestamptz
+	ObsoletedAt  pgtype.Timestamptz
+	Notes        pgtype.Text
+}
+
+// Foto das linhas da estrutura no momento em que a versão foi aprovada. Não é editada.
+type BomHeaderLine struct {
+	ID                int64
+	EnterpriseID      int64
+	BomHeaderID       int64
+	StructureID       *int64
+	ChildCode         int64
+	ParentMask        pgtype.Text
+	Sequence          *int32
+	Quantity          pgtype.Numeric
+	UnitOfMeasurement pgtype.Text
+	LossPercentage    pgtype.Numeric
+	QuantityFormula   pgtype.Text
+	StartDate         pgtype.Date
+	EndDate           pgtype.Date
+	IsCoproduct       bool
 }
 
 type CapacityRequirement struct {

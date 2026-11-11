@@ -647,7 +647,7 @@ func EntradaPelaProducaoTx(ctx context.Context, tx pgx.Tx, empresa, orderID, ite
 	err := tx.QueryRow(ctx, `SELECT controla_serie, mascara_serie_id FROM item_pos_venda WHERE enterprise_id=$1 AND item_code=$2`, empresa, itemCode).Scan(&controla, &mascara)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !controla) {
 		if len(informadas) > 0 {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d não controla número de série (VATC0110)", itemCode))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d não controla número de série (aba Pós-venda do item, VENT0200)", itemCode))
 		}
 		return nil, nil
 	}
@@ -657,7 +657,7 @@ func EntradaPelaProducaoTx(ctx context.Context, tx pgx.Tx, empresa, orderID, ite
 	series := informadas
 	if len(strings.Join(series, "")) == 0 && quantidade.IsPositive() {
 		if mascara == nil {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d controla número de série: informe as séries da entrega ou cadastre a máscara de série no perfil (VATC0110)", itemCode))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %d controla número de série: informe as séries da entrega ou cadastre a máscara de série na aba Pós-venda do item (VENT0200)", itemCode))
 		}
 		if series, err = gerarPelaMascara(ctx, tx, empresa, *mascara, int(quantidade.IntPart()), agora); err != nil {
 			return nil, err

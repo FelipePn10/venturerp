@@ -21,6 +21,10 @@ func toMachineTypeResponse(t *entity.MachineType) *response.MachineTypeResponse 
 		CreatedAt:        t.CreatedAt,
 		UpdatedAt:        t.UpdatedAt,
 		CreatedBy:        t.CreatedBy,
+
+		MachineCostCenterID: t.MachineCostCenterID,
+		LaborCostCenterID:   t.LaborCostCenterID,
+		CapacityHours:       t.CapacityHours,
 	}
 }
 

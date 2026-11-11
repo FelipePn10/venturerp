@@ -67,3 +67,14 @@ func TestNormalizacaoDeixaOValorNaFormaQueOBancoAceita(t *testing.T) {
 		t.Fatalf("conector deveria virar OR, veio %q", got)
 	}
 }
+
+func TestRestricaoNovaExigeSeEEntao(t *testing.T) {
+	se := []request.DominantDTO{{Operator: "EQUAL"}}
+	entao := []request.DeterminantDTO{{Operator: "INVALID"}}
+	if exigirClausulas(nil, entao) == nil || exigirClausulas(se, nil) == nil {
+		t.Fatal("restrição sem SE ou sem ENTÃO não restringe nada e não pode ser criada")
+	}
+	if err := exigirClausulas(se, entao); err != nil {
+		t.Fatalf("com SE e ENTÃO deveria passar: %v", err)
+	}
+}

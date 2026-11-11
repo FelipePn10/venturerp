@@ -34,5 +34,8 @@ func respondErrStatus(w http.ResponseWriter, status int, err error) {
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	respondErr(w, err)
+	// O erro simples sai com o status do handler e a mensagem. Chamar
+	// respondErr aqui era recursão infinita: o estouro de pilha derrubava o
+	// processo da API inteiro (todos os usuários), não só a requisição.
+	jsonError(w, status, err.Error())
 }

@@ -119,3 +119,34 @@ func TestCriarOFConfereDatasEAlmoxarifado(t *testing.T) {
 		t.Fatalf("OF válida recusada: %v", err)
 	}
 }
+
+type versaoFixa struct{ controla, aprovada bool }
+
+func (v versaoFixa) SituacaoParaProducao(context.Context, int64, string) (bool, bool, error) {
+	return v.controla, v.aprovada, nil
+}
+
+// Item sob controle de versão só gera OF com MBOM aprovada; sem controle, nada muda.
+func TestCriarOFExigeVersaoAprovadaDaEstrutura(t *testing.T) {
+	inicio := "2026-09-15"
+	criar := func(v versaoFixa) error {
+		repo := &fakePORepo{automatic: map[int64]int64{}}
+		uc := CreateProductionOrderUseCase{
+			Repo: repo, Auth: fakeAuth{canPlanned: true},
+			Structure:   &estruturaPorMascara{filhos: []*structentity.ItemStructure{{ChildCode: 20, Quantity: decimal.NewFromFloat(1)}}},
+			Items:       &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "MOVEL-10"}},
+			BomVersions: v,
+		}
+		_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "MOVEL-10", PlannedQty: decimal.RequireFromString("5"), StartDate: &inicio, CreatedBy: uuid.New()})
+		return err
+	}
+	if err := criar(versaoFixa{controla: true, aprovada: false}); err == nil {
+		t.Fatal("criou OF de item com controle de versão e sem MBOM aprovada")
+	}
+	if err := criar(versaoFixa{controla: true, aprovada: true}); err != nil {
+		t.Fatalf("MBOM aprovada deveria liberar: %v", err)
+	}
+	if err := criar(versaoFixa{}); err != nil {
+		t.Fatalf("item sem controle de versão não pode ser travado: %v", err)
+	}
+}

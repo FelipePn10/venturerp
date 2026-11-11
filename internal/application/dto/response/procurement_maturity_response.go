@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 type ProcurementRecordResponse struct {
@@ -63,19 +64,20 @@ type SupplierScorecardResponse struct {
 }
 
 type ApprovalLimitResponse struct {
-	ID             int64      `json:"id"`
-	EnterpriseCode int64      `json:"enterprise_code"`
-	Scope          string     `json:"scope"`
-	ScopeRef       *string    `json:"scope_ref,omitempty"`
-	Currency       string     `json:"currency"`
-	AutoApproveMax float64    `json:"auto_approve_max"`
-	BlockAbove     *float64   `json:"block_above,omitempty"`
-	IsActive       bool       `json:"is_active"`
-	ValidFrom      time.Time  `json:"valid_from"`
-	ValidTo        *time.Time `json:"valid_to,omitempty"`
-	Notes          *string    `json:"notes,omitempty"`
-	CreatedBy      *uuid.UUID `json:"created_by,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID             int64   `json:"id"`
+	EnterpriseCode int64   `json:"enterprise_code"`
+	Scope          string  `json:"scope"`
+	ScopeRef       *string `json:"scope_ref,omitempty"`
+	Currency       string  `json:"currency"`
+	// Dinheiro em decimal (não float): a alçada é comparada ao centavo.
+	AutoApproveMax decimal.Decimal  `json:"auto_approve_max"`
+	BlockAbove     *decimal.Decimal `json:"block_above,omitempty"`
+	IsActive       bool             `json:"is_active"`
+	ValidFrom      time.Time        `json:"valid_from"`
+	ValidTo        *time.Time       `json:"valid_to,omitempty"`
+	Notes          *string          `json:"notes,omitempty"`
+	CreatedBy      *uuid.UUID       `json:"created_by,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
 }
 
 type SupplierContractResponse struct {

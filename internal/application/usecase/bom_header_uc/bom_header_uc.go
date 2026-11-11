@@ -3,6 +3,7 @@ package bom_header_uc
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -108,8 +109,8 @@ func (uc *BomHeaderUseCase) ListByItem(ctx context.Context, code request.TextCod
 	return out, nil
 }
 
-// UpdateStatus movimenta o cabeçalho no ciclo de aprovação
-// (RASCUNHO → APROVADO → OBSOLETO).
+// UpdateStatus movimenta a versão no ciclo de aprovação (RASCUNHO → APROVADA →
+// OBSOLETA). Aprovar grava a foto das linhas e torna obsoleta a aprovada anterior.
 func (uc *BomHeaderUseCase) UpdateStatus(ctx context.Context, dto request.UpdateBomHeaderStatusDTO) (*response.BomHeaderResponse, error) {
 	status := strings.ToUpper(strings.TrimSpace(dto.Status))
 	if !entity.ValidStatus(status) {
@@ -118,11 +119,59 @@ func (uc *BomHeaderUseCase) UpdateStatus(ctx context.Context, dto request.Update
 	if dto.ID <= 0 {
 		return nil, errorsuc.NewValidationError("informe o cabeçalho de estrutura a alterar")
 	}
-	updated, err := uc.repo.UpdateStatus(ctx, dto.ID, status)
+	atual, err := uc.repo.GetByID(ctx, dto.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := atual.PodeIrPara(status); err != nil {
+		return nil, err
+	}
+	var updated *entity.BomHeader
+	if status == entity.StatusApproved {
+		actor, errAuth := uc.auth.UserID(ctx)
+		if errAuth != nil {
+			return nil, errAuth
+		}
+		updated, err = uc.repo.Approve(ctx, dto.ID, actor, time.Now())
+	} else {
+		updated, err = uc.repo.Obsolete(ctx, dto.ID)
+	}
 	if err != nil {
 		return nil, err
 	}
 	return toResponse(updated, uc.itemOf(ctx, updated.ItemCode)), nil
+}
+
+// Changes compara a foto da versão com a estrutura atual do item: o que entrou,
+// saiu ou mudou desde a aprovação. Rascunho compara com a estrutura atual vazia
+// de foto (tudo aparece como incluído).
+func (uc *BomHeaderUseCase) Changes(ctx context.Context, id int64) ([]response.BomHeaderChangeResponse, error) {
+	h, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	mask := ""
+	if h.Mask != nil {
+		mask = *h.Mask
+	}
+	foto, err := uc.repo.ApprovedLines(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	atual, err := uc.repo.CurrentLines(ctx, h.ItemCode, mask)
+	if err != nil {
+		return nil, err
+	}
+	out := []response.BomHeaderChangeResponse{}
+	for _, c := range entity.CompararLinhas(foto, atual) {
+		r := response.BomHeaderChangeResponse{Kind: c.Kind, LegacyChildCode: c.ChildCode, Sequence: c.Sequence, Detail: c.Detail}
+		if item := uc.itemOf(ctx, c.ChildCode); item != nil {
+			r.ChildCode = string(item.BusinessCode)
+			r.ChildName = item.Name
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 // legacyItemFinder é a fatia do repositório de itens usada para devolver o

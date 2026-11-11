@@ -801,6 +801,10 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ReleaseValidator = prodOrderRepo
 	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo}
 	prodOrderCreateUC.Structure = itemRepoStructure
+	// Item sob controle de versão da estrutura só gera OF com MBOM aprovada.
+	bomVersionGate := bomHeaderRepo.New(queries, app.db.Pool).(productionOrderUc.VersaoDaEstrutura)
+	prodOrderCreateUC.BomVersions = bomVersionGate
+	plannedFirmUC.BomVersions = bomVersionGate
 	prodOrderCreateUC.MaskVars = itemRepoStructureQuery
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -2079,6 +2083,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", bomHeaderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", bomHeaderHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", bomHeaderHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/changes", bomHeaderHandler.Changes)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/status", bomHeaderHandler.UpdateStatus)
 		})
 		r.Route("/api/warehouse", func(r chi.Router) {
@@ -2518,6 +2523,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/supplier-scorecards", procurementHandler.CreateSupplierScorecard)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/suppliers/{supplierCode}/scorecards", procurementHandler.ListSupplierScorecards)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-routes", procurementHandler.CreateReceivingInspectionRoute)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-routes", procurementHandler.ListReceivingInspectionRoutes)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-routes/{id}", procurementHandler.GetReceivingInspectionRoute)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/receiving-inspection-orders", procurementHandler.GenerateReceivingInspectionOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/receiving-inspection-orders", procurementHandler.ListReceivingInspectionOrders)
@@ -3226,11 +3232,14 @@ func (app *application) mount() chi.Router {
 		// Ficha de Produção da Ferramenta (tool production sheet): binds physical
 		// tool serials to the operations of a production order (OFC excluded).
 		r.Route("/api/tool-production-sheet", func(r chi.Router) {
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders", toolSheetHandler.ListOrders)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/substitutions", toolSheetHandler.ListSubstitutions)
+			// O posto (OPERATOR) confere na VPRO1000 a ferramenta e a série da
+			// ordem antes de produzir: lê a ficha. Vincular e substituir seguem
+			// do PCP/ferramentaria.
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/orders", toolSheetHandler.ListOrders)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/substitutions", toolSheetHandler.ListSubstitutions)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/assign", toolSheetHandler.Assign)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/substitute", toolSheetHandler.Substitute)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{orderId}", toolSheetHandler.GetSheet)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{orderId}", toolSheetHandler.GetSheet)
 		})
 		r.Route("/api/cutting-plans", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", cuttingPlanHandler.CreatePlan)
@@ -3275,6 +3284,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence/events/export", apsHandler.ExportSequencingEvents)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sequence/resources", apsHandler.ListSequencingResources)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/sequence/view", apsHandler.ViewSequencing)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/sequence/settings", apsHandler.GetSequencingSettings)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/sequence/settings", apsHandler.UpdateSequencingSettings)
 			// Matriz de tempo de preparação: quanto custa trocar de um item (ou
 			// família) para outro em cada centro. É o que permite ao
@@ -3300,9 +3310,12 @@ func (app *application) mount() chi.Router {
 			// Cronômetro do operador: a máquina parou agora, voltou agora. Parada
 			// de chão de fábrica dura minutos e acontece várias vezes por turno;
 			// exigir data e hora nas duas pontas garante que ninguém registre.
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/machine-stops/open", apsHandler.OpenMachineStop)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/machine-stops/{machineID}/close", apsHandler.CloseMachineStop)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/machine-stops/{machineID}", apsHandler.MachineStopStatus)
+			// O terminal da parada (VPRO1200) é do posto: o perfil OPERATOR abre e
+			// fecha a parada da própria máquina — antes o menu oferecia a tela ao
+			// operador e as três rotas respondiam 403.
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/machine-stops/open", apsHandler.OpenMachineStop)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/machine-stops/{machineID}/close", apsHandler.CloseMachineStop)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/machine-stops/{machineID}", apsHandler.MachineStopStatus)
 			r.With(httpmw.RequireRole("ADMIN")).Put("/employees/{id}/sequencing-profile", apsHandler.UpsertEmployeeSequencingProfile)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/employees/{id}/sequencing-profile", apsHandler.GetEmployeeSequencingProfile)
 			r.With(httpmw.RequireRole("ADMIN")).Patch("/employees/{employeeID}/contacts/{contactID}", apsHandler.UpdateEmployeeContact)
