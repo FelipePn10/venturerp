@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.16.1] — 2026-11-11
+
+- chore(release): min_client 1.16.0, publicado e servido pelo portal (`e42e6539`)
+
 ## [v1.16.0] — 2026-11-11
 
 - chore(release): min_client 1.15.0, o instalador assinado mais recente publicado (`907cd19d`)
