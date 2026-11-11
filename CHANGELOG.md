@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.16.0] — 2026-11-11
+
+- chore(release): min_client 1.15.0, o instalador assinado mais recente publicado (`907cd19d`)
+- feat(telas): telas unificadas, condição de pagamento única e versão aprovada da estrutura (`b7662d56`)
+
 ## [v1.15.0] — 2026-11-10
 
 - feat(manufatura): roteiro unificado, MRP pelo empenho, custo da OF por componente e ordem impressa (`fe4fa349`)
