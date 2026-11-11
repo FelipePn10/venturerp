@@ -225,3 +225,34 @@ func TestSucataSaiComoSubprodutoNaPrevia(t *testing.T) {
 		t.Fatalf("sucata é 05: %+v", p)
 	}
 }
+
+func TestVersaoDaEstruturaGovernaAProducao(t *testing.T) {
+	base := func() Ficha {
+		f := fichaDe(Fabricado, map[string]any{"warehouse_code": 1, "health": "ATIVO"})
+		f.TemEstrutura, f.TemRoteiro, f.TemCustoPadrao = true, true, true
+		return f
+	}
+	temPendencia := func(p Prontidao, trecho string) bool {
+		for _, x := range p.Pendencias {
+			if strings.Contains(x.Mensagem, trecho) {
+				return true
+			}
+		}
+		return false
+	}
+	// Sem versão nenhuma: comportamento de antes (não exige aprovação).
+	if p := processo(t, AvaliarProntidao(base(), Liberado, nil), "PRODUZIR"); temPendencia(p, "versão") {
+		t.Fatalf("item sem controle de versão não pode ser cobrado: %+v", p)
+	}
+	// Com versão, mas nenhuma aprovada: impede.
+	f := base()
+	f.ControlaVersaoEstrutura = true
+	if p := processo(t, AvaliarProntidao(f, Liberado, nil), "PRODUZIR"); p.Pronto || !temPendencia(p, "aprovada") {
+		t.Fatalf("sem MBOM aprovada deveria impedir: %+v", p)
+	}
+	// Aprovada, mas a estrutura mudou depois: só atenção.
+	f.TemMBOMAprovada, f.EstruturaMudouAposAprov = true, true
+	if p := processo(t, AvaliarProntidao(f, Liberado, nil), "PRODUZIR"); !p.Pronto || !temPendencia(p, "mudou") {
+		t.Fatalf("mudança após aprovação é atenção, não impedimento: %+v", p)
+	}
+}

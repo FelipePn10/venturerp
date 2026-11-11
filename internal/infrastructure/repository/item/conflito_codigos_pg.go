@@ -47,7 +47,7 @@ func (r *RepositoryItemSQLC) conferirConflitoDeCodigos(ctx context.Context, it *
 		var ativa *bool
 		err := r.pool.QueryRow(ctx, `SELECT is_active FROM delivery_capacity_lines WHERE enterprise_id = $1 AND code = $2`, it.EnterpriseID, int64(*t)).Scan(&ativa)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return errorsuc.NewValidationError(fmt.Sprintf("o tanque / linha %d não está cadastrado: cadastre em VPME0102 ou escolha outro", *t))
+			return errorsuc.NewValidationError(fmt.Sprintf("o tanque / linha %d não está cadastrado: cadastre nos Parâmetros da VPME0102ITE ou escolha outro", *t))
 		}
 		if err != nil {
 			return fmt.Errorf("conferindo o tanque do item: %w", err)

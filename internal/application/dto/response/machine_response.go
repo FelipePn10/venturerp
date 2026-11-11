@@ -8,16 +8,20 @@ import (
 
 // MachineTypeResponse is the API representation of a machine type.
 type MachineTypeResponse struct {
-	ID               int64     `json:"id"`
-	Code             int64     `json:"code"`
-	Name             string    `json:"name"`
-	Description      *string   `json:"description,omitempty"`
-	Type             string    `json:"type"`
-	RequiresOperator bool      `json:"requires_operator"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	CreatedBy        uuid.UUID `json:"created_by"`
+	ID               int64   `json:"id"`
+	Code             int64   `json:"code"`
+	Name             string  `json:"name"`
+	Description      *string `json:"description,omitempty"`
+	Type             string  `json:"type"`
+	RequiresOperator bool    `json:"requires_operator"`
+	IsActive         bool    `json:"is_active"`
+
+	MachineCostCenterID *int64    `json:"machine_cost_center_id,omitempty"`
+	LaborCostCenterID   *int64    `json:"labor_cost_center_id,omitempty"`
+	CapacityHours       string    `json:"capacity_hours,omitempty"`
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
+	CreatedBy           uuid.UUID `json:"created_by"`
 }
 
 // MachineResponse is the API representation of a machine.

@@ -144,6 +144,16 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 	if e = pool.QueryRow(base, `SELECT COUNT(*) FROM third_party_service_orders WHERE enterprise_id=$1 AND production_order_id=$2`, enterpriseID, productionID).Scan(&orderCount); e != nil || orderCount != 1 {
 		t.Fatalf("concurrent creation count=%d err=%v", orderCount, e)
 	}
+	// OF cancelada não gera ordem de serviço nova (a OS só existe enquanto a OF
+	// pode ir ao terceiro): regerar devolve nada e não cria linha.
+	var cancelada int64
+	if e = pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,mask,planned_qty,status,start_date,end_date,route_id,enterprise_id,created_by) VALUES($1,$2,'',10,'CANCELLED','2026-07-13','2026-07-20',$3,$4,$5) RETURNING id`, routeCode+1, itemCode, routeID, enterpriseID, uid).Scan(&cancelada); e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM production_orders WHERE id=$1`, cancelada) })
+	if geradas, e := repo.CreateOrdersForProduction(ctx, cancelada, uid); e != nil || len(geradas) != 0 {
+		t.Fatalf("OF cancelada gerou ordem de serviço: %+v err=%v", geradas, e)
+	}
 	if e = repo.LinkRequisitionToProduction(ctx, productionID, 88001); e != nil {
 		t.Fatal(e)
 	}

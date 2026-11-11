@@ -23,7 +23,7 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 	a, b := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
 		ctx := context.Background()
 		codes := []int64{a.Code, b.Code}
-		for _, tabela := range []string{"receiving_inspection_orders", "supplier_contracts", "supplier_scorecard_snapshots", "receiving_divergences", "receiving_notices", "supplier_edi_messages",
+		for _, tabela := range []string{"receiving_inspection_routes", "receiving_inspection_orders", "supplier_contracts", "supplier_scorecard_snapshots", "receiving_divergences", "receiving_notices", "supplier_edi_messages",
 			"import_processes", "supplier_homologations", "procurement_records"} {
 			if _, err := pool.Exec(ctx, `DELETE FROM `+tabela+` WHERE enterprise_code = ANY($1)`, codes); err != nil {
 				t.Errorf("limpando %s: %v", tabela, err)
@@ -32,6 +32,17 @@ func TestProcurementIsIsolatedByTenant(t *testing.T) {
 	})
 	repo := procurement.New(pool)
 	supplier := int64(1_690_000_000 + testutil.UniqueCode()%10_000_000)
+
+	// A lista de roteiros de inspeção (VINS0200) mostra só os da empresa.
+	if _, err := pool.Exec(context.Background(), `INSERT INTO receiving_inspection_routes(enterprise_code,basis,classification_code,inspection_warehouse_id) VALUES($1,'CLASSIFICATION','CHAPA',1)`, a.Code); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := repo.ListReceivingInspectionRoutes(b.Ctx); err != nil || len(l) != 0 {
+		t.Fatalf("empresa B listou %d roteiro(s) de inspeção da A (%v)", len(l), err)
+	}
+	if l, err := repo.ListReceivingInspectionRoutes(a.Ctx); err != nil || len(l) != 1 || l[0].ClassificationCode == nil || *l[0].ClassificationCode != "CHAPA" {
+		t.Fatalf("empresa A deveria listar o próprio roteiro: %+v (%v)", l, err)
+	}
 
 	rec, err := repo.CreateRecord(a.Ctx, &entity.Record{RecordType: "SUPPLIER_EDI", Status: "OPEN", SupplierCode: &supplier, Payload: json.RawMessage(`{}`)})
 	if err != nil {

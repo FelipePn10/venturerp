@@ -44,6 +44,18 @@ func TestClassificarRota(t *testing.T) {
 		{"POST", "/api/quality/lotes/9/resultados", acesso.Qualidade, acesso.IncluirAlterar, false},
 		{"POST", "/api/quality/capas/3/encerrar", acesso.Qualidade, acesso.Aprovar, false},
 		{"POST", "/api/quality/capas/3/avancar", acesso.Qualidade, acesso.IncluirAlterar, false},
+		// O seletor de unidade de qualquer tela lê o catálogo de unidades: sem
+		// classificação, o perfil restrito recebia 403 e o campo ficava vazio.
+		{"GET", "/api/units-of-measure/", acesso.Suprimentos, acesso.Ler, true},
+		{"GET", "/api/units-of-measure/resolve", acesso.Suprimentos, acesso.Ler, true},
+		{"POST", "/api/units-of-measure/aliases", acesso.Suprimentos, acesso.IncluirAlterar, false},
+		// Apuração de impostos é do Fiscal; o resto de /api/financial continua no Financeiro.
+		{"POST", "/api/financial/apuracao-impostos", acesso.Fiscal, acesso.IncluirAlterar, false},
+		{"GET", "/api/financial/apuracao-impostos/2026-10", acesso.Fiscal, acesso.Ler, false},
+		{"GET", "/api/financial/titulos", acesso.Financeiro, acesso.Ler, false},
+		// Condição de pagamento: grava quem tem Financeiro; ler é referência para todos.
+		{"POST", "/api/customers/support/payment-conditions", acesso.Financeiro, acesso.IncluirAlterar, false},
+		{"GET", "/api/customers/support/payment-conditions", acesso.Financeiro, acesso.Ler, true},
 	}
 	for _, c := range casos {
 		got := ClassificarRota(c.metodo, c.caminho)

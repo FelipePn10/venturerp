@@ -144,6 +144,15 @@ func (h *ProcurementHandler) GetReceivingInspectionRoute(w http.ResponseWriter, 
 	security.RespondJSON(w, http.StatusOK, result)
 }
 
+func (h *ProcurementHandler) ListReceivingInspectionRoutes(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.ListReceivingInspectionRoutes(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
 func (h *ProcurementHandler) GenerateReceivingInspectionOrder(w http.ResponseWriter, r *http.Request) {
 	var dto request.GenerateReceivingInspectionOrderDTO
 	if !security.DecodeBody(w, r, &dto) {

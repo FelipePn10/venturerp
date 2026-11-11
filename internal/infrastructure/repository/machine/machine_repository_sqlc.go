@@ -558,6 +558,10 @@ func machineTypeToEntity(row sqlc.MachineType) *entity.MachineType {
 		CreatedAt:        pgutil.FromPgTimestamptz(row.CreatedAt),
 		UpdatedAt:        pgutil.FromPgTimestamptz(row.UpdatedAt),
 		CreatedBy:        pgutil.FromPgUUID(row.CreatedBy),
+
+		MachineCostCenterID: row.MachineCostCenterID,
+		LaborCostCenterID:   row.LaborCostCenterID,
+		CapacityHours:       pgutil.FromPgNumericToString(row.CapacityHours),
 	}
 }
 

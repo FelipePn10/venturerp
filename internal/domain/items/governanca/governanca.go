@@ -85,19 +85,25 @@ func RotuloTipo(t int) string {
 // Ficha: o cadastro do item (as colunas de items) e os fatos de outras tabelas
 // que a completude precisa.
 type Ficha struct {
-	Dados              map[string]json.RawMessage
-	Tipo               int
-	TemEstrutura       bool
-	TemRoteiro         bool
-	TemFornecedor      bool
-	TemCustoPadrao     bool
-	TemConversao       bool // conversão da unidade de compra para a de estoque
-	CompraEmOutraUM    bool
-	ControlaLote       bool
-	TemRotaInspecao    bool
-	TemDesenho         bool
-	TemFichaFerramenta bool
-	Fiscal             FichaFiscal
+	Dados        map[string]json.RawMessage
+	Tipo         int
+	TemEstrutura bool
+	// Versão da estrutura (VENT0210): o item entra no controle quando ganha a
+	// primeira versão de fabricação (MBOM); daí em diante só produz com uma
+	// aprovada e vigente.
+	ControlaVersaoEstrutura bool
+	TemMBOMAprovada         bool
+	EstruturaMudouAposAprov bool
+	TemRoteiro              bool
+	TemFornecedor           bool
+	TemCustoPadrao          bool
+	TemConversao            bool // conversão da unidade de compra para a de estoque
+	CompraEmOutraUM         bool
+	ControlaLote            bool
+	TemRotaInspecao         bool
+	TemDesenho              bool
+	TemFichaFerramenta      bool
+	Fiscal                  FichaFiscal
 }
 
 func (f Ficha) texto(campo string) string {

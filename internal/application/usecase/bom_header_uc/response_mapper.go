@@ -36,6 +36,12 @@ func toResponse(h *entity.BomHeader, item *itementity.Item) *response.BomHeaderR
 		ValidFrom:    h.ValidFrom,
 		IsActive:     h.IsActive,
 		CreatedAt:    h.CreatedAt,
+		ApprovedAt:   h.ApprovedAt,
+		ObsoletedAt:  h.ObsoletedAt,
+	}
+	if h.ApprovedBy != nil {
+		por := h.ApprovedBy.String()
+		out.ApprovedBy = &por
 	}
 	if item != nil {
 		out.ItemCode = string(item.BusinessCode)

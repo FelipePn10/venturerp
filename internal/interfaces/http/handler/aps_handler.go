@@ -113,6 +113,18 @@ func (h *APSHandler) ListMachineCalendars(w http.ResponseWriter, r *http.Request
 	}
 	jsonResponse(w, 200, v)
 }
+
+// GetSequencingSettings: a tela do sequenciamento (VPRO0210) mostra o valor
+// gravado antes de oferecer a troca — só havia o PUT, e quem abria o parâmetro
+// não sabia o que estava valendo.
+func (h *APSHandler) GetSequencingSettings(w http.ResponseWriter, r *http.Request) {
+	v, err := h.uc.SequencingSettings(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, v)
+}
 func (h *APSHandler) UpdateSequencingSettings(w http.ResponseWriter, r *http.Request) {
 	var dto request.SequencingSettingsDTO
 	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
@@ -128,7 +140,7 @@ func (h *APSHandler) UpdateSequencingSettings(w http.ResponseWriter, r *http.Req
 func (h *APSHandler) UpdateWorkCenterSequencing(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		security.RespondErrorCode(w, http.StatusBadRequest, "PARADA_ID_INVALIDO", "identificador da parada inválido")
+		security.RespondErrorCode(w, http.StatusBadRequest, "CENTRO_ID_INVALIDO", "identificador do centro de trabalho inválido")
 		return
 	}
 	var dto request.WorkCenterSequencingDTO

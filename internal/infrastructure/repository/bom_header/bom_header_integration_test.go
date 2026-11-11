@@ -3,84 +3,93 @@
 package bom_header_test
 
 import (
-	"context"
 	"testing"
+	"time"
 
-	"github.com/google/uuid"
-
-	"github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/domain/bom_header/entity"
 	bomheaderrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/bom_header"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
-	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
 
-// Exercises the BOM header: auto-versioning per item, listing and status change.
-func TestIntegration_BomHeader_VersioningAndStatus(t *testing.T) {
+// Versão da estrutura: numeração automática, aprovação com foto das linhas,
+// uma aprovada por vez (a nova torna a anterior obsoleta), ciclo fechado e
+// isolamento por empresa.
+func TestIntegration_BomHeader_AprovacaoComFoto(t *testing.T) {
 	q, pool := testutil.Queries(t)
 	repo := bomheaderrepo.New(q, pool)
-	uid := uuid.New()
+	actor := testutil.Actor(t, pool)
+	pai, filho, outro := testutil.UniqueCode(), testutil.UniqueCode()+1, testutil.UniqueCode()+2
+	a, b := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		testutil.Exec(t, pool, `DELETE FROM bom_headers WHERE item_code=$1`, pai)
+		testutil.Exec(t, pool, `DELETE FROM item_structures WHERE parent_code=$1`, pai)
+	})
+	testutil.NovosItens(t, pool, a.ID, actor, pai, filho, outro)
+	ctx := a.Ctx
 
-	var enterpriseID int64
-	if err := pool.QueryRow(context.Background(), "SELECT MIN(id) FROM enterprise").Scan(&enterpriseID); err != nil || enterpriseID == 0 {
-		t.Skip("integration database has no enterprise")
-	}
-	ctx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: enterpriseID})
-
-	item := testutil.UniqueCode()
-	defer testutil.Exec(t, pool, "DELETE FROM bom_headers WHERE item_code = $1", item)
-
-	// First version.
-	v1, err := repo.NextVersion(ctx, item, "")
-	if err != nil || v1 != 1 {
-		t.Fatalf("NextVersion #1 = %d err=%v, want 1", v1, err)
-	}
-	h1, _ := entity.NewBomHeader(item, nil, "MBOM", v1, nil, uid)
-	created, err := repo.Create(ctx, h1)
-	if err != nil {
-		t.Fatalf("Create v1: %v", err)
-	}
-	if created.Version != 1 || created.Status != entity.StatusDraft {
-		t.Fatalf("created = %+v, want version 1 / DRAFT", created)
-	}
-
-	// Second version auto-increments.
-	v2, _ := repo.NextVersion(ctx, item, "")
-	if v2 != 2 {
-		t.Fatalf("NextVersion #2 = %d, want 2", v2)
-	}
-	h2, _ := entity.NewBomHeader(item, nil, "MBOM", v2, nil, uid)
-	if _, err := repo.Create(ctx, h2); err != nil {
-		t.Fatalf("Create v2: %v", err)
-	}
-
-	list, err := repo.ListByItem(ctx, item)
-	if err != nil || len(list) != 2 {
-		t.Fatalf("ListByItem = %d err=%v, want 2", len(list), err)
-	}
-	if list[0].Version != 2 {
-		t.Errorf("list should be version-desc, got first = %d", list[0].Version)
-	}
-
-	// Approve v1.
-	approved, err := repo.UpdateStatus(ctx, created.ID, entity.StatusApproved)
-	if err != nil || approved.Status != entity.StatusApproved {
-		t.Fatalf("UpdateStatus = %+v err=%v, want APPROVED", approved, err)
-	}
-
-	// Outro tenant não enxerga nem altera o cabeçalho desta empresa.
-	var otherID int64
-	if err := pool.QueryRow(ctx, "SELECT id FROM enterprise WHERE id <> $1 ORDER BY id LIMIT 1", enterpriseID).Scan(&otherID); err == nil && otherID > 0 {
-		otherCtx := context.WithValue(context.Background(), contextkey.UserKey, &security.AuthUser{EnterpriseID: otherID})
-		if _, err := repo.GetByID(otherCtx, created.ID); err == nil {
-			t.Fatal("cabeçalho de outra empresa foi lido")
+	novaVersao := func() *entity.BomHeader {
+		v, err := repo.NextVersion(ctx, pai, "")
+		if err != nil {
+			t.Fatal(err)
 		}
-		if _, err := repo.UpdateStatus(otherCtx, created.ID, entity.StatusObsolete); err == nil {
-			t.Fatal("cabeçalho de outra empresa foi alterado")
+		h, _ := entity.NewBomHeader(pai, nil, entity.TypeMBOM, v, nil, actor)
+		criada, err := repo.Create(ctx, h)
+		if err != nil {
+			t.Fatal(err)
 		}
-		other, err := repo.ListByItem(otherCtx, item)
-		if err != nil || len(other) != 0 {
-			t.Fatalf("listagem cruzou empresas: %d err=%v", len(other), err)
-		}
+		return criada
+	}
+
+	v1 := novaVersao()
+	if v1.Version != 1 || v1.Status != entity.StatusDraft {
+		t.Fatalf("v1 = %+v", v1)
+	}
+	if _, err := repo.Approve(ctx, v1.ID, actor, time.Now()); err == nil {
+		t.Fatal("aprovou versão com estrutura vazia")
+	}
+
+	testutil.Exec(t, pool, `INSERT INTO item_structures(parent_code,child_code,quantity,unit_of_measurement,sequence,created_by,is_active) VALUES($1,$2,2,'UN',1,$3,TRUE)`, pai, filho, actor)
+	aprovada, err := repo.Approve(ctx, v1.ID, actor, time.Now())
+	if err != nil || aprovada.Status != entity.StatusApproved || aprovada.ApprovedBy == nil || aprovada.ApprovedAt == nil {
+		t.Fatalf("aprovação v1 = %+v err=%v", aprovada, err)
+	}
+	foto, err := repo.ApprovedLines(ctx, v1.ID)
+	if err != nil || len(foto) != 1 || foto[0].ChildCode != filho {
+		t.Fatalf("foto da v1 = %+v err=%v", foto, err)
+	}
+
+	// A estrutura muda: a foto não, e a comparação aponta a diferença.
+	testutil.Exec(t, pool, `INSERT INTO item_structures(parent_code,child_code,quantity,unit_of_measurement,sequence,created_by,is_active) VALUES($1,$2,1,'UN',2,$3,TRUE)`, pai, outro, actor)
+	atual, err := repo.CurrentLines(ctx, pai, "")
+	if err != nil || len(atual) != 2 {
+		t.Fatalf("linhas atuais = %d err=%v", len(atual), err)
+	}
+	if mud := entity.CompararLinhas(foto, atual); len(mud) != 1 || mud[0].Kind != "INCLUIDO" {
+		t.Fatalf("comparação = %+v", mud)
+	}
+
+	// Aprovar a v2 torna a v1 obsoleta; a v1 não volta.
+	v2 := novaVersao()
+	if _, err := repo.Approve(ctx, v2.ID, actor, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if h, _ := repo.GetByID(ctx, v1.ID); h.Status != entity.StatusObsolete || h.ObsoletedAt == nil {
+		t.Fatalf("v1 deveria estar obsoleta: %+v", h)
+	}
+	if _, err := repo.Approve(ctx, v1.ID, actor, time.Now()); err == nil {
+		t.Fatal("versão obsoleta voltou a ser aprovada")
+	}
+	if foto2, _ := repo.ApprovedLines(ctx, v2.ID); len(foto2) != 2 {
+		t.Fatalf("foto da v2 = %d linhas, esperava 2", len(foto2))
+	}
+
+	// A outra empresa não lê, não aprova nem torna obsoleta.
+	if _, err := repo.GetByID(b.Ctx, v2.ID); err == nil {
+		t.Fatal("versão de outra empresa foi lida")
+	}
+	if _, err := repo.Obsolete(b.Ctx, v2.ID); err == nil {
+		t.Fatal("versão de outra empresa foi alterada")
+	}
+	if lista, err := repo.ListByItem(b.Ctx, pai); err != nil || len(lista) != 0 {
+		t.Fatalf("listagem cruzou empresas: %d err=%v", len(lista), err)
 	}
 }

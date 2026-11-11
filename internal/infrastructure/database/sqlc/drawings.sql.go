@@ -356,11 +356,18 @@ type DBDrawingCharacteristic struct {
 	VariableID       pgtype.Int8
 }
 
-func (q *Queries) AddDrawingCharacteristic(ctx context.Context, drawingID, charID int64, operator string, variableID pgtype.Int8) (DBDrawingCharacteristic, error) {
+// AddDrawingCharacteristic só vincula característica e variável da empresa
+// do desenho: o configurador é por empresa (migração 339) e o vínculo por id
+// aceitava o cadastro de outra. Sem linha devolvida (pgx.ErrNoRows) = uma das
+// duas não existe nesta empresa.
+func (q *Queries) AddDrawingCharacteristic(ctx context.Context, enterpriseID, drawingID, charID int64, operator string, variableID pgtype.Int8) (DBDrawingCharacteristic, error) {
 	const sql = `INSERT INTO drawing_characteristics (drawing_id, characteristic_id, operator, variable_id)
-		VALUES ($1,$2,$3,$4) RETURNING id, drawing_id, characteristic_id, operator, variable_id`
+		SELECT $2,$3,$4,$5
+		WHERE EXISTS(SELECT 1 FROM cfg_characteristics c WHERE c.id=$3 AND c.enterprise_id=$1)
+		  AND ($5::bigint IS NULL OR EXISTS(SELECT 1 FROM cfg_variables v WHERE v.id=$5 AND v.enterprise_id=$1))
+		RETURNING id, drawing_id, characteristic_id, operator, variable_id`
 	var i DBDrawingCharacteristic
-	err := q.db.QueryRow(ctx, sql, drawingID, charID, operator, variableID).
+	err := q.db.QueryRow(ctx, sql, enterpriseID, drawingID, charID, operator, variableID).
 		Scan(&i.ID, &i.DrawingID, &i.CharacteristicID, &i.Operator, &i.VariableID)
 	return i, err
 }
@@ -397,7 +404,7 @@ type DBItemEngineeringDrawing struct {
 
 func (q *Queries) UpsertItemEngineeringDrawing(ctx context.Context, enterpriseID, itemCode int64, mask, drawingCode string, updatedBy pgtype.UUID) (DBItemEngineeringDrawing, error) {
 	const sql = `INSERT INTO item_engineering_drawings(enterprise_id,item_code,mask,drawing_code,updated_by)
-		SELECT $1,$2,$3::varchar,$4,$5 WHERE EXISTS(SELECT 1 FROM items WHERE code=$2)
+		SELECT $1,$2,$3::varchar,$4,$5 WHERE EXISTS(SELECT 1 FROM items WHERE code=$2 AND enterprise_id=$1)
 		AND ((NOT EXISTS(SELECT 1 FROM item_masks WHERE item_code=$2) AND $3::varchar='')
 			OR EXISTS(SELECT 1 FROM item_masks WHERE item_code=$2 AND mask=$3::varchar))
 		ON CONFLICT(enterprise_id,item_code,mask) DO UPDATE SET drawing_code=EXCLUDED.drawing_code,updated_at=NOW(),updated_by=EXCLUDED.updated_by

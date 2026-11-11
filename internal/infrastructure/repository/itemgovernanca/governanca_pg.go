@@ -138,6 +138,14 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 	f := dom.Ficha{}
 	err = r.pool.QueryRow(ctx, `SELECT to_jsonb(i), i.engineering_type,
 			EXISTS(SELECT 1 FROM item_structures s WHERE s.parent_code=i.code AND s.is_active),
+			EXISTS(SELECT 1 FROM bom_headers h WHERE h.enterprise_id=i.enterprise_id AND h.item_code=i.code AND h.bom_type='MBOM' AND h.is_active),
+			EXISTS(SELECT 1 FROM bom_headers h WHERE h.enterprise_id=i.enterprise_id AND h.item_code=i.code AND h.bom_type='MBOM' AND h.is_active
+			       AND h.status='APPROVED' AND (h.valid_from IS NULL OR h.valid_from <= CURRENT_DATE)),
+			COALESCE((SELECT EXISTS(SELECT 1 FROM item_structures s WHERE s.parent_code=i.code AND GREATEST(s.created_at, s.updated_at) > h.approved_at)
+			                 OR (SELECT count(*) FROM item_structures s WHERE s.parent_code=i.code AND s.is_active AND (s.parent_mask IS NULL OR s.parent_mask = h.mask))
+			                    <> (SELECT count(*) FROM bom_header_lines l WHERE l.bom_header_id=h.id)
+			            FROM bom_headers h WHERE h.enterprise_id=i.enterprise_id AND h.item_code=i.code AND h.bom_type='MBOM' AND h.is_active AND h.status='APPROVED'
+			            ORDER BY h.version DESC LIMIT 1), FALSE),
 			EXISTS(SELECT 1 FROM manufacturing_routes m WHERE m.item_code=i.code AND m.enterprise_id=i.enterprise_id AND m.is_active),
 			EXISTS(SELECT 1 FROM item_preferred_suppliers p WHERE p.item_code=i.code AND p.enterprise_id=i.enterprise_id AND p.is_active),
 			EXISTS(SELECT 1 FROM item_standard_costs c WHERE c.item_code=i.code AND COALESCE(c.total_cost,0) > 0),
@@ -155,7 +163,7 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 		         AND (f.code::text=i.accounting_sale_fiscal_classification_code OR f.ncm=i.accounting_sale_fiscal_classification_code)
 		       ORDER BY f.valid_from DESC, f.id DESC LIMIT 1) fc ON TRUE
 		 WHERE i.code=$1 AND i.enterprise_id=$2`, itemCode, empresa).
-		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &parUM, &f.CompraEmOutraUM,
+		Scan(&dados, &f.Tipo, &f.TemEstrutura, &f.ControlaVersaoEstrutura, &f.TemMBOMAprovada, &f.EstruturaMudouAposAprov, &f.TemRoteiro, &f.TemFornecedor, &f.TemCustoPadrao, &parUM, &f.CompraEmOutraUM,
 			&f.ControlaLote, &f.TemRotaInspecao, &f.TemDesenho, &f.TemFichaFerramenta, &f.Fiscal.NCM, &f.Fiscal.ClassTrib, &f.Fiscal.CEST, &f.Fiscal.Unidade, &f.Fiscal.Origem,
 			&f.Fiscal.IPI, &f.Fiscal.ICMS, &f.Fiscal.PIS, &f.Fiscal.COFINS)
 	if errors.Is(err, pgx.ErrNoRows) {

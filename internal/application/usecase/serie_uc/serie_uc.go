@@ -162,7 +162,7 @@ func (uc *UseCase) Cadastrar(ctx context.Context, dto CadastroDTO) ([]dom.Serie,
 		return nil, err
 	}
 	if !perfil.ControlaSerie {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %s não controla número de série: ligue no perfil de pós-venda (VATC0110)", dto.ItemCode.String()))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o item %s não controla número de série: ligue na aba Pós-venda do item (VENT0200)", dto.ItemCode.String()))
 	}
 	series, err := dom.ConferirLista(dto.Series, decimal.NewFromInt(int64(contar(dto.Series))))
 	if err != nil {

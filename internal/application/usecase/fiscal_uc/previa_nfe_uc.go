@@ -507,7 +507,7 @@ func conferirNota(
 	// ── Pagamento
 	if plano.Aviso != "" {
 		atencao("pagamento", "a condição de pagamento não pôde ser dividida em parcelas: "+plano.Aviso,
-			"ajuste os percentuais das parcelas em VCLI0520 — Apoio de Cliente (Comercial); a nota sai como parcela única enquanto isso")
+			"ajuste os percentuais das parcelas na VFIN0110 — Condições de Pagamento; a nota sai como parcela única enquanto isso")
 	}
 	if plano.Origem == "SEM_CONDICAO" {
 		atencao("pagamento", "a nota não tem condição de pagamento, então sai como à vista e gera um único título",
@@ -527,7 +527,7 @@ func conferirNota(
 			// A baixa de estoque acontece de qualquer forma (efeitos da
 			// autorização): o que falta sem pedido é o faturamento e a reserva.
 			"a nota não está vinculada a um pedido de venda: o estoque é baixado pela nota, mas nenhum pedido é marcado como faturado nem tem as reservas consumidas",
-			"fature a partir do pedido ou da carga (VFIS0640 — Faturamento de Carga e DANFE) para o pedido e as reservas acompanharem a nota")
+			"fature a partir do pedido ou da carga (aba Cargas da VEXP0100 — Faturar carga) para o pedido e as reservas acompanharem a nota")
 	}
 
 	return p

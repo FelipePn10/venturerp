@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	enumtypes "github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	"github.com/FelipePn10/panossoerp/internal/domain/restriction/entity"
 )
@@ -82,4 +83,16 @@ func normalizarCondicao(valor string) entity.RestrictionCondition {
 		return entity.ConditionAnd
 	}
 	return entity.RestrictionCondition(normalizado)
+}
+
+// exigirClausulas recusa a restrição nova sem SE ou sem ENTÃO: ela não restringe
+// nada, mas ficaria ativa e apareceria para todos os itens.
+func exigirClausulas(dominantes []request.DominantDTO, determinantes []request.DeterminantDTO) error {
+	if len(dominantes) == 0 {
+		return errorsuc.NewValidationError("informe ao menos uma condição (SE) na restrição")
+	}
+	if len(determinantes) == 0 {
+		return errorsuc.NewValidationError("informe ao menos uma consequência (ENTÃO) na restrição")
+	}
+	return nil
 }

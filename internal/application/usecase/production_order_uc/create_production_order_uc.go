@@ -55,6 +55,15 @@ type CreateProductionOrderUseCase struct {
 	// Employees traduz o código do funcionário para a chave interna que
 	// `production_orders.employee_id` exige — a tela manda o código.
 	Employees employeeresolution.Finder
+	// BomVersions: item sob controle de versão da estrutura só gera OF com a
+	// versão de fabricação (MBOM) aprovada e vigente. Opcional.
+	BomVersions VersaoDaEstrutura
+}
+
+// VersaoDaEstrutura diz se o item (na máscara) está sob controle de versão da
+// estrutura e se tem MBOM aprovada e vigente.
+type VersaoDaEstrutura interface {
+	SituacaoParaProducao(ctx context.Context, itemCode int64, mask string) (controla, aprovada bool, err error)
 }
 
 func (uc *CreateProductionOrderUseCase) Execute(
@@ -214,6 +223,15 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	atomicRepo, ok := uc.Repo.(manualOrderRepository)
 	if !ok {
 		return nil, errorsuc.NewValidationError("a criação manual de ordem em uma única transação não está disponível")
+	}
+	if uc.BomVersions != nil {
+		controla, aprovada, errVersao := uc.BomVersions.SituacaoParaProducao(ctx, itemCode, dto.Mask)
+		if errVersao != nil {
+			return nil, errVersao
+		}
+		if controla && !aprovada {
+			return nil, errorsuc.NewValidationError("a estrutura do item está sob controle de versão e não tem versão de fabricação (MBOM) aprovada e vigente; aprove na VENT0210 (Versões) antes de criar a OF")
+		}
 	}
 	var route *routingentity.ManufacturingRoute
 	if uc.Routing != nil && uc.OrderOps != nil {

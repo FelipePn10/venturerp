@@ -180,7 +180,7 @@ func (uc *DeliveryPromiseUseCase) ReserveTank(ctx context.Context, dto request.D
 	// A capacidade vem do tanque cadastrado; a da requisição só cobre tanque sem cadastro.
 	for _, line := range dto.Lines {
 		if tanque, _ := uc.tankCode(ctx, line.ItemCode); !capacidade(tanque).IsPositive() {
-			return nil, errorsuc.NewValidationError(fmt.Sprintf("o tanque %d do item %d não tem capacidade cadastrada: cadastre a linha em VPME0102 ou informe a capacidade diária", tanque, line.ItemCode))
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o tanque %d do item %d não tem capacidade cadastrada: cadastre a linha nos Parâmetros da VPME0102ITE ou informe a capacidade diária", tanque, line.ItemCode))
 		}
 	}
 	createdBy, err := uc.Auth.UserID(ctx)

@@ -154,11 +154,17 @@ func AvaliarProntidao(f Ficha, status string, matriz []RegraPolitica) []Prontida
 	if !f.TemEstrutura {
 		produzir = append(produzir, impede("Sem estrutura (lista de materiais)", "VENT0210 — Estrutura de Produtos"))
 	}
+	if f.TemEstrutura && f.ControlaVersaoEstrutura && !f.TemMBOMAprovada {
+		produzir = append(produzir, impede("Estrutura sem versão de fabricação (MBOM) aprovada e vigente", "VENT0210 — Estrutura de Produtos, Versões"))
+	}
+	if f.TemMBOMAprovada && f.EstruturaMudouAposAprov {
+		produzir = append(produzir, atencao("A estrutura mudou depois da versão aprovada: confira as diferenças e aprove uma nova versão", "VENT0210 — Estrutura de Produtos, Versões"))
+	}
 	if !f.TemRoteiro {
 		produzir = append(produzir, impede("Sem roteiro de fabricação", "VENT0202 — Roteiro de Fabricação"))
 	}
 	if !f.TemCustoPadrao {
-		produzir = append(produzir, atencao("Sem custo padrão calculado", "VPRO0300 — Custo Padrão"))
+		produzir = append(produzir, atencao("Sem custo padrão calculado", "VCUS0100 — Custos"))
 	}
 	if f.texto("engineering_requires_drawing") == "true" && !f.TemDesenho {
 		produzir = append(produzir, impede("Exige desenho e nenhum está vinculado", "VDES0100 — Desenhos"))

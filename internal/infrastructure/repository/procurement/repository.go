@@ -252,6 +252,31 @@ func (r *Repository) GetReceivingInspectionRoute(ctx context.Context, id int64) 
 	return route, nil
 }
 
+// ListReceivingInspectionRoutes: a VINS0200 só abria o roteiro digitando o id
+// interno; a lista é o cabeçalho (as etapas vêm ao abrir).
+func (r *Repository) ListReceivingInspectionRoutes(ctx context.Context) ([]*entity.ReceivingInspectionRoute, error) {
+	emp, err := empresa(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, baseInspectionRouteSelect()+` WHERE enterprise_code=$1 ORDER BY is_active DESC, item_code NULLS LAST, classification_code, valid_from DESC, id DESC`, emp)
+	if err != nil {
+		return nil, fmt.Errorf("listing receiving inspection routes: %w", err)
+	}
+	defer rows.Close()
+	out := []*entity.ReceivingInspectionRoute{}
+	for {
+		route, err := scanOneRoute(rows)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, route)
+	}
+}
+
 func (r *Repository) FindReceivingInspectionRoute(ctx context.Context, enterpriseCode int64, itemCode int64, mask string, classificationCode *string) (*entity.ReceivingInspectionRoute, error) {
 	route, err := r.getRoute(ctx, `
 		WHERE enterprise_code=$1

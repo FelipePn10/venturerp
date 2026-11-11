@@ -61,6 +61,21 @@ func (h *BomHeaderHandler) Get(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, http.StatusOK, result)
 }
 
+// Changes lista o que mudou na estrutura desde a aprovação da versão.
+func (h *BomHeaderHandler) Changes(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "identificador inválido")
+		return
+	}
+	result, err := h.uc.Changes(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
 func (h *BomHeaderHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

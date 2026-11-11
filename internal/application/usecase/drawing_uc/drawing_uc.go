@@ -4,6 +4,7 @@ package drawing_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -274,6 +276,11 @@ func (uc *DrawingUseCase) DeleteDistribution(ctx context.Context, id int64) erro
 
 // ─── characteristics link ─────────────────────────────────────────────────────
 
+// operadoresDeCaracteristica são os aceitos pelo CHECK de drawing_characteristics.
+var operadoresDeCaracteristica = map[string]struct{}{
+	"EQUAL": {}, "DIFFERENT": {}, "GREATER": {}, "LESS": {}, "BELONGS": {}, "NOT_BELONGS": {},
+}
+
 func (uc *DrawingUseCase) AddCharacteristic(ctx context.Context, drawingID int64, dto request.DrawingCharacteristicDTO) (*response.DrawingCharacteristicResponse, error) {
 	enterpriseID, err := tenant.ID(ctx)
 	if err != nil {
@@ -286,11 +293,20 @@ func (uc *DrawingUseCase) AddCharacteristic(ctx context.Context, drawingID int64
 	if !belongs {
 		return nil, errorsuc.NewNotFoundError("desenho não encontrado para a empresa")
 	}
-	op := dto.Operator
+	op := strings.ToUpper(strings.TrimSpace(dto.Operator))
 	if op == "" {
 		op = "EQUAL"
 	}
-	row, err := uc.Q.AddDrawingCharacteristic(ctx, drawingID, dto.CharacteristicID, op, pgutil.ToPgInt8Ptr(dto.VariableID))
+	if _, ok := operadoresDeCaracteristica[op]; !ok {
+		return nil, errorsuc.NewValidationError("condição da característica inválida: use igual, diferente, maior, menor, pertence ou não pertence")
+	}
+	if dto.CharacteristicID <= 0 {
+		return nil, errorsuc.NewValidationError("informe a característica")
+	}
+	row, err := uc.Q.AddDrawingCharacteristic(ctx, enterpriseID, drawingID, dto.CharacteristicID, op, pgutil.ToPgInt8Ptr(dto.VariableID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError("característica ou resposta não encontrada nesta empresa")
+	}
 	if err != nil {
 		return nil, fmt.Errorf("vinculando característica ao desenho: %w", err)
 	}

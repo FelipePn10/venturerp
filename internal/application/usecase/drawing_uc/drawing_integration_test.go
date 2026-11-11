@@ -160,3 +160,73 @@ func TestIntegration_Drawing_TenantItemConfigurationAndRevisionReplication(t *te
 		t.Fatalf("other tenant list=%+v err=%v", listed, err)
 	}
 }
+
+// O desenho é da empresa, e o que se pendura nele também: a característica e a
+// resposta do configurador vêm da MESMA empresa (o configurador é por empresa)
+// e o código de desenho só vale para item da empresa. Antes a empresa B
+// vinculava a característica da A pelo id e gravava código de desenho para o
+// item da A.
+func TestIntegration_Drawing_VinculosDaMesmaEmpresa(t *testing.T) {
+	q, pool := testutil.Queries(t)
+	uc := drawing_uc.New(q)
+	base := context.Background()
+	actor := testutil.Actor(t, pool)
+	a, b := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		ids := []int64{a.ID, b.ID}
+		pool.Exec(base, `DELETE FROM drawing_characteristics WHERE drawing_id IN (SELECT id FROM drawings WHERE enterprise_id = ANY($1))`, ids)
+		pool.Exec(base, `DELETE FROM drawings WHERE enterprise_id = ANY($1)`, ids)
+		pool.Exec(base, `DELETE FROM item_engineering_drawings WHERE enterprise_id = ANY($1)`, ids)
+		pool.Exec(base, `DELETE FROM cfg_variables WHERE enterprise_id = ANY($1)`, ids)
+		pool.Exec(base, `DELETE FROM cfg_sets WHERE enterprise_id = ANY($1)`, ids)
+		pool.Exec(base, `DELETE FROM cfg_characteristics WHERE enterprise_id = ANY($1)`, ids)
+		pool.Exec(base, `DELETE FROM items WHERE enterprise_id = ANY($1)`, ids)
+	})
+
+	caracteristica := func(e testutil.Empresa) (charID, varID int64) {
+		if err := pool.QueryRow(base, `INSERT INTO cfg_characteristics(code,description,char_type,created_by,enterprise_id)
+			VALUES($1,'Cor','ESCOLHA',$2,$3) RETURNING id`, fmt.Sprintf("C%d", testutil.UniqueCode()), actor, e.ID).Scan(&charID); err != nil {
+			t.Fatal(err)
+		}
+		var setID int64
+		if err := pool.QueryRow(base, `INSERT INTO cfg_sets(description,created_by,enterprise_id) VALUES('Cores',$1,$2) RETURNING id`, actor, e.ID).Scan(&setID); err != nil {
+			t.Fatal(err)
+		}
+		if err := pool.QueryRow(base, `INSERT INTO cfg_variables(set_id,code,description,mask_composition,created_by,enterprise_id)
+			VALUES($1,'AZ','Azul','AZ',$2,$3) RETURNING id`, setID, actor, e.ID).Scan(&varID); err != nil {
+			t.Fatal(err)
+		}
+		return charID, varID
+	}
+	charA, varA := caracteristica(a)
+	charB, varB := caracteristica(b)
+
+	desenhoB, err := uc.Create(b.Ctx, request.DrawingDTO{Code: fmt.Sprintf("DB-%d", testutil.UniqueCode()), Description: "Chapa", CreatedBy: actor})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := uc.AddCharacteristic(b.Ctx, desenhoB.ID, request.DrawingCharacteristicDTO{CharacteristicID: charA}); err == nil {
+		t.Fatal("a empresa B vinculou ao desenho dela a característica da empresa A")
+	}
+	if _, err := uc.AddCharacteristic(b.Ctx, desenhoB.ID, request.DrawingCharacteristicDTO{CharacteristicID: charB, VariableID: &varA}); err == nil {
+		t.Fatal("a empresa B vinculou ao desenho dela a resposta da empresa A")
+	}
+	if _, err := uc.AddCharacteristic(b.Ctx, desenhoB.ID, request.DrawingCharacteristicDTO{CharacteristicID: charB, Operator: "EQ"}); err == nil {
+		t.Fatal("condição fora da lista do banco deveria ser recusada antes de gravar")
+	}
+	vinculo, err := uc.AddCharacteristic(b.Ctx, desenhoB.ID, request.DrawingCharacteristicDTO{CharacteristicID: charB, VariableID: &varB, Operator: "different"})
+	if err != nil {
+		t.Fatalf("vínculo da própria empresa recusado: %v", err)
+	}
+	if vinculo.Operator != "DIFFERENT" {
+		t.Fatalf("operador gravado %q, esperado DIFFERENT", vinculo.Operator)
+	}
+
+	itemA := testutil.UniqueCode()
+	testutil.SeedItem(t, pool, a.Ctx, itemA, actor)
+	if _, err := uc.MaintainItemDrawingCode(b.Ctx, request.MaintainItemDrawingCodeDTO{ItemCode: itemA, DrawingCode: "X-1", UpdatedBy: actor}); err == nil {
+		t.Fatal("a empresa B gravou código de desenho para o item da empresa A")
+	}
+	if _, err := uc.MaintainItemDrawingCode(a.Ctx, request.MaintainItemDrawingCodeDTO{ItemCode: itemA, DrawingCode: "X-1", UpdatedBy: actor}); err != nil {
+		t.Fatalf("a dona do item não gravou o código de desenho: %v", err)
+	}
+}
