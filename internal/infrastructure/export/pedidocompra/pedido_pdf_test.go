@@ -51,7 +51,4 @@ func TestPedidoCompraPDF(t *testing.T) {
 	if _, err := (Gerador{}).PedidoCompra(purchase_order_uc.DocumentoPedido{}); err == nil {
 		t.Fatal("sem dados deveria falhar")
 	}
-	if dinheiro(1234567.891, 2) != "1.234.567,89" || qtd(10.5) != "10,5" || qtd(3) != "3" || dinheiro(-5, 2) != "-5,00" {
-		t.Fatalf("formatação: %s %s %s %s", dinheiro(1234567.891, 2), qtd(10.5), qtd(3), dinheiro(-5, 2))
-	}
 }

@@ -607,6 +607,7 @@ func (h *APSHandler) ganttBranding(ctx context.Context) gantt.Branding {
 	if h.fiscal != nil {
 		if cfg, err := h.fiscal.GetFiscalConfig(ctx); err == nil && cfg != nil {
 			b.CompanyName = cfg.RazaoSocial
+			b.Logo = cfg.Logo
 			if cfg.BrandColor != nil {
 				b.BrandColorHex = *cfg.BrandColor
 			}
