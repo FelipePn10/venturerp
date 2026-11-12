@@ -125,7 +125,7 @@ func TestCancelContaPagarAndReceber(t *testing.T) {
 	if err := (&CancelContaPagarUseCase{Repo: rp, Auth: crudAuth{ok: true}}).Execute(context.Background(), 1); err != nil || !rp.cancelledP {
 		t.Fatalf("cancel pagar failed: err=%v cancelled=%v", err, rp.cancelledP)
 	}
-	rr := &crudRepo{}
+	rr := &crudRepo{cr: &entity.ContaReceber{ID: 1, Status: entity.ContaReceberStatusPendente}}
 	if err := (&CancelContaReceberUseCase{Repo: rr, Auth: crudAuth{ok: true}}).Execute(context.Background(), 1); err != nil || !rr.cancelledR {
 		t.Fatalf("cancel receber failed: err=%v cancelled=%v", err, rr.cancelledR)
 	}
@@ -193,4 +193,14 @@ func TestCreateContaPagar_Unauthorized(t *testing.T) {
 	if _, err := uc.Execute(context.Background(), request.CreateContaPagarDTO{}); !errors.Is(err, errorsuc.ErrUnauthorized) {
 		t.Fatalf("unauthorized create should fail")
 	}
+}
+
+// A conta da baixa existe e está ativa nestes testes.
+func (r *crudRepo) GetContaBancaria(_ context.Context, id int64) (*entity.ContaBancaria, error) {
+	return &entity.ContaBancaria{ID: id, IsActive: true}, nil
+}
+
+// O título a aprovar está pendente.
+func (r *crudRepo) GetContaPagar(_ context.Context, id int64) (*entity.ContaPagar, error) {
+	return &entity.ContaPagar{ID: id, Status: entity.ContaPagarStatusPendente}, nil
 }

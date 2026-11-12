@@ -38,13 +38,17 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		return err
 	}
 
-	if cr.Status != entity.ContaReceberStatusPendente && cr.Status != entity.ContaReceberStatusAprovado {
-		return errorsuc.NewValidationError(fmt.Sprintf("conta a receber deve estar PENDENTE ou APROVADO para baixa, status: %s", cr.Status))
+	// Título vencido continua em aberto e é o que mais precisa de baixa.
+	if cr.Status != entity.ContaReceberStatusPendente && cr.Status != entity.ContaReceberStatusAprovado && cr.Status != entity.ContaReceberStatusVencido {
+		return errorsuc.NewValidationError(fmt.Sprintf("só título em aberto (pendente, aprovado ou vencido) pode ser recebido; este está %s", cr.Status))
 	}
 
 	dataRecebimento, err := time.Parse("2006-01-02", dto.DataRecebimento)
 	if err != nil {
 		return errorsuc.NewValidationError("data de recebimento inválida: use o formato AAAA-MM-DD")
+	}
+	if err := conferirContaBancaria(ctx, uc.Repo, dto.ContaBancariaID); err != nil {
+		return err
 	}
 
 	valorRecebido := dto.ValorRecebido.Round(2)

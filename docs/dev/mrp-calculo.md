@@ -65,6 +65,11 @@ promoção segue as regras da VPLA0102: trava a demanda como o *Atender*, a
 demanda zerada é cancelada (ou encerrada, se já teve saída) e a quantidade nova
 não fica abaixo do atendido (a promoção inteira é recusada).
 
+Se o passo de firmar falha depois de a ordem planejada ter sido criada (roteiro
+sem etapas, validação de liberação), a ordem fica `PLANNED` e não firme. Firmar
+a mesma sugestão de novo **retoma** dali e conclui — antes a segunda tentativa
+respondia sucesso com a ordem ainda planejada e a OF não nascia.
+
 Firmar a sugestão grava, pelo pegging, a ordem planejada de cada demanda que ela
 cobre (`independent_demand_orders`); firmar de novo a mesma sugestão refaz a
 ligação sem duplicá-la. *Gerar OF agora* grava a OF e o vínculo na mesma
@@ -93,6 +98,7 @@ de estoque somariam com o pedido.
 | Estratégia | — (`CONSUMO`) | `CONSUMO`: venda consome previsão e demanda de estoque (SAP 40). `SOB_ENCOMENDA`: só o pedido gera necessidade; previsão e demanda de expectativa de venda do item saem do cálculo (posição `SOB_ENCOMENDA`), e o cadastro recusa demanda nova desse tipo (SAP 20). Finalidade própria continua |
 | Janela de consumo | 46 / 47 | Dias antes/depois da venda (por item) |
 | Horizonte firme | 48 (0 = desligado) | Dias corridos a partir de hoje: a sugestão cujo início cairia antes de hoje + N começa em hoje + N e o recebimento anda junto (o prazo fica igual). Vale no MRP/MPS e nos modos mínimo/máximo, ponto de reposição e kanban. Cada sugestão empurrada gera a exceção `FIRM_FENCE` (fonte `MRP_SUGGESTION`; só se trata, não reprograma) |
+| Horizonte de reprogramação | 51 (padrão 30; 0 = desligado; só da empresa, migração 484) | Dias corridos a partir de hoje. A ordem firme (pedido de compra, OF, ordem planejada firme) que chega **depois** da necessidade, mas até hoje + N, cobre a necessidade: o planejador recebe `RESCHEDULE_IN` para antecipá-la e a sugestão nova sai só pelo que ela não cobre (`anteciparFirmes`: da que chega mais cedo para a mais tarde, só o necessário; a sobra segue para as necessidades seguintes). Desligado, a firme atrasada não entra no netting e o MRP sugere outra ordem para a mesma falta além de mandar antecipar a existente — é a verificação de reprogramação do SAP (*rescheduling horizon*) |
 | Tempo de segurança | 49 | Dias úteis (calendário industrial): recebimento = necessidade − N; início = recebimento − prazo. Só no netting do MRP/MPS |
 | Lote por período | 50 (`NENHUM`) | `DIA`, `SEMANA` (segunda a domingo) ou `MES`: as necessidades do item no mesmo período viram uma entrada só, na data da primeira — uma ordem por período (`agruparEntradas`). Vale mesmo sem "agrupa ordens do mesmo dia" no plano. O pegging e o perfil continuam por necessidade |
 | Lote máximo | — (só política do item, migração 457) | A necessidade acima dele vira várias ordens (`DividirPorLoteMaximo`), cada uma com no máximo o lote ajustado para baixo ao lote múltiplo do item; a última leva o resto. As ordens de serviço das operações externas saem uma por parte |
@@ -501,6 +507,17 @@ Quando o MRP sugere uma ordem de produção que precisa de uma máquina, ele (no
 
 Isso permite enxergar a carga de trabalho de cada máquina dia a dia.
 
+
+**Ordem que não cabe na agenda.** Cada sugestão de fabricação é programada por
+inteiro (todas as etapas) antes de gravar. Se uma etapa não acha janela em um
+ano — ou falta a produtividade do item no centro — a ordem fica **sem agenda**,
+nada dela é gravado pela metade e as demais seguem programadas. O cálculo
+termina `COMPLETED_WITH_ERRORS` e o log lista as ordens sem agenda (as cinco
+primeiras e a contagem do resto). Antes, uma única ordem sem janela desfazia a
+programação de máquina do plano inteiro. Quando **nenhuma** ordem cabe (o
+calendário foi fechado, por exemplo), a transação é desfeita e a programação
+anterior é mantida. Falha de infraestrutura continua interrompendo tudo.
+
 ---
 
 ## Fluxo Completo — Do Pedido à Ordem
@@ -620,6 +637,24 @@ ponto de pedido e cenários.
 
 Em float, a necessidade `0,1 + 0,2` com múltiplo 0,1 virava **0,4**, um lote a
 mais. Em decimal a conta é exata.
+
+A sugestão, a ordem planejada, o pedido de compra e a NF de entrada gravam
+**4 casas** (`NUMERIC(15,4)`). Por isso:
+
+- a necessidade de cada componente (explosão do MRP **e** material da OF) sai de
+  `structentity.QuantidadeDoComponente`: base × quantidade por unidade, com a
+  perda, arredondada **para cima** na 4ª casa. A conta é a mesma nos dois lados —
+  o que o MRP mandou comprar cobre o que a OF vai requisitar. Antes a OF guardava
+  6 casas e duas OFs pararam por "saldo insuficiente" de 0,00002 kg depois de a
+  compra (4 casas) ter recebido tudo;
+- a quantidade da sugestão também é arredondada para cima na 4ª casa (para baixo
+  ela cobriria menos que a necessidade), e a falta menor que 0,0001 não vira
+  ordem: é o resto do arredondamento do suprimento já firmado. Antes, depois de
+  comprar 52.593,3173 para uma necessidade de 52.593,317345, o recálculo sugeria
+  uma compra de 0,0000.
+
+O consumo pelo apontamento e pelo encerramento continua proporcional ao produzido
+e nunca passa do material da OF.
 O ponto de pedido usa `valueobject.PontoDePedido` (decimal), o mesmo do estoque.
 
 ## Módulos que o MRP Depende
@@ -898,6 +933,21 @@ de fato cobre (pegging), não com a primeira necessidade do item:
    `RESCHEDULE_IN`; mais de 30 dias antes → `RESCHEDULE_OUT`; ordem que não
    cobre necessidade nenhuma → `CANCEL`; sobra parcial acima de 1 % da
    necessidade em aberto → `EXCESS_PROJECTED` (uma por item).
+
+Além dessas, três mensagens não nascem de ordem firme:
+
+- `FIRM_FENCE` — a sugestão foi empurrada pelo horizonte firme (parâmetro 48);
+- `INICIO_NO_PASSADO` — a sugestão precisaria ter começado antes de hoje para
+  chegar na data pedida. A mensagem traz há quantos dias o início passou e a
+  data em que ela chega se começar hoje (`suggested_date`). Fonte
+  `MRP_SUGGESTION`. A sugestão que o horizonte firme já recolocou no futuro não
+  entra (tem a mensagem dela), nem a ordem de serviço, que acompanha a de
+  fabricação;
+- `ITEM_NAO_PLANEJADO` — o item tem necessidade líquida mas o cadastro o tira
+  da geração de ordens (item **de terceiro** ou tipo de MRP **Projeto**). Uma
+  mensagem por item, com a falta somada, a primeira data e o motivo. Antes a
+  falta passava em silêncio e o perfil mostrava como "planejado" o que não
+  tinha sugestão; agora o perfil mostra zero.
 
 A análise usa uma cópia do estoque e do suprimento firme tirada antes do
 netting (`service/exceptions.go`). Antes ela olhava o suprimento já consumido e

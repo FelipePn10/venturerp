@@ -60,3 +60,21 @@ func QuantidadeComPerdaDecimal(base, perda decimal.Decimal, formula int) decimal
 		return base
 	}
 }
+
+// EscalaDaRequisicao é o número de casas em que o componente é comprado e
+// recebido: o pedido de compra, a ordem planejada e a nota fiscal gravam
+// NUMERIC(15,4).
+const EscalaDaRequisicao = 4
+
+// QuantidadeDoComponente é quanto do componente uma ordem do pai requisita:
+// base (a quantidade do pai, ou 1 para quantidade fixa) × quantidade por
+// unidade, com a perda, arredondada para cima na escala da compra.
+//
+// Fonte única para o MRP e para a OF. Antes a OF guardava 6 casas e a compra 4:
+// o MRP pedia 52.593,317345 kg, o pedido de compra gravava 52.593,3173 e as OFs
+// paravam por "saldo insuficiente" de 0,00004 kg. Arredondar para cima (nunca
+// para baixo) mantém a ordem coberta pelo que foi comprado.
+func QuantidadeDoComponente(base, porUnidade, perda decimal.Decimal, formula int) decimal.Decimal {
+	q := QuantidadeComPerdaDecimal(base.Mul(porUnidade.Round(6)), perda, formula)
+	return q.Round(6).RoundCeil(EscalaDaRequisicao)
+}

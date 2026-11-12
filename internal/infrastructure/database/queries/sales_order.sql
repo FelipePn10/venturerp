@@ -205,9 +205,26 @@ WHERE enterprise_code = sqlc.arg(tenant_enterprise_code) AND is_active = TRUE
   AND (sqlc.narg('delivery_to')::date IS NULL OR delivery_date <= sqlc.narg('delivery_to')::date);
 
 -- name: CancelSalesOrder :execrows
+-- Faturado (F) e já cancelado não são cancelados de novo: a nota autorizada
+-- é cancelada antes, e ela devolve o pedido à carteira.
 UPDATE public.sales_orders
 SET status = 'CANCELLED', cancel_reason = $2, cancel_complement = $3, updated_at = NOW()
-WHERE code = $1 AND enterprise_code = sqlc.arg(tenant_enterprise_code);
+WHERE code = $1 AND enterprise_code = sqlc.arg(tenant_enterprise_code)
+  AND status NOT IN ('F', 'CANCELLED');
+
+-- name: CancelOpenSalesOrderItems :execrows
+-- O saldo não atendido das linhas do pedido cancelado é cancelado: a linha sem
+-- atendimento vira CANCELLED e a parcialmente atendida fecha como DELIVERED
+-- (o que saiu, saiu). Antes elas ficavam OPEN/PARTIAL na carteira.
+UPDATE public.sales_order_items soi
+SET cancelled_qty = GREATEST(soi.requested_qty - soi.attended_qty, 0),
+    status = CASE WHEN soi.attended_qty > 0 THEN 'DELIVERED' ELSE 'CANCELLED' END,
+    updated_at = NOW()
+FROM public.sales_orders so
+WHERE so.code = soi.sales_order_code
+  AND so.code = $1
+  AND so.enterprise_code = sqlc.arg(tenant_enterprise_code)
+  AND soi.status IN ('OPEN', 'PARTIAL');
 
 -- name: BlockSalesOrder :execrows
 UPDATE public.sales_orders
@@ -350,9 +367,17 @@ WHERE sales_order_items.sales_order_code = $1 AND sales_order_items.is_active = 
 ORDER BY sequence;
 
 -- name: CancelSalesOrderItem :execrows
+-- Cancela o saldo NÃO atendido da linha: o que a nota já atendeu fica (a linha
+-- parcialmente faturada fecha como DELIVERED e continua visível). Antes
+-- cancelled_qty recebia o pedido inteiro e attended + cancelled passava do
+-- solicitado.
 UPDATE public.sales_order_items
-SET status = 'CANCELLED', cancelled_qty = requested_qty, is_active = FALSE, updated_at = NOW()
+SET cancelled_qty = GREATEST(requested_qty - attended_qty, 0),
+    status = CASE WHEN attended_qty > 0 THEN 'DELIVERED' ELSE 'CANCELLED' END,
+    is_active = attended_qty > 0,
+    updated_at = NOW()
 WHERE sales_order_items.code = $1
+  AND sales_order_items.status IN ('OPEN', 'PARTIAL')
   AND EXISTS (
       SELECT 1 FROM public.sales_orders sales_order
       WHERE sales_order.code=sales_order_items.sales_order_code

@@ -37,6 +37,13 @@ func NewClient(token, ambiente string) *Client {
 	if providerEnvironment == "producao" {
 		base = baseURLProducao
 	}
+	// Endereço alternativo da emissora, para o aceite automatizado rodar contra
+	// um simulador local em vez de mandar dados para fora. Só vale fora do
+	// ambiente de produção da emissora: uma variável esquecida no servidor não
+	// consegue desviar nota de verdade.
+	if alvo := strings.TrimRight(strings.TrimSpace(os.Getenv("FOCUSNFE_BASE_URL")), "/"); alvo != "" && providerEnvironment != "producao" {
+		base = alvo
+	}
 	client := &Client{
 		token:   token,
 		baseURL: base,
@@ -967,12 +974,8 @@ type NFSePrestador struct {
 	CodigoMunicipio    string `json:"codigo_municipio"`
 }
 
-// NFSeTomador identifies the service taker (customer).
-type NFSeTomador struct {
-	CNPJ            string `json:"cnpj,omitempty"`
-	CPF             string `json:"cpf,omitempty"`
-	RazaoSocial     string `json:"razao_social,omitempty"`
-	Email           string `json:"email,omitempty"`
+// NFSeEndereco é o endereço do tomador, aninhado em "tomador.endereco".
+type NFSeEndereco struct {
 	Logradouro      string `json:"logradouro,omitempty"`
 	Numero          string `json:"numero,omitempty"`
 	Complemento     string `json:"complemento,omitempty"`
@@ -982,23 +985,40 @@ type NFSeTomador struct {
 	CEP             string `json:"cep,omitempty"`
 }
 
-// NFSePayload is the Focus NFS-e (ABRASF) emission payload.
+// NFSeTomador identifies the service taker (customer).
+type NFSeTomador struct {
+	CNPJ        string        `json:"cnpj,omitempty"`
+	CPF         string        `json:"cpf,omitempty"`
+	RazaoSocial string        `json:"razao_social,omitempty"`
+	Email       string        `json:"email,omitempty"`
+	Endereco    *NFSeEndereco `json:"endereco,omitempty"`
+}
+
+// NFSeServico é o bloco "servico" da NFS-e. Aliquota vai em PERCENTUAL
+// (3 = 3%), como a Focus e as prefeituras esperam.
+type NFSeServico struct {
+	Aliquota                  float64 `json:"aliquota"`
+	Discriminacao             string  `json:"discriminacao"`
+	IssRetido                 bool    `json:"iss_retido"`
+	ItemListaServico          string  `json:"item_lista_servico"`
+	CodigoTributarioMunicipio string  `json:"codigo_tributario_municipio,omitempty"`
+	CodigoMunicipio           string  `json:"codigo_municipio,omitempty"`
+	ValorServicos             float64 `json:"valor_servicos"`
+	ValorDeducoes             float64 `json:"valor_deducoes,omitempty"`
+	ValorIss                  float64 `json:"valor_iss,omitempty"`
+}
+
+// NFSePayload is the Focus NFS-e (ABRASF) emission payload: prestador, tomador
+// (com o endereço aninhado) e servico. Antes os campos do serviço e do endereço
+// iam soltos na raiz, fora do formato da API.
 type NFSePayload struct {
-	DataEmissao               string        `json:"data_emissao"`
-	NaturezaOperacao          int           `json:"natureza_operacao"`
-	OptanteSimplesNacional    bool          `json:"optante_simples_nacional"`
-	IncentivadorCultural      bool          `json:"incentivador_cultural"`
-	Prestador                 NFSePrestador `json:"prestador"`
-	Tomador                   NFSeTomador   `json:"tomador"`
-	ItemListaServico          string        `json:"item_lista_servico"`
-	CodigoTributarioMunicipio string        `json:"codigo_tributario_municipio,omitempty"`
-	Discriminacao             string        `json:"discriminacao"`
-	CodigoMunicipio           string        `json:"codigo_municipio"`
-	ValorServicos             float64       `json:"valor_servicos"`
-	ValorDeducoes             float64       `json:"valor_deducoes,omitempty"`
-	AliquotaISS               float64       `json:"aliquota"`
-	IssRetido                 bool          `json:"iss_retido"`
-	ValorIss                  float64       `json:"valor_iss,omitempty"`
+	DataEmissao            string        `json:"data_emissao"`
+	NaturezaOperacao       int           `json:"natureza_operacao"`
+	OptanteSimplesNacional bool          `json:"optante_simples_nacional"`
+	IncentivadorCultural   bool          `json:"incentivador_cultural"`
+	Prestador              NFSePrestador `json:"prestador"`
+	Tomador                NFSeTomador   `json:"tomador"`
+	Servico                NFSeServico   `json:"servico"`
 }
 
 // NFSeResponse is the Focus response for an NFS-e emission/consult.

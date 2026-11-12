@@ -19,6 +19,21 @@ Implementação da task `.ai/tasks/sequenciamento-de-produto.md`, ampliando o AP
 da consulta é `HOUR` ou `MINUTE`; `refresh_value` não pode ser negativo. Todas as
 operações usam a empresa autenticada.
 
+## Data de entrega e ordens atrasadas
+
+A entrega de uma OF, para o sequenciamento, é a **necessidade da ordem
+planejada** que a originou; sem ela, o fim planejado da própria OF; sem os dois,
+o início (`OrderRow.Entrega`). Antes valia sempre o início: a programação
+regressiva (`direction: "BACKWARD"`) recuava a partir do começo da ordem e a
+ordem que terminaria depois da necessidade não era apontada.
+
+- Programação para frente: dentro da mesma prioridade, a entrega mais próxima
+  primeiro (EDD de fato). A OF cuja última operação termina depois do dia da
+  entrega entra em `late_orders` — só quando a entrega é conhecida.
+- `POST /api/planning/run-pipeline` devolve `aps_late_orders` e, havendo
+  alguma, `viable = false` com a observação correspondente. A execução
+  automática grava todas as observações do ciclo no histórico.
+
 ## Rastreabilidade requisito a requisito
 
 | ID | Requisito | Evidência | Estado |

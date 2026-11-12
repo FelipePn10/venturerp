@@ -268,3 +268,29 @@ O seed é **determinístico** (`setseed`) e **idempotente**: cada `make demo-see
 faz `TRUNCATE ... RESTART IDENTITY` das tabelas populadas e recria tudo do zero.
 Para ampliar volume ou adicionar exemplos em módulos auxiliares, edite
 `scripts/seed-demo.sql` (está comentado por seção) e rode `make demo-seed`.
+
+## Planejamento no demo
+
+O seed cadastra o que o MRP, o CRP e o APS precisam para mostrar resultado:
+
+- tipo do item correto (acabado fabricado, matéria-prima comprada, serviço) —
+  antes vinham trocados e o MRP não sugeria nenhuma ordem;
+- três etapas em cada roteiro (corte, uma intermediária e pintura), com o centro
+  de trabalho de cada operação;
+- produtividade de cada acabado nas máquinas dos centros do roteiro.
+
+O seed não cria plano de produção: cadastre um (VPLA) e rode o cálculo. Um banco
+de demo carregado antes desta correção precisa de `make demo-seed` de novo — o
+`demo-sync` não refaz os dados.
+
+`scripts/test-fluxo-pedido-fabrica.sh` percorre o fluxo inteiro pela API sobre o
+demo (pedido → MRP → firmar → compra → recebimento → OF → consumo → apontamento
+→ entrega → CRP → APS) conferindo quantidades e saldos:
+
+```bash
+ADMIN_PASSWORD=<senha do admin do demo> BASE_URL=http://localhost:5072 \
+  bash scripts/test-fluxo-pedido-fabrica.sh
+```
+
+Ele cria o próprio plano, tabela de preço e pedido, e pode rodar mais de uma vez
+no mesmo banco.

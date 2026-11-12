@@ -64,6 +64,9 @@ scripts/*
 !scripts/seed-demo-beneficiamento.sh
 !scripts/seed-demo-cadastros-fiscais.sql
 !scripts/loadtest/
+# Aceite do fluxo pedido de venda → fábrica, pela API, sobre o demo. A senha vem
+# de ADMIN_PASSWORD; o arquivo não tem token, CNPJ nem credencial.
+!scripts/test-fluxo-pedido-fabrica.sh
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh

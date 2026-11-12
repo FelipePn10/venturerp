@@ -97,6 +97,11 @@ func RespondUseCaseError(w http.ResponseWriter, err error) {
 			// caracteres recebendo "TESTE", por exemplo.
 			RespondError(w, http.StatusUnprocessableEntity, "um dos campos recebeu mais caracteres do que o cadastro permite")
 			return
+		case "22007", "22008": // invalid_datetime_format, datetime_field_overflow
+			// Data ou hora digitada num formato que a coluna não entende. Era
+			// erro do usuário respondido como falha do servidor.
+			RespondError(w, http.StatusUnprocessableEntity, "uma das datas ou horas informadas está em formato inválido")
+			return
 		case "22003": // numeric_value_out_of_range
 			RespondError(w, http.StatusUnprocessableEntity, "um dos valores numéricos está fora da faixa que o cadastro aceita")
 			return

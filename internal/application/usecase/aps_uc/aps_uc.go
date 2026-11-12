@@ -58,12 +58,13 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		return nil, fmt.Errorf("fetching open orders: %w", err)
 	}
 
-	// Sort by priority then planned date.
-	sort.Slice(orders, func(i, j int) bool {
+	// Prioridade e, dentro dela, a entrega mais próxima primeiro (EDD). A ordem
+	// de entrada desempata, para o resultado ser o mesmo a cada execução.
+	sort.SliceStable(orders, func(i, j int) bool {
 		if orders[i].Priority != orders[j].Priority {
 			return orders[i].Priority < orders[j].Priority
 		}
-		return orders[i].PlannedDate.Before(orders[j].PlannedDate)
+		return orders[i].Entrega().Before(orders[j].Entrega())
 	})
 
 	// wcNextAvailable tracks when each work center is next free.
@@ -84,6 +85,7 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 	}
 
 	scheduledCount := 0
+	atrasadas := make([]int64, 0)
 	for _, order := range orders {
 		if plans, ok := uc.repo.(interface {
 			MachinePlanOperationCount(context.Context, int64) (int, error)
@@ -264,11 +266,18 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			opEndTime = end
 			scheduledCount++
 		}
+		// Só com entrega conhecida: sem ela a data da ordem é o início, e
+		// terminar depois do início não é atraso.
+		if terminaDepoisDaEntrega(fimDaOperacao, order.DueDate) {
+			atrasadas = append(atrasadas, order.ID)
+		}
 	}
 
+	sort.Slice(atrasadas, func(i, j int) bool { return atrasadas[i] < atrasadas[j] })
 	return &response.APSSummaryResponse{
 		ScheduledOperations: scheduledCount,
 		OrdersProcessed:     len(orders),
+		LateOrders:          atrasadas,
 	}, nil
 }
 
@@ -1011,8 +1020,8 @@ func (uc *APSUseCase) sequenciaRegressivo(
 
 	// Entrega mais próxima primeiro: quem tem menos folga ocupa o recurso antes.
 	sort.SliceStable(orders, func(i, j int) bool {
-		if !orders[i].PlannedDate.Equal(orders[j].PlannedDate) {
-			return orders[i].PlannedDate.Before(orders[j].PlannedDate)
+		if !orders[i].Entrega().Equal(orders[j].Entrega()) {
+			return orders[i].Entrega().Before(orders[j].Entrega())
 		}
 		return orders[i].Priority < orders[j].Priority
 	})
@@ -1079,7 +1088,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 			if op.WorkCenterID == nil {
 				// Etapa em terceiro: as predecessoras têm de terminar antes do
 				// prazo do fornecedor, contado da sucessora mais cedo.
-				fim := order.PlannedDate
+				fim := order.Entrega()
 				for _, e := range sucessores[op.ID] {
 					if inicioSuc, ok := inicioDaOperacao[e.SuccessorID]; ok {
 						fim = minTime(fim, inicioSuc)
@@ -1099,7 +1108,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 
 			// Termina, no máximo, na entrega — e antes do início das sucessoras
 			// (descontada a sobreposição acordada).
-			fim := order.PlannedDate
+			fim := order.Entrega()
 			for _, e := range sucessores[op.ID] {
 				inicioSuc, ok := inicioDaOperacao[e.SuccessorID]
 				if !ok {
@@ -1172,6 +1181,30 @@ func (uc *APSUseCase) sequenciaRegressivo(
 		OrdersProcessed:     len(orders),
 		LateOrders:          atrasadas,
 	}, nil
+}
+
+// fimDoDiaDaEntrega: a entrega é uma data; a ordem está no prazo se termina
+// até o fim desse dia.
+func fimDoDiaDaEntrega(entrega time.Time) time.Time {
+	if entrega.IsZero() {
+		return entrega
+	}
+	return time.Date(entrega.Year(), entrega.Month(), entrega.Day(), 0, 0, 0, 0, entrega.Location()).AddDate(0, 0, 1)
+}
+
+// terminaDepoisDaEntrega diz se a última operação programada da ordem termina
+// depois do dia da entrega.
+func terminaDepoisDaEntrega(fimDaOperacao map[int64]time.Time, entrega time.Time) bool {
+	if entrega.IsZero() {
+		return false
+	}
+	limite := fimDoDiaDaEntrega(entrega)
+	for _, fim := range fimDaOperacao {
+		if fim.After(limite) {
+			return true
+		}
+	}
+	return false
 }
 
 // setupDaTransicao consulta a matriz de preparação do centro de trabalho e

@@ -1761,3 +1761,66 @@ func TestPontoDePedidoDoItemPorDiaTrabalhado(t *testing.T) {
 		t.Fatal("item sem ponto de pedido não devia ter ponto")
 	}
 }
+
+// A onda solta a reserva do pedido por produto; na volta ela é repartida pelas
+// linhas do produto (gravava o código do produto, e cancelar uma das linhas não
+// achava a reserva dela).
+func TestOndaDevolveAReservaParaAsLinhasDoPedido(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	_ = e.mover(t, e.item, e.almox, "IN", 10, 3, "")
+	pedido := novoPedido(t, e)
+	pool := testutil.Pool(t)
+	var l1, l2 int64
+	if err := pool.QueryRow(context.Background(), `INSERT INTO sales_order_items(sales_order_code,sequence,item_code,mask,requested_qty,warehouse_code)
+		VALUES($1,1,$2,'',6,$3) RETURNING code`, pedido, e.item, e.almox).Scan(&l1); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(context.Background(), `INSERT INTO sales_order_items(sales_order_code,sequence,item_code,mask,requested_qty,warehouse_code)
+		VALUES($1,2,$2,'',4,$3) RETURNING code`, pedido, e.item, e.almox).Scan(&l2); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range []struct {
+		code int64
+		qtd  string
+	}{{l1, "6"}, {l2, "4"}} {
+		linha := l.code
+		if _, err := e.repo.CreateReservation(e.ctx, &stockentity.StockReservation{
+			ItemCode: e.item, WarehouseID: e.almox, Quantity: dec(l.qtd), ReferenceType: stockentity.ReferenceTypeSalesOrder,
+			ReferenceCode: pedido, ReferenceItemCode: &linha, ReservationDate: time.Now(), Status: "ACTIVE", CreatedBy: e.ator,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ref := stockentity.ReferenceTypeSalesOrder
+	nec := []stockentity.NecessidadeOnda{{ItemCode: e.item, Quantity: dec("10"), ReferenceType: &ref, ReferenceCode: &pedido}}
+	onda, err := e.repo.CriarOndaDeSeparacao(e.ctx, 0, e.almox, "FEFO", nec, e.ator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.repo.CancelarOndaDeSeparacao(e.ctx, onda.Code, e.ator); err != nil {
+		t.Fatal(err)
+	}
+	if r := reservadoDe(t, e, e.item, e.almox); !r.Equal(dec("10")) {
+		t.Fatalf("cancelar devolve a reserva ao pedido: %s", r)
+	}
+	rows, err := pool.Query(context.Background(),
+		`SELECT reference_item_code, SUM(quantity) FROM stock_reservations
+		  WHERE enterprise_id=$1 AND reference_type='SALES_ORDER' AND reference_code=$2 AND status='ACTIVE'
+		  GROUP BY reference_item_code`, e.empresa, pedido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	porLinha := map[int64]decimal.Decimal{}
+	for rows.Next() {
+		var refLinha int64
+		var q decimal.Decimal
+		if err := rows.Scan(&refLinha, &q); err != nil {
+			t.Fatal(err)
+		}
+		porLinha[refLinha] = q
+	}
+	if len(porLinha) != 2 || !porLinha[l1].Equal(dec("6")) || !porLinha[l2].Equal(dec("4")) {
+		t.Fatalf("reserva por linha = %v, esperado %d→6 e %d→4", porLinha, l1, l2)
+	}
+}

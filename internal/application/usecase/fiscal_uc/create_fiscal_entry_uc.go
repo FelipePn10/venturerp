@@ -130,10 +130,10 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 		UnitPrice:             itemDTO.UnitPrice,
 		TotalPrice:            itemDTO.TotalPrice,
 		BaseICMS:              itemDTO.BaseICMS,
-		AliqICMS:              itemDTO.AliqICMS,
+		AliqICMS:              aliquotaDaNotaManual(itemDTO.AliqICMS, itemDTO.BaseICMS, itemDTO.ValorICMS),
 		ValorICMS:             itemDTO.ValorICMS,
 		BaseIPI:               itemDTO.BaseIPI,
-		AliqIPI:               itemDTO.AliqIPI,
+		AliqIPI:               aliquotaDaNotaManual(itemDTO.AliqIPI, itemDTO.BaseIPI, itemDTO.ValorIPI),
 		ValorIPI:              itemDTO.ValorIPI,
 		ValorPIS:              itemDTO.ValorPIS,
 		ValorCOFINS:           itemDTO.ValorCOFINS,
@@ -155,6 +155,37 @@ func entryItemFromDTO(itemDTO request.CreateFiscalEntryItemDTO) *entity.FiscalEn
 		MovimentaEstoque:      true,
 		GeraFinanceiro:        true,
 	}
+}
+
+// aliquotaDaNotaManual devolve a alíquota em fração, que é o que o resto da
+// entrada usa (a do XML já chega dividida por 100 e a conferência faz
+// base × alíquota). A nota manual chega das duas formas: a tela do desktop
+// manda a fração (valor ÷ base, 0.18) e a API recebia o percentual da nota
+// (18) — tratar todo valor como percentual transformava os 0.18 da tela em
+// 0,18%. Com base e valor, vale a leitura que bate com valor ÷ base; sem eles,
+// acima de 1 é percentual. Sem alíquota, mas com base e valor, ela sai da
+// própria nota: alíquota zero com imposto destacado virava aviso falso.
+func aliquotaDaNotaManual(aliq, base, valor decimal.Decimal) decimal.Decimal {
+	cem := decimal.NewFromInt(100)
+	temNota := base.IsPositive() && valor.IsPositive()
+	if !aliq.IsPositive() {
+		if temNota {
+			return valor.Div(base).Round(4)
+		}
+		return aliq
+	}
+	if temNota {
+		daNota := valor.Div(base)
+		comoFracao, comoPercentual := aliq, aliq.Div(cem)
+		if comoPercentual.Sub(daNota).Abs().LessThan(comoFracao.Sub(daNota).Abs()) {
+			return comoPercentual
+		}
+		return comoFracao
+	}
+	if aliq.GreaterThan(decimal.NewFromInt(1)) {
+		return aliq.Div(cem)
+	}
+	return aliq
 }
 
 // criarDocumento é o lançamento manual completo: fornecedor pelo cadastro (ou

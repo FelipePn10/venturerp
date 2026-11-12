@@ -11,6 +11,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 )
@@ -21,6 +22,21 @@ type CancelSalesOrderUseCase struct {
 	// Titulos: os títulos a receber ligados ao pedido (adiantamento, sinal,
 	// título lançado à mão) caem junto com o pedido.
 	Titulos RecebiveisDoPedido
+	// Transacao cancela o pedido, o saldo das linhas e as reservas de estoque
+	// juntos. Sem ela (testes), roda direto em Repo.
+	Transacao EmTransacao
+}
+
+// linhasDoCancelamento encerra o saldo não atendido das linhas do pedido.
+type linhasDoCancelamento interface {
+	CancelarLinhasEmAberto(ctx context.Context, code int64) error
+}
+
+// reservasDoPedido é o que o cancelamento usa do estoque para soltar a reserva
+// feita na confirmação (ATP).
+type reservasDoPedido interface {
+	ListActiveReservations(ctx context.Context) ([]*stockentity.StockReservation, error)
+	CancelReservation(ctx context.Context, id int64) error
 }
 
 // RecebiveisDoPedido confere (cancelar=false) ou cancela os títulos a receber
@@ -43,7 +59,36 @@ func (uc *CancelSalesOrderUseCase) Execute(ctx context.Context, dto request.Canc
 			return err
 		}
 	}
-	if err := uc.Repo.Cancel(ctx, dto.Code, dto.Reason, dto.Complement); err != nil {
+	pedido, err := uc.Repo.GetByCode(ctx, dto.Code)
+	if err != nil {
+		return err
+	}
+	switch pedido.Status {
+	case entity.SalesOrderStatusCancelled:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d já está cancelado", dto.Code))
+	case entity.SalesOrderStatusInvoiced:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está faturado: cancele a NF-e antes — ela devolve o pedido à carteira", dto.Code))
+	}
+	cancelar := func(r ConfirmacaoRepos) error {
+		if err := r.Pedidos.Cancel(ctx, dto.Code, dto.Reason, dto.Complement); err != nil {
+			return err
+		}
+		if l, ok := r.Pedidos.(linhasDoCancelamento); ok {
+			if err := l.CancelarLinhasEmAberto(ctx, dto.Code); err != nil {
+				return err
+			}
+		}
+		if r.Estoque != nil {
+			return soltarReservasDoPedido(ctx, r.Estoque, dto.Code)
+		}
+		return nil
+	}
+	if uc.Transacao != nil {
+		err = uc.Transacao(ctx, cancelar)
+	} else {
+		err = cancelar(ConfirmacaoRepos{Pedidos: uc.Repo})
+	}
+	if err != nil {
 		return err
 	}
 	if uc.Titulos != nil {
@@ -130,6 +175,17 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 		return errorsuc.ErrUnauthorized
 	}
 	newStatus := entity.SalesOrderStatus(dto.Status)
+	if err := conferirTrocaDeStatus(ctx, uc.Repo, dto.Code, newStatus); err != nil {
+		return err
+	}
+	// Pedido (P) e pedido em análise (A) são venda firme: o MRP planeja por
+	// eles e o crédito os conta como exposição. Sem linha com quantidade não há
+	// o que vender — antes o pedido vazio era confirmado e ficava na carteira.
+	if newStatus == entity.SalesOrderStatusOrder || newStatus == entity.SalesOrderStatusAnalysis {
+		if err := conferirLinhasParaConfirmar(ctx, uc.Repo, dto.Code); err != nil {
+			return err
+		}
+	}
 	if newStatus != entity.SalesOrderStatusOrder {
 		return uc.Repo.ChangeStatus(ctx, dto.Code, newStatus)
 	}
@@ -173,6 +229,21 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 	// Depois do commit: a solicitação aponta para um pedido que já está gravado
 	// como bloqueado.
 	return solicitarLiberacao(ctx, uc.Aprovacoes, uc.Repo, dto.Code)
+}
+
+// conferirLinhasParaConfirmar exige ao menos uma linha ativa com quantidade a
+// vender (pedida menos cancelada).
+func conferirLinhasParaConfirmar(ctx context.Context, repo repository.SalesOrderRepository, code int64) error {
+	linhas, err := repo.ListItems(ctx, code)
+	if err != nil {
+		return fmt.Errorf("lendo os itens do pedido %d: %w", code, err)
+	}
+	for _, l := range linhas {
+		if l != nil && l.IsActive && l.RequestedQty.Sub(l.CancelledQty).IsPositive() {
+			return nil
+		}
+	}
+	return errorsuc.NewValidationError("inclua ao menos um item com quantidade antes de confirmar o pedido")
 }
 
 // ConfirmacaoRepos são os repositórios ligados à transação da confirmação.
@@ -304,4 +375,77 @@ func (uc *SaveSalesOrderDelayReasonUseCase) Execute(ctx context.Context, dto req
 		return errorsuc.ErrUnauthorized
 	}
 	return uc.Repo.SaveDelayReason(ctx, dto.Code, strings.TrimSpace(dto.Reason), strings.TrimSpace(dto.Action), actor)
+}
+
+// soltarReservasDoPedido cancela as reservas ativas que a confirmação fez para
+// o pedido. Antes o pedido cancelado deixava o estoque reservado, e o
+// disponível para promessa ficava menor para sempre.
+func soltarReservasDoPedido(ctx context.Context, estoque reservasDoPedido, code int64) error {
+	return soltarReservas(ctx, estoque, code, nil)
+}
+
+// linhaDaReserva identifica as reservas de uma linha do pedido. A reserva
+// antiga (e a que a onda devolve) guarda o código do produto em vez da linha:
+// ela só é da linha quando o produto aparece numa linha só do pedido (Unica).
+type linhaDaReserva struct {
+	Code, ItemCode int64
+	Unica          bool
+}
+
+func (l linhaDaReserva) eDaLinha(r *stockentity.StockReservation) bool {
+	if r.ItemCode != l.ItemCode {
+		return false
+	}
+	if r.ReferenceItemCode != nil && *r.ReferenceItemCode == l.Code {
+		return true
+	}
+	return l.Unica && (r.ReferenceItemCode == nil || *r.ReferenceItemCode == l.ItemCode)
+}
+
+// soltarReservas cancela as reservas ativas do pedido; com linha, só as dela.
+func soltarReservas(ctx context.Context, estoque reservasDoPedido, code int64, linha *linhaDaReserva) error {
+	ativas, err := estoque.ListActiveReservations(ctx)
+	if err != nil {
+		return fmt.Errorf("lendo as reservas do pedido %d: %w", code, err)
+	}
+	for _, r := range ativas {
+		if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != code {
+			continue
+		}
+		if linha != nil && !linha.eDaLinha(r) {
+			continue
+		}
+		if err := estoque.CancelReservation(ctx, r.ID); err != nil {
+			return fmt.Errorf("liberando a reserva %d do pedido %d: %w", r.ID, code, err)
+		}
+	}
+	return nil
+}
+
+// conferirTrocaDeStatus: a troca de status anda só entre rascunho, orçamento,
+// análise e pedido. Cancelar tem rotina própria (motivo, títulos, reservas e
+// linhas) e faturado é a NF-e autorizada que põe — antes o PATCH de status
+// aceitava CANCELLED, F e até reabrir pedido cancelado ou faturado.
+func conferirTrocaDeStatus(ctx context.Context, repo repository.SalesOrderRepository, code int64, novo entity.SalesOrderStatus) error {
+	switch novo {
+	case entity.SalesOrderStatusDraft, entity.SalesOrderStatusOrder, entity.SalesOrderStatusAnalysis,
+		entity.SalesOrderStatusBudget, entity.SalesOrderStatusBudgetAnalysis:
+	case entity.SalesOrderStatusCancelled:
+		return errorsuc.NewValidationError("para cancelar o pedido use o cancelamento, que pede o motivo e solta as reservas e os títulos")
+	case entity.SalesOrderStatusInvoiced:
+		return errorsuc.NewValidationError("o pedido fica faturado pela NF-e autorizada, não pela troca de status")
+	default:
+		return errorsuc.NewValidationError(fmt.Sprintf("status %q não existe para o pedido de venda", string(novo)))
+	}
+	pedido, err := repo.GetByCode(ctx, code)
+	if err != nil {
+		return err
+	}
+	switch pedido.Status {
+	case entity.SalesOrderStatusCancelled:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está cancelado e não volta à carteira", code))
+	case entity.SalesOrderStatusInvoiced:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está faturado: para mexer nele, cancele a NF-e", code))
+	}
+	return nil
 }

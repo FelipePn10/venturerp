@@ -237,11 +237,28 @@ func (uc *ShipmentUseCase) Separate(ctx context.Context, code int64, actor uuid.
 		return errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para separar", code))
 	}
 	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
-		if err := reserveStock(ctx, r.Estoque, ship, actor); err != nil {
+		baixa := repository.BaixaPelaNFe{}
+		if b, ok := r.Romaneios.(baixaPelaNFe); ok {
+			var err error
+			if baixa, err = b.BaixaPelaNFe(ctx, code); err != nil {
+				return err
+			}
+		}
+		jaBaixado, err := reserveStock(ctx, r.Estoque, ship, actor, baixa)
+		if err != nil {
 			return err
 		}
-		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusSeparated, &actor, "separação")
+		nota := "separação"
+		if jaBaixado > 0 {
+			nota = fmt.Sprintf("separação — %d linha(s) já baixada(s) pela NF-e autorizada, sem reserva de estoque", jaBaixado)
+		}
+		return r.Romaneios.UpdateStatus(ctx, code, entity.ShipmentStatusSeparated, &actor, nota)
 	})
+}
+
+// baixaPelaNFe lê o que a NF-e já tirou do estoque (faturar antes de separar).
+type baixaPelaNFe interface {
+	BaixaPelaNFe(ctx context.Context, shipmentCode int64) (repository.BaixaPelaNFe, error)
 }
 
 // Confer moves SEPARATED → CONFERRED. Every line must already be conferred.
@@ -501,16 +518,41 @@ func guardTransition(ship *entity.Shipment, next entity.ShipmentStatus) error {
 	return nil
 }
 
-func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipment, actor uuid.UUID) error {
+// reserveStock reserva o que o romaneio vai tirar da prateleira. O que a NF-e
+// autorizada já baixou não está mais no estoque: reservar de novo pedia um
+// saldo que não existe, e o romaneio feito depois da nota não separava.
+// Devolve quantas linhas ficaram (total ou parcialmente) sem reserva por isso.
+func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipment, actor uuid.UUID, baixa repository.BaixaPelaNFe) (int, error) {
 	if estoque == nil {
-		return nil
+		return 0, nil
 	}
+	faturado := make(map[int64]decimal.Decimal, len(baixa.PorLinhaDoPedido))
+	for linha, qtd := range baixa.PorLinhaDoPedido {
+		faturado[linha] = qtd
+	}
+	jaBaixado := 0
 	for _, it := range ship.Items {
 		wh := int64(0)
 		if it.WarehouseID != nil {
 			wh = *it.WarehouseID
 		}
 		qty := it.Quantity
+		if !qty.IsPositive() {
+			continue
+		}
+		switch {
+		case baixa.NotaVinculadaBaixou:
+			qty = decimal.Zero
+		case it.SalesOrderItemCode != nil:
+			if f := faturado[*it.SalesOrderItemCode]; f.IsPositive() {
+				coberto := decimal.Min(qty, f)
+				faturado[*it.SalesOrderItemCode] = f.Sub(coberto)
+				qty = qty.Sub(coberto)
+			}
+		}
+		if !qty.Equal(it.Quantity) {
+			jaBaixado++
+		}
 		if !qty.IsPositive() {
 			continue
 		}
@@ -529,10 +571,10 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 			if errors.Is(err, stockrepository.ErrAlmoxSemReserva) {
 				continue
 			}
-			return fmt.Errorf("reservando o item %d do romaneio: %w", it.ItemCode, err)
+			return 0, fmt.Errorf("reservando o item %d do romaneio: %w", it.ItemCode, err)
 		}
 	}
-	return nil
+	return jaBaixado, nil
 }
 
 // releaseReservations baixa (no despacho) ou cancela (no cancelamento) as

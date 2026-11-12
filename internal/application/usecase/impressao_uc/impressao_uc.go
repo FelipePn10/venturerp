@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/shopspring/decimal"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
@@ -23,6 +25,9 @@ type Consultas interface {
 	PedidoVenda(ctx context.Context, t Tenant, code int64) (*PedidoVenda, error)
 	NotaEntrada(ctx context.Context, t Tenant, id int64) (*NotaEntrada, error)
 	Titulos(ctx context.Context, t Tenant, receber bool, f FiltroTitulos) ([]Titulo, error)
+	// RotulosContabeis devolve "código descrição" do plano de contas e do
+	// centro de custo filtrados, para o cabeçalho do PDF.
+	RotulosContabeis(ctx context.Context, t Tenant, plano, centro *int64) (string, string, error)
 	ContasBancarias(ctx context.Context, t Tenant) ([]ContaBancaria, error)
 	PlanoMateriais(ctx context.Context, t Tenant, plano int64) (*PlanoMateriais, error)
 	Capacidade(ctx context.Context, t Tenant, plano int64) (*Capacidade, error)
@@ -147,7 +152,11 @@ func (uc *UseCase) Titulos(ctx context.Context, receber bool, f FiltroTitulos) (
 	if err != nil {
 		return nil, err
 	}
-	d := Titulos{Cabecalho: cab, Receber: receber, Titulos: lista, Referencia: cab.Gerado, Filtro: descreverFiltro(f)}
+	plano, centro, err := uc.Consultas.RotulosContabeis(ctx, t, f.PlanoContasID, f.CentroCustoID)
+	if err != nil {
+		return nil, err
+	}
+	d := Titulos{Cabecalho: cab, Receber: receber, Titulos: lista, Referencia: cab.Gerado, Filtro: descreverFiltro(f, plano, centro)}
 	if receber {
 		if d.Contas, err = uc.Consultas.ContasBancarias(ctx, t); err != nil {
 			return nil, err
@@ -160,8 +169,32 @@ func (uc *UseCase) Titulos(ctx context.Context, receber bool, f FiltroTitulos) (
 	return &Arquivo{nome, uc.Gerador.Titulos(d)}, nil
 }
 
-func descreverFiltro(f FiltroTitulos) string {
+// reais formata o valor do filtro como na tela: 1.500,00.
+func reais(v *decimal.Decimal) string {
+	t := v.Abs().StringFixed(2)
+	inteiro, cent := t[:len(t)-3], t[len(t)-2:]
+	var b strings.Builder
+	for i, r := range inteiro {
+		if i > 0 && (len(inteiro)-i)%3 == 0 {
+			b.WriteByte('.')
+		}
+		b.WriteRune(r)
+	}
+	sinal := ""
+	if v.IsNegative() {
+		sinal = "-"
+	}
+	return sinal + b.String() + "," + cent
+}
+
+func descreverFiltro(f FiltroTitulos, plano, centro string) string {
 	var p []string
+	if plano == "" {
+		plano = "não cadastrado"
+	}
+	if centro == "" {
+		centro = "não cadastrado"
+	}
 	if f.De != nil || f.Ate != nil {
 		de, ate := "início", "hoje em diante"
 		if f.De != nil {
@@ -170,9 +203,46 @@ func descreverFiltro(f FiltroTitulos) string {
 		if f.Ate != nil {
 			ate = f.Ate.Format("02/01/2006")
 		}
-		p = append(p, "vencimento de "+de+" a "+ate)
+		base := "vencimento"
+		if f.PorEmissao {
+			base = "emissão"
+		}
+		p = append(p, base+" de "+de+" a "+ate)
 	}
-	if f.SomenteAbertos {
+	if f.Situacao != "" {
+		p = append(p, "situação "+strings.ToLower(f.Situacao))
+	}
+	if f.Documento != "" {
+		p = append(p, "documento contendo "+f.Documento)
+	}
+	if f.TipoDocumento != "" {
+		p = append(p, "tipo "+f.TipoDocumento)
+	}
+	if f.Aprovacao != "" {
+		p = append(p, "aprovação "+strings.ToLower(f.Aprovacao))
+	}
+	if f.PlanoContasID != nil {
+		p = append(p, "plano de contas "+plano)
+	}
+	if f.CentroCustoID != nil {
+		p = append(p, "centro de custo "+centro)
+	}
+	if f.PedidoID != nil {
+		p = append(p, fmt.Sprintf("pedido de venda %d", *f.PedidoID))
+	}
+	if f.ValorMinimo != nil || f.ValorMaximo != nil {
+		switch {
+		case f.ValorMaximo == nil:
+			p = append(p, "valor a partir de "+reais(f.ValorMinimo))
+		case f.ValorMinimo == nil:
+			p = append(p, "valor até "+reais(f.ValorMaximo))
+		default:
+			p = append(p, "valor de "+reais(f.ValorMinimo)+" a "+reais(f.ValorMaximo))
+		}
+	}
+	if f.SomenteVencidos {
+		p = append(p, "somente vencidos")
+	} else if f.SomenteAbertos {
 		p = append(p, "somente em aberto")
 	}
 	if len(p) == 0 {

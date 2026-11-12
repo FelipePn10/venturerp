@@ -50,6 +50,8 @@ type CompleteProductionOrderUseCase struct {
 	// Structure is optional. When set with StockRepo, completing the order also
 	// receives the item's BOM co-products / returnable scrap into stock.
 	Structure coproductReader
+	// Perdas lê a fórmula de perdas (parâmetro 20), a mesma do MRP. Opcional.
+	Perdas LeitorDaFormulaDePerda
 }
 
 func (uc *CompleteProductionOrderUseCase) Execute(
@@ -162,6 +164,10 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				}
 				children = structentity.SelectPrimarySubstituteComponents(lidos)
 			}
+			formula, ferr := formulaDePerda(ctx, uc.Perdas)
+			if ferr != nil {
+				return nil, ferr
+			}
 			// OF de beneficiamento (estrutura com material do cliente): o produto
 			// processado é do CLIENTE e volta pela nota de retorno (CFOP 5902).
 			// A entrega fica registrada, sem entrada no estoque próprio — nem do
@@ -215,7 +221,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				if child.IsCoproduct && beneficiamento {
 					continue // sucata do material do cliente é do cliente
 				}
-				if !child.IsCoproduct || !child.Quantity.IsPositive() {
+				if !child.IsCoproduct || !child.QuantidadeNaUnidadeDeEstoque().IsPositive() {
 					automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
 					if infoErr != nil {
 						return nil, fmt.Errorf("lendo a baixa automática do componente: %w", infoErr)
@@ -223,14 +229,18 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 					if !automatic || child.IsCoproduct {
 						continue
 					}
-					componentQty := child.Quantity
+					// Na unidade de estoque, como a OF e o apontamento: a
+					// quantidade crua da estrutura pode estar em outra unidade
+					// (g contra kg) e a baixa sairia mil vezes maior.
+					porUnidade := child.QuantidadeNaUnidadeDeEstoque()
+					componentQty := porUnidade
 					if !child.IsFixedQty {
-						componentQty = componentQty.Mul(qty)
+						componentQty = porUnidade.Mul(qty)
 						if conheceBaixas {
-							componentQty = child.Quantity.Mul(entregueAntes.Add(qty))
+							componentQty = porUnidade.Mul(entregueAntes.Add(qty))
 						}
 					}
-					componentQty = structentity.QuantidadeComPerdaDecimal(componentQty, child.LossPercentage, structentity.FormulaPerdaPadrao)
+					componentQty = structentity.QuantidadeComPerdaDecimal(componentQty, child.LossPercentage, formula)
 					if conheceBaixas {
 						// Já saiu pelo apontamento ou por entrega anterior: não sai de novo.
 						componentQty = quantidadeAindaABaixar(componentQty, baixado[child.ChildCode])
@@ -248,7 +258,7 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 					ItemCode:      child.ChildCode,
 					WarehouseID:   *warehouseID,
 					MovementType:  stockentity.MovementTypeIn,
-					Quantity:      child.Quantity.Mul(qty),
+					Quantity:      child.QuantidadeNaUnidadeDeEstoque().Mul(qty), // unidade de estoque, como o custo
 					ReferenceType: &refType,
 					ReferenceCode: &refCode,
 					CreatedBy:     ator,

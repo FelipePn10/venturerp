@@ -304,6 +304,36 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	return out, nil
 }
 
+// ConferirEstoqueParaTransmitir aplica na transmissão a conferência de saldo
+// que a prévia já mostrava. A prévia avisava ("a baixa seria recusada depois da
+// autorização") mas a transmissão não olhava: quem autorizava direto ficava com
+// a nota na SEFAZ e o estoque sem baixar, preso numa pendência. Devolve a
+// primeira falta como recusa, com o que fazer.
+func (uc *PreviaNFeUseCase) ConferirEstoqueParaTransmitir(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem) error {
+	if uc == nil || uc.Efeitos == nil || uc.Saldos == nil {
+		return nil
+	}
+	efeitosTipo, err := efeitosDaNota(ctx, uc.TiposNota, exit)
+	if err != nil {
+		return err
+	}
+	if !efeitosTipo.MovimentaEstoque || efeitosTipo.Tipo == entity.TipoNotaVendaConsignacao {
+		return nil
+	}
+	faltas, err := uc.faltasDeEstoque(ctx, exit, items)
+	if err != nil {
+		return err
+	}
+	if len(faltas) == 0 {
+		return nil
+	}
+	msg := faltas[0].Mensagem + " — " + faltas[0].ComoResolver
+	if len(faltas) > 1 {
+		msg += fmt.Sprintf(" (e mais %d item(ns) na mesma situação)", len(faltas)-1)
+	}
+	return errorsuc.NewValidationError(msg)
+}
+
 // faltasDeEstoque soma, por item e almoxarifado, o que a nota vai baixar (na
 // unidade de estoque) e compara com o saldo. Unidade sem conversão é apontada
 // à parte (quantidadesEmEstoque), então aqui ela é ignorada.

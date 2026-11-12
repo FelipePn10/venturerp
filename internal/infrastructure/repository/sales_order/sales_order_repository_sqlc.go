@@ -943,3 +943,15 @@ func rowItemToEntity(row sqlc.SalesOrderItem) *entity.SalesOrderItem {
 
 	return item
 }
+
+// CancelarLinhasEmAberto cancela o saldo não atendido das linhas do pedido.
+func (r *SalesOrderRepositorySQLC) CancelarLinhasEmAberto(ctx context.Context, code int64) error {
+	enterpriseCode, err := tenant.Code(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := r.q.CancelOpenSalesOrderItems(ctx, sqlc.CancelOpenSalesOrderItemsParams{Code: code, TenantEnterpriseCode: enterpriseCode}); err != nil {
+		return fmt.Errorf("cancelando as linhas do pedido %d: %w", code, err)
+	}
+	return nil
+}

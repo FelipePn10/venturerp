@@ -39,6 +39,102 @@ type exceptionBasis struct {
 	horizonte []*entity.PlannedOrderSuggestion
 	// demandas: demandas independentes vencidas ou atrasadas.
 	demandas []avisoDeDemanda
+	// naoPlanejados: itens com necessidade líquida que o cadastro deixa fora da
+	// geração de ordens, na ordem em que apareceram.
+	naoPlanejados      map[int64]*itemNaoPlanejado
+	ordemNaoPlanejados []int64
+	// inicioPassado: sugestões que precisariam ter começado antes de hoje.
+	inicioPassado []sugestaoAtrasada
+}
+
+// itemNaoPlanejado soma a falta de um item que o MRP não pode cobrir sozinho.
+type itemNaoPlanejado struct {
+	quantidade decimal.Decimal
+	primeira   time.Time
+	motivo     string
+}
+
+// sugestaoAtrasada é a sugestão cujo início calculado já passou.
+type sugestaoAtrasada struct {
+	sugestao *entity.PlannedOrderSuggestion
+	hoje     time.Time
+}
+
+// addNotPlanned registra a necessidade líquida de um item que não gera ordem.
+func (b *exceptionBasis) addNotPlanned(item int64, data time.Time, quantidade decimal.Decimal, motivo string) {
+	if b == nil || !quantidade.IsPositive() || motivo == "" {
+		return
+	}
+	if b.naoPlanejados == nil {
+		b.naoPlanejados = map[int64]*itemNaoPlanejado{}
+	}
+	atual, ja := b.naoPlanejados[item]
+	if !ja {
+		b.naoPlanejados[item] = &itemNaoPlanejado{quantidade: quantidade, primeira: data, motivo: motivo}
+		b.ordemNaoPlanejados = append(b.ordemNaoPlanejados, item)
+		return
+	}
+	atual.quantidade = atual.quantidade.Add(quantidade)
+	if data.Before(atual.primeira) {
+		atual.primeira = data
+	}
+}
+
+// addPastStart registra a sugestão gravada cujo início já passou. A empurrada
+// pelo horizonte firme fica de fora: ela já tem a mensagem dela e o início foi
+// recolocado no futuro.
+func (b *exceptionBasis) addPastStart(s *entity.PlannedOrderSuggestion, hoje time.Time) {
+	if b == nil || s == nil || s.Code <= 0 || s.StartDate == nil || s.InicioPedido != nil || !suppliesItem(s) {
+		return
+	}
+	if !diaDe(*s.StartDate).Before(diaDe(hoje)) {
+		return
+	}
+	b.inicioPassado = append(b.inicioPassado, sugestaoAtrasada{sugestao: s, hoje: hoje})
+}
+
+// diaDe zera a hora para comparar só a data, sem depender do fuso de cada lado.
+func diaDe(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+// notPlannedMessages: uma mensagem por item com necessidade e sem ordem.
+func (b *exceptionBasis) notPlannedMessages() []*entity.MRPExceptionMessage {
+	out := make([]*entity.MRPExceptionMessage, 0, len(b.ordemNaoPlanejados))
+	for _, item := range b.ordemNaoPlanejados {
+		n := b.naoPlanejados[item]
+		data := n.primeira
+		out = append(out, &entity.MRPExceptionMessage{
+			ItemCode: item, MessageType: entity.ExceptionNotPlanned, SuggestedDate: &data,
+			Description: fmt.Sprintf(
+				"%s: faltam %s un. a partir de %s e o MRP não gerou ordem porque o item %s. Providencie o material à mão ou revise o tipo do item no cadastro.",
+				b.rotulo(item), qtd(n.quantidade), n.primeira.Format("02/01/2006"), n.motivo),
+		})
+	}
+	return out
+}
+
+// pastStartMessages: uma mensagem por sugestão que já devia ter começado, com
+// a data mais cedo em que ela pode chegar se começar hoje.
+func (b *exceptionBasis) pastStartMessages() []*entity.MRPExceptionMessage {
+	out := make([]*entity.MRPExceptionMessage, 0, len(b.inicioPassado))
+	for _, a := range b.inicioPassado {
+		s := a.sugestao
+		code, tipo := s.Code, "MRP_SUGGESTION"
+		inicio, chegada, hoje := diaDe(*s.StartDate), diaDe(s.NeedDate), diaDe(a.hoje)
+		atraso := int(math.Round(hoje.Sub(inicio).Hours() / 24))
+		// Mantido o prazo, começar hoje entrega com o mesmo número de dias de
+		// atraso em relação à data pedida.
+		possivel := chegada.AddDate(0, 0, atraso)
+		out = append(out, &entity.MRPExceptionMessage{
+			ItemCode: s.ItemCode, MessageType: entity.ExceptionPastStart, SourceCode: &code, SourceType: &tipo,
+			SuggestedDate: &possivel,
+			Description: fmt.Sprintf(
+				"%s: a sugestão de %s un. precisava começar em %s (%d dia(s) atrás) para chegar em %s. Começando hoje, chega por volta de %s. Firme já, acelere o fornecedor/produção ou renegocie a data com o cliente.",
+				b.rotulo(s.ItemCode), qtd(s.Quantity), inicio.Format("02/01/2006"), atraso, chegada.Format("02/01/2006"), possivel.Format("02/01/2006")),
+		})
+	}
+	return out
 }
 
 // demandMessages: a demanda de estoque que venceu sem venda e a de finalidade
@@ -164,6 +260,18 @@ func (b *exceptionBasis) itens() []int64 {
 		if !vistos[a.demanda.ItemCode] {
 			vistos[a.demanda.ItemCode] = true
 			out = append(out, a.demanda.ItemCode)
+		}
+	}
+	for _, item := range b.ordemNaoPlanejados {
+		if !vistos[item] {
+			vistos[item] = true
+			out = append(out, item)
+		}
+	}
+	for _, a := range b.inicioPassado {
+		if item := a.sugestao.ItemCode; !vistos[item] {
+			vistos[item] = true
+			out = append(out, item)
 		}
 	}
 	return out

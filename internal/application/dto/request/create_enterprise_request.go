@@ -35,15 +35,17 @@ type IdentificacaoEmpresaDTO struct {
 	RazaoSocial       string `json:"razao_social"`
 	NomeFantasia      string `json:"nome_fantasia"`
 	InscricaoEstadual string `json:"inscricao_estadual"`
-	RegimeTributario  string `json:"regime_tributario"`
-	UF                string `json:"uf"`
-	Municipio         string `json:"municipio"`
-	CodigoMunicipio   string `json:"codigo_municipio"`
-	CEP               string `json:"cep"`
-	Logradouro        string `json:"logradouro"`
-	Numero            string `json:"numero"`
-	Complemento       string `json:"complemento"`
-	Bairro            string `json:"bairro"`
-	Telefone          string `json:"telefone"`
-	Email             string `json:"email"`
+	// InscricaoMunicipal: ausente mantém a gravada; "" apaga.
+	InscricaoMunicipal *string `json:"inscricao_municipal,omitempty"`
+	RegimeTributario   string  `json:"regime_tributario"`
+	UF                 string  `json:"uf"`
+	Municipio          string  `json:"municipio"`
+	CodigoMunicipio    string  `json:"codigo_municipio"`
+	CEP                string  `json:"cep"`
+	Logradouro         string  `json:"logradouro"`
+	Numero             string  `json:"numero"`
+	Complemento        string  `json:"complemento"`
+	Bairro             string  `json:"bairro"`
+	Telefone           string  `json:"telefone"`
+	Email              string  `json:"email"`
 }

@@ -648,7 +648,8 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		        COALESCE(cep,''), telefone,
 		        logo, logo_mime, brand_color,
 		        created_at, updated_at, updated_by,
-		        exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao
+		        exigir_regra_icms_ipi, aliquota_credito_simples, cbenef_diferimento, obs_retorno_industrializacao, cbenef_suspensao,
+		        inscricao_municipal
 		 FROM public.fiscal_configs WHERE enterprise_id=$1`, enterpriseID,
 	).Scan(&cfg.ID, &cfg.EnterpriseID, &cfg.CnpjEmpresa, &cfg.RazaoSocial, &cfg.TradeName, &cfg.Email, &cfg.IEEmpresa, &cfg.RegimeTributario, &cfg.UFEmpresa,
 		&cfg.IcmsInternoAliquota, &cfg.IcmsDiferimentoPercentual,
@@ -659,7 +660,8 @@ func (r *FiscalRepositoryPG) GetFiscalConfig(ctx context.Context) (*entity.Fisca
 		&cfg.CEP, &cfg.Telefone,
 		&cfg.Logo, &cfg.LogoMime, &cfg.BrandColor,
 		&cfg.CreatedAt, &cfg.UpdatedAt, &cfg.UpdatedBy,
-		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento, &cfg.ObsRetornoIndustrializacao, &cfg.CBenefSuspensao)
+		&cfg.ExigirRegraICMSIPI, &cfg.AliquotaCreditoSimples, &cfg.CBenefDiferimento, &cfg.ObsRetornoIndustrializacao, &cfg.CBenefSuspensao,
+		&cfg.InscricaoMunicipal)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError("parametrização fiscal não encontrada")

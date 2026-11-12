@@ -80,15 +80,73 @@ func soltarReservaDoPedidoTx(ctx context.Context, tx pgx.Tx, empresa, pedido, it
 }
 
 // reservarParaPedidoTx devolve a reserva ao pedido, do jeito que a nota a consome.
+// A onda solta a reserva do pedido por produto; na volta ela é repartida pelas
+// LINHAS desse produto (na ordem do pedido, até o saldo em aberto de cada uma
+// que ainda não está reservado), como a confirmação grava. Gravava o código do
+// produto em reference_item_code: com o produto em mais de uma linha, cancelar
+// ou reduzir uma linha não achava a reserva dela. O que passar do saldo das
+// linhas segue com o código do produto, como antes.
 func reservarParaPedidoTx(ctx context.Context, tx pgx.Tx, empresa, pedido, item int64, mask string, almox int64, qtd decimal.Decimal, ator uuid.UUID) error {
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO stock_reservations (item_code, mask, warehouse_id, quantity, reference_type, reference_code,
-		     reference_item_code, status, created_by, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$1,'ACTIVE',$7,$8)`,
-		item, mask, almox, qtd, entity.ReferenceTypeSalesOrder, pedido, ator, empresa); err != nil {
-		return fmt.Errorf("restoring order reservation: %w", err)
+	partes, err := linhasParaReservaTx(ctx, tx, empresa, pedido, item, mask, qtd)
+	if err != nil {
+		return err
+	}
+	for _, p := range partes {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO stock_reservations (item_code, mask, warehouse_id, quantity, reference_type, reference_code,
+			     reference_item_code, status, created_by, enterprise_id)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,'ACTIVE',$8,$9)`,
+			item, mask, almox, p.qtd, entity.ReferenceTypeSalesOrder, pedido, p.ref, ator, empresa); err != nil {
+			return fmt.Errorf("restoring order reservation: %w", err)
+		}
 	}
 	return adjustReservedTx(ctx, tx, empresa, item, mask, almox, qtd)
+}
+
+type parteDaReserva struct {
+	ref int64
+	qtd decimal.Decimal
+}
+
+// linhasParaReservaTx reparte qtd pelas linhas em aberto do produto no pedido.
+func linhasParaReservaTx(ctx context.Context, tx pgx.Tx, empresa, pedido, item int64, mask string, qtd decimal.Decimal) ([]parteDaReserva, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT i.code,
+		        GREATEST(i.requested_qty - i.attended_qty - i.cancelled_qty
+		                 - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+		                              WHERE r.enterprise_id = $1 AND r.reference_type = $5 AND r.reference_code = i.sales_order_code
+		                                AND r.reference_item_code = i.code AND r.item_code = i.item_code AND r.status = 'ACTIVE'), 0), 0)
+		   FROM sales_order_items i
+		   JOIN sales_orders o ON o.code = i.sales_order_code
+		   JOIN enterprise e ON e.code = o.enterprise_code AND e.id = $1
+		  WHERE i.sales_order_code = $2 AND i.item_code = $3 AND COALESCE(i.mask, '') = $4
+		    AND i.is_active AND i.status IN ('OPEN', 'PARTIAL')
+		  ORDER BY i.sequence, i.code`,
+		empresa, pedido, item, mask, entity.ReferenceTypeSalesOrder)
+	if err != nil {
+		return nil, fmt.Errorf("reading order lines for the reservation: %w", err)
+	}
+	defer rows.Close()
+	var partes []parteDaReserva
+	resta := qtd
+	for rows.Next() {
+		var code int64
+		var falta decimal.Decimal
+		if err := rows.Scan(&code, &falta); err != nil {
+			return nil, fmt.Errorf("reading order lines for the reservation: %w", err)
+		}
+		if q := decimal.Min(falta, resta); q.IsPositive() {
+			partes = append(partes, parteDaReserva{ref: code, qtd: q})
+			resta = resta.Sub(q)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading order lines for the reservation: %w", err)
+	}
+	if resta.IsPositive() {
+		partes = append(partes, parteDaReserva{ref: item, qtd: resta})
+	}
+	return partes, nil
 }
 
 func (r *StockRepositorySQLC) linhasDaOnda(ctx context.Context, empresa, ondaID int64) ([]entity.LinhaOnda, error) {

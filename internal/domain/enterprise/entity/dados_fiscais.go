@@ -11,21 +11,24 @@ import (
 // lugar só, a VEMP0100; a configuração fiscal (alíquotas, Focus, contas) fica
 // na VFIS0100 e não mexe nela.
 type DadosFiscais struct {
-	CNPJ             string
-	RazaoSocial      string
-	NomeFantasia     string
-	IE               string
-	RegimeTributario string // "1" Simples, "2" Presumido, "3" Real
-	UF               string
-	Municipio        string
-	CodigoMunicipio  string
-	CEP              string
-	Logradouro       string
-	Numero           string
-	Complemento      string
-	Bairro           string
-	Telefone         string
-	Email            string
+	CNPJ         string
+	RazaoSocial  string
+	NomeFantasia string
+	IE           string
+	// InscricaoMunicipal: a do prestador na NFS-e. nil = mantém a gravada (a
+	// tela que não manda o campo não apaga o que já existe); "" apaga.
+	InscricaoMunicipal *string
+	RegimeTributario   string // "1" Simples, "2" Presumido, "3" Real
+	UF                 string
+	Municipio          string
+	CodigoMunicipio    string
+	CEP                string
+	Logradouro         string
+	Numero             string
+	Complemento        string
+	Bairro             string
+	Telefone           string
+	Email              string
 }
 
 // PrefixoIBGEDaUF: os dois primeiros dígitos do código IBGE do município são o
@@ -69,6 +72,13 @@ func soDigitos(s string) string {
 func (d *DadosFiscais) Conferir() error {
 	d.CNPJ, d.CEP, d.CodigoMunicipio, d.IE = soDigitos(d.CNPJ), soDigitos(d.CEP), soDigitos(d.CodigoMunicipio), strings.TrimSpace(d.IE)
 	d.RazaoSocial, d.NomeFantasia = strings.TrimSpace(d.RazaoSocial), strings.TrimSpace(d.NomeFantasia)
+	if d.InscricaoMunicipal != nil {
+		im := strings.TrimSpace(*d.InscricaoMunicipal)
+		if len(im) > 20 {
+			return domainerr.NewValidation("inscrição municipal com até 20 caracteres")
+		}
+		d.InscricaoMunicipal = &im
+	}
 	d.UF = strings.ToUpper(strings.TrimSpace(d.UF))
 	d.RegimeTributario = strings.TrimSpace(d.RegimeTributario)
 	if len(d.CNPJ) != 14 {

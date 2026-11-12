@@ -4427,6 +4427,7 @@ type ContasReceber struct {
 	CondicaoPagamentoID *int64
 	EnterpriseID        *int64
 	FornecedorID        *int64
+	NfseID              *int64
 }
 
 type ContratosVenda struct {
@@ -5403,6 +5404,7 @@ type FiscalConfig struct {
 	CbenefDiferimento          pgtype.Text
 	ObsRetornoIndustrializacao pgtype.Text
 	CbenefSuspensao            pgtype.Text
+	InscricaoMunicipal         pgtype.Text
 }
 
 type FiscalCte struct {
@@ -7781,6 +7783,8 @@ type Nfse struct {
 	CreatedAt                 pgtype.Timestamptz
 	UpdatedAt                 pgtype.Timestamptz
 	EnterpriseID              int64
+	CustomerCode              *int64
+	DataVencimento            pgtype.Date
 }
 
 type NonConformance struct {

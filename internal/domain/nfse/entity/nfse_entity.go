@@ -61,10 +61,15 @@ type NFSe struct {
 	URL               *string `json:"url,omitempty"`
 	XMLPath           *string `json:"xml_path,omitempty"`
 
-	SalesOrderCode *int64    `json:"sales_order_code,omitempty"`
-	Notes          *string   `json:"notes,omitempty"`
-	IsActive       bool      `json:"is_active"`
-	CreatedBy      uuid.UUID `json:"created_by"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	SalesOrderCode *int64 `json:"sales_order_code,omitempty"`
+	// CustomerCode: o cliente do título a receber que a autorização gera.
+	// Sem cliente, a nota não gera título (lance-o no contas a receber).
+	CustomerCode *int64 `json:"customer_code,omitempty"`
+	// DataVencimento do título; vazio vale emissão + 30 dias, como na NF-e.
+	DataVencimento *time.Time `json:"data_vencimento,omitempty"`
+	Notes          *string    `json:"notes,omitempty"`
+	IsActive       bool       `json:"is_active"`
+	CreatedBy      uuid.UUID  `json:"created_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }

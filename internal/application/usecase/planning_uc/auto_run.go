@@ -3,6 +3,7 @@ package planning_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -113,6 +114,11 @@ type AutoRunPlanningUseCase struct {
 	Session func(context.Context, AutoRunSettings) context.Context
 	// Now permite fixar o relógio nos testes.
 	Now func() time.Time
+	// AoFalhar recebe a falha da janela de uma empresa. A execução das demais
+	// continua, mas a falha precisa aparecer em algum lugar: a que acontece
+	// antes de abrir o histórico (cadeado ocupado, plano sem número inicial)
+	// não deixa registro nenhum e se repete a cada minuto.
+	AoFalhar func(s AutoRunSettings, err error)
 }
 
 func (uc *AutoRunPlanningUseCase) now() time.Time {
@@ -137,6 +143,9 @@ func (uc *AutoRunPlanningUseCase) RunDue(ctx context.Context) (int, error) {
 		}
 		if _, err := uc.Run(ectx, s, TriggerAutomatico, s.UpdatedBy); err != nil {
 			// Uma empresa com problema não pode impedir as demais.
+			if uc.AoFalhar != nil {
+				uc.AoFalhar(s, err)
+			}
 			continue
 		}
 		executadas++
@@ -221,9 +230,9 @@ func (uc *AutoRunPlanningUseCase) Run(
 	rec.MRPOrders = result.MRPOrders
 	rec.CRPOverload = result.CRPOverload
 	rec.Viable = &viavel
-	if len(result.Notes) > 0 {
-		rec.Notes = result.Notes[0]
-	}
+	// Todas as observações do ciclo: guardar só a primeira escondia a sobrecarga
+	// do CRP atrás do aviso de cadastro incompleto.
+	rec.Notes = strings.Join(result.Notes, " ")
 	if err := uc.Repo.FinishRun(ctx, id, rec); err != nil {
 		return nil, err
 	}

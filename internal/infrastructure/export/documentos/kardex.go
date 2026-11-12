@@ -17,13 +17,21 @@ var ardosia = cor{R: 51, G: 65, B: 85}
 func rotuloMovimento(t string) string {
 	switch t {
 	case "IN":
-		return "Entrada (NF)"
+		return "Entrada"
 	case "OUT":
 		return "Saída"
 	case "REP":
 		return "Requisição p/ OF"
 	case "EP":
 		return "Produção (entrada)"
+	case "EPP":
+		return "Produção planejada (entrada)"
+	case "EPE":
+		return "Excedente de produção"
+	case "ADJUSTMENT":
+		return "Ajuste de inventário"
+	case "AJUSTE_CUSTO":
+		return "Ajuste de custo"
 	case "ENTRADA":
 		return "Ajuste de entrada"
 	case "SAIDA":
@@ -94,7 +102,7 @@ func (Gerador) Kardex(d uc.Kardex) []byte {
 				sai = sai.Add(m.Quantidade)
 			}
 		}
-		v := it.SaldoFinal.Mul(it.CustoMedio).Round(2)
+		v := it.ValorFinal
 		totalValor = totalValor.Add(v)
 		rs.linha([]string{it.Codigo, it.Descricao, it.UM, qtd(it.SaldoInicial), qtd(ent), qtd(sai), qtd(it.SaldoFinal), num(it.CustoMedio, 4), num(v, 2)}, reg, tinta, nil)
 	}
@@ -120,19 +128,23 @@ func (Gerador) Kardex(d uc.Kardex) []byte {
 		saldo, valor := it.SaldoInicial, it.CustoInicial
 		t.linha([]string{data(d.De), "", "Saldo anterior", "", "", "", qtd(saldo), "", num(valor, 2)}, ita, cinza, nil)
 		for _, m := range it.Movimentos {
+			// O valor vem com sinal do banco; o ajuste de custo não tem quantidade.
 			e, s := "", ""
-			if m.Entrada {
+			switch {
+			case m.Quantidade.IsZero():
+			case m.Entrada:
 				e = qtd(m.Quantidade)
-				saldo, valor = saldo.Add(m.Quantidade), valor.Add(m.Quantidade.Mul(m.Custo))
-			} else {
+				saldo = saldo.Add(m.Quantidade)
+			default:
 				s = qtd(m.Quantidade)
-				saldo, valor = saldo.Sub(m.Quantidade), valor.Sub(m.Quantidade.Mul(m.Custo))
+				saldo = saldo.Sub(m.Quantidade)
 			}
-			topo := t.linha([]string{m.Data.Format("02/01/06 15:04"), m.Deposito, "", juntar(" · ", m.Origem, rotulo("lote ", m.Lote)), e, s,
+			valor = valor.Add(m.Valor)
+			topo := t.linha([]string{m.Data.Format("02/01/2006"), m.Deposito, "", juntar(" · ", m.Origem, rotulo("lote ", m.Lote)), e, s,
 				qtd(saldo), num(m.Custo, 4), num(valor, 2)}, reg, tinta, nil)
 			f.texto(t.xCol(2)+13, topo+10.2, reg, 7.2, tinta, fit(rotuloMovimento(m.Tipo), reg, 7.2, t.ws[2]-16))
 			c, sinal := verde, "+"
-			if !m.Entrada {
+			if !m.Entrada && !m.Quantidade.IsZero() {
 				c, sinal = verm, "−"
 			}
 			if sinal == "−" {
@@ -142,7 +154,7 @@ func (Gerador) Kardex(d uc.Kardex) []byte {
 				f.p.FillRect(t.xCol(2)+5.85, topo+4.75, 1.3, 5, c)
 			}
 		}
-		t.linha([]string{data(d.Ate), "", "Saldo final", "", "", "", qtd(it.SaldoFinal), num(it.CustoMedio, 4), num(it.SaldoFinal.Mul(it.CustoMedio), 2)}, neg, ac, &fundo)
+		t.linha([]string{data(d.Ate), "", "Saldo final", "", "", "", qtd(it.SaldoFinal), num(it.CustoMedio, 4), num(it.ValorFinal, 2)}, neg, ac, &fundo)
 		f.y += 14
 	}
 	return doc.Render()

@@ -235,3 +235,31 @@ func TestUpdateSettingsValidaEGravaResponsavel(t *testing.T) {
 		t.Fatalf("sem permissão: %v", err)
 	}
 }
+
+// A janela de uma empresa que falha não derruba as demais, mas a falha é
+// entregue a quem cuida do log — antes ela era engolida em silêncio.
+func TestRunDueAvisaAFalhaDeUmaEmpresaESegueComAsOutras(t *testing.T) {
+	quem := uuid.New()
+	semPlano, boa := settings(), settings()
+	semPlano.PlanCode = 0 // falha antes de abrir o histórico
+	boa.EnterpriseID = 2
+	semPlano.UpdatedBy, boa.UpdatedBy = &quem, &quem
+	repo := &repoFalso{pendentes: []AutoRunSettings{semPlano, boa}}
+	var falhas []int64
+	uc := &AutoRunPlanningUseCase{
+		Pipeline: &pipelineFalso{}, Repo: repo,
+		AoFalhar: func(s AutoRunSettings, err error) {
+			if err == nil {
+				t.Fatal("AoFalhar chamado sem erro")
+			}
+			falhas = append(falhas, s.EnterpriseID)
+		},
+	}
+	n, err := uc.RunDue(context.Background())
+	if err != nil || n != 1 {
+		t.Fatalf("executadas = %d (%v), esperado 1", n, err)
+	}
+	if len(falhas) != 1 || falhas[0] != 1 {
+		t.Fatalf("falhas avisadas = %v, esperado só a empresa 1", falhas)
+	}
+}

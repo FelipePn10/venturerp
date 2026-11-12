@@ -173,3 +173,15 @@ type ShipmentRepository interface {
 	SeparationMonitor(ctx context.Context, f LoadFilter) ([]*SeparationMonitorRow, error)
 	LogisticPanel(ctx context.Context) (*LogisticPanelSummary, error)
 }
+
+// BaixaPelaNFe é o que do romaneio já saiu do estoque com a NF-e: faturar antes
+// de separar é um processo válido, e a nota autorizada baixa o estoque na hora.
+type BaixaPelaNFe struct {
+	// NotaVinculadaBaixou: a NF-e ligada ao romaneio está autorizada e já
+	// baixou o estoque — nada do romaneio tem o que reservar.
+	NotaVinculadaBaixou bool
+	// PorLinhaDoPedido: quantidade faturada (nota autorizada que baixou o
+	// estoque) de cada linha do pedido de venda e que nenhum outro romaneio
+	// separado, conferido ou despachado ainda cobre.
+	PorLinhaDoPedido map[int64]decimal.Decimal
+}

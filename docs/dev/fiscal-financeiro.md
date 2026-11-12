@@ -1360,6 +1360,13 @@ procurado pelo CNPJ), `itens[].plano_contas_id`, `itens[].centro_custo_id` e
 `parcelas` (`[{numero, data_vencimento, valor, documento?}]`; vazio = uma
 parcela para 30 dias). A nota nasce com a mesma conferência da importação.
 
+`itens[].aliq_icms` e `itens[].aliq_ipi` são gravados em fração, como os do
+XML, e aceitam as duas formas: a fração que a tela do desktop manda (`0.18`) e o
+percentual da nota (`18`). Com base e valor do imposto, vale a leitura que bate
+com valor ÷ base; sem eles, acima de 1 é percentual. Alíquota zero com base e
+valor informados sai da própria nota (valor ÷ base). Antes a alíquota ia gravada como veio e a conferência
+(base × alíquota) acusava divergência falsa de ICMS e IPI.
+
 ### `GET /api/fiscal/entries/list`
 
 Lista todas as NF-e de entrada.
@@ -3357,6 +3364,10 @@ autorização. Use cases em `nfse_uc`.
 
 Cria a NFS-e em rascunho e **calcula o ISS** (`base = valor_servicos − deducoes`,
 `ISS = base × aliquota_iss`) e o valor líquido (se `iss_retido`, desconta o ISS).
+`aliquota_iss` vai em **fração** (`0.05` = 5%), de 0 a 0,05 (teto da LC 116/2003);
+fora disso, ou com deduções negativas ou maiores que o serviço, a NFS-e é recusada (400). Na
+emissão a Focus recebe o percentual (`servico.aliquota: 5`) e o corpo no formato
+da API: `prestador`, `tomador` (endereço em `tomador.endereco`) e `servico`.
 
 **Request:**
 ```json
@@ -3392,6 +3403,22 @@ Transmite a NFS-e para a prefeitura via Focus (escopo `fiscal:authorize`). Monta
 payload ABRASF (prestador da config fiscal + tomador + serviço), faz *poll* até
 estado terminal e, autorizada, grava `numero_nfse`, `codigo_verificacao`, `url` e
 `focus_ref` com `status: "AUTORIZADA"`.
+
+O prestador leva `cnpj`, `codigo_municipio` e `inscricao_municipal` — esta vem de
+`fiscal_configs.inscricao_municipal` (migration `000485`), mantida na
+identificação da empresa (`PUT /api/enterprise/identificacao`, campo
+`inscricao_municipal`; ausente no corpo mantém a gravada, `""` apaga) e também
+aceita no cadastro da empresa. A maioria das prefeituras recusa a nota sem ela.
+**Título a receber (migration `000486`).** A NFS-e aceita `customer_code`
+(cliente do cadastro, conferido na empresa da sessão; o tomador em branco é
+preenchido com o documento e o nome dele) e `data_vencimento` (`AAAA-MM-DD`;
+vazio = emissão + 30 dias, antes da emissão é recusado). Com cliente, a
+autorização gera **um** título pelo `valor_liquido` (serviço menos o ISS
+retido), documento `NFS-e <número>`, ligado por `contas_receber.nfse_id`. O
+título é gravado depois da autorização: se falhar, a nota segue autorizada e a
+resposta pede o lançamento manual (nunca retransmite). O cancelamento é
+recusado com título recebido e cancela o título em aberto junto. Sem cliente, a
+nota não gera título.
 
 ### `POST /api/fiscal/nfse/{code}/cancel`
 

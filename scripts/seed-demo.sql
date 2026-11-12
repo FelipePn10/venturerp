@@ -204,10 +204,14 @@ SELECT ic.code,
   10, 0, '[]'::jsonb, ic.name,
   ic.uom, false, 20,
   jsonb_build_object('gross', ic.weight, 'net', round(ic.weight*0.95, 4), 'unit', 'KG'),
-  CASE ic.kind WHEN 'FINISHED' THEN 2 WHEN 'SERVICE' THEN 4 ELSE 0 END,
+  -- Tipo do item (governanca): 0 fabricado, 1 comprado, 2 de terceiro, 3 serviço.
+  -- Antes o acabado saía como "de terceiro" e a matéria-prima como "fabricado":
+  -- o MRP não gera ordem para item de terceiro, então o demo nunca sugeria nada.
+  CASE ic.kind WHEN 'FINISHED' THEN 0 WHEN 'SERVICE' THEN 3 ELSE 1 END,
   CASE ic.kind WHEN 'FINISHED' THEN 0 ELSE 1 END,
   false,
-  CASE ic.kind WHEN 'FINISHED' THEN 0 ELSE 2 END,
+  -- Tipo de MRP: 0 normal (1 = projeto, planejado à mão; 2 não existe).
+  0,
   CASE ic.kind WHEN 'FINISHED' THEN 0 ELSE 1 END,
   false,
   CASE ic.kind WHEN 'FINISHED' THEN 1 WHEN 'SERVICE' THEN 3 ELSE 0 END
@@ -231,6 +235,30 @@ WHERE f.kind = 'FINISHED';
 INSERT INTO manufacturing_routes (id, code, item_code, alternative, description, situation, is_standard, is_active, created_at, updated_at, created_by)
 SELECT f.code - 10000, f.code - 10000, f.code, 1, 'Roteiro padrão — ' || f.name, 'APROVADA', true, true, :'START_TS', :'START_TS', :'ADMIN'::uuid
 FROM item_catalog f WHERE f.kind = 'FINISHED';
+
+-- Centro de trabalho de cada operação (o tipo de máquina de mesmo número).
+-- Montagem é manual, sem máquina: fica fora dos roteiros do demo.
+UPDATE operations SET default_work_center_id = id WHERE id BETWEEN 1 AND 5;
+
+-- Etapas do roteiro — corte, uma etapa intermediária (dobra, solda ou usinagem)
+-- e pintura. Sem etapas o MRP planejava com prazo zero, o CRP não tinha carga,
+-- o APS não tinha o que sequenciar e firmar a sugestão era recusado.
+INSERT INTO route_operations (route_id, sequence, operation_id, situation, created_at, updated_at)
+SELECT r.id, e.seq, e.op, 'APROVADA', :'START_TS', :'START_TS'
+FROM manufacturing_routes r
+CROSS JOIN LATERAL (VALUES (10, 1), (20, 2 + (r.id % 3)::int), (30, 5)) e(seq, op);
+
+-- Produtividade do acabado em cada máquina dos centros do roteiro dele: é o
+-- que o planejamento usa para escolher a máquina e ocupar a agenda.
+INSERT INTO item_machine_times (item_code, mask, production_time, setup_time, priority, machine_code,
+  production_time_unit, production_base_qty, efficiency_rate)
+SELECT r.item_code, '', round(o.standard_time * 60, 2), round(o.setup_time * 60, 2),
+  row_number() OVER (PARTITION BY r.item_code, m.machine_type_code ORDER BY m.code),
+  m.code, 'MINUTO', 1, m.efficiency_rate
+FROM manufacturing_routes r
+JOIN route_operations ro ON ro.route_id = r.id
+JOIN operations o ON o.id = ro.operation_id
+JOIN machines m ON m.machine_type_code = o.default_work_center_id;
 
 -- ─── 6. Clientes (50) e Fornecedores (35) ────────────────────────────────────
 INSERT INTO customers (id, code, name, trade_name, document_type, document_number, state_registration,

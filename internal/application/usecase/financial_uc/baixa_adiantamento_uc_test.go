@@ -31,6 +31,7 @@ type fakeFinAuth struct {
 }
 
 func (f fakeFinAuth) CanBaixarContaPagar(context.Context) bool   { return f.canPagar }
+func (f fakeFinAuth) CanApproveContaPagar(context.Context) bool  { return f.canPagar }
 func (f fakeFinAuth) CanBaixarContaReceber(context.Context) bool { return f.canReceber }
 func (f fakeFinAuth) UserID(context.Context) (uuid.UUID, error)  { return f.uid, f.uidErr }
 
@@ -52,6 +53,24 @@ type fakeFinRepo struct {
 	baixaValorOriginal decimal.Decimal
 
 	adv *advCall
+
+	contaErr     error
+	contaInativa bool
+	aprovou      bool
+}
+
+// GetContaBancaria: a conta existe e está ativa, salvo quando o teste diz o
+// contrário.
+func (f *fakeFinRepo) GetContaBancaria(_ context.Context, id int64) (*entity.ContaBancaria, error) {
+	if f.contaErr != nil {
+		return nil, f.contaErr
+	}
+	return &entity.ContaBancaria{ID: id, IsActive: !f.contaInativa}, nil
+}
+
+func (f *fakeFinRepo) ApproveContaPagar(context.Context, int64, uuid.UUID) error {
+	f.aprovou = true
+	return nil
 }
 
 func (f *fakeFinRepo) GetContaPagar(context.Context, int64) (*entity.ContaPagar, error) {

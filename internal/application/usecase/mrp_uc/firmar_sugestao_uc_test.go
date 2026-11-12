@@ -11,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
 	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	mrprepo "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/repository"
 	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
@@ -328,5 +329,75 @@ func TestFirmarSugestao_LevaOCentroDaDemanda(t *testing.T) {
 	}
 	if repo.created == nil || repo.created.CostCenterCode == nil || *repo.created.CostCenterCode != 310 {
 		t.Fatalf("centro da ordem planejada: %+v", repo.created)
+	}
+}
+
+type firmerQueFalha struct{ chamadas int }
+
+func (f *firmerQueFalha) Execute(_ context.Context, _ request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
+	f.chamadas++
+	return nil, errorsuc.NewValidationError("cadastre as etapas do roteiro antes de gerar a ordem")
+}
+
+// A primeira tentativa criou a ordem planejada e falhou ao firmar (o roteiro não
+// tinha etapas). Corrigido o cadastro, firmar de novo tem de concluir o que
+// faltou — antes devolvia a ordem ainda planejada como sucesso e a OF não nascia.
+func TestFirmarSugestao_RetomaAOrdemQueNaoChegouASerFirmada(t *testing.T) {
+	existing := &plannedentity.PlannedOrder{Code: 77, OrderNumber: 88, ItemCode: 2001,
+		Status: types.StatusPlanned, IsFirm: false, IsActive: true}
+	planR := &fakePlannedRepo{existing: existing}
+	firmer := &fakeFirmer{}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()}, PlannedRepo: planR,
+		Auth: &fakeAuth{canCreate: true}, Firmer: firmer}
+
+	result, err := uc.Execute(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("erro inesperado: %v", err)
+	}
+	if planR.created != nil {
+		t.Fatal("não pode criar outra ordem planejada para a mesma sugestão")
+	}
+	if !firmer.called || firmer.gotCode != 77 {
+		t.Fatalf("firmar não foi retomado na ordem existente: called=%v code=%d", firmer.called, firmer.gotCode)
+	}
+	if !result.IsFirm || result.PlannedCode != 77 {
+		t.Fatalf("resultado = %+v, esperado a ordem 77 firme", result)
+	}
+}
+
+// Se o cadastro continua errado, a segunda tentativa devolve o mesmo erro — não
+// um sucesso falso.
+func TestFirmarSugestao_RetomadaQueFalhaDevolveOErro(t *testing.T) {
+	existing := &plannedentity.PlannedOrder{Code: 77, Status: types.StatusPlanned, IsActive: true}
+	firmer := &firmerQueFalha{}
+	uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()},
+		PlannedRepo: &fakePlannedRepo{existing: existing}, Auth: &fakeAuth{canCreate: true}, Firmer: firmer}
+
+	if _, err := uc.Execute(context.Background(), 42); err == nil {
+		t.Fatal("esperava o erro do passo de firmar")
+	}
+	if firmer.chamadas != 1 {
+		t.Fatalf("firmar chamado %d vez(es), esperado 1", firmer.chamadas)
+	}
+}
+
+// Ordem já firme ou já liberada não é firmada de novo (não gera OF em dobro).
+func TestFirmarSugestao_NaoRefirmaOrdemJaFirmeOuLiberada(t *testing.T) {
+	for nome, existing := range map[string]*plannedentity.PlannedOrder{
+		"firme":    {Code: 77, Status: types.StatusReleased, IsFirm: true, IsActive: true},
+		"liberada": {Code: 77, Status: types.StatusReleased, IsFirm: false, IsActive: true},
+		"excluída": {Code: 77, Status: types.StatusPlanned, IsFirm: false, IsActive: false},
+	} {
+		t.Run(nome, func(t *testing.T) {
+			firmer := &fakeFirmer{}
+			uc := &FirmarSugestaoMRPUseCase{MRPRepo: &fakeMRPRepo{suggestion: baseSuggestion()},
+				PlannedRepo: &fakePlannedRepo{existing: existing}, Auth: &fakeAuth{canCreate: true}, Firmer: firmer}
+			if _, err := uc.Execute(context.Background(), 42); err != nil {
+				t.Fatalf("erro inesperado: %v", err)
+			}
+			if firmer.called {
+				t.Fatal("firmar foi chamado de novo")
+			}
+		})
 	}
 }

@@ -181,6 +181,15 @@ da estrutura. Co-produtos e substitutos secundários não viram demandas; perdas
 quantidade fixa e baixa automática são preservadas. Se um componente for o
 próprio item fabricado, a OF recebe a observação `ORDEM DE RETRABALHO`.
 
+A quantidade de cada componente usa a mesma conta do MRP
+(`QuantidadeDoComponente`): perda pela fórmula do parâmetro 20 dos parâmetros de
+planejamento, 6 casas no cálculo e arredondamento para cima em 4 casas — a
+escala do pedido de compra e do estoque. O mesmo vale para a baixa automática
+no apontamento e na finalização, para o recebimento de co-produto e para o custo
+padrão; antes a OF usava sempre a fórmula padrão e pedia 0,00002 kg a mais que o
+comprado. A baixa na finalização usa a quantidade convertida para a unidade de
+estoque do componente.
+
 | Método | Rota | Uso |
 |---|---|---|
 | GET | `/{id}/materials?kind=DEMAND|RETURN` | Demandas/devoluções da OF |

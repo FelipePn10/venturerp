@@ -88,7 +88,14 @@ func (r *FiscalRepositoryPG) RegistrarFaturamento(ctx context.Context, fiscalExi
 		     GROUP BY i.sales_order_item_code)
 		 UPDATE sales_order_items soi
 		    SET attended_qty = GREATEST(soi.attended_qty + $4 * q.qtd, 0),
+		        -- Pedido cancelado: o que a nota deixa de atender volta como
+		        -- cancelado, e a linha não reabre para o MRP.
+		        cancelled_qty = CASE WHEN so.status = 'CANCELLED'
+		            THEN GREATEST(soi.requested_qty - GREATEST(soi.attended_qty + $4 * q.qtd, 0), 0)
+		            ELSE soi.cancelled_qty END,
 		        status = CASE
+		            WHEN so.status = 'CANCELLED' AND GREATEST(soi.attended_qty + $4 * q.qtd, 0) = 0 THEN 'CANCELLED'
+		            WHEN so.status = 'CANCELLED' THEN 'DELIVERED'
 		            WHEN soi.status = 'CANCELLED' THEN soi.status
 		            WHEN GREATEST(soi.attended_qty + $4 * q.qtd, 0) + soi.cancelled_qty >= soi.requested_qty THEN 'DELIVERED'
 		            WHEN GREATEST(soi.attended_qty + $4 * q.qtd, 0) > 0 THEN 'PARTIAL'

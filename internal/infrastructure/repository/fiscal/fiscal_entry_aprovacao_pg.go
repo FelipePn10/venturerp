@@ -140,9 +140,21 @@ func (r *FiscalRepositoryPG) AprovarEntrada(ctx context.Context, a repository.Ap
 				 data_lancamento, data_emissao, data_vencimento,
 				 valor_bruto, desconto, juros, multa, valor_pago,
 				 parcela_numero, parcela_total, forma_pagamento, plano_contas_id, centro_custo_id,
-				 status_aprovacao, status, observacao, is_active, criado_por, enterprise_id, retencao_tipo)
+				 status_aprovacao, status, observacao, is_active, criado_por, enterprise_id, retencao_tipo,
+				 purchase_order_id)
 			 VALUES ($1,$2,$3,$4,$5, CURRENT_DATE,$6,$7, $8,0,0,0,0, $9,$10,$11,$12,$13,
-			         'PENDENTE','PENDENTE',$14,TRUE,$15,$16,NULLIF($17,''))
+			         'PENDENTE','PENDENTE',$14,TRUE,$15,$16,NULLIF($17,''),
+			         -- O pedido de compra da nota segue para o título: sem ele o
+			         -- contas a pagar não mostrava de que pedido vinha a dívida.
+			         -- Nota sem pedido na capa: vale o pedido das linhas quando
+			         -- todas são do mesmo (com mais de um, o título não é de nenhum).
+			         (SELECT COALESCE(fe.purchase_order_code,
+			                 (SELECT MIN(poi.purchase_order_code)
+			                    FROM fiscal_entry_items fi
+			                    JOIN purchase_order_items poi ON poi.code = fi.purchase_order_item_code
+			                   WHERE fi.fiscal_entry_id = fe.id
+			                  HAVING COUNT(DISTINCT poi.purchase_order_code) = 1))
+			            FROM fiscal_entries fe WHERE fe.id = $5 AND fe.enterprise_id = $16))
 			 RETURNING id`,
 			truncarStr(t.NumeroDocumento, 60), tipo, t.FornecedorCode, nuloSeVazio(t.FornecedorCNPJ), a.EntryID,
 			t.DataEmissao, t.DataVencimento, t.Valor,

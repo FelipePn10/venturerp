@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -75,6 +76,28 @@ type EfeitosNFe struct {
 	Conversor ports.UOMConverter
 	// Consignacao confere, antes de transmitir, o saldo do cliente na venda consignada.
 	Consignacao stockrepo.ConsignacaoEstoque
+	// Reservas repõe a reserva do pedido que a nota cancelada devolve à carteira.
+	Reservas ReservasDoPedido
+}
+
+// ReservasDoPedido repõe, até o saldo em aberto de cada linha e limitada ao
+// disponível, a reserva que a NF-e cancelada tinha consumido do pedido.
+type ReservasDoPedido interface {
+	ReporReservasDoPedido(ctx context.Context, code int64) error
+}
+
+// reporReservasDoPedido roda depois que a nota cancelada devolveu o pedido à
+// carteira. Falha aqui não desfaz o cancelamento (a nota já caiu na SEFAZ):
+// volta como aviso para alguém refazer a reserva.
+func reporReservasDoPedido(ctx context.Context, reservas ReservasDoPedido, exit *entity.FiscalExit) string {
+	if reservas == nil || exit == nil || exit.SalesOrderCode == nil {
+		return ""
+	}
+	if err := reservas.ReporReservasDoPedido(ctx, *exit.SalesOrderCode); err != nil {
+		slog.Error("NF-e cancelada sem a reserva do pedido reposta", "nota", exit.ID, "pedido", *exit.SalesOrderCode, "erro", err)
+		return fmt.Sprintf("nota cancelada, mas a reserva de estoque do pedido %d não foi refeita: %v — confira o disponível antes de faturar de novo", *exit.SalesOrderCode, err)
+	}
+	return ""
 }
 
 // Registrar abre a pendência da etapa (antes de tentar aplicar os efeitos).
@@ -501,7 +524,8 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 	if err != nil {
 		return fmt.Errorf("lendo a nota: %w", err)
 	}
-	return e.Transacao(ctx, func(r EfeitosRepos) error {
+	resolvida := false
+	err = e.Transacao(ctx, func(r EfeitosRepos) error {
 		if aberta, err := r.Pendencias.Reservar(ctx, exitID, entity.PendenciaCancelamento); err != nil || !aberta {
 			return err
 		}
@@ -534,8 +558,17 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 				}
 			}
 		}
+		resolvida = true
 		return r.Pendencias.Resolver(ctx, exitID, entity.PendenciaCancelamento)
 	})
+	if err != nil || !resolvida {
+		return err
+	}
+	// Depois do commit: no reprocesso a mercadoria já voltou ao estoque. No
+	// cancelamento normal ela volta logo depois, e o caso de uso repõe de novo
+	// (a reposição só completa o que falta).
+	reporReservasDoPedido(ctx, e.Reservas, exit)
+	return nil
 }
 
 // gerarTitulos grava um título do contas a receber por parcela da condição de
@@ -692,7 +725,7 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 	if estoque == nil {
 		return nil
 	}
-	faturado := map[int64]decimal.Decimal{}
+	faturado := novoFaturamento()
 	for _, it := range items {
 		if it.ItemCode == nil {
 			continue
@@ -703,7 +736,7 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 		if q, ok := quantidades[it.ID]; ok {
 			qtd = q
 		}
-		faturado[*it.ItemCode] = faturado[*it.ItemCode].Add(qtd)
+		faturado.somar(it, qtd)
 		base := stockentity.StockMovement{
 			ItemCode:     *it.ItemCode,
 			Mask:         mascaraDaLinha(it, mascaras),
@@ -731,37 +764,110 @@ func baixarEstoque(ctx context.Context, estoque stockrepo.StockRepository, exit 
 	return consumirReservasDoPedido(ctx, estoque, exit, faturado)
 }
 
+// faturamentoDaNota é o que a nota levou do pedido: por produto e, quando a
+// linha da nota aponta a linha do pedido, por linha.
+type faturamentoDaNota struct {
+	produto map[int64]decimal.Decimal
+	linha   map[int64]linhaFaturada
+}
+
+type linhaFaturada struct {
+	produto int64
+	qtd     decimal.Decimal
+}
+
+func novoFaturamento() *faturamentoDaNota {
+	return &faturamentoDaNota{produto: map[int64]decimal.Decimal{}, linha: map[int64]linhaFaturada{}}
+}
+
+func (f *faturamentoDaNota) somar(it *entity.FiscalExitItem, q decimal.Decimal) {
+	if it.ItemCode == nil {
+		return
+	}
+	f.produto[*it.ItemCode] = f.produto[*it.ItemCode].Add(q)
+	if it.SalesOrderItemCode != nil {
+		l := f.linha[*it.SalesOrderItemCode]
+		f.linha[*it.SalesOrderItemCode] = linhaFaturada{produto: *it.ItemCode, qtd: l.qtd.Add(q)}
+	}
+}
+
 // consumirReservasDoPedido solta da reserva do pedido o que a nota levou. A remessa e
 // a transferência também tiram a mercadoria da origem: a reserva vai junto.
-func consumirReservasDoPedido(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, faturado map[int64]decimal.Decimal) error {
-	if estoque == nil || exit.SalesOrderCode == nil {
+//
+// A ordem importa quando o produto está em mais de uma linha: primeiro a reserva
+// da própria linha faturada, depois a sem linha (antiga/onda) e só então a de
+// outra linha. Consumia na ordem das reservas, e faturar a linha A gastava a
+// reserva da linha B — a da A ficava presa com a linha já atendida, e a B,
+// ainda em aberto, sem reserva.
+func consumirReservasDoPedido(ctx context.Context, estoque stockrepo.StockRepository, exit *entity.FiscalExit, fat *faturamentoDaNota) error {
+	if estoque == nil || exit.SalesOrderCode == nil || fat == nil {
 		return nil
 	}
 	reservas, err := estoque.ListActiveReservations(ctx)
 	if err != nil {
 		return fmt.Errorf("lendo as reservas do pedido: %w", err)
 	}
+	var doPedido []*stockentity.StockReservation
 	for _, r := range reservas {
-		if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != *exit.SalesOrderCode {
-			continue
+		if r.ReferenceType == stockentity.ReferenceTypeSalesOrder && r.ReferenceCode == *exit.SalesOrderCode {
+			doPedido = append(doPedido, r)
 		}
+	}
+	consumir := func(r *stockentity.StockReservation, q decimal.Decimal) (decimal.Decimal, error) {
 		// Consome só o que esta nota faturou: a nota parcial soltava a reserva
 		// inteira, e o saldo do pedido ficava livre para outro cliente.
-		consumido, err := estoque.ConsumirReservaParcial(ctx, r.ID, faturado[r.ItemCode])
-		if err != nil {
-			return fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
+		q = decimal.Min(q, fat.produto[r.ItemCode])
+		if !q.IsPositive() {
+			return decimal.Zero, nil
 		}
-		faturado[r.ItemCode] = faturado[r.ItemCode].Sub(consumido)
+		consumido, err := estoque.ConsumirReservaParcial(ctx, r.ID, q)
+		if err != nil {
+			return decimal.Zero, fmt.Errorf("consumindo a reserva %d do pedido: %w", r.ID, err)
+		}
+		fat.produto[r.ItemCode] = fat.produto[r.ItemCode].Sub(consumido)
+		return consumido, nil
+	}
+	daLinha := func(r *stockentity.StockReservation) (int64, bool) {
+		if r.ReferenceItemCode == nil {
+			return 0, false
+		}
+		l, ok := fat.linha[*r.ReferenceItemCode]
+		return *r.ReferenceItemCode, ok && l.produto == r.ItemCode
+	}
+	// 1. A reserva da linha faturada.
+	for _, r := range doPedido {
+		if code, ok := daLinha(r); ok {
+			l := fat.linha[code]
+			consumido, err := consumir(r, l.qtd)
+			if err != nil {
+				return err
+			}
+			l.qtd = l.qtd.Sub(consumido)
+			fat.linha[code] = l
+		}
+	}
+	// 2. A sem linha (código do produto ou vazia); 3. a de outra linha.
+	semLinha := func(r *stockentity.StockReservation) bool {
+		return r.ReferenceItemCode == nil || *r.ReferenceItemCode == r.ItemCode
+	}
+	for _, passo := range []bool{true, false} {
+		for _, r := range doPedido {
+			if semLinha(r) != passo {
+				continue
+			}
+			// O repositório limita ao que a reserva ainda tem.
+			if _, err := consumir(r, fat.produto[r.ItemCode]); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
-func faturadoDaNota(items []*entity.FiscalExitItem, qtd func(*entity.FiscalExitItem) decimal.Decimal) map[int64]decimal.Decimal {
-	out := map[int64]decimal.Decimal{}
+func faturadoDaNota(items []*entity.FiscalExitItem, qtd func(*entity.FiscalExitItem) decimal.Decimal) *faturamentoDaNota {
+	out := novoFaturamento()
 	for _, it := range items {
-		if it.ItemCode != nil {
-			out[*it.ItemCode] = out[*it.ItemCode].Add(qtd(it))
-		}
+		out.somar(it, qtd(it))
 	}
 	return out
 }

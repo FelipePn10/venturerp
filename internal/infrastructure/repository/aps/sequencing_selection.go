@@ -24,8 +24,10 @@ func (r *APSRepositorySQLC) GetSelectedProductionOrders(ctx context.Context, f d
 	}
 	rows, err := r.pool.Query(ctx, `SELECT DISTINCT po.id,
 		CASE WHEN po.priority ~ '^[0-9]+$' THEN po.priority::int WHEN UPPER(po.priority) IN ('ALTA','HIGH','URGENTE') THEN 1 WHEN UPPER(po.priority) IN ('BAIXA','LOW') THEN 9 ELSE 5 END,
-		COALESCE(po.start_date::timestamptz,po.created_at)
+		COALESCE(po.start_date::timestamptz,po.created_at),
+		COALESCE(pl.need_date::timestamptz,po.end_date::timestamptz,po.start_date::timestamptz,po.created_at)
 		FROM production_orders po JOIN production_order_operations op ON op.production_order_id=po.id AND op.enterprise_id=po.enterprise_id
+		LEFT JOIN planned_orders pl ON pl.id=po.planned_order_id AND pl.enterprise_id=po.enterprise_id
 		WHERE po.enterprise_id=$1 AND po.status IN ('OPEN','RELEASED','IN_PROGRESS')
 		AND ($2::bigint[] IS NULL OR po.id=ANY($2)) AND ($3::bigint[] IS NULL OR op.work_center_id=ANY($3))
 		AND ($4::bigint[] IS NULL OR op.id=ANY($4))
@@ -38,7 +40,7 @@ func (r *APSRepositorySQLC) GetSelectedProductionOrders(ctx context.Context, f d
 	out := []domainrepo.OrderRow{}
 	for rows.Next() {
 		var v domainrepo.OrderRow
-		if err := rows.Scan(&v.ID, &v.Priority, &v.PlannedDate); err != nil {
+		if err := rows.Scan(&v.ID, &v.Priority, &v.PlannedDate, &v.DueDate); err != nil {
 			return nil, err
 		}
 		out = append(out, v)

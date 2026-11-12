@@ -135,25 +135,39 @@ func (uc *CuttingPlanUseCase) Create(ctx context.Context, dto request.CreateCutt
 		}
 		plan.LotConsumptionMode = &mode
 	}
+	// Peças e estoque são montados e conferidos antes de gravar o plano: um
+	// erro no meio deixava gravado um plano pela metade.
+	parts := make([]*entity.CuttingPlanPart, 0, len(dto.Parts))
+	for _, p := range dto.Parts {
+		part, err := buildPart(0, p)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, part)
+	}
+	stock := make([]*entity.CuttingStockPiece, 0, len(dto.StockPieces))
+	for _, s := range dto.StockPieces {
+		sp, err := buildStock(0, s)
+		if err != nil {
+			return nil, err
+		}
+		stock = append(stock, sp)
+	}
+	if err := plan.ConferirDimensoes(parts, stock); err != nil {
+		return nil, err
+	}
 	created, err := uc.repo.CreatePlan(ctx, plan)
 	if err != nil {
 		return nil, err
 	}
-
-	for _, p := range dto.Parts {
-		part, err := buildPart(created.ID, p)
-		if err != nil {
-			return nil, err
-		}
+	for _, part := range parts {
+		part.PlanID = created.ID
 		if _, err := uc.repo.AddPart(ctx, part); err != nil {
 			return nil, err
 		}
 	}
-	for _, s := range dto.StockPieces {
-		sp, err := buildStock(created.ID, s)
-		if err != nil {
-			return nil, err
-		}
+	for _, sp := range stock {
+		sp.PlanID = created.ID
 		if _, err := uc.repo.AddStockPiece(ctx, sp); err != nil {
 			return nil, err
 		}
@@ -208,6 +222,13 @@ func (uc *CuttingPlanUseCase) AddPart(ctx context.Context, dto request.AddCuttin
 	if err != nil {
 		return nil, err
 	}
+	plan, err := uc.repo.GetPlanByID(ctx, dto.PlanID)
+	if err != nil {
+		return nil, err
+	}
+	if err := plan.ConferirPeca(part); err != nil {
+		return nil, err
+	}
 	if err := uc.herdarSentidoDoCadastro(ctx, part); err != nil {
 		return nil, err
 	}
@@ -254,6 +275,13 @@ func (uc *CuttingPlanUseCase) RemovePart(ctx context.Context, id int64) error {
 func (uc *CuttingPlanUseCase) AddStock(ctx context.Context, dto request.AddCuttingStockPieceDTO) (*response.CuttingStockPieceResponse, error) {
 	sp, err := buildStock(dto.PlanID, dto.CuttingStockPieceInput)
 	if err != nil {
+		return nil, err
+	}
+	plan, err := uc.repo.GetPlanByID(ctx, dto.PlanID)
+	if err != nil {
+		return nil, err
+	}
+	if err := plan.ConferirEstoque(sp); err != nil {
 		return nil, err
 	}
 	created, err := uc.repo.AddStockPiece(ctx, sp)
@@ -335,6 +363,9 @@ func (uc *CuttingPlanUseCase) Optimize(ctx context.Context, planID int64) (*resp
 	}
 	if len(stock) == 0 {
 		return nil, errorsuc.NewValidationError("o plano não tem estoque de onde cortar")
+	}
+	if err := plan.ConferirDimensoes(parts, stock); err != nil {
+		return nil, err
 	}
 
 	optimizer, err := uc.resolveOptimizer(plan.CutType)

@@ -21,8 +21,8 @@ Pedido de Venda (cliente)                         Cadastros de apoio
       │  PlanCode                                 (item, BOM, roteiro,
       ▼                                            fornecedor, fiscal)
 Demanda do plano  ─────────────┐
- (demanda independente +       │
-  previsão de vendas)          ▼
+ (saldo aberto do pedido P/A + │
+  previsão + demanda indep.)   ▼
                            MRP (run)
         explosão BOM (LLC) · necessidades líquidas · lead time (CPM do roteiro)
                                │
@@ -56,27 +56,37 @@ Demanda do plano  ─────────────┐
   bloqueio/desbloqueio por crédito (`/block`, `/unblock`).
 - Item do pedido: item, quantidade, data de entrega.
 
-**Como o pedido vira demanda do MRP:** o MRP, ao rodar um plano, lê **demandas
-independentes** (`/api/independent-demand`) e **previsões de venda**
-(`/api/sales-forecast`).
+**Como o pedido vira demanda do MRP:** o MRP, ao rodar um plano, lê **direto o
+saldo aberto das linhas dos pedidos de venda** em status **"P" (Pedido /
+confirmado)** ou **"A" (em análise)** — quantidade pedida − atendida − cancelada,
+na data de entrega da linha (ou do cabeçalho). Pedido bloqueado, rascunho (`R`) e
+orçamento não entram. Somam-se a isso as **previsões de venda**
+(`/api/sales-forecast`) e as **demandas independentes** habilitadas no plano
+(`/api/independent-demand`), consumidas pela venda conforme a política de
+planejamento do item (ver `mrp-calculo.md`, "Demanda independente e consumo pela
+venda"). Consulta: `ListOpenSalesOrderDemands` em
+`database/queries/mrp_demand_sources.sql`.
 
-> ✅ **automático:** ao mudar o status do pedido para **"P" (Pedido / confirmado)**
-> via `PATCH /api/sales-order/{code}/status`, o sistema cria automaticamente uma
-> **demanda independente por item** do pedido (item, quantidade solicitada e data =
-> data de entrega da linha ou, na falta, do cabeçalho). O código da demanda é
-> derivado da linha (`código_pedido × 100000 + sequência`), tornando a
-> reconfirmação **idempotente**. Implementado em
-> `sales_order_uc/manage_sales_order_uc.go` (`ChangeStatusSalesOrderUseCase`).
+> ⚠️ **A confirmação não cria mais demanda independente.** Antes o
+> `"P"` gerava uma demanda por linha (`código_pedido × 100000 + sequência`); como
+> o MRP também lia o pedido, a venda era contada duas vezes. Hoje confirmar só
+> muda o status, roda o crédito e reserva o estoque (abaixo), numa transação
+> (`sales_order_uc/manage_sales_order_uc.go`, `ChangeStatusSalesOrderUseCase`).
+> Faturar (NF-e autorizada) aumenta o atendido da linha e tira o saldo do MRP.
 
-Registro manual (ainda disponível para demandas avulsas / previsões):
-`POST /api/independent-demand/create` para o item desejado (qtd e data de
-necessidade).
+> **Regra:** só vira pedido (`P`) ou pedido em análise (`A`) o pedido com ao
+> menos uma linha ativa e quantidade a vender (pedida menos cancelada). O
+> pedido vazio é recusado com 422 — antes era confirmado e ficava na carteira.
+
+Demanda independente manual (`POST /api/independent-demand/create`) continua
+existindo para o que **não** é pedido de venda: expectativa de venda, reposição,
+antecipação, projeto ou assistência técnica.
 
 > ✅ **automático (crédito):** ao confirmar (`"P"`), o sistema roda uma
 > **checagem de limite de crédito** do cliente — exposição = contas a receber em
 > aberto + outros pedidos em aberto. Se confirmar o pedido ultrapassar o limite
 > (ou o cliente estiver bloqueado), o pedido é **bloqueado** automaticamente (com
-> motivo) e **não** gera demanda nem reserva. Limite `0` = sem limite.
+> motivo) e **não** entra no MRP nem reserva estoque. Limite `0` = sem limite.
 > Implementado em `sales_order_uc/credit_check.go` (`entity.EvaluateCredit`).
 >
 > ✅ **automático (ATP/reserva):** se aprovado no crédito, cada linha **reserva o
@@ -101,7 +111,8 @@ recebe (`plan_code`).
 `POST /api/mrp-calculation/run` com `{ "plan_code": <P>, "generate_llc": true }`.
 
 O motor (`mrp_calculation/service`):
-1. Carrega demandas (independentes + previsões) do plano.
+1. Carrega as demandas do plano: saldo aberto dos pedidos `P`/`A`, previsões e
+   demandas independentes (consumidas pela venda).
 2. **Explode a BOM** por nível (LLC), aplicando **fórmula de perdas** por componente.
 3. Calcula **necessidades líquidas**: `necessidade − estoque − suprimento firme`
    (ordens já firmes/aprovadas e em trânsito contam como suprimento; sugestões **não**).
@@ -367,8 +378,9 @@ MDF), o **Plano de Corte** (`/api/cutting-plans`) entra entre a OF e a fabricaç
 1. Cadastros: item + BOM + roteiro + fornecedor + classificação fiscal + conversão UM.
 2. `POST /api/production-plan/create`.
 3. `POST /api/sales-order/create` (+ itens) e confirmar com
-   `PATCH /api/sales-order/{code}/status` → `"P"` (✅ gera a demanda independente
-   automaticamente; não é mais preciso chamar `/api/independent-demand/create`).
+   `PATCH /api/sales-order/{code}/status` → `"P"` (o MRP passa a ler o saldo
+   aberto das linhas; não crie demanda independente para o pedido — ela seria
+   contada junto com a venda).
 4. `POST /api/mrp-calculation/run`.
 5. `POST /api/crp/calculate` e `POST /api/aps/sequence` (analisar capacidade).
 6. Compras: aprovar sugestões MRP (`/purchase-order/suggestions/{code}/approve`) → pedido de compra.

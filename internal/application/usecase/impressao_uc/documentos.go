@@ -184,6 +184,23 @@ type FiltroTitulos struct {
 	NotaFiscalID   *int64
 	De, Ate        *time.Time
 	SomenteAbertos bool
+	// Os mesmos filtros da carteira na tela, para o PDF trazer o que a lista
+	// mostra: período pela emissão (o padrão é o vencimento), situação exata e
+	// só os vencidos (em aberto com vencimento anterior a hoje).
+	PorEmissao      bool
+	Situacao        string
+	SomenteVencidos bool
+	// Filtros secundários da carteira. Plano de contas e centro de custo valem
+	// pelo título ou pelo rateio (só contas a pagar têm rateio); aprovação e
+	// tipo de documento existem só em contas a pagar, pedido só em receber.
+	Documento     string
+	TipoDocumento string
+	Aprovacao     string
+	PlanoContasID *int64
+	CentroCustoID *int64
+	PedidoID      *int64
+	ValorMinimo   *decimal.Decimal
+	ValorMaximo   *decimal.Decimal
 }
 
 type Titulos struct {
@@ -295,6 +312,9 @@ type MovimentoKardex struct {
 	Deposito, Tipo    string
 	Entrada           bool
 	Quantidade, Custo decimal.Decimal
+	// Valor: efeito do movimento no valor do estoque, com sinal. O ajuste de
+	// custo tem quantidade zero e só valor.
+	Valor             decimal.Decimal
 	Origem, Lote, Obs string
 }
 
@@ -303,6 +323,9 @@ type ItemKardex struct {
 	SaldoInicial, CustoInicial decimal.Decimal
 	Movimentos                 []MovimentoKardex
 	SaldoFinal, CustoMedio     decimal.Decimal
+	// ValorFinal é o valor acumulado do estoque no fim do período, o mesmo
+	// do kardex da tela (com saldo negativo o custo médio não existe).
+	ValorFinal decimal.Decimal
 }
 
 type FiltroKardex struct {

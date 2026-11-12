@@ -20,7 +20,8 @@ func ToEnterpriseEntity(d request.CreateEnterpriseDTO) (*entity.Enterprise, erro
 		return nil, err
 	}
 	if strings.TrimSpace(d.CNPJ) != "" {
-		f := &entity.DadosFiscais{CNPJ: d.CNPJ, RazaoSocial: d.RazaoSocial, NomeFantasia: d.NomeFantasia, IE: d.InscricaoEstadual,
+		im := d.InscricaoMunicipal
+		f := &entity.DadosFiscais{CNPJ: d.CNPJ, RazaoSocial: d.RazaoSocial, NomeFantasia: d.NomeFantasia, IE: d.InscricaoEstadual, InscricaoMunicipal: &im,
 			RegimeTributario: d.RegimeTributario, UF: d.UF, Municipio: d.Municipio, CodigoMunicipio: d.CodigoMunicipio, CEP: d.CEP,
 			Logradouro: d.Logradouro, Numero: d.Numero, Complemento: d.Complemento, Bairro: d.Bairro, Telefone: d.Telefone, Email: d.Email}
 		if err := f.Conferir(); err != nil {

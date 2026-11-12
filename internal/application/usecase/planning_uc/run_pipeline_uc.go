@@ -74,6 +74,14 @@ func (uc *RunPlanningPipelineUseCase) Execute(ctx context.Context, dto request.R
 	}
 	out.APSOrders = apsSummary.OrdersProcessed
 	out.APSOperations = apsSummary.ScheduledOperations
+	// Capacidade sem sobrecarga não basta: a ordem que, sequenciada, termina
+	// depois da data de necessidade também torna o plano inviável — e é o que o
+	// PCP precisa saber para avisar o cliente ou abrir turno.
+	out.APSLateOrders = apsSummary.LateOrders
+	if n := len(apsSummary.LateOrders); n > 0 {
+		out.Viable = false
+		out.Notes = append(out.Notes, fmt.Sprintf("%d ordem(ns) de fabricação terminam depois da data de necessidade no sequenciamento (APS)", n))
+	}
 
 	if out.Viable {
 		out.Notes = append(out.Notes, "Plano viável: sem sobrecarga de capacidade detectada.")

@@ -63,6 +63,8 @@ type CentrosDeCusto interface {
 }
 
 type FirmPlannedOrderUseCase struct {
+	// Perdas lê a fórmula de perdas (parâmetro 20) para os materiais da OF.
+	Perdas productionuc.LeitorDaFormulaDePerda
 	// BomVersions repassa à criação da OF a trava da versão aprovada da estrutura.
 	BomVersions productionuc.VersaoDaEstrutura
 	// Centros traduz o centro da ordem planejada para a OF. Sem ele a OF nasce
@@ -402,7 +404,7 @@ func (uc *FirmPlannedOrderUseCase) createProductionOrder(ctx context.Context, or
 			value := order.EndDate.Format("2006-01-02")
 			endDate = &value
 		}
-		manual := &productionuc.CreateProductionOrderUseCase{CreateAtomically: uc.CreateAtomically, Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items, BomVersions: uc.BomVersions}
+		manual := &productionuc.CreateProductionOrderUseCase{CreateAtomically: uc.CreateAtomically, Repo: uc.ProdOrderRepo, Auth: uc.Auth, Structure: uc.Structure, Routing: uc.Routing, OrderOps: uc.OrderOps, Items: uc.Items, BomVersions: uc.BomVersions, Perdas: uc.Perdas}
 		// ⚠️ A ordem planejada guarda a CHAVE INTERNA do item, e o contrato do
 		// caso de uso é textual. A resolução textual tenta o código de negócio
 		// PRIMEIRO: numa base onde existem códigos de negócio numéricos ("1",

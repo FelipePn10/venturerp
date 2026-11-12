@@ -237,7 +237,9 @@ Rotas em `/api/stock`: `item-control/{itemCode}`, `lots/status`, `lots/implant`,
 ## 4.3 Data do documento e fechamento mensal
 
 - **`movement_date`** é a data que vale para kardex, posição e registro de inventário;
-  `created_at` é só quando foi gravado. Lançamento manual aceita data passada dentro
+  `created_at` é só quando foi gravado. O kardex impresso (`/api/impressao/kardex`)
+  usa as mesmas expressões do kardex da tela (`QtdComSinalSQL`/`ValorComSinalSQL`
+  em `repository/stock/operacoes_pg.go`), para os dois fecharem. Lançamento manual aceita data passada dentro
   do período aberto. Nota de entrada usa a data de entrada e inventário a data da foto;
   se ela cair em mês fechado, o movimento entra hoje (`DataAjustavel`).
 - **O custo segue em tempo real.** Lançamento com data passada marca `backdated`.

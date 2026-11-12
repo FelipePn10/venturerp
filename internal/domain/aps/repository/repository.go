@@ -46,9 +46,25 @@ type APSRepository interface {
 }
 
 type OrderRow struct {
-	ID          int64
-	Priority    int
+	ID       int64
+	Priority int
+	// PlannedDate é o início planejado da ordem.
 	PlannedDate time.Time
+	// DueDate é quando a ordem precisa estar pronta: a necessidade da ordem
+	// planejada que a originou ou, sem ela, o fim planejado da própria ordem.
+	// Zero quando a fonte não informa — aí vale o início (comportamento antigo).
+	DueDate time.Time
+}
+
+// Entrega é a data em que a ordem precisa estar pronta. Antes o
+// sequenciamento usava o INÍCIO da ordem como entrega: a programação
+// regressiva recuava a partir do início e a ordem que terminaria depois da
+// necessidade não era apontada como atrasada.
+func (o OrderRow) Entrega() time.Time {
+	if o.DueDate.IsZero() {
+		return o.PlannedDate
+	}
+	return o.DueDate
 }
 
 type OpRow struct {

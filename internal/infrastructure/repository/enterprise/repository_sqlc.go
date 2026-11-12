@@ -82,12 +82,12 @@ func (r *repositoryEnterpriseSQLC) criarCompleta(ctx context.Context, e *entity.
 			return v
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO fiscal_configs (enterprise_id, cnpj_empresa, razao_social, trade_name, ie_empresa, regime_tributario, uf_empresa,
-				municipio, codigo_municipio, cep, logradouro, numero, bairro, telefone, updated_by, complemento, email)
-			VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,''),$15,NULLIF($16,''),NULLIF($17,''))`,
+				municipio, codigo_municipio, cep, logradouro, numero, bairro, telefone, updated_by, complemento, email, inscricao_municipal)
+			VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,$13,NULLIF($14,''),$15,NULLIF($16,''),NULLIF($17,''),NULLIF($18::text,''))`,
 			criada.ID, f.CNPJ, f.RazaoSocial, f.NomeFantasia, f.IE, f.RegimeTributario, f.UF,
 			padrao(f.Municipio, "A preencher"), padrao(f.CodigoMunicipio, "0000000"), padrao(f.CEP, "00000000"),
 			padrao(f.Logradouro, "A preencher"), padrao(f.Numero, "S/N"), padrao(f.Bairro, "A preencher"), f.Telefone, e.CreatedBy,
-			f.Complemento, f.Email); err != nil {
+			f.Complemento, f.Email, f.InscricaoMunicipal); err != nil {
 			return nil, fmt.Errorf("gravando a identidade fiscal da empresa: %w", err)
 		}
 		criada.Fiscal = f
@@ -139,9 +139,9 @@ func (r *repositoryEnterpriseSQLC) Identificacao(ctx context.Context) (*entity.D
 	var d entity.DadosFiscais
 	err = r.pool.QueryRow(ctx, `SELECT cnpj_empresa, razao_social, COALESCE(trade_name,''), COALESCE(ie_empresa,''), regime_tributario, uf_empresa,
 			COALESCE(municipio,''), COALESCE(codigo_municipio,''), COALESCE(cep,''), COALESCE(logradouro,''), COALESCE(numero,''),
-			COALESCE(complemento,''), COALESCE(bairro,''), COALESCE(telefone,''), COALESCE(email,'')
+			COALESCE(complemento,''), COALESCE(bairro,''), COALESCE(telefone,''), COALESCE(email,''), inscricao_municipal
 		  FROM fiscal_configs WHERE enterprise_id = $1`, empresa).Scan(&d.CNPJ, &d.RazaoSocial, &d.NomeFantasia, &d.IE, &d.RegimeTributario, &d.UF,
-		&d.Municipio, &d.CodigoMunicipio, &d.CEP, &d.Logradouro, &d.Numero, &d.Complemento, &d.Bairro, &d.Telefone, &d.Email)
+		&d.Municipio, &d.CodigoMunicipio, &d.CEP, &d.Logradouro, &d.Numero, &d.Complemento, &d.Bairro, &d.Telefone, &d.Email, &d.InscricaoMunicipal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -175,17 +175,19 @@ func (r *repositoryEnterpriseSQLC) AtualizarIdentificacao(ctx context.Context, d
 		return fmt.Errorf("gravando o nome da empresa: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO fiscal_configs (enterprise_id, cnpj_empresa, razao_social, trade_name, ie_empresa, regime_tributario, uf_empresa,
-			municipio, codigo_municipio, cep, logradouro, numero, complemento, bairro, telefone, email, updated_by, updated_at)
-		VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,NULLIF($15,''),NULLIF($16,''),$17,NOW())
+			municipio, codigo_municipio, cep, logradouro, numero, complemento, bairro, telefone, email, updated_by, updated_at, inscricao_municipal)
+		VALUES ($1,$2,$3,NULLIF($4,''),NULLIF($5,''),$6,$7,$8,$9,$10,$11,$12,NULLIF($13,''),$14,NULLIF($15,''),NULLIF($16,''),$17,NOW(),NULLIF($18::text,''))
 		ON CONFLICT (enterprise_id) DO UPDATE SET
 			cnpj_empresa = EXCLUDED.cnpj_empresa, razao_social = EXCLUDED.razao_social, trade_name = EXCLUDED.trade_name,
 			ie_empresa = EXCLUDED.ie_empresa, regime_tributario = EXCLUDED.regime_tributario, uf_empresa = EXCLUDED.uf_empresa,
 			municipio = EXCLUDED.municipio, codigo_municipio = EXCLUDED.codigo_municipio, cep = EXCLUDED.cep,
 			logradouro = EXCLUDED.logradouro, numero = EXCLUDED.numero, complemento = EXCLUDED.complemento,
 			bairro = EXCLUDED.bairro, telefone = EXCLUDED.telefone, email = EXCLUDED.email,
+			-- sem o campo no corpo, mantém a inscrição municipal gravada
+			inscricao_municipal = CASE WHEN $18::text IS NULL THEN fiscal_configs.inscricao_municipal ELSE EXCLUDED.inscricao_municipal END,
 			updated_by = EXCLUDED.updated_by, updated_at = NOW()`,
 		empresa, d.CNPJ, d.RazaoSocial, d.NomeFantasia, d.IE, d.RegimeTributario, d.UF,
-		d.Municipio, d.CodigoMunicipio, d.CEP, d.Logradouro, d.Numero, d.Complemento, d.Bairro, d.Telefone, d.Email, por); err != nil {
+		d.Municipio, d.CodigoMunicipio, d.CEP, d.Logradouro, d.Numero, d.Complemento, d.Bairro, d.Telefone, d.Email, por, d.InscricaoMunicipal); err != nil {
 		return fmt.Errorf("gravando a identificação da empresa: %w", err)
 	}
 	return tx.Commit(ctx)

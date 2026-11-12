@@ -9,13 +9,16 @@ import (
 )
 
 type FiscalConfig struct {
-	ID                        int64
-	EnterpriseID              int64
-	CnpjEmpresa               string
-	RazaoSocial               string
-	TradeName                 string
-	Email                     string
-	IEEmpresa                 *string
+	ID           int64
+	EnterpriseID int64
+	CnpjEmpresa  string
+	RazaoSocial  string
+	TradeName    string
+	Email        string
+	IEEmpresa    *string
+	// InscricaoMunicipal: do prestador na NFS-e. Mantida na identificação da
+	// empresa (VEMP0100); a gravação da configuração fiscal não mexe nela.
+	InscricaoMunicipal        *string
 	RegimeTributario          string
 	UFEmpresa                 string
 	IcmsInternoAliquota       decimal.Decimal
