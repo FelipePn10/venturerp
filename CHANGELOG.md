@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.17.0] — 2026-11-12
+
+- feat(impressao): documentos impressos com layout próprio para cada rotina (`c9da7cf5`)
+
 ## [v1.16.1] — 2026-11-11
 
 - chore(release): min_client 1.16.0, publicado e servido pelo portal (`e42e6539`)
