@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.18.0] — 2026-11-12
+
+- feat(fluxo): pedido de venda até a fábrica sem furos, e impressos fiéis à tela (`c7774514`)
+
 ## [v1.17.0] — 2026-11-12
 
 - feat(impressao): documentos impressos com layout próprio para cada rotina (`c9da7cf5`)
