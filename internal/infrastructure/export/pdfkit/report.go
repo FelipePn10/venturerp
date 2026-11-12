@@ -1,6 +1,7 @@
 package pdfkit
 
 import (
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -112,7 +113,9 @@ type TableReport struct {
 }
 
 // Render lays the report out across as many A4 pages as needed and returns the
-// PDF bytes. It never errors: a bad logo is simply dropped.
+// PDF bytes. It never errors: a bad logo is simply dropped. Long cells wrap (up
+// to maxCellLines lines) instead of being cut, and header titles wrap in two
+// lines, so narrow columns stay readable.
 func (tr *TableReport) Render() []byte {
 	d := New()
 	if tr.Orientation == "paisagem" {
@@ -133,6 +136,11 @@ func (tr *TableReport) Render() []byte {
 		gen = time.Now()
 	}
 	note := "Gerado em " + gen.Format("02/01/2006 15:04")
+	if n := len(tr.Rows); n == 1 {
+		note += " · 1 registro"
+	} else {
+		note += " · " + strconv.Itoa(n) + " registros"
+	}
 
 	d.SetFooter(func(p *Page, num, total int) {
 		drawFooter(p, th, margin, footTop, d.width-margin, note, num, total)
@@ -141,33 +149,39 @@ func (tr *TableReport) Render() []byte {
 	page := d.AddPage()
 	y := drawLetterhead(page, th, tr.Company, logo, margin, margin, contentW, false)
 
-	// Title block (page 1 only).
-	y += 18
-	page.Text(margin, y, FontBold, 15, th.Title, tr.Title)
+	// Title block (page 1 only): title, wrapped subtitle and a rule.
+	y += 20
+	page.FillRect(margin, y-11, 3.5, 14, th.Brand)
+	page.Text(margin+10, y, FontBold, 14, th.Title, ellipsize(FontBold, 14, tr.Title, contentW-10))
 	if tr.Subtitle != "" {
-		y += 13
-		page.Text(margin, y, FontRegular, 9, th.Muted, tr.Subtitle)
+		for _, ln := range wrapText(FontRegular, 8.5, tr.Subtitle, contentW-10, 3) {
+			y += 11.5
+			page.Text(margin+10, y, FontRegular, 8.5, th.Muted, ln)
+		}
 	}
-	y += 8
+	y += 10
 
-	// Column header band.
 	y = drawTableHeader(page, th, tr.Columns, widths, margin, y, contentW)
 
 	rowIndex := 0
-	for i, row := range tr.Rows {
-		if y+rowH > footTop-rowH { // leave room for footer
+	for _, row := range tr.Rows {
+		lines, h := wrapRow(tr.Columns, widths, row)
+		if y+h > footTop-rowH { // leave room for footer
 			page = d.AddPage()
 			top := drawLetterhead(page, th, tr.Company, logo, margin, margin, contentW, true)
 			top += 6
-			page.Text(margin, top+9, FontBold, 11, th.Title, tr.Title+" (continuação)")
+			page.Text(margin, top+9, FontBold, 11, th.Title, ellipsize(FontBold, 11, tr.Title+" (continuação)", contentW))
 			y = top + 18
 			y = drawTableHeader(page, th, tr.Columns, widths, margin, y, contentW)
 			rowIndex = 0
 		}
-		drawDataRow(page, th, tr.Columns, widths, row, margin, y, contentW, rowIndex%2 == 1)
-		y += rowH
+		drawDataRow(page, th, tr.Columns, widths, lines, margin, y, contentW, h, rowIndex%2 == 1)
+		y += h
 		rowIndex++
-		_ = i
+	}
+	if len(tr.Rows) == 0 {
+		page.Text(margin+4, y+12, FontOblique, bodySize, th.Muted, "Nenhum registro para os filtros aplicados.")
+		y += rowH
 	}
 
 	// Bottom border of the table body.
@@ -179,6 +193,54 @@ func (tr *TableReport) Render() []byte {
 	}
 
 	return d.Render()
+}
+
+// maxCellLines bounds how tall a row may grow; the last line is ellipsized.
+const maxCellLines = 3
+
+// wrapText splits s into lines that fit maxW, by word, up to max lines (the last
+// one ellipsized when text remains).
+func wrapText(font Font, size float64, s string, maxW float64, max int) []string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	var out []string
+	cur := ""
+	for i, w := range words {
+		try := strings.TrimSpace(cur + " " + w)
+		if cur != "" && TextWidth(font, size, try) > maxW {
+			if len(out) == max-1 {
+				out = append(out, ellipsize(font, size, strings.Join(append([]string{cur}, words[i:]...), " "), maxW))
+				return out
+			}
+			out = append(out, cur)
+			cur = w
+			continue
+		}
+		cur = try
+	}
+	if TextWidth(font, size, cur) > maxW {
+		cur = ellipsize(font, size, cur, maxW)
+	}
+	return append(out, cur)
+}
+
+// wrapRow wraps every cell of a row and returns the lines and the row height.
+func wrapRow(cols []Column, widths []float64, row []string) ([][]string, float64) {
+	lines := make([][]string, len(cols))
+	n := 1
+	for i := range cols {
+		val := ""
+		if i < len(row) {
+			val = row[i]
+		}
+		lines[i] = wrapText(FontRegular, bodySize, val, widths[i]-8, maxCellLines)
+		if len(lines[i]) > n {
+			n = len(lines[i])
+		}
+	}
+	return lines, rowH + float64(n-1)*10
 }
 
 // Letterhead draws the branded company band at (x, top) spanning width w and
@@ -243,26 +305,39 @@ func logoContain(img *Image, maxW, maxH float64) (float64, float64) {
 }
 
 func drawTableHeader(p *Page, th Theme, cols []Column, widths []float64, x, top, w float64) float64 {
-	p.FillRect(x, top, w, headerRowH, th.Brand)
+	extra := 0
+	titles := make([][]string, len(cols))
+	for i, c := range cols {
+		titles[i] = wrapText(FontBold, 7.6, c.Title, widths[i]-8, 3)
+		if len(titles[i])-1 > extra {
+			extra = len(titles[i]) - 1
+		}
+	}
+	h := headerRowH + 9*float64(extra)
+	p.FillRect(x, top, w, h, th.Brand)
 	cx := x
 	for i, c := range cols {
-		drawCell(p, c.Title, FontBold, bodySize, th.BrandText, c.Align, cx, top+11.5, widths[i])
+		base := top + h/2 + 2.6 - float64(len(titles[i])-1)*4.5
+		for _, ln := range titles[i] {
+			drawCell(p, ln, FontBold, 7.6, th.BrandText, c.Align, cx, base, widths[i])
+			base += 9
+		}
 		cx += widths[i]
 	}
-	return top + headerRowH
+	return top + h
 }
 
-func drawDataRow(p *Page, th Theme, cols []Column, widths []float64, row []string, x, top, w float64, zebra bool) {
+func drawDataRow(p *Page, th Theme, cols []Column, widths []float64, lines [][]string, x, top, w, h float64, zebra bool) {
 	if zebra {
-		p.FillRect(x, top, w, rowH, th.Zebra)
+		p.FillRect(x, top, w, h, th.Zebra)
 	}
 	cx := x
 	for i, c := range cols {
-		val := ""
-		if i < len(row) {
-			val = row[i]
+		base := top + 10.5
+		for _, ln := range lines[i] {
+			drawCell(p, ln, FontRegular, bodySize, th.Text, c.Align, cx, base, widths[i])
+			base += 10
 		}
-		drawCell(p, val, FontRegular, bodySize, th.Text, c.Align, cx, top+10.5, widths[i])
 		cx += widths[i]
 	}
 }
@@ -312,25 +387,71 @@ func ellipsize(font Font, size float64, s string, maxW float64) string {
 	return "…"
 }
 
-// columnWidths scales column weights to the available width.
+// columnWidths distributes the available width. When weights are natural
+// widths in points (the export path), short columns (dates, codes, numbers)
+// keep their natural width and only the long text columns shrink — down to a
+// floor — or grow to fill the page. Small relative weights (< 20) keep the old
+// proportional behaviour.
 func columnWidths(cols []Column, total float64) []float64 {
-	sum := 0.0
-	for _, c := range cols {
-		w := c.Weight
-		if w <= 0 {
-			w = 1
-		}
-		sum += w
-	}
-	widths := make([]float64, len(cols))
+	w := make([]float64, len(cols))
+	sum, relative := 0.0, true
 	for i, c := range cols {
-		w := c.Weight
-		if w <= 0 {
-			w = 1
+		w[i] = c.Weight
+		if w[i] <= 0 {
+			w[i] = 1
 		}
-		widths[i] = total * w / sum
+		if w[i] >= 20 {
+			relative = false
+		}
+		sum += w[i]
 	}
-	return widths
+	if relative || sum <= 0 {
+		for i := range w {
+			w[i] = total * w[i] / sum
+		}
+		return w
+	}
+	const curta, piso = 90.0, 70.0
+	fixo, flex := 0.0, 0.0
+	for _, x := range w {
+		if x <= curta {
+			fixo += x
+		} else {
+			flex += x
+		}
+	}
+	sobra := total - fixo
+	if flex == 0 || sobra < piso*float64(countAbove(w, curta)) {
+		// Nada flexível (ou nem o piso cabe): proporcional, como antes.
+		for i := range w {
+			w[i] = total * w[i] / sum
+		}
+		return w
+	}
+	for i, x := range w {
+		if x > curta {
+			w[i] = math.Max(piso, sobra*x/flex)
+		}
+	}
+	// O piso pode ter estourado a largura: corrige proporcionalmente.
+	tot := 0.0
+	for _, x := range w {
+		tot += x
+	}
+	for i := range w {
+		w[i] = w[i] * total / tot
+	}
+	return w
+}
+
+func countAbove(v []float64, lim float64) int {
+	n := 0
+	for _, x := range v {
+		if x > lim {
+			n++
+		}
+	}
+	return n
 }
 
 // Margin is the standard page margin (points) used by the shared layout.

@@ -49,6 +49,8 @@ type CuttingPlanUseCase struct {
 	machines machinerepo.MachineRepository
 	// branding optionally supplies the company letterhead for the PDF map.
 	branding mapBrandingReader
+	// mapaPDF desenha o mapa de corte em PDF; sem ele, o serviço de domínio.
+	mapaPDF GeradorMapaCorte
 }
 
 // WithBranding injects the source of the company name/brand colour used on the

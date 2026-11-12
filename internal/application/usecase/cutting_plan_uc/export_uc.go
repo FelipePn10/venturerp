@@ -3,6 +3,7 @@ package cutting_plan_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -10,6 +11,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/cutting_plan/service"
+	"github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	machineentity "github.com/FelipePn10/panossoerp/internal/domain/machine/entity"
 )
 
@@ -34,13 +36,28 @@ func (uc *CuttingPlanUseCase) ExportMap(ctx context.Context, planID int64, forma
 		}
 	}
 	b := service.MapBranding{GeneratedAt: time.Now()}
+	var cfgLogo []byte
+	var cnpj string
 	if uc.branding != nil {
 		if cfg, err := uc.branding.GetFiscalConfig(ctx); err == nil && cfg != nil {
 			b.CompanyName = cfg.RazaoSocial
 			if cfg.BrandColor != nil {
 				b.BrandColorHex = *cfg.BrandColor
 			}
+			cfgLogo, cnpj = cfg.Logo, cfg.CnpjEmpresa
 		}
+	}
+	if uc.mapaPDF != nil && strings.EqualFold(strings.TrimSpace(format), "pdf") {
+		d := MapaCorte{Empresa: b.CompanyName, EmpresaCNPJ: cnpj, Logo: cfgLogo, Plano: plan, Padroes: patterns, Gerado: b.GeneratedAt,
+			MaterialCodigo: fmt.Sprint(plan.MaterialItemCode)}
+		if uc.items != nil {
+			if ic, err := valueobject.NewItemCode(plan.MaterialItemCode); err == nil {
+				if it, err := uc.items.FindItemByCode(ctx, ic); err == nil && it != nil {
+					d.MaterialCodigo, d.MaterialNome = string(it.BusinessCode), it.Name
+				}
+			}
+		}
+		return uc.mapaPDF.MapaCorte(d), "application/pdf", nil
 	}
 	return service.RenderCutMap(plan.Code, patterns, service.MapFormat(format), b)
 }

@@ -62,6 +62,7 @@ import (
 	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/impressao_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/indicadores_pv_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
@@ -136,6 +137,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	dfesched "github.com/FelipePn10/panossoerp/internal/infrastructure/dfe"
+	documentosExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/documentos"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/fiscalefeitos"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/itemrevisoes"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
@@ -173,6 +175,7 @@ import (
 	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	ibptRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ibpt"
+	impressaoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/impressao"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
 	indicadoresPVRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/indicadorespv"
 	industrialCalendar "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/industrial_calendar"
@@ -691,7 +694,13 @@ func (app *application) mount() chi.Router {
 	loteHandler := handler.NewLoteHandler(loteUC)
 	qualidadeDocsHandler := handler.NewQualidadeDocsHandler(
 		&certificado_uc.UseCase{Repo: certificadoRepo.New(app.db.Pool), Fontes: certificadoRepo.New(app.db.Pool), Lotes: loteRepo.New(app.db.Pool), Auth: authService},
-		&documento_uc.UseCase{Repo: documentoRepo.New(app.db.Pool), Auth: authService})
+		&documento_uc.UseCase{Repo: documentoRepo.New(app.db.Pool), Auth: authService}).
+		WithLogo(func(ctx context.Context) []byte {
+			if cfg, err := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool).GetFiscalConfig(ctx); err == nil && cfg != nil {
+				return cfg.Logo
+			}
+			return nil
+		})
 	capaUC := &capa_uc.UseCase{Repo: capaRepo.New(app.db.Pool), Auth: authService}
 	capaHandler := handler.NewCapaHandler(capaUC)
 	// Pós-venda 3.5: indicadores, chamado → CAPA e recuperação junto ao fornecedor.
@@ -1259,7 +1268,7 @@ func (app *application) mount() chi.Router {
 	saidaContabil := fiscalRepository.(*fiscalRepo.FiscalRepositoryPG)
 
 	// Brand the PDF cutting map with the company letterhead from fiscal config.
-	cuttingPlanUC.WithBranding(fiscalRepository)
+	cuttingPlanUC.WithBranding(fiscalRepository).WithMapaPDF(documentosExport.MapaCorte{})
 
 	// supplier SEFAZ cadastral query (FocusNFE)
 	supplierSefazHandler := handler.NewSupplierSefazHandler(&supplier_uc.ConsultSupplierSefazUseCase{
@@ -1298,6 +1307,10 @@ func (app *application) mount() chi.Router {
 		ShipmentRepo: shipmentRepoPG,
 		Enricher:     nil,
 	}
+	// Documentos impressos: cada rotina com o layout próprio.
+	impressaoHandler := &handler.ImpressaoHandler{UC: &impressao_uc.UseCase{
+		Consultas: impressaoRepo.New(app.db.Pool), Gerador: documentosExport.Gerador{}, Auth: authService,
+	}}
 	shipmentHandler := handler.NewShipmentHandler(shipmentBaseUC).
 		WithAutoFill(shipmentAutoFillUC).
 		WithExport(shipmentExportUC)
@@ -3404,8 +3417,23 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/purchase-order", shipmentHandler.AutoFillFromPurchaseOrder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/production-order", shipmentHandler.AutoFillFromProductionOrder)
 
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/export/pdf", shipmentHandler.ExportPDF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/export/pdf", impressaoHandler.Romaneio())
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/export/xlsx", shipmentHandler.ExportXLSX)
+		})
+		r.Route("/api/impressao", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/pedido-venda/{code}", impressaoHandler.PedidoVenda())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nota-entrada/{code}", impressaoHandler.NotaEntrada())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber", impressaoHandler.ContasReceber())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-pagar", impressaoHandler.ContasPagar())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plano-materiais/{code}", impressaoHandler.PlanoMateriais())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/capacidade/{code}", impressaoHandler.Capacidade())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/programacao", impressaoHandler.Programacao())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/kardex", impressaoHandler.Kardex())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/custo-producao", impressaoHandler.CustoProducao())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/romaneio/{code}", impressaoHandler.Romaneio())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/proposta/{code}", impressaoHandler.Proposta())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cotacao/{code}", impressaoHandler.Cotacao())
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/cliente/{code}", impressaoHandler.FichaCliente())
 		})
 		r.Route("/api/crp", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/plans", crpHandler.ListPlans)
@@ -3707,7 +3735,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomers)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetCustomer)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/report/pdf", customerHandler.ExportCustomerPDF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/report/pdf", impressaoHandler.FichaCliente())
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", customerHandler.BlockCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/unblock", customerHandler.UnblockCustomer)

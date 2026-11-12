@@ -20,6 +20,7 @@ import (
 type Branding struct {
 	CompanyName   string
 	BrandColorHex string // #RRGGBB; defaults to corporate navy when empty/invalid
+	Logo          []byte // logo da empresa (PNG/JPEG), usada no PDF
 	GeneratedAt   time.Time
 }
 

@@ -2587,6 +2587,26 @@ POST /api/shipments/{code}/cancel
 -- Sem corpo.
 
 ============================================================
+MÓDULO: DOCUMENTOS IMPRESSOS (PDF)
+============================================================
+-- Cada documento tem layout próprio (export/documentos). Todos devolvem
+-- application/pdf; erro vem em JSON {"error": "..."}. Datas em AAAA-MM-DD.
+
+GET /api/impressao/pedido-venda/{code}          -- pedido de venda (código interno)
+GET /api/impressao/proposta/{code}              -- orçamento de venda como proposta comercial
+GET /api/impressao/nota-entrada/{id}            -- espelho de conferência da NF de entrada
+GET /api/impressao/cotacao/{code}               -- mapa comparativo dos fornecedores
+GET /api/impressao/cotacao/{code}?fornecedor=25 -- solicitação de cotação para um fornecedor convidado
+GET /api/impressao/contas-receber?cliente=4&nota=1&de=2026-11-01&ate=2026-12-31&abertos=true
+GET /api/impressao/contas-pagar?fornecedor=1&nota=6&de=2026-11-01&ate=2026-12-31&abertos=true
+GET /api/impressao/plano-materiais/{plan_code}  -- resultado do MRP do plano
+GET /api/impressao/capacidade/{plan_code}       -- mapa de carga (CRP) do plano
+GET /api/impressao/programacao?de=2026-12-01&ate=2026-12-31&grupo=1   -- Gantt e sequência (APS)
+GET /api/impressao/kardex?item=RN-01001&deposito=1&de=2026-11-01&ate=2026-11-30   -- sem item: todos os movimentados
+GET /api/impressao/custo-producao?ordens=3,4&de=2026-11-01&ate=2026-11-30        -- OFs com custo apurado
+GET /api/impressao/romaneio/{code}              -- o mesmo de /api/shipments/{code}/export/pdf
+
+============================================================
 MÓDULO: FISCAL — EVENTOS NF-e (MANIFESTAÇÃO / INUTILIZAÇÃO)
 ============================================================
 

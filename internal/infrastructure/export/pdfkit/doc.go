@@ -247,3 +247,22 @@ func imgIndex(imgs []*Image, target *Image) int {
 // f2/f3 format floats with 2/3 decimals without exponent.
 func f2(v float64) string { return strconv.FormatFloat(v, 'f', 2, 64) }
 func f3(v float64) string { return strconv.FormatFloat(v, 'f', 3, 64) }
+
+// StrokeDashedLine strokes a dashed line (dash and gap in points) — used for
+// detachable stubs ("destaque aqui") and guide lines.
+func (p *Page) StrokeDashedLine(x1, top1, x2, top2, lineW, dash, gap float64, c Color) {
+	fmt.Fprintf(&p.buf, "%s\n[%s %s] 0 d %s w %s %s m %s %s l S [] 0 d\n",
+		c.op(true), f2(dash), f2(gap), f2(lineW), f2(x1), f2(p.y(top1)), f2(x2), f2(p.y(top2)))
+}
+
+// FillPolygon fills a closed polygon given as top-left points (x, top, x, top…).
+func (p *Page) FillPolygon(c Color, pts ...float64) {
+	if len(pts) < 6 {
+		return
+	}
+	fmt.Fprintf(&p.buf, "%s\n%s %s m", c.op(false), f2(pts[0]), f2(p.y(pts[1])))
+	for i := 2; i+1 < len(pts); i += 2 {
+		fmt.Fprintf(&p.buf, " %s %s l", f2(pts[i]), f2(p.y(pts[i+1])))
+	}
+	p.buf.WriteString(" h f\n")
+}

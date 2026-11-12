@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -20,6 +21,14 @@ import (
 type QualidadeDocsHandler struct {
 	cert *certificado_uc.UseCase
 	doc  *documento_uc.UseCase
+	// logo devolve a logo da empresa autenticada para o certificado (opcional).
+	logo func(ctx context.Context) []byte
+}
+
+// WithLogo liga a logo da empresa ao certificado impresso.
+func (h *QualidadeDocsHandler) WithLogo(fn func(ctx context.Context) []byte) *QualidadeDocsHandler {
+	h.logo = fn
+	return h
 }
 
 func NewQualidadeDocsHandler(cert *certificado_uc.UseCase, doc *documento_uc.UseCase) *QualidadeDocsHandler {
@@ -69,7 +78,11 @@ func (h *QualidadeDocsHandler) PDFCertificado(w http.ResponseWriter, r *http.Req
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	pdf := certpdf.Gerar(c, time.Now())
+	var logo []byte
+	if h.logo != nil {
+		logo = h.logo(r.Context())
+	}
+	pdf := certpdf.GerarComLogo(c, time.Now(), logo)
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="certificado-%d.pdf"`, c.Numero))
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))

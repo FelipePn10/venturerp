@@ -2,7 +2,9 @@ package export
 
 import (
 	"io"
+	"math"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export/pdfkit"
@@ -19,14 +21,20 @@ func EncodePDF(w io.Writer, t *Table) error {
 	}
 	t.normalize()
 
+	cols := deriveColumns(t)
+	orientation := t.Orientation
+	// Sem orientação pedida, tabela larga demais para o retrato vai em paisagem.
+	if orientation == "" && naturalWidth(cols) > (pdfkit.A4Width-2*pdfkit.Margin)*1.15 {
+		orientation = "paisagem"
+	}
 	report := &pdfkit.TableReport{
-		Orientation: t.Orientation,
+		Orientation: orientation,
 		Theme:       theme(t.Branding),
 		Company:     company(t.Branding),
 		Logo:        logoBytes(t.Branding),
 		Title:       t.Title,
 		Subtitle:    t.Subtitle,
-		Columns:     deriveColumns(t),
+		Columns:     cols,
 		Rows:        t.Rows,
 		GeneratedAt: t.GeneratedAt,
 	}
@@ -68,32 +76,65 @@ func logoBytes(b *Branding) []byte {
 }
 
 // deriveColumns infers each column's alignment and relative width from the data:
-// columns whose cells are all numeric/currency are right-aligned, and widths are
-// weighted by the widest rendered cell so long text columns get more room.
+// columns whose cells are all numeric/currency are right-aligned. Text columns
+// are sized by the 90th-percentile cell (not the longest one, which would starve
+// every other column) — longer cells wrap — and never below the longest word of
+// the header, so titles do not break mid-word.
 func deriveColumns(t *Table) []pdfkit.Column {
 	cols := make([]pdfkit.Column, len(t.Columns))
 	for c, title := range t.Columns {
 		numeric := len(t.Rows) > 0
-		maxW := pdfkit.TextWidth(pdfkit.FontBold, 8.5, title)
+		var ws []float64
 		for _, row := range t.Rows {
 			if c >= len(row) {
 				continue
 			}
-			cell := row[c]
-			if w := pdfkit.TextWidth(pdfkit.FontRegular, 8.5, cell); w > maxW {
-				maxW = w
-			}
-			if strings.TrimSpace(cell) != "" && !isNumericCell(cell) {
+			cell := strings.TrimSpace(row[c])
+			ws = append(ws, pdfkit.TextWidth(pdfkit.FontRegular, 8.5, cell))
+			if cell != "" && !isNumericCell(cell) {
 				numeric = false
 			}
 		}
+		minW := 0.0
+		for _, word := range strings.Fields(title) {
+			if w := pdfkit.TextWidth(pdfkit.FontBold, 7.6, word); w > minW {
+				minW = w
+			}
+		}
+		natural := percentil(ws, 0.9)
+		if numeric {
+			natural = percentil(ws, 1)
+		}
+		natural = math.Min(math.Max(natural, minW), 230)
 		align := pdfkit.AlignLeft
 		if numeric {
 			align = pdfkit.AlignRight
 		}
-		cols[c] = pdfkit.Column{Title: title, Align: align, Weight: maxW + 8}
+		cols[c] = pdfkit.Column{Title: title, Align: align, Weight: math.Max(natural, 22) + 10}
 	}
 	return cols
+}
+
+// naturalWidth soma a largura que as colunas pedem — decide a orientação.
+func naturalWidth(cols []pdfkit.Column) float64 {
+	total := 0.0
+	for _, c := range cols {
+		total += c.Weight
+	}
+	return total
+}
+
+func percentil(v []float64, p float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	s := append([]float64(nil), v...)
+	sort.Float64s(s)
+	i := int(math.Ceil(p*float64(len(s)))) - 1
+	if i < 0 {
+		i = 0
+	}
+	return s[i]
 }
 
 var numericCell = regexp.MustCompile(`^[R$\s]*-?[\d.]+(,\d+)?%?$`)

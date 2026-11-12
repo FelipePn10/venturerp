@@ -82,3 +82,24 @@ func TestTableReportLandscapeRendersValidPDF(t *testing.T) {
 		t.Fatal("PDF paisagem invalido")
 	}
 }
+
+func TestColumnWidthsPreservaColunasCurtas(t *testing.T) {
+	cols := []Column{{Weight: 40}, {Weight: 240}, {Weight: 230}, {Weight: 55}, {Weight: 60}, {Weight: 240}}
+	w := columnWidths(cols, 523)
+	soma := 0.0
+	for _, x := range w {
+		soma += x
+	}
+	if soma < 522.9 || soma > 523.1 {
+		t.Fatalf("soma = %.2f", soma)
+	}
+	if w[0] < 38 || w[3] < 52 || w[4] < 57 {
+		t.Fatalf("colunas curtas encolheram: %v", w)
+	}
+	if rel := columnWidths([]Column{{Weight: 1}, {Weight: 3}}, 400); rel[0] != 100 || rel[1] != 300 {
+		t.Fatalf("pesos relativos: %v", rel)
+	}
+	if ls := wrapText(FontRegular, 8.5, "uma descrição muito longa que precisa quebrar em várias linhas de texto", 80, 3); len(ls) != 3 || !strings.HasSuffix(ls[2], "…") {
+		t.Fatalf("wrapText: %q", ls)
+	}
+}
