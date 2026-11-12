@@ -59,4 +59,5 @@ var parametrosEmDias = map[int]string{
 	47: "a janela de consumo",
 	48: "o horizonte firme",
 	49: "o tempo de segurança",
+	51: "o horizonte de reprogramação",
 }

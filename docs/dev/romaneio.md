@@ -118,6 +118,12 @@ Transições válidas (recusadas fora disso, com erro claro):
 Regras de cada passo:
 - **Separar** (`OPEN→SEPARATED`): exige itens; **reserva o estoque** (uma
   `stock_reservation` ACTIVE por item, referência `SHIPMENT`/código).
+  **Faturar antes de separar** também vale: o que a NF-e autorizada já baixou
+  (movimento `NF_SAIDA`) não é reservado de novo — o romaneio ligado a essa nota
+  não reserva nada, e a linha ligada ao pedido de venda reserva só o que passa
+  do faturado ainda não coberto por outro romaneio separado, conferido ou
+  despachado. O evento da separação diz quantas linhas ficaram sem reserva por
+  isso. Antes, separar depois da nota pedia um saldo que já tinha saído.
 - **Conferir** (`SEPARATED→CONFERRED`): exige **todos** os itens conferidos.
 - **Despachar** (`CONFERRED→SHIPPED`): valida conferência e **divergências**;
   **consome** as reservas (a NF-e faz a baixa real). Carimba `shipped_at`.

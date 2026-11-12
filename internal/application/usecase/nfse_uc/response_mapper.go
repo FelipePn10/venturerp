@@ -45,6 +45,8 @@ func toNFSeResponse(n *entity.NFSe) *response.NFSeResponse {
 		URL:                       n.URL,
 		XMLPath:                   n.XMLPath,
 		SalesOrderCode:            n.SalesOrderCode,
+		CustomerCode:              n.CustomerCode,
+		DataVencimento:            n.DataVencimento,
 		Notes:                     n.Notes,
 		IsActive:                  n.IsActive,
 		CreatedBy:                 n.CreatedBy,

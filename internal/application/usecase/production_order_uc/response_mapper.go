@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// ToProductionOrderResponse é o contrato da OF na API (snake_case). Iniciar,
+// alterar, entregar, encerrar, cancelar e criar devolviam a entidade crua, que
+// saía em PascalCase — diferente do que a consulta da mesma ordem devolve.
+func ToProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOrderResponse {
+	return toProductionOrderResponse(o)
+}
+
 func toProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOrderResponse {
 	if o == nil {
 		return nil
@@ -140,4 +147,14 @@ func ToProductionOrderCostResponse(c *entity.ProductionOrderCost) *response.Prod
 		out.SettledAt = c.SettledAt.Format(time.RFC3339)
 	}
 	return out
+}
+
+// ToProductionAppointmentResponse e ToProductionConsumptionResponse: o mesmo
+// contrato das listagens, para o lançamento não responder em PascalCase.
+func ToProductionAppointmentResponse(a *entity.ProductionAppointment) *response.ProductionAppointmentResponse {
+	return toProductionAppointmentResponse(a)
+}
+
+func ToProductionConsumptionResponse(c *entity.ProductionConsumption) *response.ProductionConsumptionResponse {
+	return toProductionConsumptionResponse(c)
 }

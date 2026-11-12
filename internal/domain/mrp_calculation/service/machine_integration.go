@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/enums/types"
@@ -12,6 +13,7 @@ import (
 	routing "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -179,29 +181,85 @@ func (s *MRPServiceImpl) processMachineIntegration(ctx context.Context, planCode
 	if tx, ok := s.MRPRepo.(interface {
 		WithMachinePlanningTransaction(context.Context, func(mrprepo.MRPCalculationRepository) error) error
 	}); ok {
-		return tx.WithMachinePlanningTransaction(ctx, func(repo mrprepo.MRPCalculationRepository) error {
+		var semAgenda []string
+		err := tx.WithMachinePlanningTransaction(ctx, func(repo mrprepo.MRPCalculationRepository) error {
 			copy := *s
 			copy.MRPRepo = repo
-			return copy.scheduleMachineIntegration(ctx, planCode, allCodes)
+			falhas, programadas, err := copy.scheduleMachineIntegration(ctx, planCode, allCodes)
+			if err != nil {
+				return err
+			}
+			// Nenhuma ordem coube: o replanejamento não trouxe nada. Devolver o
+			// erro aqui desfaz a transação e mantém a programação anterior
+			// completa, em vez de trocá-la por um plano vazio.
+			if programadas == 0 && len(falhas) > 0 {
+				return nenhumaOrdemProgramada(falhas)
+			}
+			semAgenda = falhas
+			return nil
 		})
+		if err != nil {
+			return err
+		}
+		return ordensSemAgenda(semAgenda)
 	}
-	return s.scheduleMachineIntegration(ctx, planCode, allCodes)
+	semAgenda, _, err := s.scheduleMachineIntegration(ctx, planCode, allCodes)
+	if err != nil {
+		return err
+	}
+	return ordensSemAgenda(semAgenda)
 }
-func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCode int64, allCodes []int64) error {
+
+// nenhumaOrdemProgramada é a falha total do replanejamento de máquinas.
+func nenhumaOrdemProgramada(falhas []string) error {
+	return domainerr.NewValidation(fmt.Sprintf(
+		"nenhuma ordem de fabricação pôde ser programada nas máquinas; a programação anterior foi mantida: %s", falhas[0]))
+}
+
+// ordensSemAgenda resume as ordens que não couberam na agenda das máquinas.
+// As demais ficam programadas: antes uma única ordem sem janela (ou com o
+// cadastro incompleto) desfazia a programação de máquina do plano inteiro.
+func ordensSemAgenda(falhas []string) error {
+	if len(falhas) == 0 {
+		return nil
+	}
+	const mostrar = 5
+	texto := strings.Join(falhas[:min(len(falhas), mostrar)], "; ")
+	if len(falhas) > mostrar {
+		texto += fmt.Sprintf("; e mais %d", len(falhas)-mostrar)
+	}
+	return domainerr.NewValidation(fmt.Sprintf(
+		"%d ordem(ns) de fabricação ficaram sem agenda de máquina (as demais foram programadas): %s", len(falhas), texto))
+}
+
+// falhaDeCadastroOuCapacidade diz se o erro é da ordem (capacidade que não
+// cabe, cadastro que falta) e não da infraestrutura. Só o primeiro deixa o
+// planejamento seguir com as outras ordens.
+func falhaDeCadastroOuCapacidade(err error) bool {
+	var v *domainerr.ValidationError
+	return errors.As(err, &v)
+}
+
+// scheduleMachineIntegration programa as sugestões de fabricação nas máquinas.
+// Devolve as ordens que ficaram sem agenda (uma frase por ordem), quantas foram
+// programadas e, à parte, o erro que impede o planejamento inteiro.
+func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCode int64, allCodes []int64) ([]string, int, error) {
+	var semAgenda []string
+	programadas := 0
 	times, err := s.MRPRepo.ListItemMachineTimes(ctx, allCodes)
 	if err != nil {
-		return fmt.Errorf("carregando produtividade por item: %w", err)
+		return nil, 0, fmt.Errorf("carregando produtividade por item: %w", err)
 	}
 
 	suggestions, err := s.MRPRepo.ListSuggestionsByPlan(ctx, planCode)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	if cleaner, ok := s.MRPRepo.(interface {
 		ClearUnreleasedMachineAllocations(context.Context, int64) error
 	}); ok {
 		if err := cleaner.ClearUnreleasedMachineAllocations(ctx, planCode); err != nil {
-			return err
+			return nil, 0, err
 		}
 	}
 	sort.SliceStable(suggestions, func(i, j int) bool {
@@ -212,7 +270,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 	})
 	suggestions, err = orderMachineSuggestions(suggestions)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 	ready := materialReadiness{}
 	reserved := map[int64][]machinesvc.CapacityWindow{}
@@ -227,7 +285,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 		}); ok {
 			exists, err := reader.SuggestionHasOrder(ctx, sug.Code)
 			if err != nil {
-				return err
+				return nil, 0, err
 			}
 			if exists {
 				end := sug.NeedDate
@@ -240,7 +298,12 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 		}
 		steps, err := s.machineSteps(ctx, sug, times[sug.ItemCode])
 		if err != nil {
-			return err
+			if !falhaDeCadastroOuCapacidade(err) {
+				return nil, 0, err
+			}
+			semAgenda = append(semAgenda, err.Error())
+			ready.record(sug, sug.NeedDate)
+			continue
 		}
 		if len(steps) == 0 {
 			ready.record(sug, sug.NeedDate)
@@ -261,61 +324,90 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 			day = pronto
 		}
 		firstStart := day
+		// Primeiro calcula-se a agenda da ordem inteira, sem gravar: se uma
+		// etapa não couber, a ordem fica sem agenda e nada dela é gravado pela
+		// metade. As reservas das etapas anteriores da própria ordem entram
+		// como ocupação das seguintes.
+		type etapaAlocada struct {
+			slots   []machinesvc.CapacityWindow
+			maquina *entity.MachineTimeInfo
+		}
+		alocadas := make([]etapaAlocada, len(steps))
+		daOrdem := map[int64][]machinesvc.CapacityWindow{}
+		var naoCoube error
 		for i, step := range steps {
-			mt := step.profile
 			day = day.Add(step.before)
-			if finite {
-				slots, escolhida, err := escolherMaquinaQueTerminaAntes(step, func(cand *entity.MachineTimeInfo) ([]machinesvc.CapacityWindow, error) {
-					windows, busy, err := calendar.MachinePlanningWindows(ctx, cand.MachineID, planCode, day, day.AddDate(1, 0, 0))
-					if err != nil {
-						return nil, err
-					}
-					busy = append(busy, reserved[cand.MachineID]...)
-					if step.cycles > 0 {
-						return machinesvc.AllocateMachineCycles(day, step.cycles, step.cycleMinutes, step.setupMinutes, windows, busy)
-					}
-					return machinesvc.AllocateMachineTime(day, step.minutes, windows, busy)
-				})
+			if !finite {
+				continue
+			}
+			inicio := day
+			slots, escolhida, err := escolherMaquinaQueTerminaAntes(step, func(cand *entity.MachineTimeInfo) ([]machinesvc.CapacityWindow, error) {
+				windows, busy, err := calendar.MachinePlanningWindows(ctx, cand.MachineID, planCode, inicio, inicio.AddDate(1, 0, 0))
 				if err != nil {
-					return fmt.Errorf("item %d: %w", sug.ItemCode, err)
+					return nil, err
 				}
-				mt = escolhida
+				ocupado := make([]machinesvc.CapacityWindow, 0, len(busy)+len(reserved[cand.MachineID])+len(daOrdem[cand.MachineID]))
+				ocupado = append(append(append(ocupado, busy...), reserved[cand.MachineID]...), daOrdem[cand.MachineID]...)
+				if step.cycles > 0 {
+					return machinesvc.AllocateMachineCycles(inicio, step.cycles, step.cycleMinutes, step.setupMinutes, windows, ocupado)
+				}
+				return machinesvc.AllocateMachineTime(inicio, step.minutes, windows, ocupado)
+			})
+			if err != nil {
+				if !falhaDeCadastroOuCapacidade(err) {
+					return nil, 0, fmt.Errorf("item %d: %w", sug.ItemCode, err)
+				}
+				naoCoube = err
+				break
+			}
+			alocadas[i] = etapaAlocada{slots: slots, maquina: escolhida}
+			daOrdem[escolhida.MachineID] = append(daOrdem[escolhida.MachineID], slots...)
+			day = slots[len(slots)-1].End.Add(step.after)
+		}
+		if naoCoube != nil {
+			semAgenda = append(semAgenda, fmt.Sprintf("item %d: %v", sug.ItemCode, naoCoube))
+			ready.record(sug, sug.NeedDate)
+			continue
+		}
+		if finite {
+			for i, a := range alocadas {
+				mt := a.maquina
 				// Persist the parent allocation before slots: INSERT ... SELECT
 				// cannot create reservations until this row exists.
 				if i == 0 {
 					if err := s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, mt.MachineID, totalMinutes); err != nil {
-						return err
+						return nil, 0, err
 					}
 				}
-				if err = calendar.SaveMachineSlots(ctx, sug.Code, mt.MachineID, step.operationID, slots, i == 0); err != nil {
-					return err
+				if err = calendar.SaveMachineSlots(ctx, sug.Code, mt.MachineID, steps[i].operationID, a.slots, i == 0); err != nil {
+					return nil, 0, err
 				}
 				steps[i].profile = mt // a etapa passa a apontar a máquina REALMENTE alocada
-				reserved[mt.MachineID] = append(reserved[mt.MachineID], slots...)
+				reserved[mt.MachineID] = append(reserved[mt.MachineID], a.slots...)
 				if i == 0 {
-					firstStart = slots[0].Start
+					firstStart = a.slots[0].Start
 				}
-				day = slots[len(slots)-1].End.Add(step.after)
 			}
 		}
 		// Só agora se sabe qual máquina levou a primeira etapa.
 		if err = s.MRPRepo.UpdatePlannedOrderMachine(ctx, sug.Code, steps[0].profile.MachineID, totalMinutes); err != nil {
-			return err
+			return nil, 0, err
 		}
 		if err = s.MRPRepo.CreateMachineSchedule(ctx, &entity.MachineScheduleInfo{PlanCode: planCode, PlannedOrderCode: sug.Code, MachineID: steps[0].profile.MachineID, ScheduleDate: firstStart, ProductionTime: totalMinutes}); err != nil {
-			return err
+			return nil, 0, err
 		}
 
 		if writer, ok := s.MRPRepo.(interface {
 			SaveMachineCompletion(context.Context, int64, time.Time) error
 		}); ok {
 			if err := writer.SaveMachineCompletion(ctx, sug.Code, day); err != nil {
-				return err
+				return nil, 0, err
 			}
 		}
 		ready.record(sug, day)
+		programadas++
 	}
-	return nil
+	return semAgenda, programadas, nil
 }
 
 // Components are planned before their consuming parent. When several orders

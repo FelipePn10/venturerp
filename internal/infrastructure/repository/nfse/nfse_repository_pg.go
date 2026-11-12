@@ -30,7 +30,8 @@ const nfseColumns = `id, numero_rps, serie_rps, tipo_rps, data_emissao, status, 
 	item_lista_servico, codigo_tributario_municipio, discriminacao, codigo_municipio,
 	valor_servicos, valor_deducoes, aliquota_iss, iss_retido, valor_iss, valor_liquido,
 	focus_ref, numero_nfse, codigo_verificacao, url, xml_path,
-	sales_order_code, notes, is_active, created_by, created_at, updated_at`
+	sales_order_code, notes, is_active, created_by, created_at, updated_at,
+	customer_code, data_vencimento`
 
 func scanNFSe(s interface{ Scan(...interface{}) error }) (*entity.NFSe, error) {
 	var n entity.NFSe
@@ -43,6 +44,7 @@ func scanNFSe(s interface{ Scan(...interface{}) error }) (*entity.NFSe, error) {
 		&n.ValorServicos, &n.ValorDeducoes, &n.AliquotaISS, &n.IssRetido, &n.ValorISS, &n.ValorLiquido,
 		&n.FocusRef, &n.NumeroNFSe, &n.CodigoVerificacao, &n.URL, &n.XMLPath,
 		&n.SalesOrderCode, &n.Notes, &n.IsActive, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt,
+		&n.CustomerCode, &n.DataVencimento,
 	)
 	if err != nil {
 		return nil, err
@@ -71,8 +73,8 @@ func (r *NFSeRepositoryPG) Create(ctx context.Context, n *entity.NFSe) (*entity.
 		     tomador_complemento, tomador_bairro, tomador_codigo_municipio, tomador_uf, tomador_cep,
 		     item_lista_servico, codigo_tributario_municipio, discriminacao, codigo_municipio,
 		     valor_servicos, valor_deducoes, aliquota_iss, iss_retido, valor_iss, valor_liquido,
-		     sales_order_code, notes, created_by, enterprise_id)
-		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32
+		     sales_order_code, notes, created_by, enterprise_id, customer_code, data_vencimento)
+		 SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$34,$35
 		  WHERE $29::bigint IS NULL OR EXISTS (SELECT 1 FROM sales_orders so WHERE so.code = $29 AND so.enterprise_code = $33)
 		 RETURNING id, is_active, created_at, updated_at`,
 		n.NumeroRPS, n.SerieRPS, n.TipoRPS, n.DataEmissao, n.Status, n.NaturezaOperacao,
@@ -81,7 +83,7 @@ func (r *NFSeRepositoryPG) Create(ctx context.Context, n *entity.NFSe) (*entity.
 		n.TomadorComplemento, n.TomadorBairro, n.TomadorCodigoMunicipio, n.TomadorUF, n.TomadorCEP,
 		n.ItemListaServico, n.CodigoTributarioMunicipio, n.Discriminacao, n.CodigoMunicipio,
 		n.ValorServicos, n.ValorDeducoes, n.AliquotaISS, n.IssRetido, n.ValorISS, n.ValorLiquido,
-		n.SalesOrderCode, n.Notes, n.CreatedBy, empresa, codigoEmpresa,
+		n.SalesOrderCode, n.Notes, n.CreatedBy, empresa, codigoEmpresa, n.CustomerCode, n.DataVencimento,
 	).Scan(&n.ID, &n.IsActive, &n.CreatedAt, &n.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError("pedido de venda da NFS-e não encontrado nesta empresa")

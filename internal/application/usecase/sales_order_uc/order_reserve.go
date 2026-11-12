@@ -54,40 +54,52 @@ func (r *OrderStockReserver) Reserve(ctx context.Context, code int64, pedidos re
 			continue
 		}
 
-		// Sem saldo cadastrado no depósito o disponível é zero; falha de leitura é erro.
-		available := decimal.Zero
-		bal, balErr := estoque.GetBalance(ctx, it.ItemCode, it.Mask, *it.WarehouseCode)
-		if balErr != nil && !errorsuc.EhNaoEncontrado(balErr) {
-			return fmt.Errorf("lendo o saldo do item %d: %w", it.ItemCode, balErr)
+		if err := reservarDisponivel(ctx, estoque, order, it, wanted); err != nil {
+			return err
 		}
-		if balErr == nil {
-			available = bal.AvailableQty
-		}
-		reserveQty := decimal.Min(wanted, available)
-		if !reserveQty.IsPositive() {
-			continue
-		}
+	}
+	return nil
+}
 
-		itemCode := it.ItemCode
-		res := &stockentity.StockReservation{
-			ItemCode:          it.ItemCode,
-			Mask:              it.Mask,
-			WarehouseID:       *it.WarehouseCode,
-			Quantity:          reserveQty,
-			ReferenceType:     stockentity.ReferenceTypeSalesOrder,
-			ReferenceCode:     code,
-			ReferenceItemCode: &itemCode,
-			ReservationDate:   time.Now(),
-			Status:            "ACTIVE",
-			CreatedBy:         order.CreatedBy,
+// reservarDisponivel reserva para a linha até qty, limitado ao disponível do
+// depósito dela. Depósito que não aceita reserva deixa a linha sem reservar.
+func reservarDisponivel(ctx context.Context, estoque stockrepo.StockRepository, order *entity.SalesOrder, it *entity.SalesOrderItem, qty decimal.Decimal) error {
+	// Sem saldo cadastrado no depósito o disponível é zero; falha de leitura é erro.
+	available := decimal.Zero
+	bal, balErr := estoque.GetBalance(ctx, it.ItemCode, it.Mask, *it.WarehouseCode)
+	if balErr != nil && !errorsuc.EhNaoEncontrado(balErr) {
+		return fmt.Errorf("lendo o saldo do item %d: %w", it.ItemCode, balErr)
+	}
+	if balErr == nil {
+		available = bal.AvailableQty
+	}
+	reserveQty := decimal.Min(qty, available)
+	if !reserveQty.IsPositive() {
+		return nil
+	}
+
+	// reference_item_code é a LINHA do pedido (como no romaneio e na
+	// reprogramação da entrega); gravava o código do produto, e a
+	// reprogramação e o cancelamento da linha não achavam a reserva.
+	linha := it.Code
+	res := &stockentity.StockReservation{
+		ItemCode:          it.ItemCode,
+		Mask:              it.Mask,
+		WarehouseID:       *it.WarehouseCode,
+		Quantity:          reserveQty,
+		ReferenceType:     stockentity.ReferenceTypeSalesOrder,
+		ReferenceCode:     order.Code,
+		ReferenceItemCode: &linha,
+		ReservationDate:   time.Now(),
+		Status:            "ACTIVE",
+		CreatedBy:         order.CreatedBy,
+	}
+	if _, err := estoque.CreateReservation(ctx, res); err != nil {
+		// O depósito do pedido não aceita reservas: o pedido segue sem reservar.
+		if errors.Is(err, stockrepo.ErrAlmoxSemReserva) {
+			return nil
 		}
-		if _, err := estoque.CreateReservation(ctx, res); err != nil {
-			// O depósito do pedido não aceita reservas: o pedido segue sem reservar.
-			if errors.Is(err, stockrepo.ErrAlmoxSemReserva) {
-				continue
-			}
-			return fmt.Errorf("reservando o item %d: %w", it.ItemCode, err)
-		}
+		return fmt.Errorf("reservando o item %d: %w", it.ItemCode, err)
 	}
 	return nil
 }

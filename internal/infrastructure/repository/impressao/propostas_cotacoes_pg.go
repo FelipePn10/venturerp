@@ -47,7 +47,7 @@ func (c *Consultas) Proposta(ctx context.Context, t uc.Tenant, code int64) (*uc.
 	c.enderecosCliente(ctx, clienteID, &p.Cliente, &entrega)
 
 	rows, err := c.pool.Query(ctx, `
-		SELECT sqi.sequence, COALESCE(i.business_code, sqi.item_code::text), COALESCE(NULLIF(i.commercial_description,''), i.name, ''),
+		SELECT sqi.sequence, COALESCE(i.business_code, sqi.item_code::text), `+nomeComercial("i")+`,
 		       COALESCE(fc.ncm,''), COALESCE(sqi.sales_uom,'UN'), sqi.requested_qty::text, COALESCE(sqi.attended_qty,0)::text, COALESCE(sqi.cancelled_qty,0)::text,
 		       sqi.unit_price::text, COALESCE(sqi.discount_pct,0)::text, sqi.total_net::text, COALESCE(sqi.ipi_pct,0)::text,
 		       COALESCE(sqi.total_ipi, sqi.total_net_with_ipi - sqi.total_net, 0)::text, COALESCE(sqi.total_st,0)::text,
@@ -73,6 +73,9 @@ func (c *Consultas) Proposta(ctx context.Context, t uc.Tenant, code int64) (*uc.
 		p.Itens = append(p.Itens, it)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 	if p.Parcelas, err = c.parcelasCondicao(ctx, condID); err != nil {
 		return nil, err
 	}
@@ -180,12 +183,15 @@ func (c *Consultas) Cotacao(ctx context.Context, t uc.Tenant, code int64) (*uc.C
 		q.Fornecedores = append(q.Fornecedores, p)
 	}
 	fr.Close()
+	if err := fr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 	for i, id := range ids {
 		c.enderecoFornecedor(ctx, id, &q.Fornecedores[i])
 	}
 
 	ir, err := c.pool.Query(ctx, `
-		SELECT qi.id, qi.sequence, COALESCE(i.business_code, qi.item_code::text), COALESCE(i.name,''), COALESCE(qi.uom, i.supplies_purchase_uom, i.warehouse_unit_of_measurement, 'UN'),
+		SELECT qi.id, qi.sequence, COALESCE(i.business_code, qi.item_code::text), `+nomeInterno("i")+`, COALESCE(qi.uom, i.supplies_purchase_uom, i.warehouse_unit_of_measurement, 'UN'),
 		       qi.quantity::text, qi.delivery_date
 		  FROM purchase_quotation_items qi
 		  LEFT JOIN items i ON i.code = qi.item_code AND i.enterprise_id = $2
@@ -207,6 +213,9 @@ func (c *Consultas) Cotacao(ctx context.Context, t uc.Tenant, code int64) (*uc.C
 		q.Itens = append(q.Itens, it)
 	}
 	ir.Close()
+	if err := ir.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	pr, err := c.pool.Query(ctx, `
 		SELECT qp.quotation_item_id, qp.supplier_code, qp.unit_price::text, COALESCE(qp.lead_time_days,0), COALESCE(pc.description,''),
@@ -286,6 +295,9 @@ func (c *Consultas) FichaCliente(ctx context.Context, t uc.Tenant, code int64) (
 		f.Enderecos = append(f.Enderecos, e)
 	}
 	ar.Close()
+	if err := ar.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	cr, err := c.pool.Query(ctx, `SELECT COALESCE(name,''), COALESCE(position,''), COALESCE(email,''), COALESCE(phone,''), COALESCE(mobile,''), COALESCE(is_primary,false)
 	                                FROM customer_contacts WHERE customer_id = $1 AND COALESCE(is_active,true) ORDER BY is_primary DESC, id`, id)
@@ -307,6 +319,9 @@ func (c *Consultas) FichaCliente(ctx context.Context, t uc.Tenant, code int64) (
 		f.Contatos = append(f.Contatos, x)
 	}
 	cr.Close()
+	if err := cr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	fr, err := c.pool.Query(ctx, `SELECT code, name, COALESCE(document_number,''), COALESCE(state_registration,'')
 	                                FROM customers WHERE corporate_code = $1 AND code <> $1 AND enterprise_id = $2 ORDER BY code`, code, t.ID)
@@ -322,6 +337,9 @@ func (c *Consultas) FichaCliente(ctx context.Context, t uc.Tenant, code int64) (
 		f.Filiais = append(f.Filiais, p)
 	}
 	fr.Close()
+	if err := fr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	// Posição comercial: títulos em aberto, pedidos em carteira e faturamento.
 	var aberto, vencido, pedidos, fat string

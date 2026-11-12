@@ -126,3 +126,19 @@ func TestTokenRecusadoNaoECulpaDaSEFAZ(t *testing.T) {
 		t.Fatal("rejeição da SEFAZ tratada como recusa da Focus")
 	}
 }
+
+// O endereço alternativo serve ao simulador do aceite; em produção ele é
+// ignorado, para uma variável esquecida não desviar nota de verdade.
+func TestEnderecoAlternativoSoValeForaDaProducao(t *testing.T) {
+	t.Setenv("FOCUSNFE_BASE_URL", "http://127.0.0.1:9/v2/")
+	if got := NewClient("t", "homologacao").baseURL; got != "http://127.0.0.1:9/v2" {
+		t.Fatalf("homologação = %q, esperado o endereço alternativo", got)
+	}
+	if got := NewClient("t", "producao").baseURL; got != baseURLProducao {
+		t.Fatalf("produção = %q, não pode ser desviada", got)
+	}
+	t.Setenv("FOCUSNFE_BASE_URL", "")
+	if got := NewClient("t", "homologacao").baseURL; got != baseURLHomologacao {
+		t.Fatalf("sem a variável = %q", got)
+	}
+}

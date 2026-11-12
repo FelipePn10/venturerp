@@ -37,6 +37,11 @@ type TypedPlanningParams struct {
 	TempoSegurancaDias int
 	// LotePeriodo (50): período de agrupamento das necessidades da empresa.
 	LotePeriodo string
+	// HorizonteReprogramacaoDias (51, dias corridos, padrão 30, 0 = desligado): a ordem
+	// firme que chega depois da necessidade, mas até hoje + N, cobre a
+	// necessidade (o planejador recebe o aviso de antecipar) em vez de o MRP
+	// sugerir uma ordem nova para a mesma falta.
+	HorizonteReprogramacaoDias int
 	// Politicas é a política de planejamento efetiva dos itens que têm regra
 	// (item ou classificação). Item fora do mapa segue os parâmetros acima.
 	// Preenchida pelo cálculo (por execução), não pelo LoadFromDB.
@@ -77,6 +82,7 @@ func DefaultTypedPlanningParams() *TypedPlanningParams {
 		NumeracaoOrdens:              "AUTO",
 		ConsumoDiasAntes:             30,
 		LotePeriodo:                  LotePeriodoNenhum,
+		HorizonteReprogramacaoDias:   30,
 	}
 }
 
@@ -160,6 +166,9 @@ func (p *TypedPlanningParams) LoadFromDB(raw map[int]string) {
 	}
 	if v, ok := raw[50]; ok {
 		p.LotePeriodo = strings.ToUpper(strings.TrimSpace(v))
+	}
+	if v, ok := raw[51]; ok {
+		p.HorizonteReprogramacaoDias = naoNegativo(parseInt(v, 30))
 	}
 }
 

@@ -35,6 +35,14 @@ const movimentoQueGiraSQL = `reverses_movement_id IS NULL AND reversed_by_moveme
 const qtdSQL = `(` + sinalSQL + ` * ABS(m.quantity))`
 const valorSQL = `(CASE WHEN m.movement_type = 'AJUSTE_CUSTO' THEN m.total_price ELSE ` + sinalSQL + ` * ABS(m.total_price) END)`
 
+// QtdComSinalSQL e ValorComSinalSQL expõem as expressões do kardex (alias "m"
+// de stock_movements) para relatórios que precisam fechar com ele — a
+// impressão do kardex tinha regra própria e divergia da tela.
+const (
+	QtdComSinalSQL   = qtdSQL
+	ValorComSinalSQL = valorSQL
+)
+
 // almoxPrometivelSQL: almoxarifado cujo saldo conta para promessa (ATP).
 const almoxPrometivelSQL = `(w.disposition AND w.location::text NOT IN ('INSPECAO','REJEICAO','TRANSITO'))`
 

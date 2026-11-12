@@ -2,9 +2,12 @@ package sales_order_uc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -157,6 +160,28 @@ type UpdateSalesOrderItemUseCase struct {
 	Politica *PoliticaDoPedido
 	// Contratos mantém o preço da linha de chamada de contrato. Opcional.
 	Contratos PrecosContratados
+	// Transacao: a linha e o ajuste da reserva dela juntos. Opcional.
+	Transacao EmTransacao
+}
+
+// quantidadesDaAlteracao: o atendido é o que as notas (ou o atendimento
+// manual) registraram — o corpo da alteração não o muda; antes qualquer
+// usuário marcava a linha como entregue sem nota. O cancelado não volta atrás
+// e solicitado não fica abaixo do atendido + cancelado.
+func quantidadesDaAlteracao(current *entity.SalesOrderItem, dto *request.UpdateSalesOrderItemDTO) error {
+	dto.AttendedQty = current.AttendedQty
+	if dto.CancelledQty.LessThan(current.CancelledQty) {
+		dto.CancelledQty = current.CancelledQty
+	}
+	if !dto.RequestedQty.IsPositive() {
+		return errorsuc.NewValidationError("a quantidade da linha deve ser maior que zero")
+	}
+	if dto.RequestedQty.LessThan(dto.AttendedQty.Add(dto.CancelledQty)) {
+		return errorsuc.NewValidationError(fmt.Sprintf(
+			"a quantidade %s fica abaixo do já atendido (%s) mais o cancelado (%s)",
+			dto.RequestedQty.String(), dto.AttendedQty.String(), dto.CancelledQty.String()))
+	}
+	return nil
 }
 
 func (uc *UpdateSalesOrderItemUseCase) Execute(
@@ -184,6 +209,17 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 	}
 	order, err := uc.Repo.GetByCode(ctx, current.SalesOrderCode)
 	if err != nil {
+		return nil, err
+	}
+	switch {
+	case order.Status == entity.SalesOrderStatusCancelled:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está cancelado", order.Code))
+	case order.Status == entity.SalesOrderStatusInvoiced:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está faturado: cancele a NF-e antes de mexer nas linhas", order.Code))
+	case current.Status == entity.SalesOrderItemStatusCancelled:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a linha %d está cancelada", current.Code))
+	}
+	if err := quantidadesDaAlteracao(current, &dto); err != nil {
 		return nil, err
 	}
 	if uc.Items != nil {
@@ -252,7 +288,17 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 		Notes:            dto.Notes,
 	}
 
-	item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
+	// Campo opcional que não veio no corpo mantém o valor da linha: o PUT
+	// apagava data de entrega, lote, entrega ao cliente, cupom e observação de
+	// quem mandava só a quantidade. Para limpar, envie o campo vazio.
+	item.DeliveryDate = current.DeliveryDate
+	if dto.DeliveryDate != nil {
+		item.DeliveryDate = datetime.ParseDatePtr(dto.DeliveryDate)
+	}
+	item.CustomerDelivery = manterSeAusente(dto.CustomerDelivery, current.CustomerDelivery)
+	item.Lot = manterSeAusente(dto.Lot, current.Lot)
+	item.CouponDelivery = manterSeAusente(dto.CouponDelivery, current.CouponDelivery)
+	item.Notes = manterSeAusente(dto.Notes, current.Notes)
 
 	// Determine status from quantities
 	balance := dto.RequestedQty.Sub(dto.AttendedQty).Sub(dto.CancelledQty)
@@ -269,7 +315,28 @@ func (uc *UpdateSalesOrderItemUseCase) Execute(
 
 	item.RecalcularTotais()
 
-	updated, err := uc.Repo.UpdateItem(ctx, item)
+	var updated *entity.SalesOrderItem
+	alterar := func(r ConfirmacaoRepos) error {
+		var errUpd error
+		if updated, errUpd = r.Pedidos.UpdateItem(ctx, item); errUpd != nil {
+			return errUpd
+		}
+		if r.Estoque == nil {
+			return nil
+		}
+		aberto := dto.RequestedQty.Sub(dto.AttendedQty).Sub(dto.CancelledQty)
+		if err := aparaReservaDaLinha(ctx, r, current, aberto); err != nil {
+			return err
+		}
+		// A linha que aumentou reserva o acréscimo (dentro do disponível), como
+		// a confirmação faria; antes a reserva ficava na quantidade antiga.
+		return reporReservas(ctx, r, current.SalesOrderCode, current.Code)
+	}
+	if uc.Transacao != nil {
+		err = uc.Transacao(ctx, alterar)
+	} else {
+		err = alterar(ConfirmacaoRepos{Pedidos: uc.Repo})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -301,6 +368,9 @@ func (uc *ListSalesOrderItemsUseCase) Execute(ctx context.Context, salesOrderCod
 type CancelSalesOrderItemUseCase struct {
 	Repo repository.SalesOrderRepository
 	Auth ports.AuthService
+	// Transacao: linha, reserva da linha e totais juntos. Opcional (sem ela,
+	// só a linha e os totais, sem soltar reserva).
+	Transacao EmTransacao
 }
 
 func (uc *CancelSalesOrderItemUseCase) Execute(ctx context.Context, itemCode int64) error {
@@ -311,8 +381,107 @@ func (uc *CancelSalesOrderItemUseCase) Execute(ctx context.Context, itemCode int
 	if err != nil {
 		return err
 	}
-	if err := uc.Repo.CancelItem(ctx, itemCode); err != nil {
+	switch item.Status {
+	case entity.SalesOrderItemStatusCancelled:
+		return errorsuc.NewValidationError(fmt.Sprintf("a linha %d já está cancelada", itemCode))
+	case entity.SalesOrderItemStatusDelivered:
+		return errorsuc.NewValidationError(fmt.Sprintf("a linha %d já foi atendida por inteiro: não há saldo a cancelar", itemCode))
+	}
+	pedido, err := uc.Repo.GetByCode(ctx, item.SalesOrderCode)
+	if err != nil {
 		return err
 	}
-	return uc.Repo.RecalculateTotals(ctx, item.SalesOrderCode)
+	switch pedido.Status {
+	case entity.SalesOrderStatusCancelled:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está cancelado", item.SalesOrderCode))
+	case entity.SalesOrderStatusInvoiced:
+		return errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está faturado: cancele a NF-e antes de mexer nas linhas", item.SalesOrderCode))
+	}
+	cancelar := func(r ConfirmacaoRepos) error {
+		if err := r.Pedidos.CancelItem(ctx, itemCode); err != nil {
+			return err
+		}
+		// A reserva que a confirmação fez para a linha deixava o estoque preso.
+		if r.Estoque != nil {
+			linhas, err := r.Pedidos.ListItems(ctx, item.SalesOrderCode)
+			if err != nil {
+				return err
+			}
+			alvo := linhaDaReserva{Code: itemCode, ItemCode: item.ItemCode, Unica: true}
+			for _, outra := range linhas {
+				if outra.Code != itemCode && outra.ItemCode == item.ItemCode && outra.IsActive {
+					alvo.Unica = false
+				}
+			}
+			if err := soltarReservas(ctx, r.Estoque, item.SalesOrderCode, &alvo); err != nil {
+				return err
+			}
+		}
+		return r.Pedidos.RecalculateTotals(ctx, item.SalesOrderCode)
+	}
+	if uc.Transacao != nil {
+		return uc.Transacao(ctx, cancelar)
+	}
+	return cancelar(ConfirmacaoRepos{Pedidos: uc.Repo})
+}
+
+// aparaReservaDaLinha: a linha que diminuiu não pode continuar segurando o
+// estoque da quantidade antiga. Com reserva acima do saldo em aberto, as
+// reservas da linha são soltas e uma nova fica só com o saldo.
+func aparaReservaDaLinha(ctx context.Context, r ConfirmacaoRepos, linha *entity.SalesOrderItem, aberto decimal.Decimal) error {
+	linhas, err := r.Pedidos.ListItems(ctx, linha.SalesOrderCode)
+	if err != nil {
+		return err
+	}
+	alvo := linhaDaReserva{Code: linha.Code, ItemCode: linha.ItemCode, Unica: true}
+	for _, outra := range linhas {
+		if outra.Code != linha.Code && outra.ItemCode == linha.ItemCode && outra.IsActive {
+			alvo.Unica = false
+		}
+	}
+	ativas, err := r.Estoque.ListActiveReservations(ctx)
+	if err != nil {
+		return fmt.Errorf("lendo as reservas do pedido %d: %w", linha.SalesOrderCode, err)
+	}
+	var daLinha []*stockentity.StockReservation
+	reservado := decimal.Zero
+	for _, res := range ativas {
+		if res.ReferenceType == stockentity.ReferenceTypeSalesOrder && res.ReferenceCode == linha.SalesOrderCode && alvo.eDaLinha(res) {
+			daLinha = append(daLinha, res)
+			reservado = reservado.Add(res.Quantity)
+		}
+	}
+	if !reservado.GreaterThan(aberto) {
+		return nil
+	}
+	for _, res := range daLinha {
+		if err := r.Estoque.CancelReservation(ctx, res.ID); err != nil {
+			return fmt.Errorf("soltando a reserva %d da linha %d: %w", res.ID, linha.Code, err)
+		}
+	}
+	if !aberto.IsPositive() {
+		return nil
+	}
+	modelo := daLinha[0]
+	code := linha.Code
+	if _, err := r.Estoque.CreateReservation(ctx, &stockentity.StockReservation{
+		ItemCode: modelo.ItemCode, Mask: modelo.Mask, WarehouseID: modelo.WarehouseID, Quantity: aberto,
+		ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: linha.SalesOrderCode, ReferenceItemCode: &code,
+		ReservationDate: modelo.ReservationDate, ExpirationDate: modelo.ExpirationDate, Status: "ACTIVE",
+		Notes: modelo.Notes, CreatedBy: modelo.CreatedBy,
+	}); err != nil {
+		return fmt.Errorf("refazendo a reserva da linha %d com %s: %w", linha.Code, aberto.String(), err)
+	}
+	return nil
+}
+
+// manterSeAusente: nil é "não informado" (mantém); "" limpa.
+func manterSeAusente(novo, atual *string) *string {
+	if novo == nil {
+		return atual
+	}
+	if *novo == "" {
+		return nil
+	}
+	return novo
 }

@@ -89,7 +89,7 @@ func (h *ProductionOrderHandler) Maintain(w http.ResponseWriter, r *http.Request
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) ListMaterials(w http.ResponseWriter, r *http.Request) {
@@ -331,7 +331,7 @@ func (h *ProductionOrderHandler) Create(w http.ResponseWriter, r *http.Request) 
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusCreated, result)
+	security.RespondJSON(w, http.StatusCreated, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
@@ -375,7 +375,7 @@ func (h *ProductionOrderHandler) Start(w http.ResponseWriter, r *http.Request) {
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.Request) {
@@ -391,7 +391,7 @@ func (h *ProductionOrderHandler) AddAppointment(w http.ResponseWriter, r *http.R
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusCreated, result)
+	security.RespondJSON(w, http.StatusCreated, production_order_uc.ToProductionAppointmentResponse(result))
 }
 
 func (h *ProductionOrderHandler) AddConsumption(w http.ResponseWriter, r *http.Request) {
@@ -407,7 +407,7 @@ func (h *ProductionOrderHandler) AddConsumption(w http.ResponseWriter, r *http.R
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusCreated, result)
+	security.RespondJSON(w, http.StatusCreated, production_order_uc.ToProductionConsumptionResponse(result))
 }
 
 func (h *ProductionOrderHandler) Complete(w http.ResponseWriter, r *http.Request) {
@@ -427,7 +427,7 @@ func (h *ProductionOrderHandler) Complete(w http.ResponseWriter, r *http.Request
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) Close(w http.ResponseWriter, r *http.Request) {
@@ -442,7 +442,7 @@ func (h *ProductionOrderHandler) Close(w http.ResponseWriter, r *http.Request) {
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
@@ -457,7 +457,7 @@ func (h *ProductionOrderHandler) Cancel(w http.ResponseWriter, r *http.Request) 
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	security.RespondJSON(w, http.StatusOK, result)
+	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
 }
 
 func (h *ProductionOrderHandler) GetAppointments(w http.ResponseWriter, r *http.Request) {

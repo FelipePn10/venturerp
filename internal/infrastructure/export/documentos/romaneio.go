@@ -150,7 +150,7 @@ func (Gerador) Romaneio(d uc.Romaneio) []byte {
 		}
 	} else {
 		p.Text(mg+8, f.y+34, neg, 10, branco, "—")
-		p.Text(mg+100, f.y+30, ita, 7.6, ambar, "Romaneio ainda sem NF-e vinculada: a carga não sai sem nota (vincule em VEXP0100).")
+		p.Text(mg+100, f.y+30, ita, 7.6, ambar, "Romaneio ainda sem NF-e vinculada: a carga não sai sem nota fiscal.")
 	}
 	f.y += 64
 

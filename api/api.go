@@ -726,6 +726,8 @@ func (app *application) mount() chi.Router {
 
 	// mrp_calculation
 	mrpRepo := mrpCalculation.NewMRPCalculationRepositorySQLC(queries, app.db.Pool)
+	// O custo-padrão usa a mesma fórmula de perdas (parâmetro 20) do MRP e da OF.
+	standardCostUC.WithPerdas(mrpRepo)
 	supplyPort := planned.NewPlannedOrderSupplyAdapter(queries)
 	mrpService := mrpservice.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR, rRepo, itemRepoStructureQuery)
 	// Cenários de simulação: o motor lê os ajustes do cenário dono do plano.
@@ -761,6 +763,9 @@ func (app *application) mount() chi.Router {
 	planningAutoRunUC := &planning_uc.AutoRunPlanningUseCase{
 		Pipeline: planningPipelineUC, Repo: planningRunRepo, Auth: authService,
 		Session: planningsched.SessaoDaEmpresa,
+		AoFalhar: func(s planning_uc.AutoRunSettings, err error) {
+			app.logger.Error("planejamento automático falhou", "empresa", s.EnterpriseCode, "plano", s.PlanCode, "error", err)
+		},
 	}
 	planningHandler := handler.NewPlanningHandler(planningPipelineUC, planningAutoRunUC)
 	app.planningScheduler = planningsched.NewScheduler(planningAutoRunUC, app.logger)
@@ -782,7 +787,7 @@ func (app *application) mount() chi.Router {
 	plannedRepo := planned.NewPlannedOrderRepositorySQLC(queries)
 	plannedCreateUC := &planned_order_uc.CreatePlannedOrderUseCase{Repo: plannedRepo, Auth: authService}
 	plannedListUC := &planned_order_uc.ListPlannedOrdersUseCase{Repo: plannedRepo, Auth: authService}
-	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Repo: plannedRepo, Auth: authService, Params: planningParamsRepo, Items: itemRepo,
+	plannedFirmUC := &planned_order_uc.FirmPlannedOrderUseCase{Perdas: mrpRepo, Repo: plannedRepo, Auth: authService, Params: planningParamsRepo, Items: itemRepo,
 		Centros: independentDemandRepo}
 	plannedHandler := handler.NewPlannedOrderHandler(plannedCreateUC, plannedListUC, plannedFirmUC)
 
@@ -808,7 +813,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ProdOrderRepo = prodOrderRepo
 	plannedFirmUC.ServiceLinker = prodOrderRepo
 	plannedFirmUC.ReleaseValidator = prodOrderRepo
-	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo}
+	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo}
 	prodOrderCreateUC.Structure = itemRepoStructure
 	// Item sob controle de versão da estrutura só gera OF com MBOM aprovada.
 	bomVersionGate := bomHeaderRepo.New(queries, app.db.Pool).(productionOrderUc.VersaoDaEstrutura)
@@ -818,9 +823,9 @@ func (app *application) mount() chi.Router {
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderStartUC := &productionOrderUc.StartProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
-	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Repo: prodOrderRepo, Auth: authService, Employees: employeeRepo}
+	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService, Employees: employeeRepo}
 	prodOrderAddConsumptionUC := &productionOrderUc.AddConsumptionUseCase{Repo: prodOrderRepo, Auth: authService}
-	prodOrderCompleteUC := &productionOrderUc.CompleteProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderCompleteUC := &productionOrderUc.CompleteProductionOrderUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService}
 	prodOrderCloseUC := &productionOrderUc.CloseProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderCancelUC := &productionOrderUc.CancelProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderGetAppointmentsUC := &productionOrderUc.GetAppointmentsUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -1039,6 +1044,8 @@ func (app *application) mount() chi.Router {
 	// Captured so the automatic credit check and stock reservation (ATP) can be
 	// attached once the customer/financial/stock repositories are available below.
 	changeStatusSalesOrderUC := &sales_order_uc.ChangeStatusSalesOrderUseCase{Repo: soRepo, Auth: authService}
+	cancelSalesOrderItemUC := &sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService}
+	cancelSalesOrderUC := &sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService, Titulos: financialRepo.NewFinancialRepositoryPG(app.db.Pool).(sales_order_uc.RecebiveisDoPedido)}
 	// Motor de aprovação: os módulos pedem aprovação e os efetivadores de cada
 	// tipo são ligados mais abaixo, quando os repositórios existem.
 	aprovacaoUC := &aprovacao_uc.UseCase{Repo: aprovacaoRepo.New(app.db.Pool), Auth: authService}
@@ -1058,7 +1065,7 @@ func (app *application) mount() chi.Router {
 		&sales_order_uc.ListSalesOrdersUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrdersByCustomerUseCase{Repo: soRepo, Auth: authService},
 		&sales_order_uc.ListSalesOrdersByStatusUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.CancelSalesOrderUseCase{Repo: soRepo, Auth: authService, Titulos: financialRepo.NewFinancialRepositoryPG(app.db.Pool).(sales_order_uc.RecebiveisDoPedido)},
+		cancelSalesOrderUC,
 		&sales_order_uc.BlockSalesOrderUseCase{Repo: soRepo, Auth: authService},
 		unblockSalesOrderUC,
 		changeStatusSalesOrderUC,
@@ -1072,7 +1079,7 @@ func (app *application) mount() chi.Router {
 		createSalesOrderItemUC,
 		updateSalesOrderItemUC,
 		&sales_order_uc.ListSalesOrderItemsUseCase{Repo: soRepo, Auth: authService},
-		&sales_order_uc.CancelSalesOrderItemUseCase{Repo: soRepo, Auth: authService},
+		cancelSalesOrderItemUC,
 	)
 	// Cadastro de transportadora: o perfil de transporte do fornecedor (RNTRC,
 	// modal, tabela de frete, frota, regiões) e a cotação comparativa de frete.
@@ -1475,7 +1482,11 @@ func (app *application) mount() chi.Router {
 	})
 	// Efeitos da NF-e (estoque, reservas, títulos, pedido) como pendência
 	// reprocessável: rodam numa transação só, que também resolve a pendência.
+	// A NF-e cancelada devolve ao pedido a reserva que tinha consumido; a
+	// transação é a da confirmação do pedido (ligada mais abaixo).
+	reposicaoDeReservas := &sales_order_uc.ReposicaoDeReservas{}
 	efeitosNFe := &fiscalUC.EfeitosNFe{
+		Reservas:    reposicaoDeReservas,
 		Fiscal:      fiscalRepository,
 		Customers:   custRepo,
 		Orders:      soRepo,
@@ -1526,7 +1537,7 @@ func (app *application) mount() chi.Router {
 			SalesOrderRepo: soRepo,
 			Itens:          fiscalEntryDocs,
 		},
-		&fiscalUC.AuthorizeFiscalExitUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
+		&fiscalUC.AuthorizeFiscalExitUseCase{ConferenciaEstoque: previaNFeUC, Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
 		&fiscalUC.CancelFiscalExitUseCase{EstoqueDaNota: stockRepository, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, BeneficiamentoEstorno: customerMaterialUC, Faturamento: faturamentoDoPedido, Pedidos: soRepo, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC},
@@ -1600,9 +1611,9 @@ func (app *application) mount() chi.Router {
 	// fiscal: NFS-e (service invoices)
 	nfseRepository := nfseRepo.NewNFSeRepositoryPG(app.db.Pool)
 	nfseHandler := handler.NewNFSeHandler(
-		&nfse_uc.CreateNFSeUseCase{Repo: nfseRepository, Auth: authService},
-		&nfse_uc.AuthorizeNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService},
-		&nfse_uc.CancelNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService},
+		&nfse_uc.CreateNFSeUseCase{Repo: nfseRepository, Auth: authService, Clientes: custRepo},
+		&nfse_uc.AuthorizeNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService, Titulos: fRepo.(nfse_uc.TitulosDaNFSe)},
+		&nfse_uc.CancelNFSeUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService, Titulos: fRepo.(nfse_uc.TitulosDaNFSe)},
 		&nfse_uc.ListNFSeUseCase{Repo: nfseRepository, Auth: authService},
 		&nfse_uc.GetNFSeUseCase{Repo: nfseRepository, Auth: authService},
 	)
@@ -1676,6 +1687,11 @@ func (app *application) mount() chi.Router {
 		Transacao: changeStatusSalesOrderUC.Transacao, Reserver: changeStatusSalesOrderUC.Reserver,
 	}
 	unblockSalesOrderUC.Conclusao = conclusaoDoDesbloqueio
+	// O cancelamento solta as reservas e fecha as linhas na mesma transação.
+	cancelSalesOrderUC.Transacao = changeStatusSalesOrderUC.Transacao
+	cancelSalesOrderItemUC.Transacao = changeStatusSalesOrderUC.Transacao
+	updateSalesOrderItemUC.Transacao = changeStatusSalesOrderUC.Transacao
+	reposicaoDeReservas.Transacao = changeStatusSalesOrderUC.Transacao
 	aprovacaoUC.Registrar(aprovacao.LiberacaoCredito, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusaoDoDesbloqueio, Tipo: aprovacao.LiberacaoCredito, Aprovacoes: aprovacaoUC})
 	aprovacaoUC.Registrar(aprovacao.PedidoPoliticaComercial, &sales_order_uc.LiberacaoDeCredito{Conclusao: conclusaoDoDesbloqueio, Tipo: aprovacao.PedidoPoliticaComercial, Aprovacoes: aprovacaoUC})
 

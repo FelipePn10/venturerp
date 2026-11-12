@@ -22,8 +22,10 @@ import (
 )
 
 type AddAppointmentUseCase struct {
-	Repo repository.ProductionOrderRepository
-	Auth ports.AuthService
+	// Perdas lê a fórmula de perdas (parâmetro 20), a mesma do MRP. Opcional.
+	Perdas LeitorDaFormulaDePerda
+	Repo   repository.ProductionOrderRepository
+	Auth   ports.AuthService
 	// StructureRepo and StockRepo are optional. When both are set and the
 	// appointment carries a backflush warehouse, the BOM components are consumed
 	// automatically (OUT) in proportion to the produced quantity.
@@ -70,6 +72,9 @@ func (uc *AddAppointmentUseCase) Execute(
 		return nil, err
 	}
 	dto.EmployeeID = &operador
+	if err := conferirHorasDoApontamento(dto.StartTime, dto.EndTime); err != nil {
+		return nil, err
+	}
 	if dto.ProducedQty.IsNegative() || dto.ScrappedQty.IsNegative() || !dto.ProducedQty.Add(dto.ScrappedQty).IsPositive() {
 		return nil, errorsuc.NewValidationError("quantidades boas/refugadas devem ser nao negativas e possuir total maior que zero")
 	}
@@ -159,6 +164,10 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 	if rawErr != nil {
 		return nil, fmt.Errorf("lendo a estrutura do item para a baixa dos componentes: %w", rawErr)
 	}
+	formula, err := formulaDePerda(ctx, uc.Perdas)
+	if err != nil {
+		return nil, err
+	}
 	var baixas []*stockentity.StockMovement
 
 	refType := stockentity.ReferenceTypeProductionOrder
@@ -179,13 +188,13 @@ func (uc *AddAppointmentUseCase) planejarBaixas(ctx context.Context, dto request
 		if c.fixed {
 			base = decimal.NewFromInt(1)
 		}
-		consumed := structentity.QuantidadeComPerdaDecimal(base.Mul(c.qty), c.loss, structentity.FormulaPerdaPadrao)
+		consumed := structentity.QuantidadeComPerdaDecimal(base.Mul(c.qty), c.loss, formula)
 		if conheceBaixas {
 			acumulado := apontadoAntes.Add(dto.ProducedQty)
 			if c.fixed {
 				acumulado = decimal.NewFromInt(1)
 			}
-			exigido := structentity.QuantidadeComPerdaDecimal(acumulado.Mul(c.qty), c.loss, structentity.FormulaPerdaPadrao)
+			exigido := structentity.QuantidadeComPerdaDecimal(acumulado.Mul(c.qty), c.loss, formula)
 			consumed = decimal.Min(consumed, quantidadeAindaABaixar(exigido, baixado[c.code]))
 		}
 		if !consumed.IsPositive() {
@@ -231,4 +240,28 @@ type structureChild struct {
 	qty   decimal.Decimal
 	loss  decimal.Decimal
 	fixed bool
+}
+
+// conferirHorasDoApontamento valida a hora de início e de fim (HH:MM ou
+// HH:MM:SS). Hora em outro formato chegava ao banco e voltava como "erro
+// interno do servidor".
+func conferirHorasDoApontamento(inicio, fim *string) error {
+	ler := func(rotulo string, v *string) (*time.Time, error) {
+		if v == nil || strings.TrimSpace(*v) == "" {
+			return nil, nil
+		}
+		texto := strings.TrimSpace(*v)
+		for _, formato := range []string{"15:04", "15:04:05"} {
+			if t, err := time.Parse(formato, texto); err == nil {
+				return &t, nil
+			}
+		}
+		return nil, errorsuc.NewValidationError("a hora de " + rotulo + " deve estar no formato HH:MM (ex.: 08:30)")
+	}
+	if _, err := ler("início", inicio); err != nil {
+		return err
+	}
+	// Fim menor que o início é válido: turno que vira a noite (22:00 → 06:00).
+	_, err := ler("fim", fim)
+	return err
 }

@@ -115,11 +115,27 @@ func (h *ImpressaoHandler) titulos(receber bool) http.HandlerFunc {
 				}
 			}
 		}
+		if err == nil {
+			if f.PlanoContasID, err = inteiroParam(r, "plano_contas_id"); err == nil {
+				if f.CentroCustoID, err = inteiroParam(r, "centro_custo_id"); err == nil {
+					f.PedidoID, err = inteiroParam(r, "sales_order_id")
+				}
+			}
+		}
 		if err != nil {
 			security.RespondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		f.SomenteAbertos = r.URL.Query().Get("abertos") == "true"
+		qs := r.URL.Query()
+		f.SomenteAbertos = qs.Get("abertos") == "true"
+		f.SomenteVencidos = qs.Get("vencidos") == "true"
+		f.PorEmissao = strings.EqualFold(qs.Get("data"), "emissao")
+		f.Situacao = strings.TrimSpace(qs.Get("situacao"))
+		f.Documento = strings.TrimSpace(qs.Get("documento"))
+		f.TipoDocumento = strings.TrimSpace(qs.Get("tipo_documento"))
+		f.Aprovacao = strings.TrimSpace(qs.Get("status_aprovacao"))
+		f.ValorMinimo = valorDaQuery(qs, "valor_minimo")
+		f.ValorMaximo = valorDaQuery(qs, "valor_maximo")
 		a, err := h.UC.Titulos(r.Context(), receber, f)
 		h.responder(w, a, err)
 	}

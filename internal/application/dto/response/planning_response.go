@@ -16,8 +16,12 @@ type PlanningPipelineResponse struct {
 
 	APSOrders     int `json:"aps_orders"`
 	APSOperations int `json:"aps_operations"`
+	// APSLateOrders são as ordens de fabricação que, sequenciadas, terminam
+	// depois da data de necessidade.
+	APSLateOrders []int64 `json:"aps_late_orders,omitempty"`
 
-	// Viable is true when MRP completed and CRP found no capacity overload.
+	// Viable is true when MRP completed, CRP found no capacity overload and no
+	// sequenced order ends after its need date.
 	Viable bool     `json:"viable"`
 	Notes  []string `json:"notes,omitempty"`
 }

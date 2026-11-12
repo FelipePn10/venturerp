@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
 	routingrepo "github.com/FelipePn10/panossoerp/internal/domain/routing/repository"
 	"sort"
 	"time"
@@ -34,7 +35,35 @@ type StandardCostUseCase struct {
 	routing     routingReader // optional; when nil, falls back to the legacy average-rate estimate
 	thirdParty  thirdPartyCostReader
 	workCenters workCenterReader
+	// perdas lê a fórmula de perdas (parâmetro 20), a mesma do MRP e da OF.
+	perdas leitorDaFormulaDePerda
 }
+
+type leitorDaFormulaDePerda interface {
+	LoadTypedPlanningParams(ctx context.Context) (*mrpentity.TypedPlanningParams, error)
+}
+
+// WithPerdas faz o custo usar a fórmula de perdas configurada; sem ela vale a
+// padrão do sistema.
+func (uc *StandardCostUseCase) WithPerdas(l leitorDaFormulaDePerda) *StandardCostUseCase {
+	uc.perdas = l
+	return uc
+}
+
+func (uc *StandardCostUseCase) formulaDePerda(ctx context.Context) (int, error) {
+	if uc.perdas == nil {
+		return structentity.FormulaPerdaPadrao, nil
+	}
+	p, err := uc.perdas.LoadTypedPlanningParams(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("lendo a fórmula de perdas da estrutura (parâmetro 20): %w", err)
+	}
+	if p == nil || p.FormulaPerdasEstrutura == 0 {
+		return structentity.FormulaPerdaPadrao, nil
+	}
+	return p.FormulaPerdasEstrutura, nil
+}
+
 type workCenterReader interface {
 	ListActiveWorkCenterTypes(context.Context, string, int, int) ([]*machineentity.MachineType, int64, error)
 }
@@ -189,8 +218,12 @@ func (uc *StandardCostUseCase) RollUp(ctx context.Context, dto request.CostRollu
 		return nil, fmt.Errorf("lendo o esquema de indiretos: %w", err)
 	}
 
+	formula, err := uc.formulaDePerda(ctx)
+	if err != nil {
+		return nil, err
+	}
 	unitCache := make(map[int64]decimal.Decimal)
-	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache, regras, quando)
+	result, err := uc.rollupItem(ctx, dto.ItemCode, dto.Mask, 0, lotSize, unitCache, regras, quando, formula)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +408,7 @@ func (n *costNode) total() decimal.Decimal {
 // etapa agrega × o que veio de baixo" é o que diz onde o custo subiu.
 func (uc *StandardCostUseCase) rollupItem(
 	ctx context.Context, itemCode int64, mask string, level int, lotSize decimal.Decimal,
-	unitCache map[int64]decimal.Decimal, regras []*entity.RegraDeRateio, quando time.Time,
+	unitCache map[int64]decimal.Decimal, regras []*entity.RegraDeRateio, quando time.Time, formula int,
 ) (*costNode, error) {
 	children, err := uc.repo.GetDirectChildren(ctx, itemCode, mask)
 	if err != nil {
@@ -405,7 +438,7 @@ func (uc *StandardCostUseCase) rollupItem(
 			if child.CustomerSupplied {
 				continue
 			}
-			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache, regras, quando)
+			childNode, err2 := uc.rollupItem(ctx, child.ChildCode, mask, level+1, lotSize, unitCache, regras, quando, formula)
 			if err2 != nil {
 				return nil, err2
 			}
@@ -415,7 +448,7 @@ func (uc *StandardCostUseCase) rollupItem(
 				comp.NivelInferior = comp.NivelInferior.Sub(childNode.total().Mul(child.QuantidadeNaUnidadeDeEstoque()))
 				continue
 			}
-			netQty := structentity.QuantidadeComPerdaDecimal(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, structentity.FormulaPerdaPadrao)
+			netQty := structentity.QuantidadeComPerdaDecimal(child.QuantidadeNaUnidadeDeEstoque(), child.LossPercentage, formula)
 			if child.IsFixedQty && lotSize.IsPositive() {
 				netQty = netQty.Div(lotSize) // componente por lote, amortizado pelo lote de referência
 			}

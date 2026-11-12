@@ -8,6 +8,10 @@ import (
 
 // PlannedOrderResponse is the API representation of a planned order.
 type PlannedOrderResponse struct {
+	// ID é a chave que a OF guarda em planned_order_id. Sem ele a tela não
+	// tinha como ligar a OF à ordem planejada que a gerou (o código é outra
+	// sequência e só coincide por acaso).
+	ID                int64      `json:"id"`
 	Code              int64      `json:"code"`
 	OrderNumber       int64      `json:"order_number"`
 	ItemCode          int64      `json:"item_code"`

@@ -143,7 +143,20 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 				return nil, fmt.Errorf("ligando a ordem planejada %d às demandas da sugestão %d: %w", existing.Code, suggestionCode, err)
 			}
 		}
-		return suggestionResponse(sugg.Code, existing), nil
+		result := suggestionResponse(sugg.Code, existing)
+		// A ordem planejada existe mas não chegou a ser firmada: a tentativa
+		// anterior a criou e falhou no passo de firmar (roteiro sem etapas,
+		// validação de liberação…). Sem retomar aqui, o segundo clique devolvia
+		// "sucesso" com a ordem ainda planejada e a OF nunca nascia.
+		if uc.Firmer != nil && firm && existing.IsActive && !existing.IsFirm && existing.Status == types.StatusPlanned {
+			firmed, ferr := uc.Firmer.Execute(ctx, request.FirmOrderDTO{OrderCode: existing.Code})
+			if ferr != nil {
+				return nil, fmt.Errorf("firming planned order %d from suggestion %d: %w", existing.Code, suggestionCode, ferr)
+			}
+			result.Status = firmed.Status
+			result.IsFirm = firmed.IsFirm
+		}
+		return result, nil
 	} else if !errorsuc.EhNaoEncontrado(existingErr) {
 		return nil, fmt.Errorf("conferindo se a sugestão já foi firmada: %w", existingErr)
 	}

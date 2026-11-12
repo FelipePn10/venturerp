@@ -439,6 +439,15 @@ máxima de produção em alto volume.
 | POST | `/api/cutting-plans/{id}/stock` | Adiciona peça de estoque |
 | DELETE | `/api/cutting-plans/{id}/stock/{stockId}` | Remove peça de estoque |
 
+**Medidas conforme o tipo de corte** (`entity/dimensoes.go`): plano `LINEAR_1D`
+exige comprimento em toda peça e barra; `GUILLOTINE_2D` e `TRUE_SHAPE_2D` exigem
+largura e altura em toda peça e chapa (retalho incluído). A conferência roda na
+criação (antes de gravar qualquer coisa — o plano não fica pela metade), ao
+adicionar peça ou estoque e de novo ao otimizar, e responde 422 dizendo qual peça
+ou estoque está sem a medida. Antes, a barra sem comprimento (ou a chapa sem
+largura/altura) era ignorada pelo otimizador e o plano saía "otimizado" com
+todas as peças em `unplaced`.
+
 ### Exemplo — criar e otimizar
 ```http
 POST /api/cutting-plans

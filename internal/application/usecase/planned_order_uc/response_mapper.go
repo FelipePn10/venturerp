@@ -10,6 +10,7 @@ func toPlannedOrderResponse(o *entity.PlannedOrder) *response.PlannedOrderRespon
 		return nil
 	}
 	return &response.PlannedOrderResponse{
+		ID:                o.ID,
 		Code:              o.Code,
 		OrderNumber:       o.OrderNumber,
 		ItemCode:          o.ItemCode,

@@ -40,6 +40,8 @@ type productionRouteExploder interface {
 type AtomicOrderCreator func(context.Context, *entity.ProductionOrder, []*entity.ProductionOrderMaterial, int64) (*entity.ProductionOrder, error)
 
 type CreateProductionOrderUseCase struct {
+	// Perdas lê a fórmula de perdas (parâmetro 20), a mesma do MRP. Opcional.
+	Perdas           LeitorDaFormulaDePerda
 	CreateAtomically AtomicOrderCreator
 	Repo             repository.ProductionOrderRepository
 	Auth             ports.AuthService
@@ -184,6 +186,10 @@ func (uc *CreateProductionOrderUseCase) Execute(
 			return nil, fmt.Errorf("lendo as respostas da máscara do item: %w", errMascara)
 		}
 	}
+	formula, err := formulaDePerda(ctx, uc.Perdas)
+	if err != nil {
+		return nil, err
+	}
 	materials := []*entity.ProductionOrderMaterial{}
 	rework := false
 	for _, child := range structentity.SelectPrimarySubstituteComponents(vigentes) {
@@ -197,11 +203,12 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		if child.CustomerSupplied {
 			continue
 		}
-		quantity := perUnit
-		if !child.IsFixedQty {
-			quantity = quantity.Mul(dto.PlannedQty)
+		base := dto.PlannedQty
+		if child.IsFixedQty {
+			base = decimal.NewFromInt(1)
 		}
-		quantity = structentity.QuantidadeComPerdaDecimal(quantity, child.LossPercentage, structentity.FormulaPerdaPadrao)
+		// Mesma conta e mesma escala do MRP: a compra que ele sugeriu cobre a OF.
+		quantity := structentity.QuantidadeDoComponente(base, perUnit, child.LossPercentage, formula)
 		automatic, warehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
 		if infoErr != nil {
 			return nil, infoErr

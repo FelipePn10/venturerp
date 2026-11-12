@@ -471,7 +471,8 @@ func impedimentosDoPedido(p *salesentity.SalesOrder, linhas []linhaPedido, ender
 	if !temPendente && p.Status != salesentity.SalesOrderStatusInvoiced {
 		out = append(out, "não há quantidade pendente: tudo já foi faturado ou está em nota não autorizada")
 	}
-	return out
+	// O mesmo item em duas linhas repetia a mesma pendência.
+	return semRepetir(out)
 }
 
 // codigoDaLinha: as mensagens citam o código que a pessoa conhece (RN-01001),

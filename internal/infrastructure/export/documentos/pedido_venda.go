@@ -202,6 +202,7 @@ func (Gerador) PedidoVenda(d uc.PedidoVenda) []byte {
 	ty += 13
 	if len(d.Parcelas) == 0 {
 		f.texto(mg+6, ty+9, ita, 7.3, cinza, "Pagamento à vista, na emissão da nota.")
+		ty += 13
 	}
 	for _, par := range d.Parcelas {
 		f.texto(mg+6, ty+9, reg, 7.5, tinta, fmt.Sprintf("%dª", par.Numero))

@@ -38,13 +38,18 @@ func (uc *BaixarContaPagarUseCase) Execute(ctx context.Context, id int64, dto re
 		return err
 	}
 
-	if cp.Status != entity.ContaPagarStatusPendente && cp.Status != entity.ContaPagarStatusAprovado {
-		return errorsuc.NewValidationError(fmt.Sprintf("conta a pagar deve estar PENDENTE ou APROVADO para baixa, status: %s", cp.Status))
+	// Título vencido continua em aberto: é justamente o que mais precisa ser
+	// pago. Antes só PENDENTE e APROVADO passavam e o vencido não tinha baixa.
+	if cp.Status != entity.ContaPagarStatusPendente && cp.Status != entity.ContaPagarStatusAprovado && cp.Status != entity.ContaPagarStatusVencido {
+		return errorsuc.NewValidationError(fmt.Sprintf("só título em aberto (pendente, aprovado ou vencido) pode ser pago; este está %s", cp.Status))
 	}
 
 	dataPagamento, err := time.Parse("2006-01-02", dto.DataPagamento)
 	if err != nil {
 		return errorsuc.NewValidationError("data de pagamento inválida: use o formato AAAA-MM-DD")
+	}
+	if err := conferirContaBancaria(ctx, uc.Repo, dto.ContaBancariaID); err != nil {
+		return err
 	}
 
 	valorPago := dto.ValorPago.Round(2)

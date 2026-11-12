@@ -25,7 +25,15 @@ import (
 	"github.com/google/uuid"
 )
 
+// conferenciaDeEstoque é a conferência de saldo da prévia (PreviaNFeUseCase).
+type conferenciaDeEstoque interface {
+	ConferirEstoqueParaTransmitir(ctx context.Context, exit *entity.FiscalExit, items []*entity.FiscalExitItem) error
+}
+
 type AuthorizeFiscalExitUseCase struct {
+	// ConferenciaEstoque recusa a transmissão da nota cuja baixa de estoque
+	// seria recusada depois de autorizada. Opcional.
+	ConferenciaEstoque conferenciaDeEstoque
 	// CFOPs: a autorização recusa CFOP que a SEFAZ recusaria.
 	CFOPs CatalogoCFOP
 	// Series: números de série das linhas, impressos no infAdProd do item.
@@ -203,6 +211,13 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if uc.Efeitos != nil && exit.FiscalEntryID == nil {
 		if err := uc.Efeitos.PreConferirDepositos(ctx, exit, items); err != nil {
 			return nil, err
+		}
+		// E o saldo desse depósito: sem ele a baixa é recusada depois, com a
+		// nota já autorizada.
+		if uc.ConferenciaEstoque != nil {
+			if err := uc.ConferenciaEstoque.ConferirEstoqueParaTransmitir(ctx, exit, items); err != nil {
+				return nil, err
+			}
 		}
 	}
 

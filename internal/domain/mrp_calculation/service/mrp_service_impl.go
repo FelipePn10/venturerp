@@ -766,7 +766,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				errs[fmt.Sprintf("item_%d", input.ItemCode)] = err.Error()
 				continue
 			}
-			firmSupplyUsed := firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate)
+			firmSupplyUsed := firmSupplyForItem(supplyMap, input.ItemCode, input.NeedDate).Add(output.FirmeAntecipada)
 			advanceNettingState(input, output, snapshotMap, supplyMap)
 
 			if _, errPerfil := s.MRPRepo.CreateProfile(ctx, &entity.MRPItemProfile{
@@ -777,7 +777,7 @@ func (s *MRPServiceImpl) calculateMRP(
 				// Necessidade líquida negativa = o estoque/firmes sobram: não há
 				// ordem planejada. Antes o perfil gravava o negativo e o
 				// "planejado" do item aparecia como −400.
-				OrdersPlanned:  decimal.Max(decimal.Zero, output.NetRequirement),
+				OrdersPlanned:  ordensPlanejadasDoPerfil(output),
 				OrdersFirm:     firmSupplyUsed,
 				StockProjected: output.StockProjected,
 				LLC:            level,
@@ -786,6 +786,9 @@ func (s *MRPServiceImpl) calculateMRP(
 				registrarErro(errs, "perfil", errPerfil)
 			}
 			totalItems++
+			if output.NaoPlanejado != "" {
+				excecoes.addNotPlanned(input.ItemCode, input.NeedDate, output.NetRequirement, output.NaoPlanejado)
+			}
 
 			for _, suggestion := range output.PlannedOrders {
 				suggestion.PlanCode = planCode
@@ -805,6 +808,7 @@ func (s *MRPServiceImpl) calculateMRP(
 					}
 					excecoes.addSuggestion(suggestion)
 					excecoes.addFirmFence(suggestion)
+					excecoes.addPastStart(suggestion, today())
 				}
 
 				if suggestion.StartDate == nil || !suppliesItem(suggestion) {
@@ -1323,6 +1327,31 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		NetRequirement: netReq,
 	}
 
+	// Horizonte de reprogramação: a ordem firme que chega depois desta
+	// necessidade, mas dentro do horizonte, cobre a falta — o planejador a
+	// antecipa (mensagem RESCHEDULE_IN) em vez de receber uma sugestão nova para
+	// a mesma falta, que somada à ordem existente dobrava o suprimento.
+	if netReq.IsPositive() && params != nil && params.HorizonteReprogramacaoDias > 0 {
+		limite := today().AddDate(0, 0, params.HorizonteReprogramacaoDias)
+		antecipada := anteciparFirmes(supplyMap, input.ItemCode, input.NeedDate, limite, netReq)
+		if antecipada.IsPositive() {
+			netReq = netReq.Sub(antecipada)
+			stockProjected = stockProjected.Add(antecipada)
+			output.FirmeAntecipada = antecipada
+			output.NetRequirement = netReq
+			output.StockProjected = stockProjected
+		}
+	}
+
+	// Sobra menor que a menor quantidade que a sugestão consegue gravar não é
+	// necessidade: é o resto do arredondamento do suprimento já firmado (a
+	// ordem guarda 4 casas, a explosão calcula em 6). Sem isto o recálculo
+	// sugeria uma ordem de 0,0000 para o item que acabou de ser comprado.
+	if netReq.IsPositive() && netReq.LessThan(menorQuantidadeDeOrdem) {
+		netReq = decimal.Zero
+		output.NetRequirement = decimal.Zero
+		output.StockProjected = decimal.Zero
+	}
 	if !netReq.IsPositive() {
 		return output, nil
 	}
@@ -1341,7 +1370,9 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	if !minLot.IsPositive() {
 		minLot = cachedItem.minimumLot
 	}
-	netReq = aplicaPoliticaDeLote(netReq, minLot, cachedItem.multipleLot)
+	// Para cima, na escala em que a ordem é gravada: arredondada para baixo ela
+	// cobriria menos que a necessidade e o recálculo veria uma falta residual.
+	netReq = aplicaPoliticaDeLote(netReq, minLot, cachedItem.multipleLot).RoundCeil(escalaDaOrdem)
 
 	orderType := "FABRICACAO"
 	demandType := input.DemandType
@@ -1360,9 +1391,11 @@ func (s *MRPServiceImpl) calcNetReqFast(
 	case 1: // COMPRADO
 		orderType = "COMPRA"
 	case 2: // DE_TERCEIRO — no order generated
+		output.NaoPlanejado = "é item de terceiro (o material pertence ao cliente e chega por remessa)"
 		return output, nil
 	}
 	if cached.typeMRP != 0 { // PROJETO — planned manually
+		output.NaoPlanejado = "é planejado por projeto (tipo de MRP \"Projeto\"), fora do cálculo automático"
 		return output, nil
 	}
 
@@ -1492,7 +1525,9 @@ func (s *MRPServiceImpl) generateExceptionMessages(ctx context.Context, planCode
 			primeiro = fmt.Errorf("lendo os códigos dos itens das exceções: %w", primeiro)
 		}
 	}
-	for _, m := range append(append(basis.messages(), basis.firmFenceMessages()...), basis.demandMessages()...) {
+	mensagens := append(append(basis.messages(), basis.firmFenceMessages()...), basis.demandMessages()...)
+	mensagens = append(append(mensagens, basis.notPlannedMessages()...), basis.pastStartMessages()...)
+	for _, m := range mensagens {
 		m.PlanCode = planCode
 		if err := s.MRPRepo.CreateExceptionMessage(ctx, m); err != nil && primeiro == nil {
 			primeiro = err
@@ -2009,8 +2044,10 @@ func explode(
 // Fórmula 1: Qty = QtdPai * QtdComponente * (1 + %Perda/100)
 // Fórmula 2: Qty = QtdPai * QtdComponente / (1 - %Perda/100)
 // Fórmula 3: Qty = QtdPai * QtdComponente (ignora perda)
+// O resultado sai na escala da compra (structentity.QuantidadeDoComponente), a
+// mesma da OF que a ordem planejada vai gerar.
 func applyLossFormula(parentQty, childQtyPer, lossPercentage decimal.Decimal, formula int) decimal.Decimal {
-	return quantidadeComPerda(parentQty.Mul(childQtyPer.Round(6)), lossPercentage, formula)
+	return structentity.QuantidadeDoComponente(parentQty, childQtyPer, lossPercentage, formula)
 }
 
 func collectAllItemCodes(bomMap map[int64][]*structentity.ItemStructure, roots []int64) []int64 {
@@ -2039,6 +2076,47 @@ func firmSupplyForItem(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, 
 		}
 	}
 	return total
+}
+
+// anteciparFirmes consome, das ordens firmes do item que chegam DEPOIS da
+// necessidade e até o limite do horizonte de reprogramação, o que falta cobrir
+// — da que chega mais cedo para a mais tarde, só o necessário. O que sobra de
+// cada ordem continua disponível para as necessidades seguintes. Devolve o
+// total coberto.
+func anteciparFirmes(supplyMap map[int64][]ports.SupplyEntry, itemCode int64, necessidade, limite time.Time, falta decimal.Decimal) decimal.Decimal {
+	entradas := supplyMap[itemCode]
+	if len(entradas) == 0 || !falta.IsPositive() {
+		return decimal.Zero
+	}
+	candidatas := make([]int, 0, len(entradas))
+	for i, e := range entradas {
+		if e.ArrivalDate.After(necessidade) && !e.ArrivalDate.After(limite) && e.Quantity.IsPositive() {
+			candidatas = append(candidatas, i)
+		}
+	}
+	sort.SliceStable(candidatas, func(a, b int) bool {
+		return entradas[candidatas[a]].ArrivalDate.Before(entradas[candidatas[b]].ArrivalDate)
+	})
+	coberto := decimal.Zero
+	for _, i := range candidatas {
+		if !falta.IsPositive() {
+			break
+		}
+		usar := decimal.Min(falta, entradas[i].Quantity)
+		entradas[i].Quantity = entradas[i].Quantity.Sub(usar)
+		falta = falta.Sub(usar)
+		coberto = coberto.Add(usar)
+	}
+	// A ordem consumida por inteiro sai da lista: não sobra nada dela para as
+	// próximas necessidades.
+	restantes := entradas[:0]
+	for _, e := range entradas {
+		if e.Quantity.IsPositive() {
+			restantes = append(restantes, e)
+		}
+	}
+	supplyMap[itemCode] = restantes
+	return coberto
 }
 
 func shouldPlanTechnicalAssistance(input *entity.MRPInput, params *entity.TypedPlanningParams) bool {
@@ -2076,6 +2154,24 @@ func (s *MRPServiceImpl) createNumberedSuggestion(ctx context.Context, suggestio
 		return created, nil
 	}
 	return nil, domainerr.NewValidation(fmt.Sprintf("nenhum número de ordem livre em %d tentativas a partir de %d", tentativas, *nextOrderNumber-tentativas))
+}
+
+// escalaDaOrdem é o número de casas em que a quantidade da sugestão e da ordem
+// planejada é gravada (NUMERIC(15,4)); menorQuantidadeDeOrdem, a menor
+// quantidade que essa escala representa.
+const escalaDaOrdem = 4
+
+var menorQuantidadeDeOrdem = decimal.New(1, -escalaDaOrdem)
+
+// ordensPlanejadasDoPerfil é o "planejado" que o perfil do item mostra: a
+// necessidade líquida que de fato virou sugestão. Item com necessidade mas
+// fora da geração de ordens (terceiro, projeto) mostra zero — antes mostrava a
+// necessidade inteira como planejada, sem existir sugestão nenhuma.
+func ordensPlanejadasDoPerfil(output *entity.MRPOutput) decimal.Decimal {
+	if output == nil || output.NaoPlanejado != "" {
+		return decimal.Zero
+	}
+	return decimal.Max(decimal.Zero, output.NetRequirement)
 }
 
 // suppliesItem diz se a sugestão traz o item para o estoque. A ordem de

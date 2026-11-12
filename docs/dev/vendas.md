@@ -115,6 +115,52 @@ atual e status diferente de `F`/`CANCELLED`.
 ### Regras Operacionais
 
 O cancelamento exige motivo e mantém o pedido consultável para preservar histórico.
+Na mesma transação ele fecha as linhas em aberto (`cancelled_qty` = solicitado −
+atendido; a linha vira `CANCELLED`, ou `DELIVERED` se já teve atendimento) e
+cancela as reservas de estoque `SALES_ORDER` ativas do pedido — sem isso o MRP e
+o saldo disponível continuavam enxergando a demanda. Pedido já cancelado ou
+faturado (`F`) é recusado: o faturado volta à carteira cancelando a NF-e. Se a
+NF-e de um pedido cancelado for cancelada depois, o que ela deixa de atender
+volta como quantidade cancelada e a linha não reabre.
+
+Cancelar a NF-e de um pedido em carteira devolve a mercadoria ao estoque, o
+saldo à linha e o pedido `F` a `P` — e agora também a **reserva** que a nota
+consumiu (`sales_order_uc/repor_reservas.go`): cada linha `OPEN`/`PARTIAL` é
+completada até o saldo em aberto, descontando as reservas ativas que já tem,
+limitada ao disponível do depósito. Antes a reserva não voltava e o estoque
+devolvido ficava livre para outro pedido. Pedido bloqueado, rascunho ou
+cancelado não reserva aqui (o bloqueado reserva no desbloqueio). A reposição
+roda depois dos efeitos do cancelamento (também no reprocesso da pendência) e,
+se falhar, volta como aviso — a nota já caiu na SEFAZ.
+
+Cancelar uma linha (`DELETE /items/{itemCode}/cancel`) cancela só o saldo não
+atendido (a linha parcialmente faturada fecha `DELIVERED` e continua visível),
+solta a reserva da linha e recalcula os totais na mesma transação; linha já
+cancelada ou atendida e pedido cancelado ou faturado são recusados. A reserva
+da confirmação guarda a **linha** do pedido em `reference_item_code` (gravava o
+produto, e a reprogramação da entrega e o cancelamento da linha não a achavam;
+migration `000488` corrige as reservas ativas sem ambiguidade). Pedidos
+cancelados antes desta versão tiveram linhas fechadas e reservas soltas pela
+migration `000487`.
+
+Alterar uma linha (`PUT /items/{itemCode}`) não mexe no atendido (vem das
+notas) nem desfaz cancelamento; a quantidade não fica abaixo de atendido +
+cancelado e o preço é reconferido na tabela. A reserva acompanha o saldo em
+aberto na mesma transação: a linha que diminuiu apara a reserva, a que aumentou
+reserva o acréscimo dentro do disponível (pedido confirmado e liberado). Os
+campos opcionais de texto/data (`delivery_date`, `lot`, `customer_delivery`,
+`coupon_delivery`, `notes`) ausentes no corpo mantêm o valor da linha; `""`
+limpa — antes o PUT só com a quantidade apagava a data de entrega e o lote. A
+onda de separação devolve a reserva ao pedido repartida pelas linhas do produto
+(gravava o código do produto). A NF-e autorizada consome primeiro a reserva da
+própria linha faturada (`sales_order_item_code` da linha da nota), depois a
+sem linha e só então a de outra linha — consumia na ordem das reservas, e com
+o produto em duas linhas a nota da linha B gastava a reserva da A, que ficava
+presa na linha já atendida.
+
+A troca de status (`PATCH /{code}/status`) não cancela nem fatura: `CANCELLED`
+exige o cancelamento acima (motivo, reservas, títulos) e `F` vem da NF-e
+autorizada. Status desconhecido e saída de `CANCELLED`/`F` também são recusados.
 O atendimento manual registra motivo e data de atendimento e marca o pedido como
 faturado/atendido no fluxo operacional. A conferência marca o resultado logístico;
 quando houver divergência, o motivo deve ser informado pelo operador. Pedidos em

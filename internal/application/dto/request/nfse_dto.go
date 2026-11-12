@@ -35,7 +35,11 @@ type CreateNFSeDTO struct {
 	AliquotaISS               decimal.Decimal `json:"aliquota_iss"`
 	IssRetido                 bool            `json:"iss_retido"`
 
-	SalesOrderCode *int64  `json:"sales_order_code,omitempty"`
+	SalesOrderCode *int64 `json:"sales_order_code,omitempty"`
+	// CustomerCode: com cliente, a autorização gera o título a receber.
+	CustomerCode *int64 `json:"customer_code,omitempty"`
+	// DataVencimento (AAAA-MM-DD) do título; vazio = emissão + 30 dias.
+	DataVencimento *string `json:"data_vencimento,omitempty"`
 	Notes          *string `json:"notes,omitempty"`
 }
 

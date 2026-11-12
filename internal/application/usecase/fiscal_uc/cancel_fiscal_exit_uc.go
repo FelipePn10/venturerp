@@ -86,6 +86,15 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 
 	// Nota transmitida: quem conta o prazo é a SEFAZ, a partir da autorização, e a
 	// recusa dela volta com o motivo. Sem transmissão não há a quem perguntar.
+	// Título da nota já recebido: cancelar a nota deixaria o dinheiro no caixa
+	// sem venda que o explicasse (o título recebido não é cancelado). Conferido
+	// ANTES da SEFAZ, como a entrada faz com o título pago — cancelada lá, a
+	// nota não volta.
+	if uc.FinancialRepo != nil {
+		if err := recusarNotaComTituloRecebido(ctx, uc.FinancialRepo, exit.ID); err != nil {
+			return nil, err
+		}
+	}
 	if exit.FocusRef == nil && prazoDeCancelamentoVencido(exit.DataEmissao, time.Now()) {
 		return nil, errorsuc.NewValidationError("o prazo de cancelamento desta nota já passou: ela foi emitida há mais de 24 horas")
 	}
@@ -204,6 +213,15 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 		}
 	}
 
+	// A mercadoria voltou ao estoque e o saldo à linha do pedido: a reserva
+	// que a nota consumiu volta para o pedido, senão o estoque devolvido fica
+	// livre para outro cliente e o pedido segue na carteira sem promessa.
+	if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+		if aviso := reporReservasDoPedido(ctx, uc.Efeitos.Reservas, exit); aviso != "" {
+			avisos = append(avisos, aviso)
+		}
+	}
+
 	resp := toFiscalExitResponse(updated)
 	resp.Warnings = append(resp.Warnings, avisosEfeitos...)
 	resp.Warnings = append(resp.Warnings, avisos...)
@@ -217,4 +235,25 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 func prazoDeCancelamentoVencido(emissao, agora time.Time) bool {
 	y, m, d := emissao.Date()
 	return agora.After(time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Add(48*time.Hour + 6*time.Hour))
+}
+
+// recusarNotaComTituloRecebido impede cancelar a NF-e de saída enquanto algum
+// título dela tiver recebimento.
+func recusarNotaComTituloRecebido(ctx context.Context, fin financialRepo.FinancialRepository, exitID int64) error {
+	titulos, err := fin.ListContasReceber(ctx, financialRepo.CRFilter{FiscalExitID: &exitID})
+	if err != nil {
+		return fmt.Errorf("lendo os títulos da nota: %w", err)
+	}
+	for _, t := range titulos {
+		if t != nil && t.ValorRecebido.IsPositive() {
+			doc := ""
+			if t.NumeroDocumento != nil {
+				doc = " " + *t.NumeroDocumento
+			}
+			return errorsuc.NewValidationError(fmt.Sprintf(
+				"o título%s desta nota já teve recebimento de %s: estorne o recebimento antes de cancelar a nota",
+				doc, t.ValorRecebido.StringFixed(2)))
+		}
+	}
+	return nil
 }

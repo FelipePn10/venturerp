@@ -41,3 +41,27 @@ func TestTituloAtrasadoESaldo(t *testing.T) {
 		t.Errorf("saldo %s atrasado %v dias %d", tt.Saldo(), tt.Atrasado(ref), tt.DiasParaVencer(ref))
 	}
 }
+
+// O cabeçalho do PDF descreve os filtros como a tela os mostra: valor em reais
+// e plano de contas pelo código e nome, nunca pelo número interno.
+func TestDescricaoDoFiltroDosTitulos(t *testing.T) {
+	min, max := decimal.RequireFromString("1500"), decimal.RequireFromString("1234567.8")
+	plano := int64(42)
+	got := descreverFiltro(FiltroTitulos{Documento: "NF-10", PlanoContasID: &plano, ValorMinimo: &min, ValorMaximo: &max, SomenteVencidos: true},
+		"2.1.01 Matéria-prima", "")
+	quer := "documento contendo NF-10 · plano de contas 2.1.01 Matéria-prima · valor de 1.500,00 a 1.234.567,80 · somente vencidos"
+	if got != quer {
+		t.Fatalf("descrição:\n got %q\nquer %q", got, quer)
+	}
+	if got := reais(&max); got != "1.234.567,80" {
+		t.Fatal(got)
+	}
+	neg := decimal.RequireFromString("-999.5")
+	if got := reais(&neg); got != "-999,50" {
+		t.Fatal(got)
+	}
+	centro := int64(7)
+	if got := descreverFiltro(FiltroTitulos{CentroCustoID: &centro}, "", ""); got != "centro de custo não cadastrado" {
+		t.Fatal(got)
+	}
+}

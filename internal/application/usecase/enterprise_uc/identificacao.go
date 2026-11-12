@@ -40,7 +40,8 @@ func (uc *IdentificacaoUseCase) Atualizar(ctx context.Context, dto request.Ident
 	}
 	d := &entity.DadosFiscais{
 		CNPJ: dto.CNPJ, RazaoSocial: dto.RazaoSocial, NomeFantasia: dto.NomeFantasia, IE: dto.InscricaoEstadual,
-		RegimeTributario: dto.RegimeTributario, UF: dto.UF, Municipio: dto.Municipio, CodigoMunicipio: dto.CodigoMunicipio,
+		InscricaoMunicipal: dto.InscricaoMunicipal,
+		RegimeTributario:   dto.RegimeTributario, UF: dto.UF, Municipio: dto.Municipio, CodigoMunicipio: dto.CodigoMunicipio,
 		CEP: dto.CEP, Logradouro: dto.Logradouro, Numero: dto.Numero, Complemento: dto.Complemento, Bairro: dto.Bairro,
 		Telefone: dto.Telefone, Email: dto.Email,
 	}
@@ -56,8 +57,16 @@ func (uc *IdentificacaoUseCase) Atualizar(ctx context.Context, dto request.Ident
 func toIdentificacaoResponse(d *entity.DadosFiscais) *response.IdentificacaoEmpresaResponse {
 	return &response.IdentificacaoEmpresaResponse{
 		CNPJ: d.CNPJ, RazaoSocial: d.RazaoSocial, NomeFantasia: d.NomeFantasia, InscricaoEstadual: d.IE,
-		RegimeTributario: d.RegimeTributario, UF: d.UF, Municipio: d.Municipio, CodigoMunicipio: d.CodigoMunicipio,
+		InscricaoMunicipal: valorOuVazio(d.InscricaoMunicipal),
+		RegimeTributario:   d.RegimeTributario, UF: d.UF, Municipio: d.Municipio, CodigoMunicipio: d.CodigoMunicipio,
 		CEP: d.CEP, Logradouro: d.Logradouro, Numero: d.Numero, Complemento: d.Complemento, Bairro: d.Bairro,
 		Telefone: d.Telefone, Email: d.Email,
 	}
+}
+
+func valorOuVazio(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

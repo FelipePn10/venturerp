@@ -12,6 +12,7 @@ import (
 	"time"
 
 	uc "github.com/FelipePn10/panossoerp/internal/application/usecase/impressao_uc"
+	stockrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +32,15 @@ func d(s string) decimal.Decimal {
 		return decimal.Zero
 	}
 	return v
+}
+
+// enderecoDeEntrega monta a linha do local de entrega com o CEP no formato
+// 00000-000 (o cadastro guarda só os dígitos).
+func enderecoDeEntrega(end, bairro, cidade, uf, cep string) string {
+	if len(cep) == 8 {
+		cep = cep[:5] + "-" + cep[5:]
+	}
+	return fmt.Sprintf("%s · %s · %s/%s · CEP %s", end, bairro, cidade, uf, cep)
 }
 
 func endereco(rua, numero, compl string) string {
@@ -127,13 +137,16 @@ func (c *Consultas) PedidoVenda(ctx context.Context, t uc.Tenant, code int64) (*
 			p.Cliente.Endereco, p.Cliente.Bairro, p.Cliente.Cidade, p.Cliente.UF, p.Cliente.CEP = end, bairro, cidade, uf, cep
 		}
 		if tipo == "ENTREGA" && p.EnderecoEntrega == "" {
-			p.EnderecoEntrega = fmt.Sprintf("%s · %s · %s/%s · CEP %s", end, bairro, cidade, uf, cep)
+			p.EnderecoEntrega = enderecoDeEntrega(end, bairro, cidade, uf, cep)
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	rows, err = c.pool.Query(ctx, `
-		SELECT soi.sequence, COALESCE(i.business_code, soi.item_code::text), COALESCE(NULLIF(i.commercial_description,''), i.name, ''),
+		SELECT soi.sequence, COALESCE(i.business_code, soi.item_code::text), `+nomeComercial("i")+`,
 		       COALESCE(fc.ncm,''), COALESCE(soi.sales_uom,'UN'),
 		       soi.requested_qty::text, soi.attended_qty::text, soi.cancelled_qty::text, soi.unit_price::text, soi.discount_pct::text,
 		       soi.total_net::text, soi.ipi_pct::text, COALESCE(soi.total_net_with_ipi - soi.total_net, 0)::text, soi.icms_pct::text,
@@ -163,6 +176,9 @@ func (c *Consultas) PedidoVenda(ctx context.Context, t uc.Tenant, code int64) (*
 		p.Itens = append(p.Itens, it)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	if condID != "0" {
 		pr, err := c.pool.Query(ctx, `
@@ -182,6 +198,9 @@ func (c *Consultas) PedidoVenda(ctx context.Context, t uc.Tenant, code int64) (*
 			p.Parcelas = append(p.Parcelas, par)
 		}
 		pr.Close()
+		if err := pr.Err(); err != nil {
+			return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+		}
 	}
 
 	nr, err := c.pool.Query(ctx, `
@@ -242,7 +261,7 @@ func (c *Consultas) NotaEntrada(ctx context.Context, t uc.Tenant, id int64) (*uc
 	c.enderecoFornecedor(ctx, supplierID, &n.Fornecedor)
 
 	rows, err := c.pool.Query(ctx, `
-		SELECT fi.sequence, COALESCE(i.business_code, fi.item_code::text, ''), COALESCE(fi.description, i.name, ''), COALESCE(fi.ncm,''),
+		SELECT fi.sequence, COALESCE(i.business_code, fi.item_code::text, ''), COALESCE(NULLIF(fi.description,''), `+nomeInterno("i")+`), COALESCE(fi.ncm,''),
 		       COALESCE(fi.cfop_entrada, fi.cfop, ''), COALESCE(fi.uom, i.warehouse_unit_of_measurement, ''),
 		       COALESCE(fi.cst_icms,''), fi.quantity::text, fi.unit_price::text, fi.total_price::text,
 		       fi.base_icms::text, fi.aliq_icms::text, fi.valor_icms::text, fi.aliq_ipi::text, fi.valor_ipi::text, fi.valor_pis::text, fi.valor_cofins::text,
@@ -278,6 +297,9 @@ func (c *Consultas) NotaEntrada(ctx context.Context, t uc.Tenant, id int64) (*uc
 		n.Itens = append(n.Itens, it)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	pr, err := c.pool.Query(ctx, `
 		SELECT fi.numero, COALESCE(NULLIF(fi.documento,''), cp.numero_documento, ''), fi.data_vencimento, fi.valor::text,
@@ -300,6 +322,9 @@ func (c *Consultas) NotaEntrada(ctx context.Context, t uc.Tenant, id int64) (*uc
 		n.Parcelas = append(n.Parcelas, p)
 	}
 	pr.Close()
+	if err := pr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 	if len(n.Parcelas) == 0 {
 		// Notas antigas: as parcelas estão só no contas a pagar.
 		cr, err := c.pool.Query(ctx, `SELECT COALESCE(parcela_numero,1), COALESCE(numero_documento,''), data_vencimento, valor_bruto::text, status, COALESCE(status_aprovacao,'')
@@ -316,6 +341,9 @@ func (c *Consultas) NotaEntrada(ctx context.Context, t uc.Tenant, id int64) (*uc
 			}
 			p.Valor, p.Titulo = d(v), strings.TrimSpace(st+" "+rotuloAprovacao(ap))
 			n.Parcelas = append(n.Parcelas, p)
+		}
+		if err := cr.Err(); err != nil {
+			return nil, fmt.Errorf("lendo os dados do documento: %w", err)
 		}
 	}
 	return n, nil
@@ -356,6 +384,73 @@ func (c *Consultas) enderecoFornecedor(ctx context.Context, supplierID int64, p 
 
 // ─── Títulos ────────────────────────────────────────────────────────────────
 
+// RotulosContabeis lê código e descrição do plano de contas e do centro de
+// custo filtrados, sempre da empresa da sessão; id de outra empresa fica vazio.
+func (c *Consultas) RotulosContabeis(ctx context.Context, t uc.Tenant, plano, centro *int64) (string, string, error) {
+	var p, cc string
+	if plano != nil {
+		err := c.pool.QueryRow(ctx, `SELECT codigo||' '||descricao FROM plano_contas WHERE id=$1 AND enterprise_id=$2`, *plano, t.ID).Scan(&p)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", "", fmt.Errorf("plano de contas: %w", err)
+		}
+	}
+	if centro != nil {
+		err := c.pool.QueryRow(ctx, `SELECT code::text||' '||description FROM cost_centers WHERE id=$1 AND enterprise_id=$2`, *centro, t.ID).Scan(&cc)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", "", fmt.Errorf("centro de custo: %w", err)
+		}
+	}
+	return p, cc, nil
+}
+
+// filtrosSecundarios acrescenta os demais filtros da carteira na tela, com as
+// mesmas regras da listagem: documento por trecho, plano de contas e centro de
+// custo pelo título ou pelo rateio, faixa pelo valor bruto. Filtro que não
+// existe na carteira (aprovação e tipo em receber, pedido em pagar) é ignorado.
+func filtrosSecundarios(tab string, receber bool, f uc.FiltroTitulos, args *[]any) string {
+	var q strings.Builder
+	param := func(v any) int {
+		*args = append(*args, v)
+		return len(*args)
+	}
+	if d := strings.TrimSpace(f.Documento); d != "" {
+		fmt.Fprintf(&q, " AND %s.numero_documento ILIKE '%%' || $%d || '%%'", tab, param(d))
+	}
+	rateio := func(coluna string, id int64) {
+		n := param(id)
+		if receber {
+			fmt.Fprintf(&q, " AND %s.%s = $%d", tab, coluna, n)
+			return
+		}
+		fmt.Fprintf(&q, " AND (%[1]s.%[2]s = $%[3]d OR EXISTS (SELECT 1 FROM contas_pagar_rateios rt WHERE rt.conta_pagar_id = %[1]s.id AND rt.%[2]s = $%[3]d))", tab, coluna, n)
+	}
+	if f.PlanoContasID != nil {
+		rateio("plano_contas_id", *f.PlanoContasID)
+	}
+	if f.CentroCustoID != nil {
+		rateio("centro_custo_id", *f.CentroCustoID)
+	}
+	if f.ValorMinimo != nil {
+		fmt.Fprintf(&q, " AND COALESCE(%s.valor_bruto,0) >= $%d::numeric", tab, param(f.ValorMinimo.String()))
+	}
+	if f.ValorMaximo != nil {
+		fmt.Fprintf(&q, " AND COALESCE(%s.valor_bruto,0) <= $%d::numeric", tab, param(f.ValorMaximo.String()))
+	}
+	if receber {
+		if f.PedidoID != nil {
+			fmt.Fprintf(&q, " AND %s.sales_order_id = $%d", tab, param(*f.PedidoID))
+		}
+		return q.String()
+	}
+	if v := strings.TrimSpace(f.TipoDocumento); v != "" {
+		fmt.Fprintf(&q, " AND %s.tipo_documento = $%d", tab, param(v))
+	}
+	if v := strings.TrimSpace(f.Aprovacao); v != "" {
+		fmt.Fprintf(&q, " AND UPPER(%s.status_aprovacao) = UPPER($%d)", tab, param(v))
+	}
+	return q.String()
+}
+
 func (c *Consultas) Titulos(ctx context.Context, t uc.Tenant, receber bool, f uc.FiltroTitulos) ([]uc.Titulo, error) {
 	var q string
 	if receber {
@@ -394,10 +489,19 @@ func (c *Consultas) Titulos(ctx context.Context, t uc.Tenant, receber bool, f uc
 	if receber {
 		tab = "cr"
 	}
-	q += fmt.Sprintf(` AND ($4::date IS NULL OR %[1]s.data_vencimento >= $4) AND ($5::date IS NULL OR %[1]s.data_vencimento <= $5)
-	                   AND (NOT $6 OR %[1]s.status NOT IN ('PAGO','RECEBIDO','CANCELADO','BAIXADO'))
-	                 ORDER BY %[1]s.data_vencimento, 4, %[1]s.id`, tab)
-	rows, err := c.pool.Query(ctx, q, t.ID, f.ParteID, f.NotaFiscalID, f.De, f.Ate, f.SomenteAbertos)
+	data := "data_vencimento"
+	if f.PorEmissao {
+		data = "data_emissao"
+	}
+	q += fmt.Sprintf(` AND ($4::date IS NULL OR %[1]s.%[2]s >= $4) AND ($5::date IS NULL OR %[1]s.%[2]s <= $5)
+	                   AND (NOT $6 OR UPPER(%[1]s.status) NOT IN ('PAGO','RECEBIDO','CANCELADO','BAIXADO'))
+	                   AND ($7 = '' OR UPPER(%[1]s.status) = UPPER($7))
+	                   AND (NOT $8 OR (%[1]s.data_vencimento < CURRENT_DATE AND UPPER(%[1]s.status) NOT IN ('PAGO','RECEBIDO','CANCELADO','BAIXADO')))
+`, tab, data)
+	args := []any{t.ID, f.ParteID, f.NotaFiscalID, f.De, f.Ate, f.SomenteAbertos, strings.TrimSpace(f.Situacao), f.SomenteVencidos}
+	q += filtrosSecundarios(tab, receber, f, &args)
+	q += fmt.Sprintf(" ORDER BY %[1]s.data_vencimento, 4, %[1]s.id", tab)
+	rows, err := c.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("títulos: %w", err)
 	}
@@ -458,7 +562,7 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 	// Demanda de origem: pedidos de venda em aberto e demandas independentes
 	// ativas — o que o MRP leu.
 	dr, err := c.pool.Query(ctx, `
-		SELECT 'Pedido de venda', 'Pedido '||so.order_number, COALESCE(cu.name,''), COALESCE(i.business_code,''), COALESCE(i.name,''),
+		SELECT 'Pedido de venda', 'Pedido '||so.order_number, COALESCE(cu.name,''), COALESCE(i.business_code,''), `+nomeInterno("i")+`,
 		       COALESCE(soi.sales_uom,'UN'), GREATEST(soi.requested_qty - soi.attended_qty - soi.cancelled_qty, soi.requested_qty)::text,
 		       COALESCE(soi.delivery_date, so.delivery_date)
 		  FROM sales_order_items soi
@@ -468,7 +572,7 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 		 WHERE so.enterprise_code = $3 AND so.is_active AND soi.is_active
 		   AND EXISTS (SELECT 1 FROM mrp_planned_suggestions s WHERE s.plan_code = $1 AND s.enterprise_id = $2 AND s.item_code = soi.item_code AND s.demand_type = 'SALES_ORDER')
 		UNION ALL
-		SELECT 'Demanda independente', 'Demanda '||idm.code, COALESCE(idm.motivo,''), COALESCE(i.business_code,''), COALESCE(i.name,''),
+		SELECT 'Demanda independente', 'Demanda '||idm.code, COALESCE(idm.motivo,''), COALESCE(i.business_code,''), `+nomeInterno("i")+`,
 		       COALESCE(i.warehouse_unit_of_measurement,'UN'), idm.quantity::text, idm.demand_date
 		  FROM independent_demands idm
 		  LEFT JOIN items i ON i.code = idm.item_code AND i.enterprise_id = $2
@@ -489,9 +593,12 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 		p.Demandas = append(p.Demandas, x)
 	}
 	dr.Close()
+	if err := dr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	sr, err := c.pool.Query(ctx, `
-		SELECT s.code, COALESCE(s.order_number,0), COALESCE(i.business_code, s.item_code::text), COALESCE(i.name,''), COALESCE(i.warehouse_unit_of_measurement,'UN'),
+		SELECT s.code, COALESCE(s.order_number,0), COALESCE(i.business_code, s.item_code::text), `+nomeInterno("i")+`, COALESCE(i.warehouse_unit_of_measurement,'UN'),
 		       s.order_type, COALESCE(s.llc,0), COALESCE(pi.business_code,''), s.quantity::text, s.start_date, s.need_date, COALESCE(s.demand_type,''),
 		       po.id IS NOT NULL OR poi.code IS NOT NULL OR COALESCE(pl.is_firm,false),
 		       COALESCE('OF '||po.id, 'PC '||poi.purchase_order_code, ''),
@@ -533,6 +640,9 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 		p.Sugestoes = append(p.Sugestoes, x)
 	}
 	sr.Close()
+	if err := sr.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	er, err := c.pool.Query(ctx, `
 		SELECT COALESCE(i.business_code, e.item_code::text), e.message_type, COALESCE(e.description,''), e.suggested_date, e.handled_at IS NOT NULL
@@ -582,6 +692,9 @@ func (c *Consultas) Capacidade(ctx context.Context, t uc.Tenant, plano int64) (*
 		p.Cargas = append(p.Cargas, x)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	// Ordens que formam a carga: operações das OFs firmadas pelo plano.
 	or, err := c.pool.Query(ctx, `
@@ -608,6 +721,9 @@ func (c *Consultas) Capacidade(ctx context.Context, t uc.Tenant, plano int64) (*
 		p.Ordens = append(p.Ordens, x)
 	}
 	or.Close()
+	if err := or.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	mr, err := c.pool.Query(ctx, `SELECT mt.name, m.name FROM machines m JOIN machine_types mt ON mt.code = m.machine_type_code
 	                               WHERE m.enterprise_id = $1 AND m.is_active ORDER BY 1, 2`, t.ID)
@@ -633,7 +749,7 @@ func (c *Consultas) Programacao(ctx context.Context, t uc.Tenant, de, ate time.T
 		_ = c.pool.QueryRow(ctx, `SELECT code||' — '||description FROM production_resource_groups WHERE id=$1 AND enterprise_id=$2`, *grupo, t.ID).Scan(&p.Grupo)
 	}
 	rows, err := c.pool.Query(ctx, `
-		SELECT COALESCE(m.name, mt.name, 'Sem máquina'), COALESCE(mt.name,''), po.id, COALESCE(i.business_code,''), COALESCE(i.name,''),
+		SELECT COALESCE(m.name, mt.name, 'Sem máquina'), COALESCE(mt.name,''), po.id, COALESCE(i.business_code,''), `+nomeInterno("i")+`,
 		       COALESCE(o.sequence,0), COALESCE(o.operation_name,''), po.planned_qty::text, ps.scheduled_start, ps.scheduled_end,
 		       COALESCE(o.status, ps.status), COALESCE(pl.need_date, po.end_date)
 		  FROM production_sequences ps
@@ -664,30 +780,39 @@ func (c *Consultas) Programacao(ctx context.Context, t uc.Tenant, de, ate time.T
 
 // ─── Kardex ─────────────────────────────────────────────────────────────────
 
-// sinal: tipos que somam no saldo. Os demais subtraem.
-const entradasKardex = `('IN','ENTRADA','EP','DEV','AJUSTE_ENTRADA','TRANSFER_IN','RETORNO')`
+// O kardex impresso usa as expressões do kardex da tela (stockrepo), para os
+// dois fecharem: a data que vale é a do documento (movement_date — o
+// lançamento com data passada cai no dia dele, não no da digitação), o sinal é
+// o do saldo (stockentity.SignedQuantity) e o valor é o total do movimento,
+// com o ajuste de custo (frete lançado depois da nota). Antes o impresso tinha
+// lista própria de entradas (EPP e EPE saíam como saída, o ajuste invertia),
+// contava pela hora da gravação e ignorava o ajuste de custo.
+const (
+	kardexQtd   = stockrepo.QtdComSinalSQL
+	kardexValor = stockrepo.ValorComSinalSQL
+)
 
 func (c *Consultas) Kardex(ctx context.Context, t uc.Tenant, f uc.FiltroKardex) (*uc.Kardex, error) {
 	k := &uc.Kardex{}
 	if f.Deposito != nil {
 		_ = c.pool.QueryRow(ctx, `SELECT code||' — '||description FROM warehouse WHERE id=$1 AND enterprise_id=$2`, *f.Deposito, t.ID).Scan(&k.Deposito)
 	}
-	fim := f.Ate.AddDate(0, 0, 1)
+	de, ate := f.De.Format("2006-01-02"), f.Ate.Format("2006-01-02")
 	rows, err := c.pool.Query(ctx, `
 		WITH mov AS (
-		  SELECT sm.*, (sm.movement_type IN `+entradasKardex+`) AS entrada
-		    FROM stock_movements sm
-		   WHERE sm.enterprise_id = $1 AND ($2::bigint IS NULL OR sm.warehouse_id = $2)
-		     AND sm.quantity <> 0 AND sm.created_at < $4
+		  SELECT m.item_code, m.movement_date, `+kardexQtd+` AS qs, `+kardexValor+` AS vs
+		    FROM stock_movements m
+		   WHERE m.enterprise_id = $1 AND ($2::bigint IS NULL OR m.warehouse_id = $2)
+		     AND m.movement_date <= $4::date
 		), itens AS (
-		  SELECT DISTINCT m.item_code FROM mov m WHERE m.created_at >= $3
+		  SELECT DISTINCT x.item_code FROM mov x WHERE x.movement_date >= $3::date AND (x.qs <> 0 OR x.vs <> 0)
 		)
-		SELECT i.code, COALESCE(i.business_code, i.code::text), COALESCE(i.name,''), COALESCE(i.warehouse_unit_of_measurement,'UN'),
-		       COALESCE((SELECT SUM(CASE WHEN m.entrada THEN m.quantity ELSE -m.quantity END) FROM mov m WHERE m.item_code = i.code AND m.created_at < $3),0)::text,
-		       COALESCE((SELECT SUM(CASE WHEN m.entrada THEN m.quantity*m.unit_price ELSE -m.quantity*m.unit_price END) FROM mov m WHERE m.item_code = i.code AND m.created_at < $3),0)::text
-		  FROM itens x JOIN items i ON i.code = x.item_code AND i.enterprise_id = $1
+		SELECT i.code, COALESCE(i.business_code, i.code::text), `+nomeInterno("i")+`, COALESCE(i.warehouse_unit_of_measurement,'UN'),
+		       COALESCE((SELECT SUM(x.qs) FROM mov x WHERE x.item_code = i.code AND x.movement_date < $3::date),0)::text,
+		       COALESCE((SELECT SUM(x.vs) FROM mov x WHERE x.item_code = i.code AND x.movement_date < $3::date),0)::text
+		  FROM itens y JOIN items i ON i.code = y.item_code AND i.enterprise_id = $1
 		 WHERE ($5 = '' OR i.business_code = $5 OR i.code::text = $5)
-		 ORDER BY 2`, t.ID, f.Deposito, f.De, fim, strings.TrimSpace(f.Item))
+		 ORDER BY 2`, t.ID, f.Deposito, de, ate, strings.TrimSpace(f.Item))
 	if err != nil {
 		return nil, fmt.Errorf("kardex: %w", err)
 	}
@@ -707,24 +832,28 @@ func (c *Consultas) Kardex(ctx context.Context, t uc.Tenant, f uc.FiltroKardex) 
 		lista = append(lista, x)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 	for _, x := range lista {
 		mr, err := c.pool.Query(ctx, `
-			SELECT sm.created_at, COALESCE(w.code,''), sm.movement_type, sm.movement_type IN `+entradasKardex+`, sm.quantity::text, sm.unit_price::text,
-			       CASE sm.reference_type
+			SELECT m.movement_date, COALESCE(w.code,''), m.movement_type, (`+kardexQtd+`)::text, m.unit_price::text, (`+kardexValor+`)::text,
+			       CASE m.reference_type
 			         WHEN 'NF_ENTRADA' THEN COALESCE('NF '||fe.numero_nf||' · '||LEFT(COALESCE(s.name,fe.razao_social_emitente,''),28), 'NF de entrada')
 			         WHEN 'NF_SAIDA' THEN COALESCE('NF-e '||fx.numero_nf||' · '||LEFT(COALESCE(fx.razao_social_destinatario,''),28), 'NF-e de saída')
-			         WHEN 'PRODUCTION_ORDER' THEN 'OF '||sm.reference_code
+			         WHEN 'PRODUCTION_ORDER' THEN 'OF '||m.reference_code
 			         WHEN 'ADJUSTMENT' THEN 'Ajuste manual'
-			         ELSE COALESCE(sm.reference_type,'')||COALESCE(' '||sm.reference_code,'') END,
-			       COALESCE(sm.lot,''), COALESCE(sm.notes,'')
-			  FROM stock_movements sm
-			  LEFT JOIN warehouse w ON w.id = sm.warehouse_id
-			  LEFT JOIN fiscal_entries fe ON sm.reference_type = 'NF_ENTRADA' AND fe.id = sm.reference_code AND fe.enterprise_id = sm.enterprise_id
+			         ELSE COALESCE(m.reference_type,'')||COALESCE(' '||m.reference_code,'') END,
+			       COALESCE(m.lot,''), COALESCE(m.notes,'')
+			  FROM stock_movements m
+			  LEFT JOIN warehouse w ON w.id = m.warehouse_id
+			  LEFT JOIN fiscal_entries fe ON m.reference_type = 'NF_ENTRADA' AND fe.id = m.reference_code AND fe.enterprise_id = m.enterprise_id
 			  LEFT JOIN suppliers s ON s.code = fe.supplier_code AND s.enterprise_id = fe.enterprise_id
-			  LEFT JOIN fiscal_exits fx ON sm.reference_type = 'NF_SAIDA' AND fx.id = sm.reference_code AND fx.enterprise_id = sm.enterprise_id
-			 WHERE sm.enterprise_id = $1 AND sm.item_code = $2 AND ($3::bigint IS NULL OR sm.warehouse_id = $3)
-			   AND sm.quantity <> 0 AND sm.created_at >= $4 AND sm.created_at < $5
-			 ORDER BY sm.created_at, sm.id`, t.ID, x.code, f.Deposito, f.De, fim)
+			  LEFT JOIN fiscal_exits fx ON m.reference_type = 'NF_SAIDA' AND fx.id = m.reference_code AND fx.enterprise_id = m.enterprise_id
+			 WHERE m.enterprise_id = $1 AND m.item_code = $2 AND ($3::bigint IS NULL OR m.warehouse_id = $3)
+			   AND m.movement_date >= $4::date AND m.movement_date <= $5::date
+			   AND (`+kardexQtd+` <> 0 OR `+kardexValor+` <> 0)
+			 ORDER BY m.movement_date, m.id`, t.ID, x.code, f.Deposito, de, ate)
 		if err != nil {
 			return nil, err
 		}
@@ -732,21 +861,21 @@ func (c *Consultas) Kardex(ctx context.Context, t uc.Tenant, f uc.FiltroKardex) 
 		saldo, valor := it.SaldoInicial, it.CustoInicial
 		for mr.Next() {
 			var m uc.MovimentoKardex
-			var q, cst string
-			if err := mr.Scan(&m.Data, &m.Deposito, &m.Tipo, &m.Entrada, &q, &cst, &m.Origem, &m.Lote, &m.Obs); err != nil {
+			var q, cst, v string
+			if err := mr.Scan(&m.Data, &m.Deposito, &m.Tipo, &q, &cst, &v, &m.Origem, &m.Lote, &m.Obs); err != nil {
 				mr.Close()
 				return nil, err
 			}
-			m.Quantidade, m.Custo = d(q), d(cst)
-			if m.Entrada {
-				saldo, valor = saldo.Add(m.Quantidade), valor.Add(m.Quantidade.Mul(m.Custo))
-			} else {
-				saldo, valor = saldo.Sub(m.Quantidade), valor.Sub(m.Quantidade.Mul(m.Custo))
-			}
+			qs := d(q)
+			m.Entrada, m.Quantidade, m.Custo, m.Valor = qs.IsPositive(), qs.Abs(), d(cst), d(v)
+			saldo, valor = saldo.Add(qs), valor.Add(m.Valor)
 			it.Movimentos = append(it.Movimentos, m)
 		}
 		mr.Close()
-		it.SaldoFinal = saldo
+		if err := mr.Err(); err != nil {
+			return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+		}
+		it.SaldoFinal, it.ValorFinal = saldo, valor.Round(2)
 		if saldo.IsPositive() {
 			it.CustoMedio = valor.Div(saldo).Round(4)
 		}
@@ -764,7 +893,7 @@ func (c *Consultas) CustoProducao(ctx context.Context, t uc.Tenant, ordens []int
 		fim = &x
 	}
 	rows, err := c.pool.Query(ctx, `
-		SELECT po.id, COALESCE(i.business_code,''), COALESCE(i.name,''), COALESCE(i.warehouse_unit_of_measurement,'UN'),
+		SELECT po.id, COALESCE(i.business_code,''), `+nomeInterno("i")+`, COALESCE(i.warehouse_unit_of_measurement,'UN'),
 		       COALESCE(pc.produced_qty, po.produced_qty)::text, po.start_date, po.end_date, po.status,
 		       COALESCE(pc.material_cost_real,0)::text, COALESCE(pc.machine_cost_real,0)::text, COALESCE(pc.labor_cost_real,0)::text,
 		       COALESCE(pc.overhead_cost_real,0)::text, COALESCE(pc.subcontract_cost_real,0)::text, COALESCE(pc.total_cost_real,0)::text,
@@ -798,14 +927,19 @@ func (c *Consultas) CustoProducao(ctx context.Context, t uc.Tenant, ordens []int
 		out = append(out, o)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 	for i := range out {
 		o := &out[i]
 		cr, err := c.pool.Query(ctx, `
-			SELECT COALESCE(it.business_code,''), COALESCE(it.name,''), COALESCE(it.warehouse_unit_of_measurement,'UN'),
-			       SUM(sm.quantity)::text, (SUM(sm.quantity*sm.unit_price))::text
+			SELECT COALESCE(it.business_code,''), `+nomeInterno("it")+`, COALESCE(it.warehouse_unit_of_measurement,'UN'),
+			       SUM(sm.quantity)::text, SUM(sm.total_price)::text
 			  FROM stock_movements sm LEFT JOIN items it ON it.code = sm.item_code AND it.enterprise_id = sm.enterprise_id
 			 WHERE sm.enterprise_id = $1 AND sm.reference_type = 'PRODUCTION_ORDER' AND sm.reference_code = $2
-			   AND sm.movement_type IN ('OUT','REP','REQ') AND sm.quantity <> 0
+			   AND sm.movement_type IN ('OUT','REP') AND sm.quantity <> 0
+			   -- Os mesmos movimentos da apuração do custo real: o estornado não conta.
+			   AND sm.reversed_by_movement_id IS NULL
 			 GROUP BY 1,2,3 ORDER BY 1`, t.ID, o.Ordem)
 		if err != nil {
 			return nil, err
@@ -821,6 +955,9 @@ func (c *Consultas) CustoProducao(ctx context.Context, t uc.Tenant, ordens []int
 			o.Consumos = append(o.Consumos, x)
 		}
 		cr.Close()
+		if err := cr.Err(); err != nil {
+			return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+		}
 		er, err := c.pool.Query(ctx, `
 			SELECT o.sequence, o.operation_name, COALESCE(mt.name,''), (COALESCE(o.planned_hours,0)+COALESCE(o.setup_hours,0))::text,
 			       COALESCE(o.actual_hours,0)::text, o.status
@@ -840,6 +977,9 @@ func (c *Consultas) CustoProducao(ctx context.Context, t uc.Tenant, ordens []int
 			o.Etapas = append(o.Etapas, x)
 		}
 		er.Close()
+		if err := er.Err(); err != nil {
+			return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+		}
 	}
 	return out, nil
 }
@@ -912,16 +1052,19 @@ func (c *Consultas) Romaneio(ctx context.Context, t uc.Tenant, code int64) (*uc.
 					r.Destinatario.Endereco, r.Destinatario.Bairro, r.Destinatario.Cidade, r.Destinatario.UF, r.Destinatario.CEP = end, bairro, cidade, uf, cep
 				}
 				if tipo == "ENTREGA" && r.EnderecoEntrega == "" {
-					r.EnderecoEntrega = fmt.Sprintf("%s · %s · %s/%s · CEP %s", end, bairro, cidade, uf, cep)
+					r.EnderecoEntrega = enderecoDeEntrega(end, bairro, cidade, uf, cep)
 				}
 			}
 			ar.Close()
+			if err := ar.Err(); err != nil {
+				return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+			}
 		}
 	}
 	c.enderecoFornecedor(ctx, transpID, &r.Transportadora)
 
 	rows, err := c.pool.Query(ctx, `
-		SELECT si.sequence, COALESCE(i.business_code, si.item_code::text), COALESCE(NULLIF(i.commercial_description,''), i.name, ''),
+		SELECT si.sequence, COALESCE(i.business_code, si.item_code::text), `+nomeComercial("i")+`,
 		       COALESCE(i.warehouse_unit_of_measurement,'UN'), COALESCE(w.code,''), si.quantity::text, COALESCE(si.conferred_qty,0)::text, si.is_conferred,
 		       COALESCE(NULLIF(si.unit_net_weight,0), (i.engineering_weight->>'net')::numeric, 0)::text,
 		       COALESCE(NULLIF(si.unit_gross_weight,0), (i.engineering_weight->>'gross')::numeric, 0)::text
@@ -943,6 +1086,9 @@ func (c *Consultas) Romaneio(ctx context.Context, t uc.Tenant, code int64) (*uc.
 		r.Itens = append(r.Itens, x)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("lendo os dados do documento: %w", err)
+	}
 
 	vr, err := c.pool.Query(ctx, `
 		SELECT volume_number, COALESCE(package_type,''), COALESCE(marking,''), COALESCE(contents,''), COALESCE(net_weight,0)::text, COALESCE(gross_weight,0)::text,

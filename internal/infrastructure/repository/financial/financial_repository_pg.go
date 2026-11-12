@@ -642,16 +642,21 @@ func (r *FinancialRepositoryPG) ApproveContaPagar(ctx context.Context, id int64,
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
+	// A situação entra na condição: duas aprovações ao mesmo tempo, ou uma
+	// aprovação que corre com a baixa, não podem reabrir título já quitado.
+	tag, err := r.pool.Exec(ctx,
 		`UPDATE contas_pagar SET
 			status_aprovacao = 'APROVADO',
 			status = 'APROVADO',
 			aprovado_por = $1,
 			data_aprovacao = NOW(),
 			updated_at = NOW()
-		 WHERE id = $2 AND enterprise_id = $3`, approvedBy, id, empresa)
+		 WHERE id = $2 AND enterprise_id = $3 AND status IN ('PENDENTE','VENCIDO')`, approvedBy, id, empresa)
 	if err != nil {
 		return fmt.Errorf("approving conta pagar %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewConflictError(fmt.Sprintf("o título %d não está mais pendente: atualize a tela", id))
 	}
 	return nil
 }
@@ -688,10 +693,16 @@ func (r *FinancialRepositoryPG) CancelContaPagar(ctx context.Context, id int64) 
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
-		`UPDATE contas_pagar SET status = 'CANCELADO', is_active = false, updated_at = NOW() WHERE id = $1 AND enterprise_id = $2`, id, empresa)
+	// Em aberto e sem baixa, conferido na própria gravação: a baixa que corre
+	// junto com o cancelamento não pode terminar em título quitado e cancelado.
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE contas_pagar SET status = 'CANCELADO', is_active = false, updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2 AND status IN ('PENDENTE','APROVADO','VENCIDO') AND valor_pago = 0`, id, empresa)
 	if err != nil {
 		return fmt.Errorf("cancelling conta pagar %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewConflictError(fmt.Sprintf("o título %d não está mais em aberto ou já teve baixa: atualize a tela", id))
 	}
 	return nil
 }
@@ -898,10 +909,16 @@ func (r *FinancialRepositoryPG) CancelContaReceber(ctx context.Context, id int64
 	if err != nil {
 		return err
 	}
-	_, err = r.pool.Exec(ctx,
-		`UPDATE contas_receber SET status = 'CANCELADO', is_active = false, updated_at = NOW() WHERE id = $1 AND enterprise_id = $2`, id, empresa)
+	// Em aberto e sem baixa, conferido na própria gravação: a baixa que corre
+	// junto com o cancelamento não pode terminar em título quitado e cancelado.
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE contas_receber SET status = 'CANCELADO', is_active = false, updated_at = NOW()
+		  WHERE id = $1 AND enterprise_id = $2 AND status IN ('PENDENTE','APROVADO','VENCIDO') AND valor_recebido = 0`, id, empresa)
 	if err != nil {
 		return fmt.Errorf("cancelling conta receber %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewConflictError(fmt.Sprintf("o título %d não está mais em aberto ou já teve baixa: atualize a tela", id))
 	}
 	return nil
 }
