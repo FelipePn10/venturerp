@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.18.1] — 2026-11-13
+
+- fix(conciliacao): extrato OFX visível e conciliável, sem lançamento perdido nem saldo dobrado (`2eb88ca4`)
+
 ## [v1.18.0] — 2026-11-12
 
 - feat(fluxo): pedido de venda até a fábrica sem furos, e impressos fiéis à tela (`c7774514`)
