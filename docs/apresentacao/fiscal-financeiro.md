@@ -210,9 +210,10 @@ O sistema gera o arquivo de **remessa CNAB 240** (padrão FEBRABAN) para envio d
 
 A empresa importa o **extrato bancário em formato OFX** (aceita os formatos usados pela maioria dos bancos brasileiros) e o sistema:
 
-- **Evita duplicidade** — transações já importadas são reconhecidas e ignoradas.
-- **Concilia automaticamente** — casa cada lançamento do extrato com o fluxo de caixa quando o valor bate (tolerância de centavos) e a data é próxima.
-- Ao final, informa quantas transações foram **importadas, duplicadas e conciliadas**.
+- **Evita duplicidade** — transações já importadas são reconhecidas e ignoradas, sem perder lançamentos iguais do mesmo dia (bancos que repetem o identificador, como a Caixa).
+- **Concilia automaticamente** — casa cada lançamento do extrato com o pagamento ou recebimento baixado na conta quando o valor bate e a data é próxima.
+- Ao final, informa quantas transações foram **importadas, conciliadas e quantas aguardam conferência**, e compara o saldo informado pelo banco com o do sistema.
+- **Conciliação manual** — numa aba própria, o financeiro vê o extrato importado, escolhe o movimento correspondente a cada lançamento pendente, lança no caixa o que não tem título (tarifas, IOF, aplicações) e desfaz o que foi casado errado.
 
 ---
 

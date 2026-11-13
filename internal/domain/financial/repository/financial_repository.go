@@ -79,6 +79,47 @@ type AgingResult struct {
 	Total  float64 `json:"total"`
 }
 
+// ExtratoSituacao filtra as linhas do extrato pela conciliação.
+type ExtratoSituacao string
+
+const (
+	ExtratoTodos       ExtratoSituacao = ""
+	ExtratoPendentes   ExtratoSituacao = "PENDENTE"
+	ExtratoConciliados ExtratoSituacao = "CONCILIADO"
+)
+
+type ExtratoFiltro struct {
+	Situacao ExtratoSituacao
+	Inicio   *time.Time
+	Fim      *time.Time
+}
+
+// ExtratoLinha é a linha do extrato com o movimento do caixa a que está casada.
+type ExtratoLinha struct {
+	entity.ExtratoBancario
+	MovimentoData      *time.Time
+	MovimentoDescricao *string
+	MovimentoValor     *decimal.Decimal
+	ContasPagarID      *int64
+	ContasReceberID    *int64
+	// LancadoPeloExtrato: o movimento nasceu desta linha ("lançar no caixa").
+	LancadoPeloExtrato bool
+}
+
+// CandidatoConciliacao é um movimento do caixa que pode casar com a linha.
+type CandidatoConciliacao struct {
+	FluxoCaixaID    int64
+	Data            time.Time
+	Valor           decimal.Decimal
+	Tipo            entity.FluxoCaixaTipo
+	Descricao       *string
+	ContasPagarID   *int64
+	ContasReceberID *int64
+	// Documento do título baixado, quando o movimento veio de uma baixa.
+	Documento     *string
+	DiferencaDias int
+}
+
 type ProjectedFlow struct {
 	Data          time.Time `json:"data"`
 	ValorEntradas float64   `json:"valor_entradas"`
@@ -232,8 +273,22 @@ type FinancialRepository interface {
 	// arquivo, e não erro. Sem esse retorno, "duplicado" e "falhou" eram contados
 	// um pelo outro — e a tela informava importação bem-sucedida de nada.
 	SaveExtratoItem(ctx context.Context, contaID int64, data time.Time, valor decimal.Decimal, tipo, descricao, fitid, hash string) (bool, error)
-	GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error)
+	// ListExtrato devolve as linhas do extrato da conta com o movimento a que cada
+	// uma está casada. A conta tem de ser da empresa autenticada.
+	ListExtrato(ctx context.Context, contaID int64, filtro ExtratoFiltro) ([]*ExtratoLinha, error)
+	// CandidatosConciliacao lista os movimentos do caixa ainda não conciliados que
+	// podem casar com a linha: mesma conta, mesmo sentido e mesmo valor, do mais
+	// próximo da data do extrato ao mais distante.
+	CandidatosConciliacao(ctx context.Context, extratoID int64) ([]*CandidatoConciliacao, error)
+	// ConciliarExtrato casa a linha com o movimento. Recusa (validação) o que as
+	// regras de entity.ExtratoBancario não aceitam.
 	ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error
+	// LancarExtratoNoCaixa cria o movimento que falta no caixa a partir da linha
+	// (tarifa, IOF, aplicação…), atualiza o saldo da conta e já o deixa conciliado.
+	LancarExtratoNoCaixa(ctx context.Context, extratoID int64, descricao string) (int64, error)
+	// DesfazerConciliacao solta a linha do movimento. Se o movimento nasceu da
+	// própria linha, ele é apagado e o saldo da conta volta.
+	DesfazerConciliacao(ctx context.Context, extratoID int64) error
 	AutoMatchExtrato(ctx context.Context, contaID int64) (int, error)
 }
 

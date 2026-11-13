@@ -1,6 +1,12 @@
 package financial_uc
 
 import (
+	"context"
+
+	"crypto/sha256"
+	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
 	"strings"
 	"testing"
 )
@@ -152,6 +158,32 @@ func TestComparacaoDeContaIgnoraFormatacao(t *testing.T) {
 	}
 }
 
+// Extrato real da Caixa (Tecnofer, 13/11/2026): ACCTID vem com zeros à esquerda e
+// o dígito colado. Sem conta+dígito, a conta certa recebia aviso de conta trocada.
+func TestContaDaCaixaComDigitoColadoNaoGeraAviso(t *testing.T) {
+	digito := "5"
+	repo := &contasFake{contas: []*entity.ContaBancaria{{ID: 3, Banco: "104", Conta: "579582733", Digito: &digito}}}
+	uc := &ImportarOFXUseCase{Repo: repo}
+	extrato := &extratoOFX{BankID: "0104", AccountID: "0005795827335"}
+	if aviso := uc.conferirConta(context.Background(), 3, extrato); aviso != "" {
+		t.Fatalf("conta certa recebeu aviso: %s", aviso)
+	}
+	// E a conta errada continua avisando.
+	extrato.AccountID = "0001234567890"
+	if aviso := uc.conferirConta(context.Background(), 3, extrato); aviso == "" {
+		t.Fatal("conta errada deveria gerar aviso")
+	}
+}
+
+type contasFake struct {
+	repository.FinancialRepository
+	contas []*entity.ContaBancaria
+}
+
+func (f *contasFake) ListContasBancarias(context.Context) ([]*entity.ContaBancaria, error) {
+	return f.contas, nil
+}
+
 func TestDataOFXAceitaOsTresFormatos(t *testing.T) {
 	casos := map[string]string{
 		"20260903":                   "03/09/2026",
@@ -171,5 +203,74 @@ func TestDataOFXAceitaOsTresFormatos(t *testing.T) {
 	}
 	if _, err := parseOFXDate("03/09/2026"); err == nil {
 		t.Fatal("data no formato brasileiro deveria ser recusada: não é data OFX")
+	}
+}
+
+// Extrato da Caixa (formato real, abreviado): o FITID "000000" se repete, e dois
+// lançamentos de mesma data e valor geravam o mesmo hash — o segundo era contado
+// como "já importado" e sumia. Foi o que aconteceu com a Tecnofer em 13/11/2026.
+const ofxFitIDRepetido = `OFXHEADER:100
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS>
+<BANKACCTFROM><BANKID>104<ACCTID>579582733</BANKACCTFROM>
+<BANKTRANLIST>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261104<TRNAMT>-250.00<FITID>000000<MEMO>DEBITO CAPITALIZACAO</STMTTRN>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261104<TRNAMT>-250.00<FITID>000000<MEMO>DEBITO CAPITALIZACAO</STMTTRN>
+<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20261104<TRNAMT>-15000.00<FITID>000000<MEMO>APLICACAO FDO</STMTTRN>
+</BANKTRANLIST>
+<LEDGERBAL><BALAMT>1234.56<DTASOF>20261110</LEDGERBAL>
+</STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`
+
+func TestLancamentosIguaisNoMesmoArquivoNaoViramDuplicado(t *testing.T) {
+	extrato, err := parseOFX(ofxFitIDRepetido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vistos := map[string]bool{}
+	oc := map[string]int{}
+	for _, tr := range extrato.Transacoes {
+		h := hashDoLancamento(3, tr, oc)
+		if vistos[h] {
+			t.Fatalf("dois lançamentos do mesmo arquivo com o mesmo hash: o segundo seria descartado")
+		}
+		vistos[h] = true
+	}
+	if len(vistos) != 3 {
+		t.Fatalf("esperava 3 hashes distintos, veio %d", len(vistos))
+	}
+
+	// Reimportar o mesmo arquivo tem de dar os MESMOS hashes — senão duplica tudo.
+	oc2 := map[string]int{}
+	for _, tr := range extrato.Transacoes {
+		if !vistos[hashDoLancamento(3, tr, oc2)] {
+			t.Fatal("reimportação gerou hash novo: o extrato seria duplicado")
+		}
+	}
+}
+
+// A primeira ocorrência mantém o hash antigo: é o que está gravado nos extratos
+// já importados, e mudá-lo duplicaria tudo na próxima reimportação.
+func TestPrimeiraOcorrenciaMantemOHashDeSempre(t *testing.T) {
+	tr := ofxTransaction{DtPosted: "20261112", TrnAmt: "-147.00", FitID: "24093802672"}
+	antigo := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d|%s|%s|%s", 2, tr.DtPosted, tr.TrnAmt, tr.FitID))))
+	if got := hashDoLancamento(2, tr, map[string]int{}); got != antigo {
+		t.Fatalf("hash da 1ª ocorrência mudou: %s ≠ %s", got, antigo)
+	}
+}
+
+func TestSaldoDoBancoELidoDoArquivo(t *testing.T) {
+	extrato, err := parseOFX(ofxFitIDRepetido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if extrato.SaldoFinal != "1234.56" || extrato.DataSaldo != "20261110" {
+		t.Fatalf("saldo do arquivo = %q em %q", extrato.SaldoFinal, extrato.DataSaldo)
+	}
+	// Sem LEDGERBAL, sem saldo — e sem erro.
+	semSaldo, err := parseOFX(ofxValido)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if semSaldo.SaldoFinal != "" {
+		t.Fatalf("inventou saldo: %q", semSaldo.SaldoFinal)
 	}
 }
