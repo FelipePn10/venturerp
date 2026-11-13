@@ -2207,25 +2207,58 @@ Suporta dois formatos:
 ```
 
 **O que acontece internamente:**
-1. Parse do arquivo OFX (suporta datas `YYYYMMDD`, `YYYYMMDDHHMMSS`, `YYYYMMDDHHMMSS.000[-TZ]`)
-2. Deduplicação por hash SHA-256 de `(conta_id | data | valor | FitID)` — transações já importadas são contadas como `duplicados` e ignoradas
-3. Cada transação é salva em `extrato_bancario` com `ON CONFLICT DO NOTHING`
-4. **Auto-match:** tenta casar cada transação do extrato com lançamentos do fluxo de caixa com valor igual (tolerância ±R$ 0,01) e data próxima (±3 dias)
+1. Parse do arquivo OFX (suporta datas `YYYYMMDD`, `YYYYMMDDHHMMSS`, `YYYYMMDDHHMMSS.000[-TZ]`). Arquivo que não é OFX é recusado com `422`.
+2. Deduplicação por hash SHA-256 de `(conta_id | data | valor | FitID)`. Quando a MESMA chave se repete
+   no mesmo arquivo (a Caixa manda FITID `000000` em vários lançamentos), a 2ª, 3ª… ocorrência ganha
+   `|#n` na chave: são lançamentos distintos, e reimportar o arquivo gera os mesmos hashes. A 1ª
+   ocorrência mantém o hash de sempre — o que já está gravado nos extratos importados.
+3. Cada transação é salva em `extrato_bancario` com `ON CONFLICT DO NOTHING`.
+4. **Auto-match:** casa cada linha pendente com o movimento de `fluxo_caixa` da mesma conta, mesmo
+   sentido e mesmo valor, o mais próximo da data em até ±3 dias.
+5. O saldo do arquivo (`<LEDGERBAL><BALAMT>`) volta na resposta para conferência com o do sistema.
 
-**Resposta esperada (`200 OK`):**
+**Resposta (`200 OK`):**
 ```json
 {
-  "importados": 8,
-  "duplicados": 2,
-  "conciliados": 5
+  "importados": 7, "duplicados": 0, "conciliados": 1, "ignorados": 0, "pendentes": 6,
+  "banco_do_arquivo": "104", "conta_do_arquivo": "579582733",
+  "periodo_inicio": "04/11/2026", "periodo_fim": "10/11/2026",
+  "saldo_do_arquivo": "8991.50", "data_saldo_do_arquivo": "10/11/2026"
 }
 ```
 
 | Campo | Significado |
 |---|---|
-| `importados` | Transações novas gravadas no banco |
+| `importados` | Transações novas gravadas |
 | `duplicados` | Transações que já existiam (hash idêntico) — ignoradas |
-| `conciliados` | Transações que foram automaticamente casadas com o fluxo de caixa |
+| `conciliados` | Linhas casadas automaticamente com o fluxo de caixa |
+| `pendentes` | Linhas da conta (desta e de importações anteriores) que esperam conciliação manual |
+| `saldo_do_arquivo` | Saldo informado pelo banco, quando o arquivo traz `LEDGERBAL` |
+
+### Extrato e conciliação manual (VFIN0620, aba *Extrato e conciliação*)
+
+| Rota | Faz |
+|---|---|
+| `GET /api/financial/conciliacao/{conta_id}/extrato?situacao=pendente\|conciliado&data_inicio=&data_fim=` | Linhas do extrato com o movimento casado, `resumo` (pendentes, conciliados, créditos/débitos pendentes) e `saldo_sistema` |
+| `POST /api/financial/conciliacao/{conta_id}/auto` | Roda o auto-match de novo (depois de baixar títulos) → `{conciliados, pendentes}` |
+| `GET /api/financial/conciliacao/extrato/{id}/candidatos` | Movimentos não conciliados da mesma conta, sentido e valor, do mais próximo ao mais distante da data |
+| `POST /api/financial/conciliacao/extrato/{id}/conciliar` `{"fluxo_caixa_id": N}` | Casa a linha com o movimento |
+| `POST /api/financial/conciliacao/extrato/{id}/lancar` `{"descricao": "..."}` | Cria o movimento no caixa (tarifa, IOF, aplicação…), atualiza o saldo da conta e concilia → `201` |
+| `POST /api/financial/conciliacao/extrato/{id}/desfazer` | Solta a linha; se o movimento nasceu do extrato, apaga o movimento e devolve o saldo |
+
+**Regras** (`entity.ExtratoBancario`): só casa movimento da MESMA conta, mesmo sentido (crédito ↔
+`ENTRADA`, débito ↔ `SAIDA`) e mesmo valor; nenhum dos dois pode estar conciliado com outra coisa.
+A data não é regra — boleto e TED compensam dias depois. Recusa é `422`; linha ou movimento de outra
+empresa é `404`. As escritas travam as duas linhas (`FOR UPDATE`).
+
+**Movimento lançado pelo extrato:** grava `fluxo_caixa.extrato_hash` = hash da linha e não tem título
+(`contas_pagar_id`/`contas_receber_id` nulos). É essa marca que faz o *desfazer* apagá-lo. Não gera
+lançamento contábil: tarifa e IOF lançados aqui não chegam à contabilidade.
+
+**Saldo da conta:** `contas_bancarias.saldo_inicial` é o saldo CORRENTE — a baixa, o adiantamento e o
+lançamento pelo extrato o atualizam no mesmo gesto em que gravam o movimento. `GetSaldoConta` e
+`GetSaldoConsolidado` devolvem esse valor; até a v1.18.0 somavam por cima os movimentos conciliados,
+o que dobraria o saldo no primeiro extrato conciliado.
 
 ---
 

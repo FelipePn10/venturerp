@@ -1378,6 +1378,10 @@ func (app *application) mount() chi.Router {
 		&financial_uc.ImportarOFXUseCase{Repo: fRepo, Auth: authService},
 	)
 
+	// Conciliação bancária: o extrato importado contra o fluxo de caixa (VFIN0620).
+	conciliacaoHandler := handler.NewConciliacaoHandler(
+		&financial_uc.ConciliacaoUseCase{Repo: fRepo, Auth: authService})
+
 	// adiantamentos (advance payments)
 	adiantamentoHandler := handler.NewAdiantamentoHandler(
 		&financial_uc.CreateAdiantamentoUseCase{Repo: fRepo, Auth: authService, Contabil: saidaContabil},
@@ -3051,6 +3055,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/relatorios/compras-periodo", financialHandler.GetComprasPeriodo)
 			// Bank statement reconciliation
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/{conta_id}/importar-ofx", financialHandler.ImportarOFX)
+			// O extrato importado e a conciliação manual. Antes a importação era a
+			// única rota: as linhas entravam no banco e nenhuma tela as mostrava.
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/conciliacao/{conta_id}/extrato", conciliacaoHandler.Extrato)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/{conta_id}/auto", conciliacaoHandler.AutoConciliar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/conciliacao/extrato/{id}/candidatos", conciliacaoHandler.Candidatos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/extrato/{id}/conciliar", conciliacaoHandler.Conciliar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/extrato/{id}/lancar", conciliacaoHandler.Lancar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/conciliacao/extrato/{id}/desfazer", conciliacaoHandler.Desfazer)
 		})
 		r.Route("/api/routing", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", routingHandler.ListOperations)

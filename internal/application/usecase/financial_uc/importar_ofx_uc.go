@@ -36,6 +36,13 @@ type ImportarOFXResult struct {
 	ContaDoArquivo string `json:"conta_do_arquivo,omitempty"`
 	PeriodoInicio  string `json:"periodo_inicio,omitempty"`
 	PeriodoFim     string `json:"periodo_fim,omitempty"`
+	// Pendentes: linhas da conta que não casaram com nenhum movimento e esperam
+	// conciliação manual na aba do extrato.
+	Pendentes int `json:"pendentes"`
+	// Saldo que o banco informa no arquivo (LEDGERBAL), para conferir com o do
+	// sistema. Vazio quando o banco não manda.
+	SaldoDoArquivo     *decimal.Decimal `json:"saldo_do_arquivo,omitempty"`
+	DataSaldoDoArquivo string           `json:"data_saldo_do_arquivo,omitempty"`
 }
 
 type ofxTransaction struct {
@@ -53,6 +60,9 @@ type extratoOFX struct {
 	AccountID  string
 	DtStart    string
 	DtEnd      string
+	// Saldo do extrato (<LEDGERBAL><BALAMT>) e a data a que ele se refere.
+	SaldoFinal string
+	DataSaldo  string
 }
 
 // ErrArquivoNaoEhOFX é o que a tela recebe quando o arquivo escolhido não é um
@@ -86,6 +96,12 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 		PeriodoFim:     dataOFXLegivel(extrato.DtEnd),
 		Avisos:         []string{},
 	}
+	if extrato.SaldoFinal != "" {
+		if v, err := decimal.NewFromString(strings.TrimSpace(extrato.SaldoFinal)); err == nil {
+			result.SaldoDoArquivo = &v
+			result.DataSaldoDoArquivo = dataOFXLegivel(extrato.DataSaldo)
+		}
+	}
 
 	// A conta do arquivo contra a conta escolhida na tela. Importar o extrato de
 	// uma conta em outra concilia pagamento com movimento que nunca existiu ali —
@@ -96,6 +112,12 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 	if aviso := uc.conferirConta(ctx, contaBancariaID, extrato); aviso != "" {
 		result.Avisos = append(result.Avisos, aviso)
 	}
+
+	// Quantas vezes a mesma chave (data + valor + FITID) já apareceu NESTE arquivo.
+	// Há banco que repete o FITID — a Caixa manda "000000" em vários lançamentos —
+	// e dois lançamentos legítimos de mesma data e valor geravam o mesmo hash: o
+	// segundo era contado como "já importado" e sumia do extrato.
+	ocorrencias := make(map[string]int)
 
 	for _, t := range extrato.Transacoes {
 		data, err := parseOFXDate(t.DtPosted)
@@ -128,9 +150,7 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 			valor = valor.Neg()
 		}
 
-		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(
-			fmt.Sprintf("%d|%s|%s|%s", contaBancariaID, t.DtPosted, t.TrnAmt, t.FitID),
-		)))
+		hash := hashDoLancamento(contaBancariaID, t, ocorrencias)
 
 		inserido, err := uc.Repo.SaveExtratoItem(ctx, contaBancariaID, data, valor, tipo, t.Memo, t.FitID, hash)
 		if err != nil {
@@ -154,6 +174,11 @@ func (uc *ImportarOFXUseCase) Execute(ctx context.Context, contaBancariaID int64
 			"os lançamentos foram importados, mas a conciliação automática falhou: "+err.Error())
 	}
 	result.Conciliados = matched
+	// Pendentes é o que a conta tem para conciliar à mão DEPOIS desta importação —
+	// inclui linhas de importações anteriores, que é o que a aba do extrato mostra.
+	if pend, err := uc.Repo.ListExtrato(ctx, contaBancariaID, repository.ExtratoFiltro{Situacao: repository.ExtratoPendentes}); err == nil {
+		result.Pendentes = len(pend)
+	}
 
 	if len(result.Avisos) == 0 {
 		result.Avisos = nil
@@ -174,7 +199,14 @@ func (uc *ImportarOFXUseCase) conferirConta(ctx context.Context, contaBancariaID
 		if c.ID != contaBancariaID {
 			continue
 		}
-		if extrato.AccountID != "" && !mesmoNumero(c.Conta, extrato.AccountID) {
+		// O banco costuma mandar a conta com o dígito colado (a Caixa manda
+		// "0005795827335" para a conta 579582733 dígito 5): sem conferir também
+		// conta+dígito, o aviso de conta trocada aparecia na conta certa.
+		contaComDigito := c.Conta
+		if c.Digito != nil {
+			contaComDigito += *c.Digito
+		}
+		if extrato.AccountID != "" && !mesmoNumero(c.Conta, extrato.AccountID) && !mesmoNumero(contaComDigito, extrato.AccountID) {
 			return fmt.Sprintf(
 				"atenção: o arquivo é da conta %s (banco %s) e a conta selecionada é %s (banco %s) — confirme antes de conciliar",
 				extrato.AccountID, extrato.BankID, c.Conta, c.Banco)
@@ -224,10 +256,11 @@ func somenteDigitos(s string) string {
 }
 
 var (
-	tagRe      = regexp.MustCompile(`(?i)<([A-Z0-9.]+)>([^<]*)`)
-	stmttrnRe  = regexp.MustCompile(`(?is)<STMTTRN>(.*?)</STMTTRN>`)
-	temRaizOFX = regexp.MustCompile(`(?i)<OFX>`)
-	temHeader  = regexp.MustCompile(`(?i)OFXHEADER\s*[:=]`)
+	tagRe       = regexp.MustCompile(`(?i)<([A-Z0-9.]+)>([^<]*)`)
+	stmttrnRe   = regexp.MustCompile(`(?is)<STMTTRN>(.*?)</STMTTRN>`)
+	ledgerBalRe = regexp.MustCompile(`(?is)<LEDGERBAL>(.*?)(?:</LEDGERBAL>|<AVAILBAL>|</STMTRS>|$)`)
+	temRaizOFX  = regexp.MustCompile(`(?i)<OFX>`)
+	temHeader   = regexp.MustCompile(`(?i)OFXHEADER\s*[:=]`)
 )
 
 // parseOFX lê OFX 1.x (SGML) e 2.x (XML) e RECUSA o que não for OFX.
@@ -304,6 +337,17 @@ func lerTagsOFX(content string) *extratoOFX {
 		DtEnd:     tagsCabecalho["DTEND"],
 	}
 
+	if m := ledgerBalRe.FindStringSubmatch(content); m != nil {
+		for _, t := range tagRe.FindAllStringSubmatch(m[1], -1) {
+			switch strings.ToUpper(t[1]) {
+			case "BALAMT":
+				extrato.SaldoFinal = strings.TrimSpace(t[2])
+			case "DTASOF":
+				extrato.DataSaldo = strings.TrimSpace(t[2])
+			}
+		}
+	}
+
 	for _, b := range stmttrnRe.FindAllStringSubmatch(content, -1) {
 		blockTags := make(map[string]string)
 		for _, m := range tagRe.FindAllStringSubmatch(b[1], -1) {
@@ -344,4 +388,21 @@ func dataOFXLegivel(bruto string) string {
 		return ""
 	}
 	return t.Format("02/01/2006")
+}
+
+// hashDoLancamento identifica o lançamento para a reimportação não duplicar.
+//
+// A primeira ocorrência de uma chave no arquivo mantém o hash de sempre
+// (conta|data|valor|FITID) — é o que já está gravado nos extratos importados, e
+// mudá-lo faria a próxima reimportação duplicar tudo. Só a 2ª, 3ª… ocorrência da
+// MESMA chave no mesmo arquivo ganha o número de ordem: são lançamentos distintos
+// que o banco não distinguiu, e reimportar o arquivo volta a dar os mesmos hashes.
+func hashDoLancamento(contaBancariaID int64, t ofxTransaction, ocorrencias map[string]int) string {
+	chave := fmt.Sprintf("%d|%s|%s|%s", contaBancariaID, t.DtPosted, t.TrnAmt, t.FitID)
+	n := ocorrencias[chave]
+	ocorrencias[chave] = n + 1
+	if n > 0 {
+		chave = fmt.Sprintf("%s|#%d", chave, n)
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(chave)))
 }

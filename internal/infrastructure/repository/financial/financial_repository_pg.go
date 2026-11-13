@@ -1071,18 +1071,11 @@ func (r *FinancialRepositoryPG) GetSaldoConta(ctx context.Context, contaID int64
 		return decimal.Zero, fmt.Errorf("getting saldo conta %d: %w", contaID, err)
 	}
 
-	// O movimento segue a conta: `fluxo_caixa` não tem coluna de empresa, e a
-	// posse dele é a da conta bancária que ele movimenta.
-	var movSum decimal.Decimal
-	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(CASE WHEN tipo = 'ENTRADA' THEN valor ELSE -valor END), 0)
-		 FROM fluxo_caixa WHERE conta_bancaria_id = $1 AND conciliado = true`, contaID,
-	).Scan(&movSum)
-	if err != nil {
-		return decimal.Zero, fmt.Errorf("somando os movimentos da conta %d: %w", contaID, err)
-	}
-
-	return saldo.Add(movSum), nil
+	// `saldo_inicial` JÁ É o saldo corrente: a baixa de título, o adiantamento e o
+	// lançamento pelo extrato o atualizam no mesmo gesto em que gravam o movimento.
+	// Somar aqui os movimentos conciliados contava cada um duas vezes — e o saldo
+	// dobrava justamente quando a conciliação passava a funcionar.
+	return saldo, nil
 }
 
 func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (decimal.Decimal, error) {
@@ -1098,19 +1091,7 @@ func (r *FinancialRepositoryPG) GetSaldoConsolidado(ctx context.Context) (decima
 		return decimal.Zero, fmt.Errorf("getting saldo consolidado: %w", err)
 	}
 
-	// Somar `fluxo_caixa` inteiro somaria o caixa das outras empresas ao saldo
-	// desta. O movimento entra pela conta bancária a que pertence.
-	var movSum decimal.Decimal
-	err = r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(CASE WHEN f.tipo = 'ENTRADA' THEN f.valor ELSE -f.valor END), 0)
-		 FROM fluxo_caixa f
-		 JOIN contas_bancarias cb ON cb.id = f.conta_bancaria_id AND cb.enterprise_id = $1
-		 WHERE f.conciliado = true`, empresa,
-	).Scan(&movSum)
-	if err == nil {
-		saldo = saldo.Add(movSum)
-	}
-
+	// Como em GetSaldoConta: `saldo_inicial` já é o saldo corrente de cada conta.
 	return saldo, nil
 }
 
@@ -2167,114 +2148,6 @@ func (r *FinancialRepositoryPG) SaveExtratoItem(ctx context.Context, contaID int
 	// ON CONFLICT DO NOTHING não é erro: zero linha afetada significa que o
 	// lançamento já estava importado.
 	return tag.RowsAffected() > 0, nil
-}
-
-func (r *FinancialRepositoryPG) GetExtratoPendente(ctx context.Context, contaID int64) ([]map[string]interface{}, error) {
-	if err := r.contaDaEmpresa(ctx, contaID); err != nil {
-		return nil, err
-	}
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, data_transacao, valor, tipo, descricao, fitid, extrato_hash, conciliado
-		 FROM extrato_bancario WHERE conta_bancaria_id = $1 ORDER BY data_transacao`, contaID)
-	if err != nil {
-		return nil, fmt.Errorf("getting extrato pendente: %w", err)
-	}
-	defer rows.Close()
-	return scanToMaps(rows, []string{"id", "data_transacao", "valor", "tipo", "descricao", "fitid", "extrato_hash", "conciliado"})
-}
-
-func (r *FinancialRepositoryPG) ConciliarExtrato(ctx context.Context, extratoID, fluxoID int64) error {
-	empresa, err := tenant.ID(ctx)
-	if err != nil {
-		return err
-	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	_, err = tx.Exec(ctx,
-		// O extrato herda a posse da conta bancária; o fluxo tem empresa própria.
-		`UPDATE extrato_bancario e SET conciliado=true, fluxo_caixa_id=$1
-		 FROM contas_bancarias cb
-		 WHERE e.id=$2 AND cb.id = e.conta_bancaria_id AND cb.enterprise_id=$3`,
-		fluxoID, extratoID, empresa)
-	if err != nil {
-		return fmt.Errorf("updating extrato: %w", err)
-	}
-	_, err = tx.Exec(ctx,
-		`UPDATE fluxo_caixa SET conciliado=true WHERE id=$1 AND enterprise_id=$2`, fluxoID, empresa)
-	if err != nil {
-		return fmt.Errorf("marking fluxo conciliado: %w", err)
-	}
-	return tx.Commit(ctx)
-}
-
-func (r *FinancialRepositoryPG) AutoMatchExtrato(ctx context.Context, contaID int64) (int, error) {
-	if err := r.contaDaEmpresa(ctx, contaID); err != nil {
-		return 0, err
-	}
-	empresaAuto, err := tenant.ID(ctx)
-	if err != nil {
-		return 0, err
-	}
-	// Try to match extrato entries to fluxo_caixa by exact value and date ±3 days
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, data_transacao, valor, tipo FROM extrato_bancario
-		 WHERE conta_bancaria_id=$1 AND conciliado=false`, contaID)
-	if err != nil {
-		return 0, fmt.Errorf("querying extrato for auto-match: %w", err)
-	}
-	defer rows.Close()
-
-	type entry struct {
-		id    int64
-		data  time.Time
-		valor float64
-		tipo  string
-	}
-	var entries []entry
-	for rows.Next() {
-		var e entry
-		if err := rows.Scan(&e.id, &e.data, &e.valor, &e.tipo); err != nil {
-			return 0, err
-		}
-		entries = append(entries, e)
-	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-
-	matched := 0
-	for _, e := range entries {
-		fcTipo := "ENTRADA"
-		if e.tipo == "DEBIT" {
-			fcTipo = "SAIDA"
-		}
-		var fluxoID int64
-		err := r.pool.QueryRow(ctx,
-			`SELECT id FROM fluxo_caixa
-			 WHERE conta_bancaria_id=$1 AND tipo=$2
-			   AND ABS(valor - $3) < 0.01
-			   AND data BETWEEN $4 AND $5
-			   AND conciliado=false
-			   AND enterprise_id=$6
-			 LIMIT 1`,
-			contaID, fcTipo, e.valor, e.data.AddDate(0, 0, -3), e.data.AddDate(0, 0, 3), empresaAuto,
-		).Scan(&fluxoID)
-		if errors.Is(err, pgx.ErrNoRows) {
-			continue // sem lançamento correspondente: fica para conciliar à mão
-		}
-		if err != nil {
-			return matched, fmt.Errorf("procurando lançamento para o extrato %d: %w", e.id, err)
-		}
-		if err := r.ConciliarExtrato(ctx, e.id, fluxoID); err != nil {
-			return matched, fmt.Errorf("conciliando o extrato %d: %w", e.id, err)
-		}
-		matched++
-	}
-	return matched, nil
 }
 
 // RecebiveisDoPedidoDeVenda confere os títulos ligados ao pedido (sales_order_id
