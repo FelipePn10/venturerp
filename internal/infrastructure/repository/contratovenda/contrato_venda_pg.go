@@ -43,12 +43,8 @@ func (r *PG) Criar(ctx context.Context, c *dom.Contrato, por *uuid.UUID) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var ok bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM customers WHERE code=$1 AND enterprise_id=$2)`, c.CustomerCode, empresa).Scan(&ok); err != nil {
+	if err := clienteAtivo(ctx, tx, empresa, c.CustomerCode); err != nil {
 		return err
-	}
-	if !ok {
-		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d", c.CustomerCode))
 	}
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('contratos_venda'), $1::int)`, empresa); err != nil {
 		return err
@@ -62,6 +58,7 @@ func (r *PG) Criar(ctx context.Context, c *dom.Contrato, por *uuid.UUID) error {
 	}
 	for i := range c.Itens {
 		it := &c.Itens[i]
+		var ok bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM items WHERE code=$1 AND enterprise_id=$2)`, it.ItemCode, empresa).Scan(&ok); err != nil {
 			return err
 		}
@@ -257,6 +254,10 @@ func (r *PG) Chamar(ctx context.Context, ch dom.Chamada) (*orderentity.SalesOrde
 	if _, err := dom.ConferirChamada(c, ch.Linhas, ch.Data); err != nil {
 		return nil, err
 	}
+	// Mesma regra do pedido digitado: cliente inativado na VCLI0500 não recebe pedido novo.
+	if err := clienteAtivo(ctx, tx, empresa, c.CustomerCode); err != nil {
+		return nil, err
+	}
 	pedidos := salesorder.NewSalesOrderRepositorySQLC(sqlc.New(tx))
 	numero, err := pedidos.NextOrderNumber(ctx, ch.Pedido.EnterpriseCode)
 	if err != nil {
@@ -317,4 +318,19 @@ func (r *PG) PrecoContratado(ctx context.Context, salesOrderItemCode int64) (*de
 		return nil, err
 	}
 	return &p, nil
+}
+
+func clienteAtivo(ctx context.Context, tx pgx.Tx, empresa, code int64) error {
+	var ativo bool
+	err := tx.QueryRow(ctx, `SELECT is_active FROM customers WHERE code=$1 AND enterprise_id=$2`, code, empresa).Scan(&ativo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d", code))
+	}
+	if err != nil {
+		return fmt.Errorf("conferindo o cliente %d: %w", code, err)
+	}
+	if !ativo {
+		return errorsuc.NewValidationError(fmt.Sprintf("o cliente %d está inativo: reative na VCLI0500 antes de gerar pedido", code))
+	}
+	return nil
 }

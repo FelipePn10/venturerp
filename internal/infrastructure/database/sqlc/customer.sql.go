@@ -339,25 +339,92 @@ func (q *Queries) CreateContactType(ctx context.Context, arg CreateContactTypePa
 	return i, err
 }
 
+const createCreditReview = `-- name: CreateCreditReview :one
+INSERT INTO customer_credit_reviews (
+    enterprise_id, customer_code, origin, suggested_limit, approved_limit, previous_limit,
+    score, risk_class, expires_at, deviates, reason, factors, created_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11, $12, $13
+) RETURNING id, enterprise_id, customer_code, origin, suggested_limit, approved_limit, previous_limit, score, risk_class, expires_at, deviates, reason, factors, created_by, created_at
+`
+
+type CreateCreditReviewParams struct {
+	EnterpriseID   int64
+	CustomerCode   int64
+	Origin         string
+	SuggestedLimit pgtype.Numeric
+	ApprovedLimit  pgtype.Numeric
+	PreviousLimit  pgtype.Numeric
+	Score          int32
+	RiskClass      string
+	ExpiresAt      pgtype.Date
+	Deviates       bool
+	Reason         pgtype.Text
+	Factors        []byte
+	CreatedBy      pgtype.UUID
+}
+
+func (q *Queries) CreateCreditReview(ctx context.Context, arg CreateCreditReviewParams) (CustomerCreditReview, error) {
+	row := q.db.QueryRow(ctx, createCreditReview,
+		arg.EnterpriseID,
+		arg.CustomerCode,
+		arg.Origin,
+		arg.SuggestedLimit,
+		arg.ApprovedLimit,
+		arg.PreviousLimit,
+		arg.Score,
+		arg.RiskClass,
+		arg.ExpiresAt,
+		arg.Deviates,
+		arg.Reason,
+		arg.Factors,
+		arg.CreatedBy,
+	)
+	var i CustomerCreditReview
+	err := row.Scan(
+		&i.ID,
+		&i.EnterpriseID,
+		&i.CustomerCode,
+		&i.Origin,
+		&i.SuggestedLimit,
+		&i.ApprovedLimit,
+		&i.PreviousLimit,
+		&i.Score,
+		&i.RiskClass,
+		&i.ExpiresAt,
+		&i.Deviates,
+		&i.Reason,
+		&i.Factors,
+		&i.CreatedBy,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createCustomer = `-- name: CreateCustomer :one
 
 INSERT INTO customers (
     code, corporate_code, is_corporate, name, trade_name,
     document_type, document_number, state_registration, municipal_registration,
     suframa_code, suframa_expiry,
-    region_id, market_segment_id, customer_type_id,
-    payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
-    invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by, enterprise_id, finalidade_compra
+    region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id,
+    credit_limit, website, created_by, enterprise_id, finalidade_compra,
+    ie_indicator, tax_regime, main_cnae, nfe_email, billing_email,
+    representative_code, shipping_carrier_id, freight_type,
+    requires_customer_po, requires_quality_cert, allows_partial_billing,
+    receiving_notes, commercial_notes, financial_notes
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9,
     $10, $11,
-    $12, $13, $14,
-    $15, $16, $17, $18,
-    $19, $20, $21,
-    $22, $23, $24, $25, $26::varchar
-) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra
+    $12, $13, $14, $15, $16,
+    $17, $18, $19, $20, $21::varchar,
+    $22::varchar, $23::varchar, $24::varchar, $25::varchar, $26::varchar,
+    $27::bigint, $28::bigint, $29::varchar,
+    $30, $31, $32,
+    $33::text, $34::text, $35::text
+) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at
 `
 
 type CreateCustomerParams struct {
@@ -375,18 +442,27 @@ type CreateCustomerParams struct {
 	RegionID              *int64
 	MarketSegmentID       *int64
 	CustomerTypeID        *int64
-	PaymentConditionID    *int64
-	SalesTableID          *int64
 	CarrierID             *int64
-	CarrierGroupID        *int64
-	InvoiceTypeID         *int64
 	TaxTypeID             *int64
-	PaymentCondVisibility sqltypes.PaymentCondVisibilityEnum
 	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
 	CreatedBy             pgtype.UUID
 	EnterpriseID          int64
 	FinalidadeCompra      pgtype.Text
+	IeIndicator           pgtype.Text
+	TaxRegime             pgtype.Text
+	MainCnae              pgtype.Text
+	NfeEmail              pgtype.Text
+	BillingEmail          pgtype.Text
+	RepresentativeCode    *int64
+	ShippingCarrierID     *int64
+	FreightType           pgtype.Text
+	RequiresCustomerPo    bool
+	RequiresQualityCert   bool
+	AllowsPartialBilling  bool
+	ReceivingNotes        pgtype.Text
+	CommercialNotes       pgtype.Text
+	FinancialNotes        pgtype.Text
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -407,18 +483,27 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		arg.RegionID,
 		arg.MarketSegmentID,
 		arg.CustomerTypeID,
-		arg.PaymentConditionID,
-		arg.SalesTableID,
 		arg.CarrierID,
-		arg.CarrierGroupID,
-		arg.InvoiceTypeID,
 		arg.TaxTypeID,
-		arg.PaymentCondVisibility,
 		arg.CreditLimit,
 		arg.Website,
 		arg.CreatedBy,
 		arg.EnterpriseID,
 		arg.FinalidadeCompra,
+		arg.IeIndicator,
+		arg.TaxRegime,
+		arg.MainCnae,
+		arg.NfeEmail,
+		arg.BillingEmail,
+		arg.RepresentativeCode,
+		arg.ShippingCarrierID,
+		arg.FreightType,
+		arg.RequiresCustomerPo,
+		arg.RequiresQualityCert,
+		arg.AllowsPartialBilling,
+		arg.ReceivingNotes,
+		arg.CommercialNotes,
+		arg.FinancialNotes,
 	)
 	var i Customer
 	err := row.Scan(
@@ -437,13 +522,8 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.RegionID,
 		&i.MarketSegmentID,
 		&i.CustomerTypeID,
-		&i.PaymentConditionID,
-		&i.SalesTableID,
 		&i.CarrierID,
-		&i.CarrierGroupID,
-		&i.InvoiceTypeID,
 		&i.TaxTypeID,
-		&i.PaymentCondVisibility,
 		&i.CreditLimit,
 		&i.Website,
 		&i.IsActive,
@@ -454,6 +534,32 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.UpdatedAt,
 		&i.EnterpriseID,
 		&i.FinalidadeCompra,
+		&i.IeIndicator,
+		&i.TaxRegime,
+		&i.MainCnae,
+		&i.NfeEmail,
+		&i.BillingEmail,
+		&i.RepresentativeCode,
+		&i.ShippingCarrierID,
+		&i.FreightType,
+		&i.RequiresCustomerPo,
+		&i.RequiresQualityCert,
+		&i.AllowsPartialBilling,
+		&i.ReceivingNotes,
+		&i.CommercialNotes,
+		&i.FinancialNotes,
+		&i.RegistrationStatus,
+		&i.RegistrationCheckedAt,
+		&i.RegistrationAttemptAt,
+		&i.OpeningDate,
+		&i.ShareCapital,
+		&i.CompanySize,
+		&i.LegalNature,
+		&i.CreditScore,
+		&i.CreditRiskClass,
+		&i.CreditLimitSuggested,
+		&i.CreditLimitExpiresAt,
+		&i.CreditReviewedAt,
 	)
 	return i, err
 }
@@ -1145,6 +1251,23 @@ func (q *Queries) DeleteContact(ctx context.Context, arg DeleteContactParams) (i
 	return result.RowsAffected(), nil
 }
 
+const deleteCustomer = `-- name: DeleteCustomer :execrows
+DELETE FROM customers WHERE code = $1 AND enterprise_id = $2
+`
+
+type DeleteCustomerParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) DeleteCustomer(ctx context.Context, arg DeleteCustomerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCustomer, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteInstallment = `-- name: DeleteInstallment :exec
 UPDATE payment_condition_installments SET is_active = FALSE WHERE id = $1
 `
@@ -1257,8 +1380,35 @@ func (q *Queries) GetContactTypeByCode(ctx context.Context, arg GetContactTypeBy
 	return i, err
 }
 
+const getCreditPolicy = `-- name: GetCreditPolicy :one
+SELECT enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by FROM customer_credit_policies WHERE enterprise_id = $1
+`
+
+func (q *Queries) GetCreditPolicy(ctx context.Context, enterpriseID int64) (CustomerCreditPolicy, error) {
+	row := q.db.QueryRow(ctx, getCreditPolicy, enterpriseID)
+	var i CustomerCreditPolicy
+	err := row.Scan(
+		&i.EnterpriseID,
+		&i.MaxLimit,
+		&i.NewCustomerCapitalPct,
+		&i.NewCustomerCap,
+		&i.OverrideTolerancePct,
+		&i.OverdueBlockDays,
+		&i.HistoryMonths,
+		&i.ValidityMonthsA,
+		&i.ValidityMonthsB,
+		&i.ValidityMonthsC,
+		&i.ValidityMonthsD,
+		&i.ValidityMonthsE,
+		&i.RegistrationCheckDays,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
+
 const getCustomerByCode = `-- name: GetCustomerByCode :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetCustomerByCodeParams struct {
@@ -1285,13 +1435,8 @@ func (q *Queries) GetCustomerByCode(ctx context.Context, arg GetCustomerByCodePa
 		&i.RegionID,
 		&i.MarketSegmentID,
 		&i.CustomerTypeID,
-		&i.PaymentConditionID,
-		&i.SalesTableID,
 		&i.CarrierID,
-		&i.CarrierGroupID,
-		&i.InvoiceTypeID,
 		&i.TaxTypeID,
-		&i.PaymentCondVisibility,
 		&i.CreditLimit,
 		&i.Website,
 		&i.IsActive,
@@ -1302,12 +1447,41 @@ func (q *Queries) GetCustomerByCode(ctx context.Context, arg GetCustomerByCodePa
 		&i.UpdatedAt,
 		&i.EnterpriseID,
 		&i.FinalidadeCompra,
+		&i.IeIndicator,
+		&i.TaxRegime,
+		&i.MainCnae,
+		&i.NfeEmail,
+		&i.BillingEmail,
+		&i.RepresentativeCode,
+		&i.ShippingCarrierID,
+		&i.FreightType,
+		&i.RequiresCustomerPo,
+		&i.RequiresQualityCert,
+		&i.AllowsPartialBilling,
+		&i.ReceivingNotes,
+		&i.CommercialNotes,
+		&i.FinancialNotes,
+		&i.RegistrationStatus,
+		&i.RegistrationCheckedAt,
+		&i.RegistrationAttemptAt,
+		&i.OpeningDate,
+		&i.ShareCapital,
+		&i.CompanySize,
+		&i.LegalNature,
+		&i.CreditScore,
+		&i.CreditRiskClass,
+		&i.CreditLimitSuggested,
+		&i.CreditLimitExpiresAt,
+		&i.CreditReviewedAt,
 	)
 	return i, err
 }
 
 const getCustomerByDocument = `-- name: GetCustomerByDocument :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
+WHERE regexp_replace(document_number, '\D', '', 'g') = regexp_replace($1::TEXT, '\D', '', 'g')
+  AND enterprise_id = $2
+ORDER BY code LIMIT 1
 `
 
 type GetCustomerByDocumentParams struct {
@@ -1315,6 +1489,7 @@ type GetCustomerByDocumentParams struct {
 	EnterpriseID   int64
 }
 
+// Compara só os dígitos: cadastro antigo pode ter o documento com pontuação.
 func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDocumentParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, getCustomerByDocument, arg.DocumentNumber, arg.EnterpriseID)
 	var i Customer
@@ -1334,13 +1509,8 @@ func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDo
 		&i.RegionID,
 		&i.MarketSegmentID,
 		&i.CustomerTypeID,
-		&i.PaymentConditionID,
-		&i.SalesTableID,
 		&i.CarrierID,
-		&i.CarrierGroupID,
-		&i.InvoiceTypeID,
 		&i.TaxTypeID,
-		&i.PaymentCondVisibility,
 		&i.CreditLimit,
 		&i.Website,
 		&i.IsActive,
@@ -1351,6 +1521,32 @@ func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDo
 		&i.UpdatedAt,
 		&i.EnterpriseID,
 		&i.FinalidadeCompra,
+		&i.IeIndicator,
+		&i.TaxRegime,
+		&i.MainCnae,
+		&i.NfeEmail,
+		&i.BillingEmail,
+		&i.RepresentativeCode,
+		&i.ShippingCarrierID,
+		&i.FreightType,
+		&i.RequiresCustomerPo,
+		&i.RequiresQualityCert,
+		&i.AllowsPartialBilling,
+		&i.ReceivingNotes,
+		&i.CommercialNotes,
+		&i.FinancialNotes,
+		&i.RegistrationStatus,
+		&i.RegistrationCheckedAt,
+		&i.RegistrationAttemptAt,
+		&i.OpeningDate,
+		&i.ShareCapital,
+		&i.CompanySize,
+		&i.LegalNature,
+		&i.CreditScore,
+		&i.CreditRiskClass,
+		&i.CreditLimitSuggested,
+		&i.CreditLimitExpiresAt,
+		&i.CreditReviewedAt,
 	)
 	return i, err
 }
@@ -1868,6 +2064,78 @@ func (q *Queries) ListContacts(ctx context.Context, arg ListContactsParams) ([]C
 	return items, nil
 }
 
+const listCreditReviews = `-- name: ListCreditReviews :many
+SELECT r.id, r.enterprise_id, r.customer_code, r.origin, r.suggested_limit, r.approved_limit, r.previous_limit, r.score, r.risk_class, r.expires_at, r.deviates, r.reason, r.factors, r.created_by, r.created_at, COALESCE(u.name, '')::text AS created_by_name FROM customer_credit_reviews r
+  JOIN customers c ON c.code = r.customer_code AND c.enterprise_id = r.enterprise_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.enterprise_id = $1 AND r.customer_code = $2
+   AND r.created_at >= c.created_at
+ ORDER BY r.created_at DESC, r.id DESC
+`
+
+type ListCreditReviewsParams struct {
+	EnterpriseID int64
+	CustomerCode int64
+}
+
+type ListCreditReviewsRow struct {
+	ID             int64
+	EnterpriseID   int64
+	CustomerCode   int64
+	Origin         string
+	SuggestedLimit pgtype.Numeric
+	ApprovedLimit  pgtype.Numeric
+	PreviousLimit  pgtype.Numeric
+	Score          int32
+	RiskClass      string
+	ExpiresAt      pgtype.Date
+	Deviates       bool
+	Reason         pgtype.Text
+	Factors        []byte
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
+	CreatedByName  string
+}
+
+// Só as análises do cadastro atual: a trilha de um cliente excluído fica
+// guardada, mas não aparece para outro cliente criado depois com o mesmo código.
+func (q *Queries) ListCreditReviews(ctx context.Context, arg ListCreditReviewsParams) ([]ListCreditReviewsRow, error) {
+	rows, err := q.db.Query(ctx, listCreditReviews, arg.EnterpriseID, arg.CustomerCode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCreditReviewsRow
+	for rows.Next() {
+		var i ListCreditReviewsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EnterpriseID,
+			&i.CustomerCode,
+			&i.Origin,
+			&i.SuggestedLimit,
+			&i.ApprovedLimit,
+			&i.PreviousLimit,
+			&i.Score,
+			&i.RiskClass,
+			&i.ExpiresAt,
+			&i.Deviates,
+			&i.Reason,
+			&i.Factors,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.CreatedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCustomerTypes = `-- name: ListCustomerTypes :many
 SELECT id, code, description, category, delivery_days, is_active, created_at, enterprise_id FROM customer_types
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
@@ -1909,7 +2177,7 @@ func (q *Queries) ListCustomerTypes(ctx context.Context, arg ListCustomerTypesPa
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
 WHERE enterprise_id = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
@@ -1945,13 +2213,8 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.RegionID,
 			&i.MarketSegmentID,
 			&i.CustomerTypeID,
-			&i.PaymentConditionID,
-			&i.SalesTableID,
 			&i.CarrierID,
-			&i.CarrierGroupID,
-			&i.InvoiceTypeID,
 			&i.TaxTypeID,
-			&i.PaymentCondVisibility,
 			&i.CreditLimit,
 			&i.Website,
 			&i.IsActive,
@@ -1962,6 +2225,84 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.UpdatedAt,
 			&i.EnterpriseID,
 			&i.FinalidadeCompra,
+			&i.IeIndicator,
+			&i.TaxRegime,
+			&i.MainCnae,
+			&i.NfeEmail,
+			&i.BillingEmail,
+			&i.RepresentativeCode,
+			&i.ShippingCarrierID,
+			&i.FreightType,
+			&i.RequiresCustomerPo,
+			&i.RequiresQualityCert,
+			&i.AllowsPartialBilling,
+			&i.ReceivingNotes,
+			&i.CommercialNotes,
+			&i.FinancialNotes,
+			&i.RegistrationStatus,
+			&i.RegistrationCheckedAt,
+			&i.RegistrationAttemptAt,
+			&i.OpeningDate,
+			&i.ShareCapital,
+			&i.CompanySize,
+			&i.LegalNature,
+			&i.CreditScore,
+			&i.CreditRiskClass,
+			&i.CreditLimitSuggested,
+			&i.CreditLimitExpiresAt,
+			&i.CreditReviewedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCustomersForRegistrationCheck = `-- name: ListCustomersForRegistrationCheck :many
+SELECT c.enterprise_id, e.code AS enterprise_code, c.code, c.document_number, c.blocked, c.created_by
+  FROM customers c
+  JOIN enterprise e ON e.id = c.enterprise_id
+ WHERE c.document_type = 'CNPJ' AND c.is_active
+   AND (c.registration_checked_at IS NULL
+        OR c.registration_checked_at < NOW() - make_interval(days => COALESCE(
+             (SELECT p.registration_check_days FROM customer_credit_policies p WHERE p.enterprise_id = c.enterprise_id), 30)))
+   -- Quem falhou há menos de um dia espera a vez dos outros.
+   AND (c.registration_attempt_at IS NULL OR c.registration_attempt_at < NOW() - interval '1 day')
+ ORDER BY c.registration_attempt_at NULLS FIRST, c.registration_checked_at NULLS FIRST
+ LIMIT $1
+`
+
+type ListCustomersForRegistrationCheckRow struct {
+	EnterpriseID   int64
+	EnterpriseCode int32
+	Code           int64
+	DocumentNumber string
+	Blocked        bool
+	CreatedBy      pgtype.UUID
+}
+
+// Clientes CNPJ ativos cuja situação na Receita não é conferida há `days` dias,
+// de todas as empresas (o agendador roda fora de requisição).
+func (q *Queries) ListCustomersForRegistrationCheck(ctx context.Context, maxRows int32) ([]ListCustomersForRegistrationCheckRow, error) {
+	rows, err := q.db.Query(ctx, listCustomersForRegistrationCheck, maxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCustomersForRegistrationCheckRow
+	for rows.Next() {
+		var i ListCustomersForRegistrationCheckRow
+		if err := rows.Scan(
+			&i.EnterpriseID,
+			&i.EnterpriseCode,
+			&i.Code,
+			&i.DocumentNumber,
+			&i.Blocked,
+			&i.CreatedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -1974,7 +2315,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 }
 
 const listEstablishments = `-- name: ListEstablishments :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
 WHERE corporate_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY code
 `
@@ -2009,13 +2350,8 @@ func (q *Queries) ListEstablishments(ctx context.Context, arg ListEstablishments
 			&i.RegionID,
 			&i.MarketSegmentID,
 			&i.CustomerTypeID,
-			&i.PaymentConditionID,
-			&i.SalesTableID,
 			&i.CarrierID,
-			&i.CarrierGroupID,
-			&i.InvoiceTypeID,
 			&i.TaxTypeID,
-			&i.PaymentCondVisibility,
 			&i.CreditLimit,
 			&i.Website,
 			&i.IsActive,
@@ -2026,6 +2362,32 @@ func (q *Queries) ListEstablishments(ctx context.Context, arg ListEstablishments
 			&i.UpdatedAt,
 			&i.EnterpriseID,
 			&i.FinalidadeCompra,
+			&i.IeIndicator,
+			&i.TaxRegime,
+			&i.MainCnae,
+			&i.NfeEmail,
+			&i.BillingEmail,
+			&i.RepresentativeCode,
+			&i.ShippingCarrierID,
+			&i.FreightType,
+			&i.RequiresCustomerPo,
+			&i.RequiresQualityCert,
+			&i.AllowsPartialBilling,
+			&i.ReceivingNotes,
+			&i.CommercialNotes,
+			&i.FinancialNotes,
+			&i.RegistrationStatus,
+			&i.RegistrationCheckedAt,
+			&i.RegistrationAttemptAt,
+			&i.OpeningDate,
+			&i.ShareCapital,
+			&i.CompanySize,
+			&i.LegalNature,
+			&i.CreditScore,
+			&i.CreditRiskClass,
+			&i.CreditLimitSuggested,
+			&i.CreditLimitExpiresAt,
+			&i.CreditReviewedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2421,6 +2783,24 @@ func (q *Queries) ListTaxTypes(ctx context.Context, arg ListTaxTypesParams) ([]T
 	return items, nil
 }
 
+const markRegistrationAttempt = `-- name: MarkRegistrationAttempt :execrows
+UPDATE customers SET registration_attempt_at = NOW()
+WHERE code = $1 AND enterprise_id = $2
+`
+
+type MarkRegistrationAttemptParams struct {
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) MarkRegistrationAttempt(ctx context.Context, arg MarkRegistrationAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markRegistrationAttempt, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const nextCarrierCode = `-- name: NextCarrierCode :one
 SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM carriers WHERE enterprise_id = $1
 `
@@ -2551,6 +2931,101 @@ type RemoveCarrierFromGroupParams struct {
 func (q *Queries) RemoveCarrierFromGroup(ctx context.Context, arg RemoveCarrierFromGroupParams) error {
 	_, err := q.db.Exec(ctx, removeCarrierFromGroup, arg.CarrierGroupID, arg.CarrierID, arg.EnterpriseID)
 	return err
+}
+
+const setCustomerActive = `-- name: SetCustomerActive :execrows
+UPDATE customers SET is_active = $1, updated_at = NOW()
+WHERE code = $2 AND enterprise_id = $3
+`
+
+type SetCustomerActiveParams struct {
+	IsActive     bool
+	Code         int64
+	EnterpriseID int64
+}
+
+func (q *Queries) SetCustomerActive(ctx context.Context, arg SetCustomerActiveParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCustomerActive, arg.IsActive, arg.Code, arg.EnterpriseID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setCustomerCredit = `-- name: SetCustomerCredit :execrows
+UPDATE customers
+SET credit_limit = $1, credit_limit_suggested = $2,
+    credit_score = $3, credit_risk_class = $4,
+    credit_limit_expires_at = $5, credit_reviewed_at = NOW(), updated_at = NOW()
+WHERE code = $6 AND enterprise_id = $7
+`
+
+type SetCustomerCreditParams struct {
+	CreditLimit          pgtype.Numeric
+	CreditLimitSuggested pgtype.Numeric
+	CreditScore          *int32
+	CreditRiskClass      pgtype.Text
+	CreditLimitExpiresAt pgtype.Date
+	Code                 int64
+	EnterpriseID         int64
+}
+
+func (q *Queries) SetCustomerCredit(ctx context.Context, arg SetCustomerCreditParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCustomerCredit,
+		arg.CreditLimit,
+		arg.CreditLimitSuggested,
+		arg.CreditScore,
+		arg.CreditRiskClass,
+		arg.CreditLimitExpiresAt,
+		arg.Code,
+		arg.EnterpriseID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setCustomerRegistration = `-- name: SetCustomerRegistration :execrows
+UPDATE customers
+SET registration_status = $1, registration_checked_at = NOW(),
+    opening_date = COALESCE($2, opening_date),
+    share_capital = COALESCE($3, share_capital),
+    company_size = COALESCE(NULLIF($4::varchar, ''), company_size),
+    legal_nature = COALESCE(NULLIF($5::varchar, ''), legal_nature),
+    main_cnae = COALESCE(main_cnae, NULLIF($6::varchar, '')),
+    updated_at = NOW()
+WHERE code = $7 AND enterprise_id = $8
+`
+
+type SetCustomerRegistrationParams struct {
+	RegistrationStatus pgtype.Text
+	OpeningDate        pgtype.Date
+	ShareCapital       pgtype.Numeric
+	CompanySize        string
+	LegalNature        string
+	MainCnae           string
+	Code               int64
+	EnterpriseID       int64
+}
+
+// Situação cadastral lida na Receita. Os campos que a consulta não trouxe
+// ficam como estavam.
+func (q *Queries) SetCustomerRegistration(ctx context.Context, arg SetCustomerRegistrationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setCustomerRegistration,
+		arg.RegistrationStatus,
+		arg.OpeningDate,
+		arg.ShareCapital,
+		arg.CompanySize,
+		arg.LegalNature,
+		arg.MainCnae,
+		arg.Code,
+		arg.EnterpriseID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const unblockCustomer = `-- name: UnblockCustomer :execrows
@@ -2793,65 +3268,95 @@ func (q *Queries) UpdateContactType(ctx context.Context, arg UpdateContactTypePa
 
 const updateCustomer = `-- name: UpdateCustomer :one
 UPDATE customers
-SET name = $2, trade_name = $3, state_registration = $4, municipal_registration = $5,
-    suframa_code = $6, suframa_expiry = $7,
-    region_id = $8, market_segment_id = $9, customer_type_id = $10,
-    payment_condition_id = $11, sales_table_id = $12, carrier_id = $13,
-    carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
-    payment_cond_visibility = $17, credit_limit = $18, website = $19,
-    is_active = $20, finalidade_compra = $21::varchar, updated_at = NOW()
-WHERE id = $1 AND enterprise_id = $22
-RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, payment_condition_id, sales_table_id, carrier_id, carrier_group_id, invoice_type_id, tax_type_id, payment_cond_visibility, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra
+SET name = $1, trade_name = $2,
+    state_registration = $3, municipal_registration = $4,
+    suframa_code = $5, suframa_expiry = $6,
+    corporate_code = $7, is_corporate = $8,
+    region_id = $9, market_segment_id = $10,
+    customer_type_id = $11, carrier_id = $12, tax_type_id = $13,
+    website = $14, finalidade_compra = $15::varchar,
+    ie_indicator = $16::varchar, tax_regime = $17::varchar,
+    main_cnae = $18::varchar, nfe_email = $19::varchar,
+    billing_email = $20::varchar,
+    representative_code = $21::bigint, shipping_carrier_id = $22::bigint,
+    freight_type = $23::varchar,
+    requires_customer_po = $24, requires_quality_cert = $25,
+    allows_partial_billing = $26,
+    receiving_notes = $27::text, commercial_notes = $28::text,
+    financial_notes = $29::text,
+    updated_at = NOW()
+WHERE id = $30 AND enterprise_id = $31
+RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at
 `
 
 type UpdateCustomerParams struct {
-	ID                    int64
 	Name                  string
 	TradeName             pgtype.Text
 	StateRegistration     pgtype.Text
 	MunicipalRegistration pgtype.Text
 	SuframaCode           pgtype.Text
 	SuframaExpiry         pgtype.Date
+	CorporateCode         *int64
+	IsCorporate           bool
 	RegionID              *int64
 	MarketSegmentID       *int64
 	CustomerTypeID        *int64
-	PaymentConditionID    *int64
-	SalesTableID          *int64
 	CarrierID             *int64
-	CarrierGroupID        *int64
-	InvoiceTypeID         *int64
 	TaxTypeID             *int64
-	PaymentCondVisibility sqltypes.PaymentCondVisibilityEnum
-	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
-	IsActive              bool
 	FinalidadeCompra      pgtype.Text
+	IeIndicator           pgtype.Text
+	TaxRegime             pgtype.Text
+	MainCnae              pgtype.Text
+	NfeEmail              pgtype.Text
+	BillingEmail          pgtype.Text
+	RepresentativeCode    *int64
+	ShippingCarrierID     *int64
+	FreightType           pgtype.Text
+	RequiresCustomerPo    bool
+	RequiresQualityCert   bool
+	AllowsPartialBilling  bool
+	ReceivingNotes        pgtype.Text
+	CommercialNotes       pgtype.Text
+	FinancialNotes        pgtype.Text
+	ID                    int64
 	EnterpriseID          int64
 }
 
+// O limite de crédito não passa por aqui: só muda por SetCustomerCredit, que
+// grava a trilha da análise.
 func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) (Customer, error) {
 	row := q.db.QueryRow(ctx, updateCustomer,
-		arg.ID,
 		arg.Name,
 		arg.TradeName,
 		arg.StateRegistration,
 		arg.MunicipalRegistration,
 		arg.SuframaCode,
 		arg.SuframaExpiry,
+		arg.CorporateCode,
+		arg.IsCorporate,
 		arg.RegionID,
 		arg.MarketSegmentID,
 		arg.CustomerTypeID,
-		arg.PaymentConditionID,
-		arg.SalesTableID,
 		arg.CarrierID,
-		arg.CarrierGroupID,
-		arg.InvoiceTypeID,
 		arg.TaxTypeID,
-		arg.PaymentCondVisibility,
-		arg.CreditLimit,
 		arg.Website,
-		arg.IsActive,
 		arg.FinalidadeCompra,
+		arg.IeIndicator,
+		arg.TaxRegime,
+		arg.MainCnae,
+		arg.NfeEmail,
+		arg.BillingEmail,
+		arg.RepresentativeCode,
+		arg.ShippingCarrierID,
+		arg.FreightType,
+		arg.RequiresCustomerPo,
+		arg.RequiresQualityCert,
+		arg.AllowsPartialBilling,
+		arg.ReceivingNotes,
+		arg.CommercialNotes,
+		arg.FinancialNotes,
+		arg.ID,
 		arg.EnterpriseID,
 	)
 	var i Customer
@@ -2871,13 +3376,8 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.RegionID,
 		&i.MarketSegmentID,
 		&i.CustomerTypeID,
-		&i.PaymentConditionID,
-		&i.SalesTableID,
 		&i.CarrierID,
-		&i.CarrierGroupID,
-		&i.InvoiceTypeID,
 		&i.TaxTypeID,
-		&i.PaymentCondVisibility,
 		&i.CreditLimit,
 		&i.Website,
 		&i.IsActive,
@@ -2888,6 +3388,32 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.UpdatedAt,
 		&i.EnterpriseID,
 		&i.FinalidadeCompra,
+		&i.IeIndicator,
+		&i.TaxRegime,
+		&i.MainCnae,
+		&i.NfeEmail,
+		&i.BillingEmail,
+		&i.RepresentativeCode,
+		&i.ShippingCarrierID,
+		&i.FreightType,
+		&i.RequiresCustomerPo,
+		&i.RequiresQualityCert,
+		&i.AllowsPartialBilling,
+		&i.ReceivingNotes,
+		&i.CommercialNotes,
+		&i.FinancialNotes,
+		&i.RegistrationStatus,
+		&i.RegistrationCheckedAt,
+		&i.RegistrationAttemptAt,
+		&i.OpeningDate,
+		&i.ShareCapital,
+		&i.CompanySize,
+		&i.LegalNature,
+		&i.CreditScore,
+		&i.CreditRiskClass,
+		&i.CreditLimitSuggested,
+		&i.CreditLimitExpiresAt,
+		&i.CreditReviewedAt,
 	)
 	return i, err
 }
@@ -3516,6 +4042,82 @@ func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (T
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.EnterpriseID,
+	)
+	return i, err
+}
+
+const upsertCreditPolicy = `-- name: UpsertCreditPolicy :one
+INSERT INTO customer_credit_policies (
+    enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
+    overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5,
+    $6, $7, $8, $9, $10,
+    $11, $12, $13, $14, NOW()
+)
+ON CONFLICT (enterprise_id) DO UPDATE SET
+    max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
+    new_customer_cap = EXCLUDED.new_customer_cap, override_tolerance_pct = EXCLUDED.override_tolerance_pct,
+    overdue_block_days = EXCLUDED.overdue_block_days, history_months = EXCLUDED.history_months,
+    validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
+    validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
+    validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
+    updated_by = EXCLUDED.updated_by, updated_at = NOW()
+RETURNING enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by
+`
+
+type UpsertCreditPolicyParams struct {
+	EnterpriseID          int64
+	MaxLimit              pgtype.Numeric
+	NewCustomerCapitalPct pgtype.Numeric
+	NewCustomerCap        pgtype.Numeric
+	OverrideTolerancePct  pgtype.Numeric
+	OverdueBlockDays      int32
+	HistoryMonths         int32
+	ValidityMonthsA       int32
+	ValidityMonthsB       int32
+	ValidityMonthsC       int32
+	ValidityMonthsD       int32
+	ValidityMonthsE       int32
+	RegistrationCheckDays int32
+	UpdatedBy             pgtype.UUID
+}
+
+func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicyParams) (CustomerCreditPolicy, error) {
+	row := q.db.QueryRow(ctx, upsertCreditPolicy,
+		arg.EnterpriseID,
+		arg.MaxLimit,
+		arg.NewCustomerCapitalPct,
+		arg.NewCustomerCap,
+		arg.OverrideTolerancePct,
+		arg.OverdueBlockDays,
+		arg.HistoryMonths,
+		arg.ValidityMonthsA,
+		arg.ValidityMonthsB,
+		arg.ValidityMonthsC,
+		arg.ValidityMonthsD,
+		arg.ValidityMonthsE,
+		arg.RegistrationCheckDays,
+		arg.UpdatedBy,
+	)
+	var i CustomerCreditPolicy
+	err := row.Scan(
+		&i.EnterpriseID,
+		&i.MaxLimit,
+		&i.NewCustomerCapitalPct,
+		&i.NewCustomerCap,
+		&i.OverrideTolerancePct,
+		&i.OverdueBlockDays,
+		&i.HistoryMonths,
+		&i.ValidityMonthsA,
+		&i.ValidityMonthsB,
+		&i.ValidityMonthsC,
+		&i.ValidityMonthsD,
+		&i.ValidityMonthsE,
+		&i.RegistrationCheckDays,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
 	)
 	return i, err
 }

@@ -19,6 +19,20 @@ Todas as rotas do módulo de cliente vivem sob `/api/customers`:
 
 Esses cadastros devem existir antes de criar um cliente.
 
+Região, segmento, tipo de cliente, portador, tipo de nota e tipo de imposto têm
+situação: `PATCH /api/customers/support/{resource}/{code}/active {"is_active": false|true}`.
+Inativo some das listas de escolha (`only_active` padrão) e continua nos
+documentos antigos; a tela de cadastro lista com `only_active=false`. Tipo de
+contato e grupo de portadores não têm situação (o PATCH responde 422). O que
+está em uso não sai pelo DELETE (409) — inclusive tipo de nota em item de
+pedido de compra.
+
+Cliente inativo não recebe pedido novo por nenhum caminho: pedido digitado,
+recorrência (usa o mesmo caso de uso), conversão de orçamento e chamada de
+contrato de venda. O faturamento de OS continua permitido (o serviço já foi
+feito). Pedido criado sem representante herda o do cadastro do cliente, se o
+representante estiver ativo e desbloqueado.
+
 ### 1.1 Região (`/api/customers/support/regions`)
 
 Define a área geográfica de atuação (território de vendas/representantes).
@@ -199,7 +213,7 @@ POST /api/customers/support/payment-conditions
 |---|---|
 | `description` | Nome da condição de pagamento (ex: "30/60/90 dias DD") |
 | `carrier_code` | Portador padrão associado a esta condição (banco/modalidade de cobrança) |
-| `analysis_type` | `SEMPRE_ANALISA` — sempre passa por análise de crédito; `BLOQUEIA_SEMPRE` — bloqueia o pedido independentemente do crédito; `LIBERA_SEM_ANALISE` — aprova automaticamente sem análise |
+| `analysis_type` | `SEMPRE_ANALISA` — sempre passa por análise de crédito; `BLOQUEIA_SEMPRE` — bloqueia o pedido independentemente do crédito; `LIBERA_SEM_ANALISE` — dispensa a análise só quando a condição é à vista (nas demais, analisa). Outros valores são recusados |
 | `parcel_start` | Quando começa a contagem do primeiro vencimento: `EMISSAO` — a partir da data de emissão da NF; `PROXIMO_MES` — no 1º dia do mês seguinte; `PROXIMA_QUINZENA` — na próxima quinzena |
 | `expenses` | Valor de despesas/taxas adicionais cobradas nesta condição (ex: tarifa bancária) |
 | `average_term` | Prazo médio ponderado em dias (usado em relatórios de projeção de recebíveis) |
@@ -278,6 +292,14 @@ POST /api/customers/support/sales-tables
 ---
 
 ### 1.9 Tipo de Nota Fiscal de Saída (`/api/customers/support/invoice-types`)
+
+> **Tela:** VFIS0305 — Tipos de Nota Fiscal (módulo Fiscal; gravar exige o módulo
+> Fiscal, ler é livre). O fiscal só lê: `type`, `icms_type`, `icms_reduction_pct`,
+> `calc_substitution_tax`, `calc_icms_deferral`, `calc_pis_cofins`, `calc_difal`,
+> `generates_financial_title`, `updates_inventory`/`stock_movement`, `baixa_pedido`,
+> `generates_revenue`, `requires_sales_order` e `is_active`. Os demais campos
+> continuam no DTO e são preservados pela tela, mas não têm efeito. O tipo de
+> nota não fica mais no cliente (000489).
 
 Configura o comportamento fiscal das NF-e emitidas para o cliente (quais impostos calcular,
 se gera receita, se atualiza estoque, etc.). Armazenado como preferência padrão no cliente;
@@ -469,14 +491,22 @@ POST /api/customers
   "region_code": 1,
   "market_segment_code": 1,
   "customer_type_code": 1,
-  "payment_condition_code": 1,
-  "sales_table_code": 1,
   "carrier_code": 1,
-  "carrier_group_code": 1,
-  "invoice_type_code": 1,
   "tax_type_code": 1,
-  "payment_cond_visibility": "SOMENTE_VINCULADOS",
-  "credit_limit": 50000,
+  "ie_indicator": "CONTRIBUINTE",
+  "tax_regime": "NORMAL",
+  "main_cnae": "2599399",
+  "nfe_email": "nfe@exemplo.com.br",
+  "billing_email": "financeiro@exemplo.com.br",
+  "representative_code": 10,
+  "shipping_carrier_id": 3,
+  "freight_type": "FOB",
+  "requires_customer_po": true,
+  "requires_quality_cert": false,
+  "allows_partial_billing": true,
+  "receiving_notes": "seg–sex 7h–16h, agendar 24h antes",
+  "credit_limit": 18000,
+  "credit_limit_reason": "",
   "website": "https://exemplo.com.br",
   "created_by": "<uuid>"
 }
@@ -498,14 +528,17 @@ POST /api/customers
 | `region_code` | Região de vendas do cliente (define território do representante) |
 | `market_segment_code` | Segmento de mercado (classifica o tipo de negócio do cliente) |
 | `customer_type_code` | Tipo de cliente (define categoria e prazo de entrega padrão) |
-| `payment_condition_code` | Condição de pagamento padrão do cliente (herdada pelo pedido de venda) |
-| `sales_table_code` | Tabela de preços padrão do cliente (herdada pelo pedido de venda) |
-| `carrier_code` | Portador padrão do cliente para cobrança |
-| `carrier_group_code` | Grupo de portadores disponíveis para seleção no pedido de venda |
-| `invoice_type_code` | Tipo de NF padrão — preferência copiada para o pedido de venda na criação |
+| `carrier_code` | Portador padrão do cliente para cobrança (pré-preenche orçamento e pedido) |
 | `tax_type_code` | Tipo de imposto padrão — define composição de base de cálculo herdada pelo pedido |
-| `payment_cond_visibility` | `SOMENTE_VINCULADOS` — só exibe condições vinculadas ao grupo do cliente; `VINCULADOS_E_NENHUM` — inclui opção "nenhuma condição"; `TODOS` — exibe todas as condições cadastradas |
-| `credit_limit` | Limite de crédito do cliente em reais — verificado quando o portador do pedido tem `uses_credit_limit = true` |
+| `ie_indicator` | `CONTRIBUINTE` (exige IE), `ISENTO` (grava IE "ISENTO" → indIEDest 2), `NAO_CONTRIBUINTE` (sem IE); vazio = deduz pela IE |
+| `tax_regime` | `SIMPLES`, `MEI` ou `NORMAL`; MEI limita a classe de crédito a C |
+| `main_cnae` | CNAE principal (7 dígitos) |
+| `nfe_email` | E-mail(s) do XML/DANFE separados por `;`; o primeiro vai como e-mail do destinatário da NF-e |
+| `representative_code`, `shipping_carrier_id`, `freight_type` | Padrões comerciais/logísticos (orçamento e pedido pré-preenchem portador, frete e representante) |
+| `requires_customer_po` | Pedido de venda só é confirmado com `customer_po_number` (até 15 caracteres), que vai na NF-e como `pedido_compra` no cabeçalho e em cada item (xPed). Informar depois: `PATCH /api/sales-order/{code}/customer-po` |
+| `requires_quality_cert`, `allows_partial_billing`, `*_notes` | Exigências e observações exibidas ao escolher o cliente e na Visão 360 |
+| `representative_code` | Conferido pelo vínculo do representante com a empresa (`representativevalidation`): inexistente, bloqueado ou inativo é recusado |
+| `credit_limit` / `credit_limit_reason` | **Só na inclusão.** Ausente = vale o limite sugerido. Diferente do sugerido exige motivo (≥ 15 caracteres); acima da tolerância da política ou do teto da empresa (`max_limit`), só ADMIN. Na alteração, o limite muda por `PUT /{code}/credit-limit` |
 | `website` | Site do cliente (informativo) |
 
 ---
@@ -517,7 +550,18 @@ POST /api/customers
 | POST | `/api/customers/` | Cria cliente |
 | GET | `/api/customers/` | Lista (`?only_active=false` inclui inativos; `?format=xlsx\|pdf\|csv`) |
 | GET | `/api/customers/{code}` | Detalhe — **hidrata endereços e contatos** |
-| PUT | `/api/customers/{code}` | **Atualiza** o cliente |
+| PUT | `/api/customers/{code}` | **Atualiza** o cliente (formulário inteiro: campo ausente limpa; não mexe no limite) |
+| DELETE | `/api/customers/{code}` | Exclui (ADMIN) — só cliente sem nenhum movimento |
+| GET | `/api/customers/{code}/usage` | Onde o cliente é usado e se pode ser inativado/excluído |
+| PATCH | `/api/customers/{code}/inactivate` · `/reactivate` | Inativa (recusa com movimento em andamento) / reativa |
+| POST | `/api/customers/{code}/registration-check` | Reconsulta a Receita; bloqueia se não estiver ATIVA |
+| GET | `/api/customers/credit-suggestion?document_type=&document=` · `/{code}/credit-suggestion` | Análise de crédito explicada (score, classe, limite, fatores) |
+| PUT | `/api/customers/{code}/credit-limit` | Grava limite revisado `{credit_limit, reason}` com trilha |
+| GET | `/api/customers/{code}/credit-reviews` | Trilha de crédito, com `created_by_name` (quem aprovou) |
+| GET | `/api/customers/{code}/overview` | Visão 360 |
+| PUT/DELETE | `/api/customers/{code}/addresses/{id}` · `/contacts/{id}` | Altera/exclui endereço ou contato |
+| GET/PUT | `/api/customers/support/credit-policy/` | Política de crédito da empresa (PUT só ADMIN) |
+| DELETE | `/api/customers/support/{recurso}/{code}` | Exclui cadastro de apoio que não esteja em uso |
 | PATCH | `/api/customers/{code}/block` · `/unblock` | Bloqueia / desbloqueia |
 
 > **Atualização (`PUT /api/customers/{code}`).** Reutiliza o mesmo corpo do
@@ -616,20 +660,70 @@ PATCH /api/customers/{code}/unblock
 | `tax_type_code` | `tax_types.code` (FK — migration 000120) |
 | `bearer_code` | `carriers.code` (FK — migration 000120) |
 
-O campo `default_nf_type` do pedido de venda é um código de modelo NF-e (ex: "55" para NF-e, "65" para NFC-e), não uma FK para `invoice_types`. O `invoice_type_code` do cliente é uma **preferência** que deve ser copiada para o pedido ao criá-lo (lógica de negócio a implementar no front/use case de criação de pedido).
+O cliente não tem condição de pagamento, tabela de venda nem tipo de NF padrão
+(migration 000489): a condição é negociada no orçamento/pedido, a tabela é do
+item e a operação fiscal é decidida na nota. Os valores antigos ficaram em
+`customers_campos_retirados`.
 
-### Fluxo de verificação de crédito (a implementar no pedido de venda)
+### Crédito (domínio: `customer/entity/credit.go`)
 
-```
-Pedido de venda criado
-  └─ carrier.uses_credit_limit = true?
-       ├─ carrier.consider_available = true  → saldo disponível = credit_limit − Σ pedidos em aberto
-       └─ carrier.consider_available = false → usa credit_limit bruto
-            └─ total do pedido > saldo disponível?
-                 ├─ payment_condition.analysis_type = BLOQUEIA_SEMPRE → bloqueia
-                 ├─ payment_condition.analysis_type = SEMPRE_ANALISA  → envia para análise
-                 └─ payment_condition.analysis_type = LIBERA_SEM_ANALISE → aprova
-```
+Score de 0 a 1000 e classe A–E, calculados a cada análise:
+
+- **Com histórico** (≥ 3 títulos pagos na janela da política, somando o grupo
+  econômico pela raiz do CNPJ): pontualidade por valor (300), atraso médio
+  ponderado (200), maior atraso (100), relacionamento (100), renegociações
+  (100), devoluções (50), idade do CNPJ (150); −100 se o atraso dos últimos 90
+  dias passou o histórico em mais de 10 dias; −50 com vencido dentro da
+  tolerância. Limite base = média mensal faturada × (prazo médio ÷ 30 + 1).
+- **Sem histórico:** 350 + capital social (até 150) + idade (até 150), classe
+  máxima C. Base = % do capital social, com teto; sem capital, 25% do teto.
+- **Bloqueios (classe E, limite 0):** Receita não ATIVA, título vencido além
+  da tolerância, protesto, baixa como perda.
+- Limite = base × fator da classe (A 1; B 0,8; C 0,6; D 0,3; E 0), teto da
+  empresa, arredondado para baixo em R$ 100. Validade por classe (política).
+
+Na confirmação do pedido (`sales_order_uc/credit_check.go`), antes do limite,
+`CreditGate` manda para análise: limite vencido, classe D/E, limite zero numa
+análise, título vencido além da tolerância no grupo econômico. Cliente que
+nunca passou pela análise segue só a regra do limite.
+
+A análise trava o cliente (`pg_advisory_xact_lock` por empresa + cliente) na
+transação da confirmação: dois pedidos do mesmo cliente confirmados ao mesmo
+tempo são analisados um depois do outro, e o segundo já conta o primeiro como
+exposição. A exposição soma os títulos em aberto e, dos outros pedidos P/A,
+só o **saldo** das linhas (pedida − faturada − cancelada, na proporção do total
+da linha): a parte faturada já está nos títulos. A Visão 360 usa a mesma conta.
+**Alterar** um pedido já confirmado (linha nova, quantidade, preço)
+não refaz a análise.
+
+A lista da VCLI0500 marca o limite vencido ou que vence em até 30 dias e filtra
+"Só crédito a revisar" — é por ela que se acha quem revisar.
+
+Cliente **inativo** não recebe pedido de venda novo (criação e alteração).
+
+`form_version: 2` identifica a VCLI0500 revista. Sem ele (desktop antigo), a
+alteração preserva os campos novos do cliente e a inclusão ignora o limite
+digitado (vale o sugerido, com trilha) — a tela antiga não manda motivo.
+
+**Orçamento convertido em pedido** (`/sales-quotation/{code}/convert-to-order`,
+status padrão "P") nasce rascunho e passa pela mesma confirmação da VVND0200:
+crédito, pedido de compra do cliente, linhas e reserva de estoque. Recusa
+devolve erro com o número do pedido, que fica em rascunho.
+
+**Preferência de nome do cliente** (`GET/PUT /api/acesso/minhas-preferencias`,
+tabela `user_preferences`, rota livre de perfil): `customer_name_display`
+`RAZAO_SOCIAL` (padrão) ou `FANTASIA`. Os campos de busca de cliente mostram o
+nome escolhido e acham pelos dois.
+
+A exclusão confere o uso e apaga na mesma transação, com a linha do cliente
+travada. Conta também os vínculos sem FK (item exclusivo do cliente, grupo de
+metas, consumidor final padrão do orçamento, nota de retorno da assistência,
+datas de reajuste da venda recorrente): apagar deixaria o código órfão, e um
+cliente novo com o mesmo código herdaria o vínculo. A trilha de crédito sobrevive à exclusão, mas só aparece para o
+cadastro que a gerou (código reaproveitado não herda análise antiga).
+
+O agendador `infrastructure/clientereceita` reconsulta 10 CNPJs por hora (30 s
+entre consultas, pela cota das APIs públicas) e bloqueia quem não está ATIVO.
 
 ---
 

@@ -47,11 +47,12 @@ type PurchaseOrderReader interface {
 }
 
 type PurchaseOrderHeader struct {
-	Code         int64
-	CarrierCode  *int64
-	SupplierCode *int64
-	TotalWeight  decimal.Decimal
-	Items        []PurchaseOrderItemHeader
+	Code              int64
+	CarrierCode       *int64
+	ShippingCarrierID *int64
+	SupplierCode      *int64
+	TotalWeight       decimal.Decimal
+	Items             []PurchaseOrderItemHeader
 }
 
 type PurchaseOrderItemHeader struct {
@@ -190,6 +191,7 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromPurchaseOrder(ctx context.Context
 		ReferenceType:     &refType,
 		PurchaseOrderCode: &purchaseOrderCode,
 		CarrierCode:       po.CarrierCode,
+		ShippingCarrierID: po.ShippingCarrierID,
 		Status:            entity.ShipmentStatusOpen,
 		TotalVolumes:      1,
 		TotalGrossWeight:  po.TotalWeight,

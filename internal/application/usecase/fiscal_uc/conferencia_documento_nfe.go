@@ -35,6 +35,11 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 	impede := func(campo, msg, como string) {
 		p = append(p, response.PreviaPendenciaNFe{Nivel: NivelImpede, Campo: campo, Mensagem: msg, ComoResolver: como})
 	}
+	// Dígito de IE é AVISO: a regra é por UF e uma divergência nossa não pode
+	// travar nota boa; a SEFAZ tem a palavra final.
+	atencao := func(campo, msg, como string) {
+		p = append(p, response.PreviaPendenciaNFe{Nivel: NivelAtencao, Campo: campo, Mensagem: msg, ComoResolver: como})
+	}
 
 	// ── Emitente
 	const naConfig = "complete em VFIS0100 — Configuração Fiscal"
@@ -83,6 +88,37 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 	}
 	if ie := strings.TrimSpace(derefStr(exit.IEDestinatario)); ie != "" && !strings.EqualFold(ie, "ISENTO") && soDigitos(ie) == "" {
 		impede("destinatario.ie", fmt.Sprintf("a inscrição estadual do destinatário (%s) não é válida: use só os números ou ISENTO", ie), naNota)
+	} else if ie != "" && !exterior && validation.UFValida(ufDest) && !validation.IEValida(ie, ufDest) {
+		atencao("destinatario.ie", fmt.Sprintf("a inscrição estadual do destinatário (%s) não confere com o dígito de %s: a SEFAZ deve recusar (rejeição 209)", ie, ufDest), naNota)
+	}
+
+	// ── Transportadora e local de entrega: grupos opcionais, mas, se vão, a SEFAZ
+	// valida documento e endereço deles como os do destinatário.
+	if t := exit.Transportador; t != nil {
+		const naTransportadora = "corrija o fornecedor da transportadora (VSUP0100), descarte este rascunho e gere a nota novamente"
+		if doc := strings.TrimSpace(t.CNPJCPF); doc != "" && !validation.ValidateCNPJOrCPF(doc) {
+			impede("transportador.documento", fmt.Sprintf("o CNPJ ou CPF da transportadora %s não é válido", t.Nome), naTransportadora)
+		}
+		uf := strings.ToUpper(strings.TrimSpace(t.UF))
+		if uf != "" && !validation.UFValida(uf) {
+			impede("transportador.uf", fmt.Sprintf("a UF da transportadora %s não é válida", t.Nome), naTransportadora)
+		} else if ie := strings.TrimSpace(t.IE); ie != "" && uf != "" && !validation.IEValida(ie, uf) {
+			atencao("transportador.ie", fmt.Sprintf("a inscrição estadual da transportadora %s (%s) não confere com o dígito de %s: a SEFAZ deve recusar (rejeição 544)", t.Nome, ie, uf), naTransportadora)
+		}
+	}
+	if e := exit.LocalEntrega; e != nil {
+		const naEntrega = "corrija o endereço de entrega do cliente (VCLI0500), descarte este rascunho e gere a nota novamente"
+		for _, f := range []struct{ campo, nome, valor string }{
+			{"logradouro", "o logradouro", e.Logradouro}, {"numero", "o número", e.Numero},
+			{"bairro", "o bairro", e.Bairro}, {"municipio", "o município", e.Municipio},
+		} {
+			if strings.TrimSpace(f.valor) == "" {
+				impede("entrega."+f.campo, "falta "+f.nome+" do endereço de entrega", naEntrega)
+			}
+		}
+		if !validation.UFValida(strings.ToUpper(strings.TrimSpace(e.UF))) {
+			impede("entrega.uf", "falta a UF do endereço de entrega", naEntrega)
+		}
 	}
 
 	// ── Datas

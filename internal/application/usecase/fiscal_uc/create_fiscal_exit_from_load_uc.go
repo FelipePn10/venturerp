@@ -89,7 +89,9 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		SalesOrderCode:          salesOrderCode,
 		SourceType:              &source,
 		ShipmentLoadCode:        &loadCode,
-		Itens:                   items,
+		// Quem leva a carga é a transportadora da NF-e; sem ela, a do cliente.
+		ShippingCarrierID: load.ShippingCarrierID,
+		Itens:             items,
 	}
 
 	created, err := uc.CreateUC.Execute(ctx, createDTO)

@@ -9,6 +9,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/procurement/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/transportadora"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -28,14 +29,28 @@ func (r *Repository) CreateReceivingNotice(ctx context.Context, n *entity.Receiv
 	}
 	defer tx.Rollback(ctx)
 
+	if n.ShippingCarrierID == nil && n.PurchaseOrderCode != nil {
+		// Sem transportadora informada, herda a do pedido de compra — só se ainda ativa.
+		err = tx.QueryRow(ctx, `
+			SELECT po.shipping_carrier_id FROM purchase_orders po
+			JOIN shipping_carriers sc ON sc.id = po.shipping_carrier_id AND sc.is_active
+			WHERE po.code = $1 AND po.enterprise_code = $2`,
+			*n.PurchaseOrderCode, emp).Scan(&n.ShippingCarrierID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lendo a transportadora do pedido de compra: %w", err)
+		}
+	}
+	if err := transportadora.Conferir(ctx, tx, n.ShippingCarrierID); err != nil {
+		return nil, err
+	}
 	err = tx.QueryRow(ctx, `
 		INSERT INTO receiving_notices
 			(enterprise_code, supplier_code, purchase_order_code, carrier_code, status, dock,
-			 scheduled_at, arrived_at, invoice_number, blocked, notes, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+			 scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, shipping_carrier_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 		RETURNING id, notice_number, status, blocked, created_at, updated_at`,
 		n.EnterpriseCode, n.SupplierCode, n.PurchaseOrderCode, n.CarrierCode, n.Status, n.Dock,
-		n.ScheduledAt, n.ArrivedAt, n.InvoiceNumber, n.Blocked, n.Notes, n.CreatedBy,
+		n.ScheduledAt, n.ArrivedAt, n.InvoiceNumber, n.Blocked, n.Notes, n.CreatedBy, n.ShippingCarrierID,
 	).Scan(&n.ID, &n.NoticeNumber, &n.Status, &n.Blocked, &n.CreatedAt, &n.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating receiving notice: %w", err)
@@ -67,10 +82,10 @@ func (r *Repository) GetReceivingNotice(ctx context.Context, id int64) (*entity.
 	var n entity.ReceivingNotice
 	err = r.pool.QueryRow(ctx, `
 		SELECT id, enterprise_code, notice_number, supplier_code, purchase_order_code, carrier_code, status,
-		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at
+		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at, shipping_carrier_id
 		FROM receiving_notices WHERE id=$1 AND enterprise_code=$2`, id, emp).Scan(
 		&n.ID, &n.EnterpriseCode, &n.NoticeNumber, &n.SupplierCode, &n.PurchaseOrderCode, &n.CarrierCode, &n.Status,
-		&n.Dock, &n.ScheduledAt, &n.ArrivedAt, &n.InvoiceNumber, &n.Blocked, &n.Notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt)
+		&n.Dock, &n.ScheduledAt, &n.ArrivedAt, &n.InvoiceNumber, &n.Blocked, &n.Notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt, &n.ShippingCarrierID)
 	if err != nil {
 		return nil, naoEncontrado(fmt.Errorf("fetching receiving notice: %w", err), fmt.Sprintf("aviso de recebimento %d não encontrado", id))
 	}
@@ -95,7 +110,7 @@ func (r *Repository) GetReceivingNotice(ctx context.Context, id int64) (*entity.
 func (r *Repository) ListReceivingNotices(ctx context.Context, status string) ([]*entity.ReceivingNotice, error) {
 	query := `
 		SELECT id, enterprise_code, notice_number, supplier_code, purchase_order_code, carrier_code, status,
-		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at
+		       dock, scheduled_at, arrived_at, invoice_number, blocked, notes, created_by, created_at, updated_at, shipping_carrier_id
 		FROM receiving_notices WHERE enterprise_code=$1`
 	emp, err := empresa(ctx)
 	if err != nil {
@@ -117,7 +132,7 @@ func (r *Repository) ListReceivingNotices(ctx context.Context, status string) ([
 		var n entity.ReceivingNotice
 		if err := rows.Scan(&n.ID, &n.EnterpriseCode, &n.NoticeNumber, &n.SupplierCode, &n.PurchaseOrderCode,
 			&n.CarrierCode, &n.Status, &n.Dock, &n.ScheduledAt, &n.ArrivedAt, &n.InvoiceNumber, &n.Blocked,
-			&n.Notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt); err != nil {
+			&n.Notes, &n.CreatedBy, &n.CreatedAt, &n.UpdatedAt, &n.ShippingCarrierID); err != nil {
 			return nil, fmt.Errorf("scanning receiving notice: %w", err)
 		}
 		out = append(out, &n)

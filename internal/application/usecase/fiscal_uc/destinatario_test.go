@@ -5,8 +5,11 @@ import (
 	"testing"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
+	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 )
 
 // clientesFake implementa só o que o resolvedor usa; o resto da interface fica
@@ -52,21 +55,20 @@ func endereco(tipo customerentity.AddressType, rua, cidade, uf string) *customer
 	}
 }
 
-// A mercadoria vai para o endereço de ENTREGA — é o que a NF-e pede. Usar o de
-// cobrança faria a nota apontar para o escritório em vez da fábrica.
-func TestEnderecoDeEntregaTemPreferencia(t *testing.T) {
+// O destinatário é o endereço cadastral (o da IE); a fábrica onde a mercadoria
+// é entregue vai no grupo de local de entrega — antes a nota apontava o
+// destinatário para a entrega, e uma entrega em outra UF mudaria CFOP e DIFAL.
+func TestDestinatarioCadastralEEntregaNoGrupoProprio(t *testing.T) {
 	clientes := clienteComEnderecos(
-		endereco(customerentity.AddressCobranca, "RUA DO ESCRITORIO", "SAO PAULO", "SP"),
 		endereco(customerentity.AddressEntrega, "RUA DA FABRICA", "CAMPINAS", "SP"),
+		endereco(customerentity.AddressCobranca, "RUA DO ESCRITORIO", "SAO PAULO", "SP"),
 	)
 	dto := request.CreateFiscalExitDTO{CustomerCode: i64p(7)}
-	resolverDestinatario(context.Background(), &dto, clientes, nil)
-
-	if dto.DestLogradouro == nil || *dto.DestLogradouro != "RUA DA FABRICA" {
-		t.Fatalf("deveria usar o endereço de entrega, veio %v", dto.DestLogradouro)
+	if err := resolverDestinatario(context.Background(), &dto, clientes, nil); err != nil {
+		t.Fatal(err)
 	}
-	if dto.DestMunicipio == nil || *dto.DestMunicipio != "CAMPINAS" {
-		t.Fatalf("município errado: %v", dto.DestMunicipio)
+	if dto.DestLogradouro == nil || *dto.DestLogradouro != "RUA DO ESCRITORIO" {
+		t.Fatalf("o destinatário deveria ser o endereço cadastral, veio %v", dto.DestLogradouro)
 	}
 	if dto.DestCEP == nil || *dto.DestCEP != "13050000" {
 		t.Fatalf("o CEP tem de ir só com dígitos, veio %v", dto.DestCEP)
@@ -76,6 +78,64 @@ func TestEnderecoDeEntregaTemPreferencia(t *testing.T) {
 	}
 	if dto.IEDestinatario == nil || *dto.IEDestinatario != "9012345678" {
 		t.Fatalf("inscrição estadual não veio do cadastro: %v", dto.IEDestinatario)
+	}
+	entrega, err := localDeEntrega(context.Background(), &dto, clientes, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entrega == nil || entrega.Logradouro != "RUA DA FABRICA" || entrega.Municipio != "CAMPINAS" || entrega.CNPJCPF != "11222333000181" || entrega.CEP != "13050000" {
+		t.Fatalf("local de entrega: %+v", entrega)
+	}
+}
+
+// Comercial vem antes de cobrança; no mesmo tipo, o padrão.
+func TestOrdemDoEnderecoCadastral(t *testing.T) {
+	outraCobranca := endereco(customerentity.AddressCobranca, "RUA COBRANCA PADRAO", "SAO PAULO", "SP")
+	outraCobranca.IsDefault = true
+	clientes := clienteComEnderecos(
+		endereco(customerentity.AddressCobranca, "RUA COBRANCA", "SAO PAULO", "SP"), outraCobranca,
+		endereco(customerentity.AddressComercial, "RUA COMERCIAL", "SAO PAULO", "SP"),
+	)
+	end, _ := enderecoDaNota(context.Background(), clientes, clientes.cliente)
+	if end == nil || *end.Street != "RUA COMERCIAL" {
+		t.Fatalf("comercial deveria vencer: %v", end)
+	}
+	clientes.enderecos = clientes.enderecos[:2]
+	if end, _ := enderecoDaNota(context.Background(), clientes, clientes.cliente); end == nil || *end.Street != "RUA COBRANCA PADRAO" {
+		t.Fatalf("no mesmo tipo, o padrão: %v", end)
+	}
+}
+
+// Cadastro só com endereço de entrega (o legado da maioria) continua emitindo
+// igual: ele é o destinatário e não há grupo de entrega repetindo o endereço.
+func TestSoEntregaViraDestinatarioSemGrupo(t *testing.T) {
+	clientes := clienteComEnderecos(endereco(customerentity.AddressEntrega, "RUA DA FABRICA", "CAMPINAS", "SP"))
+	dto := request.CreateFiscalExitDTO{CustomerCode: i64p(7)}
+	if err := resolverDestinatario(context.Background(), &dto, clientes, nil); err != nil {
+		t.Fatal(err)
+	}
+	if dto.DestLogradouro == nil || *dto.DestLogradouro != "RUA DA FABRICA" {
+		t.Fatalf("sem outro endereço, o de entrega é o do destinatário: %v", dto.DestLogradouro)
+	}
+	if e, _ := localDeEntrega(context.Background(), &dto, clientes, nil); e != nil {
+		t.Fatalf("entrega igual ao destinatário não vai na nota: %+v", e)
+	}
+}
+
+// Frete e transportadora vêm do cadastro do cliente quando a nota não diz.
+func TestFreteETransportadoraDoCliente(t *testing.T) {
+	clientes := clienteComEnderecos(endereco(customerentity.AddressCobranca, "RUA DO ESCRITORIO", "SAO PAULO", "SP"))
+	clientes.cliente.FreightType = strp("FOB")
+	clientes.cliente.ShippingCarrierID = i64p(3)
+	dto := request.CreateFiscalExitDTO{CustomerCode: i64p(7)}
+	_ = resolverDestinatario(context.Background(), &dto, clientes, nil)
+	if dto.TipoFrete == nil || *dto.TipoFrete != "FOB" || dto.ShippingCarrierID == nil || *dto.ShippingCarrierID != 3 {
+		t.Fatalf("frete %v transportadora %v", dto.TipoFrete, dto.ShippingCarrierID)
+	}
+	dto2 := request.CreateFiscalExitDTO{CustomerCode: i64p(7), TipoFrete: strp("CIF"), ShippingCarrierID: i64p(9)}
+	_ = resolverDestinatario(context.Background(), &dto2, clientes, nil)
+	if *dto2.TipoFrete != "CIF" || *dto2.ShippingCarrierID != 9 {
+		t.Fatal("o informado na nota prevalece sobre o cadastro")
 	}
 }
 
@@ -118,5 +178,56 @@ func TestClienteSemEnderecoNaoQuebra(t *testing.T) {
 	}
 	if dto.RazaoSocialDestinatario == nil {
 		t.Fatal("o nome do cliente deveria vir mesmo sem endereço")
+	}
+}
+
+func (c *clientesFake) GetCustomerByDocument(_ context.Context, doc string) (*customerentity.Customer, error) {
+	if c.cliente == nil || c.cliente.DocumentNumber != doc {
+		return nil, errNaoAchouDoc
+	}
+	return c.cliente, nil
+}
+
+var errNaoAchouDoc = errorsuc.NewNotFoundError("cliente não encontrado para o documento informado")
+
+// Nota avulsa digitada com o CNPJ de um cliente cadastrado fica ligada a ele;
+// documento desconhecido segue sem cliente.
+func TestNotaAvulsaPeloCNPJLigaAoCliente(t *testing.T) {
+	clientes := clienteComEnderecos(endereco(customerentity.AddressCobranca, "RUA DO ESCRITORIO", "SAO PAULO", "SP"))
+	dto := request.CreateFiscalExitDTO{CnpjDestinatario: strp("11.222.333/0001-81")}
+	if err := resolverDestinatario(context.Background(), &dto, clientes, nil); err != nil {
+		t.Fatal(err)
+	}
+	if dto.CustomerCode == nil || *dto.CustomerCode != 7 || dto.DestLogradouro == nil {
+		t.Fatalf("nota não foi ligada ao cliente: %v %v", dto.CustomerCode, dto.DestLogradouro)
+	}
+	outro := request.CreateFiscalExitDTO{CnpjDestinatario: strp("99.999.999/0001-91")}
+	if err := resolverDestinatario(context.Background(), &outro, clientes, nil); err != nil || outro.CustomerCode != nil {
+		t.Fatalf("documento desconhecido: %v %v", outro.CustomerCode, err)
+	}
+}
+
+type pedidoComFrete struct {
+	salesrepo.SalesOrderRepository
+	frete string
+}
+
+func (p pedidoComFrete) GetByCode(_ context.Context, code int64) (*salesentity.SalesOrder, error) {
+	c := int64(7)
+	return &salesentity.SalesOrder{Code: code, CustomerCode: &c, FreightType: &p.frete}, nil
+}
+
+// O pedido convertido do orçamento traz o tipo comercial ("FOB CONTRAT."): a
+// nota o traduz, e um tipo sem equivalente não trava o faturamento.
+func TestFreteComercialDoPedido(t *testing.T) {
+	clientes := clienteComEnderecos(endereco(customerentity.AddressCobranca, "RUA DO ESCRITORIO", "SAO PAULO", "SP"))
+	for frete, quer := range map[string]string{"FOB CONTRAT.": "FOB", "RETIRA": "FOB", "CONVENIO": ""} {
+		dto := request.CreateFiscalExitDTO{SalesOrderCode: i64p(1)}
+		if err := resolverDestinatario(context.Background(), &dto, clientes, pedidoComFrete{frete: frete}); err != nil {
+			t.Fatal(err)
+		}
+		if got := valorOuVazio(dto.TipoFrete); got != quer {
+			t.Errorf("%s: %q, quer %q", frete, got, quer)
+		}
 	}
 }

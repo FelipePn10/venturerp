@@ -92,6 +92,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/preferencias_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/procurement_uc"
 	productionOrderUc "github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_plan_uc"
@@ -132,6 +133,7 @@ import (
 	mrpservice "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/audit"
 	infraauth "github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/clientereceita"
 	cnpjinfra "github.com/FelipePn10/panossoerp/internal/infrastructure/cnpj"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
@@ -204,6 +206,7 @@ import (
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
 	planningrunrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_run"
 	planningscenariorepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_scenario"
+	preferenciasRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/preferencias"
 	procurementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/procurement"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
@@ -259,6 +262,8 @@ type application struct {
 	dfeScheduler        *dfesched.Scheduler
 	efeitosNFeScheduler *fiscalefeitos.Scheduler
 	revisoesScheduler   *itemrevisoes.Scheduler
+	// clienteReceitaScheduler reconsulta a situação cadastral dos clientes.
+	clienteReceitaScheduler *clientereceita.Scheduler
 }
 
 func (app *application) mount() chi.Router {
@@ -410,7 +415,8 @@ func (app *application) mount() chi.Router {
 		&enterprise_uc.GetEnterpriseUseCase{Repo: enterpriseRepo, Auth: authService},
 		&enterprise_uc.ListEnterprisesUseCase{Repo: enterpriseRepo, Auth: authService},
 	).ComIdentificacao(&enterprise_uc.IdentificacaoUseCase{Repo: enterpriseRepo, Auth: authService})
-	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjinfra.New(cnpjinfra.Config{})))
+	cnpjProvider := cnpjinfra.New(cnpjinfra.Config{})
+	cnpjHandler := handler.NewCNPJHandler(cnpj_uc.NewLookupCNPJUseCase(cnpjProvider))
 
 	// The generic report export brands its output with the company's fiscal data.
 	reportExportHandler := handler.NewReportExportHandler(fiscalRepo.NewFiscalRepositoryPG(app.db.Pool))
@@ -1107,9 +1113,10 @@ func (app *application) mount() chi.Router {
 	salesCommissionHandler := handler.NewSalesCommissionHandler(&sales_commission_uc.UseCase{Repo: salesCommissionRepo.New(app.db.Pool)})
 	salesQuotationRepository := salesQuotationRepo.New(app.db.Pool)
 	custRepo := customerRepo.New(queries, app.db.Pool)
+	createSalesOrderUC.Customers, updateSalesOrderUC.Customers = custRepo, custRepo
 	salesQuotationUC := &sales_quotation_uc.UseCase{Repo: salesQuotationRepository, Auth: authService, Customers: custRepo, Divisions: sdRepo, Items: itemRepo, Representatives: representativeRepository, Aprovacoes: aprovacaoUC, Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool)}
 	aprovacaoUC.Registrar(aprovacao.OrcamentoPoliticaComercial, &sales_quotation_uc.LiberacaoDeOrcamento{Repo: salesQuotationRepository})
-	salesQuotationConvertUC := &sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool)}
+	salesQuotationConvertUC := &sales_quotation_uc.ConvertUseCase{Quotes: salesQuotationUC, UOW: salesQuotationRepo.NewConversionUnitOfWork(app.db.Pool), Confirmar: changeStatusSalesOrderUC}
 	salesQuotationHandler := handler.NewSalesQuotationHandler(
 		salesQuotationUC,
 		salesQuotationConvertUC,
@@ -1397,7 +1404,7 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
 	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
-	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool), Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool)}
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool), Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), Transportadoras: fiscalRepo.NewCadastroTributarioPG(app.db.Pool)}
 	reformaTributariaHandler := handler.NewReformaTributariaHandler(reformaTributariaUC)
 	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
 	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
@@ -1629,7 +1636,9 @@ func (app *application) mount() chi.Router {
 	)
 
 	// customer
-	customerUC := customer_uc.NewCustomerUseCase(custRepo)
+	custLifecycle := customerRepo.NewLifecycle(custRepo)
+	customerUC := customer_uc.NewCustomerUseCase(custRepo).WithLifecycle(custLifecycle, cnpjProvider, representativeRepository)
+	app.clienteReceitaScheduler = clientereceita.NewScheduler(custLifecycle, customerUC, app.logger)
 	createSalesOrderItemUC.Prices = custRepo
 	updateSalesOrderItemUC.Prices = custRepo
 	// Políticas comerciais e alçada de desconto no pedido (Fase 5.3): a mesma
@@ -1646,6 +1655,7 @@ func (app *application) mount() chi.Router {
 	// Romaneio export enrichment: real company (with branding), parties, carrier
 	// and item data, so exported romaneios carry the professional letterhead.
 	shipmentExportUC.Enricher = &shipmentRepo.RomaneioEnricherAdapter{
+		DB:         app.db.Pool,
 		Fiscal:     fiscalRepository,
 		Customers:  custRepo,
 		Suppliers:  suppRepo,
@@ -1663,6 +1673,7 @@ func (app *application) mount() chi.Router {
 		SalesRepo:     soRepo,
 		CustomerRepo:  custRepo,
 		FinancialRepo: fRepo,
+		Lifecycle:     custLifecycle,
 	}
 	changeStatusSalesOrderUC.Reserver = &sales_order_uc.OrderStockReserver{
 		SalesRepo: soRepo,
@@ -1794,6 +1805,10 @@ func (app *application) mount() chi.Router {
 
 		r.Route("/api/acesso", func(r chi.Router) {
 			r.Get("/minhas-permissoes", acessoHandler.MinhasPermissoes)
+			// Preferências de exibição do próprio usuário (qualquer perfil).
+			prefGet, prefPut := handler.MinhasPreferencias(&preferencias_uc.UseCase{Repo: preferenciasRepo.New(app.db.Pool)})
+			r.Get("/minhas-preferencias", prefGet)
+			r.Put("/minhas-preferencias", prefPut)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/catalogo", acessoHandler.Catalogo)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/perfis", acessoHandler.ListarPerfis)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/perfis", acessoHandler.CriarPerfil)
@@ -2264,6 +2279,7 @@ func (app *application) mount() chi.Router {
 
 		r.Route("/api/sales-order", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesOrderHandler.Create)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/customer-po", handler.SalesOrderCustomerPO(&sales_order_uc.SetCustomerPOUseCase{Repo: salesOrderRepo.NewPedidoCompraRepo(app.db.Pool), Auth: authService}))
 			// Sugestão de IPI/ICMS/ST para orçamento e pedido (mesmo cálculo da nota).
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tributacao/simular", simularTributacaoHandler.Simular)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/list", salesOrderHandler.List)
@@ -3678,31 +3694,41 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", customerHandler.UpdateRegion)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListRegions)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetRegion)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("regions"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("regions"))
 				})
 				r.Route("/market-segments", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateMarketSegment)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateMarketSegment)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListMarketSegments)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("market-segments"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("market-segments"))
 				})
 				r.Route("/contact-types", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateContactType)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListContactTypes)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateContactType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("contact-types"))
 				})
 				r.Route("/customer-types", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomerType)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomerTypes)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCustomerType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("customer-types"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("customer-types"))
 				})
 				r.Route("/carriers", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCarrier)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCarriers)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCarrier)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("carriers"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("carriers"))
 				})
 				r.Route("/carrier-groups", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCarrierGroup)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCarrierGroups)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCarrierGroup)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("carrier-groups"))
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/members", customerHandler.AddCarrierToGroup)
 				})
 				r.Route("/payment-conditions", func(r chi.Router) {
@@ -3753,16 +3779,40 @@ func (app *application) mount() chi.Router {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateInvoiceType)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", customerHandler.UpdateInvoiceType)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListInvoiceTypes)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateInvoiceTypeByCode)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("invoice-types"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("invoice-types"))
 				})
 				r.Route("/tax-types", func(r chi.Router) {
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateTaxType)
 					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListTaxTypes)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateTaxType)
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}", customerHandler.DeleteSupport("tax-types"))
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/active", customerHandler.SetSupportActive("tax-types"))
+				})
+				r.Route("/credit-policy", func(r chi.Router) {
+					r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.GetCreditPolicy)
+					r.With(httpmw.RequireRole("ADMIN")).Put("/", customerHandler.SaveCreditPolicy)
 				})
 			})
 			// ── Main customer CRUD ───────────────────────────────────────────
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomers)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/credit-suggestion", customerHandler.CreditSuggestion)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetCustomer)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", customerHandler.DeleteCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/usage", customerHandler.CustomerUsage)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/overview", customerHandler.CustomerOverview)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/inactivate", customerHandler.InactivateCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/reactivate", customerHandler.ReactivateCustomer)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/registration-check", customerHandler.RefreshRegistration)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/credit-suggestion", customerHandler.CreditSuggestion)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/credit-limit", customerHandler.SetCreditLimit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/credit-reviews", customerHandler.ListCreditReviews)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/addresses/{id}", customerHandler.UpdateAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/addresses/{id}", customerHandler.DeleteAddress)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/contacts/{id}", customerHandler.UpdateContact)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/contacts/{id}", customerHandler.DeleteContact)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/report/pdf", impressaoHandler.FichaCliente())
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}", customerHandler.UpdateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/block", customerHandler.BlockCustomer)
@@ -4039,6 +4089,9 @@ func (app *application) run(r chi.Router) error {
 	serverErr := make(chan error, 1)
 	if app.dfeScheduler != nil {
 		go app.dfeScheduler.Run(ctx)
+	}
+	if app.clienteReceitaScheduler != nil {
+		go app.clienteReceitaScheduler.Run(ctx)
 	}
 	if app.revisoesScheduler != nil {
 		go app.revisoesScheduler.Run(ctx)

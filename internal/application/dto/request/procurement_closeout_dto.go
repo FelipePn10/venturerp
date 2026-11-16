@@ -13,6 +13,7 @@ type CreateReceivingNoticeDTO struct {
 	SupplierCode      *int64                   `json:"supplier_code"`
 	PurchaseOrderCode *int64                   `json:"purchase_order_code"`
 	CarrierCode       *int64                   `json:"carrier_code"`
+	ShippingCarrierID *int64                   `json:"shipping_carrier_id,omitempty"`
 	Dock              *string                  `json:"dock"`
 	ScheduledAt       *string                  `json:"scheduled_at"`
 	InvoiceNumber     *string                  `json:"invoice_number"`

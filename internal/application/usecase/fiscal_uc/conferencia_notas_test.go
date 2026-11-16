@@ -58,6 +58,16 @@ func TestConferirDocumentoDaNota(t *testing.T) {
 			n.Finalidade = 4
 			n.NFeReferenciada = sp(strings.Repeat("1", 44))
 		}, "nfe_referenciada"},
+		{"transportadora com CNPJ inválido", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			n.Transportador = &entity.Transportador{CNPJCPF: "11111111111111", Nome: "X", UF: "SP"}
+		}, "transportador.documento"},
+		{"entrega sem número", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			n.LocalEntrega = &entity.LocalEntrega{Logradouro: "RUA A", Bairro: "B", Municipio: "M", UF: "SP"}
+		}, "entrega.numero"},
+		{"transportadora e entrega corretas", func(n *entity.FiscalExit, _ *entity.FiscalExitItem, _ *entity.FiscalConfig) {
+			n.Transportador = &entity.Transportador{CNPJCPF: "11222333000181", Nome: "X", UF: "PR"}
+			n.LocalEntrega = &entity.LocalEntrega{Logradouro: "RUA A", Numero: "1", Bairro: "B", Municipio: "M", UF: "SP"}
+		}, ""},
 		{"linha sem NCM", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.Ncm = nil }, "itens[1].ncm"},
 		{"CFOP sem 4 dígitos", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) { l.Cfop = "510" }, "itens[1].cfop"},
 		{"quantidade zero", func(_ *entity.FiscalExit, l *entity.FiscalExitItem, _ *entity.FiscalConfig) {
@@ -241,5 +251,22 @@ func TestPlanoDoTipoNota(t *testing.T) {
 	}
 	if got := planoDoTipoNota(plano, entity.EfeitosDoTipoNota{}); !got.SemCobranca || got.Origem != "SEM_COBRANCA" || got.Parcelas != nil {
 		t.Fatalf("tipo sem título: %+v", got)
+	}
+}
+
+// IE com dígito errado só AVISA: a regra é por UF e a SEFAZ dá a palavra final.
+func TestConferenciaIEComDigitoErradoAvisa(t *testing.T) {
+	agora := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	nota, itens, cfg := notaBoa(agora)
+	nota.IEDestinatario = sp("9103144678")
+	nota.Transportador = &entity.Transportador{CNPJCPF: "11222333000181", Nome: "X", UF: "SP", IE: "200000419"}
+	n := niveis(conferirDocumentoDaNota(nota, itens, cfg, agora))
+	if n["destinatario.ie"] != NivelAtencao || n["transportador.ie"] != NivelAtencao {
+		t.Fatalf("IE errada deveria avisar: %v", n)
+	}
+	nota.IEDestinatario = sp("9103144679")
+	nota.Transportador.IE = "200000410002"
+	if n := niveis(conferirDocumentoDaNota(nota, itens, cfg, agora)); len(n) != 0 {
+		t.Fatalf("IE correta não pode ter pendência: %v", n)
 	}
 }

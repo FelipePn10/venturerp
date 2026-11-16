@@ -194,3 +194,25 @@ func (r *FiscalRepositoryPG) TravarPedido(ctx context.Context, salesOrderCode in
 	}
 	return liberar, nil
 }
+
+func (r *FiscalRepositoryPG) ItensComCertificado(ctx context.Context, salesOrderCode int64) (map[int64]bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, `SELECT DISTINCT item_code FROM quality_certificates
+		 WHERE enterprise_id = $1 AND sales_order_code = $2 AND status = 'EMITIDO'`, empresa, salesOrderCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os certificados de qualidade do pedido: %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]bool{}
+	for rows.Next() {
+		var item int64
+		if err := rows.Scan(&item); err != nil {
+			return nil, err
+		}
+		out[item] = true
+	}
+	return out, rows.Err()
+}

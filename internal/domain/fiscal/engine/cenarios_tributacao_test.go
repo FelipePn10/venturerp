@@ -191,6 +191,21 @@ func TestCenario_Simples_RegraIsentaViraCSOSN400(t *testing.T) {
 	querCST(t, "CSOSN", "400", r.CSTICMS)
 }
 
+// A regra legada grava origem + CST ("000", "041"). A NF-e leva só o CST, e o
+// "041" tem de zerar o ICMS como o "41".
+func TestCenario_CSTComOrigemDaRegraLegada(t *testing.T) {
+	r := calcularCenario(t, cenario{destUF: "SP", destTipo: "contribuinte", item: TaxItem{Parametro: &ParametroICMSIPI{ID: 5, Contrib: LadoParametroICMSIPI{CSTICMS: "000"}}}})
+	querCST(t, "CST", "00", r.CSTICMS)
+	r = calcularCenario(t, cenario{destUF: "SP", destTipo: "contribuinte", item: TaxItem{Parametro: &ParametroICMSIPI{ID: 6, Contrib: LadoParametroICMSIPI{CSTICMS: "041"}}}})
+	querCST(t, "CST", "41", r.CSTICMS)
+	near(t, "ICMS do 041", 0, r.ValorICMS)
+	for in, quer := range map[string]string{"190": "90", "101": "101", "300": "300", "00": "00", " 020 ": "20"} {
+		if got := SemOrigem(in); got != quer {
+			t.Errorf("SemOrigem(%q) = %q, quer %q", in, got, quer)
+		}
+	}
+}
+
 // ── Substituição tributária pela regra ──────────────────────────────────────
 
 // Interestadual com MVA ajustada: 40% vira 50,2439% (inter 12%, intra SP 18%).

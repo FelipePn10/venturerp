@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/cnpj/service"
@@ -106,6 +109,32 @@ func doGET(ctx context.Context, httpc *http.Client, url string, out any) error {
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("cnpj provider: decode response: %w", err)
+	}
+	return nil
+}
+
+// capitalSocial normaliza o capital social das fontes ("1000.00", "1000,00" ou
+// número JSON) para texto decimal; o que não for número vira vazio.
+func capitalSocial(v string) string {
+	v = strings.TrimSpace(strings.Trim(v, `"`))
+	if strings.Contains(v, ",") {
+		v = strings.ReplaceAll(strings.ReplaceAll(v, ".", ""), ",", ".")
+	}
+	d, err := decimal.NewFromString(v)
+	if err != nil || d.IsNegative() {
+		return ""
+	}
+	return d.StringFixed(2)
+}
+
+// flexNumber aceita número ou texto no JSON e nunca falha a decodificação: um
+// capital social em formato inesperado não pode derrubar a consulta inteira.
+type flexNumber string
+
+func (f *flexNumber) UnmarshalJSON(b []byte) error {
+	*f = flexNumber(strings.Trim(string(b), `"`))
+	if *f == "null" {
+		*f = ""
 	}
 	return nil
 }

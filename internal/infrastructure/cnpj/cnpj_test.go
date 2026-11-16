@@ -34,3 +34,16 @@ func TestCnpjaProviderParsesCompany(t *testing.T) {
 		t.Fatalf("cnpja must not report state registrations: %+v", company.StateRegistrations)
 	}
 }
+
+func TestCapitalSocial(t *testing.T) {
+	casos := map[string]string{"150000.00": "150000.00", "1.500.000,50": "1500000.50", "1000": "1000.00", "": "", "abc": "", "-5": ""}
+	for in, want := range casos {
+		if got := capitalSocial(in); got != want {
+			t.Errorf("capitalSocial(%q) = %q, quer %q", in, got, want)
+		}
+	}
+	var f flexNumber
+	if err := f.UnmarshalJSON([]byte(`12.5`)); err != nil || capitalSocial(string(f)) != "12.50" {
+		t.Fatalf("número JSON: %q %v", f, err)
+	}
+}

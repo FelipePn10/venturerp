@@ -31,6 +31,7 @@ func toSalesOrderResponse(o *entity.SalesOrder) *response.SalesOrderResponse {
 		CommissionPct:               o.CommissionPct.InexactFloat64(),
 		TaxTypeCode:                 o.TaxTypeCode,
 		FinalidadeCompra:            o.FinalidadeCompra,
+		CustomerPONumber:            o.CustomerPONumber,
 		PresenceIndicator:           o.PresenceIndicator,
 		SalesChannel:                o.SalesChannel,
 		DefaultNFType:               o.DefaultNFType,

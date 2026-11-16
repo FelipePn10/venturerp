@@ -41,6 +41,14 @@ type CreateFiscalExitUseCase struct {
 	// Cadastro lê a finalidade da compra (pedido, cliente) e os indicadores do
 	// tipo de nota. Opcional: sem ele vale só o informado na nota.
 	Cadastro CadastroTributario
+	// Transportadoras monta o grupo transporta da NF-e com os dados da
+	// transportadora escolhida (ou a preferencial do cliente). Opcional.
+	Transportadoras ResolvedorTransportador
+}
+
+// ResolvedorTransportador lê os dados fiscais de uma transportadora da empresa.
+type ResolvedorTransportador interface {
+	TransportadorDaNota(ctx context.Context, shippingCarrierID int64) (*entity.Transportador, error)
 }
 
 // ResolvedorBeneficioFiscal acha o código de benefício fiscal (cBenef) de um
@@ -85,6 +93,26 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 
 	if err := resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders); err != nil {
 		return nil, err
+	}
+	if dto.TipoFrete != nil {
+		t, ok := entity.TipoFreteDaNota(*dto.TipoFrete)
+		if strings.TrimSpace(*dto.TipoFrete) == "" {
+			dto.TipoFrete = nil
+		} else if !ok {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("tipo de frete %q inválido: use CIF, FOB, TERCEIROS ou SEM_FRETE", *dto.TipoFrete))
+		} else {
+			dto.TipoFrete = &t
+		}
+	}
+	entrega, err := localDeEntrega(ctx, &dto, uc.Customers, uc.SalesOrders)
+	if err != nil {
+		return nil, err
+	}
+	var transportador *entity.Transportador
+	if dto.ShippingCarrierID != nil && uc.Transportadoras != nil && (dto.TipoFrete == nil || *dto.TipoFrete != "SEM_FRETE") {
+		if transportador, err = uc.Transportadoras.TransportadorDaNota(ctx, *dto.ShippingCarrierID); err != nil {
+			return nil, err
+		}
 	}
 
 	userID, err := uc.Auth.UserID(ctx)
@@ -193,6 +221,10 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		DestCEP:                 dto.DestCEP,
 		DestEmail:               dto.DestEmail,
 		DestTelefone:            dto.DestTelefone,
+		TipoFrete:               dto.TipoFrete,
+		LocalEntrega:            entrega,
+		Transportador:           transportador,
+		ShippingCarrierID:       carrierDaFoto(dto.ShippingCarrierID, transportador),
 		CustomerCode:            dto.CustomerCode,
 		Cfop:                    dto.Cfop,
 		NaturezaOperacao:        dto.NaturezaOperacao,
@@ -331,4 +363,12 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 	created.Itens = items
 
 	return toFiscalExitResponse(created), nil
+}
+
+// carrierDaFoto: o id da transportadora só fica na nota quando a foto dela foi tirada.
+func carrierDaFoto(id *int64, t *entity.Transportador) *int64 {
+	if t == nil {
+		return nil
+	}
+	return id
 }

@@ -22,7 +22,8 @@ type RomaneioEnricher interface {
 	GetBranding(ctx context.Context) (logo []byte, brandColorHex string, err error)
 	GetCustomer(ctx context.Context, customerCode int64) (romaneioExport.CompanyInfo, error)
 	GetSupplier(ctx context.Context, supplierCode int64) (romaneioExport.CompanyInfo, error)
-	GetCarrier(ctx context.Context, carrierCode int64) (romaneioExport.CarrierInfo, error)
+	// GetCarrier: a transportadora (shipping_carriers), não o portador de cobrança.
+	GetCarrier(ctx context.Context, shippingCarrierID int64) (romaneioExport.CarrierInfo, error)
 	GetItemDetails(ctx context.Context, itemCode int64) (romaneioExport.RomaneioItem, error)
 	GetSalesOrder(ctx context.Context, code int64) (*SalesOrderHeader, error)
 	GetPurchaseOrder(ctx context.Context, code int64) (*PurchaseOrderHeader, error)
@@ -102,8 +103,8 @@ func (uc *ShipmentExportUseCase) buildRomaneioData(ctx context.Context, shipment
 			d.BrandColorHex = color
 		}
 
-		if s.CarrierCode != nil {
-			carrier, err := uc.Enricher.GetCarrier(ctx, *s.CarrierCode)
+		if s.ShippingCarrierID != nil {
+			carrier, err := uc.Enricher.GetCarrier(ctx, *s.ShippingCarrierID)
 			if ok, err := opcional(err, "a transportadora"); err != nil {
 				return nil, err
 			} else if ok {

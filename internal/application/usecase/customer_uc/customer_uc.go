@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
+	cnpjservice "github.com/FelipePn10/panossoerp/internal/domain/cnpj/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
@@ -22,10 +25,23 @@ import (
 // CustomerUseCase consolidates all customer-related operations.
 type CustomerUseCase struct {
 	repo repository.CustomerRepository
+	// life e cnpj ligam o crédito, a situação na Receita e o ciclo de vida do
+	// cadastro (credit_uc.go); sem eles o cadastro básico continua funcionando.
+	life repository.CustomerLifecycleRepository
+	cnpj cnpjservice.Provider
+	reps representativevalidation.Repository
+	now  func() time.Time
 }
 
 func NewCustomerUseCase(repo repository.CustomerRepository) *CustomerUseCase {
-	return &CustomerUseCase{repo: repo}
+	return &CustomerUseCase{repo: repo, now: time.Now}
+}
+
+// WithLifecycle liga crédito, Receita e ciclo de vida do cadastro, e a
+// conferência do representante padrão (vínculo com a empresa, ativo).
+func (uc *CustomerUseCase) WithLifecycle(life repository.CustomerLifecycleRepository, cnpj cnpjservice.Provider, reps representativevalidation.Repository) *CustomerUseCase {
+	uc.life, uc.cnpj, uc.reps = life, cnpj, reps
+	return uc
 }
 
 // ─── Regions ─────────────────────────────────────────────────────────────────
@@ -1907,10 +1923,6 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 		if table.TableType == entity.TableTypePromocional {
 			priority = 30
 		}
-		if customer != nil && customer.SalesTableID != nil && *customer.SalesTableID == table.ID {
-			priority = 10
-			source = "CUSTOMER_SALES_TABLE"
-		}
 		applied := price.Price
 		qtd := dto.Quantity
 		context := entity.CommercialPolicyContext{GrossValue: price.Price.Mul(qtd), Quantity: qtd, SalesTableID: &table.ID, ItemCode: &dto.ItemCode}
@@ -1919,7 +1931,6 @@ func (uc *CustomerUseCase) ResolveSalesTablesForItem(ctx context.Context, dto re
 			context.CustomerTypeID = customer.CustomerTypeID
 			context.MarketSegmentID = customer.MarketSegmentID
 			context.RegionID = customer.RegionID
-			context.PaymentConditionID = customer.PaymentConditionID
 			context.CarrierID = customer.CarrierID
 		}
 		if evaluation, evaluationErr := entity.EvaluateCommercialPolicies(policies, context); evaluationErr == nil && len(evaluation.Effects) > 0 {
@@ -2229,6 +2240,15 @@ func (uc *CustomerUseCase) CreateTaxType(ctx context.Context, dto request.Create
 	if err != nil {
 		return nil, err
 	}
+	fillTaxType(tt, dto)
+	created, err := uc.repo.CreateTaxType(ctx, tt)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxTypeResponse(created), nil
+}
+
+func fillTaxType(tt *entity.TaxType, dto request.CreateTaxTypeDTO) {
 	tt.IPIBaseTotalItems = dto.IPIBaseTotalItems
 	tt.IPIBaseSubtractDiscount = dto.IPIBaseSubtractDiscount
 	tt.IPIBaseAddFreight = dto.IPIBaseAddFreight
@@ -2250,11 +2270,25 @@ func (uc *CustomerUseCase) CreateTaxType(ctx context.Context, dto request.Create
 	tt.IRBaseSubtractDiscount = dto.IRBaseSubtractDiscount
 	tt.IRBaseAddFreight = dto.IRBaseAddFreight
 	tt.IsConsumer = dto.IsConsumer
-	created, err := uc.repo.CreateTaxType(ctx, tt)
+}
+
+// UpdateTaxType altera o tipo de imposto (antes só dava para criar).
+func (uc *CustomerUseCase) UpdateTaxType(ctx context.Context, code int64, dto request.CreateTaxTypeDTO) (*response.TaxTypeResponse, error) {
+	current, err := uc.repo.GetTaxTypeByCode(ctx, code)
 	if err != nil {
 		return nil, err
 	}
-	return toTaxTypeResponse(created), nil
+	tt, err := entity.NewTaxType(code, dto.Description)
+	if err != nil {
+		return nil, err
+	}
+	fillTaxType(tt, dto)
+	tt.ID, tt.IsActive = current.ID, current.IsActive
+	updated, err := uc.repo.UpdateTaxType(ctx, tt)
+	if err != nil {
+		return nil, err
+	}
+	return toTaxTypeResponse(updated), nil
 }
 
 func (uc *CustomerUseCase) ListTaxTypes(ctx context.Context, onlyActive bool) ([]*response.TaxTypeResponse, error) {
@@ -2306,147 +2340,285 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 	if err != nil {
 		return nil, err
 	}
-	c.CorporateCode = dto.CorporateCode
-	c.IsCorporate = dto.IsCorporate
-	c.TradeName = dto.TradeName
-	c.StateRegistration = dto.StateRegistration
-	c.MunicipalRegistration = dto.MunicipalRegistration
-	c.SuframaCode = dto.SuframaCode
 	c.SuframaExpiry = dto.SuframaExpiry
-	c.CreditLimit = dto.CreditLimit
-	c.Website = dto.Website
-	if dto.FinalidadeCompra != nil {
-		f, err := finalidadeDoCliente(*dto.FinalidadeCompra)
+	if err := uc.applyCustomerDTO(ctx, c, dto); err != nil {
+		return nil, err
+	}
+	if err := uc.rejectDuplicateDocument(ctx, c); err != nil {
+		return nil, err
+	}
+
+	// O limite nasce da análise de crédito (credit_uc.go). Sem o módulo de
+	// crédito ligado (testes), grava o que veio.
+	var analise *creditAnalysis
+	if uc.life != nil {
+		analise, err = uc.analyzeCredit(ctx, nil, c.DocumentType, c.DocumentNumber, nil)
 		if err != nil {
 			return nil, err
 		}
-		c.FinalidadeCompra = f
-	}
-	// Sem escolha, vale "todos": a coluna é enum e string vazia derrubava a
-	// gravação com o erro cru do Postgres.
-	if dto.PaymentCondVisibility == "" {
-		c.PaymentCondVisibility = entity.PaymentCondVisibility("TODOS")
-	} else {
-		c.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
-	}
-
-	// Resolve FK IDs from codes
-	if err := uc.resolveCustomerFKs(ctx, c, dto); err != nil {
-		return nil, err
+		approved := analise.suggestion.SuggestedLimit
+		// A tela antiga digitava o limite sem motivo: vale o sugerido.
+		if dto.CreditLimit != nil && dto.FormVersion >= 2 {
+			approved = *dto.CreditLimit
+		}
+		if _, err := uc.checkApproval(ctx, analise, approved, dto.CreditLimitReason); err != nil {
+			return nil, err
+		}
+		c.CreditLimit = approved
+	} else if dto.CreditLimit != nil {
+		c.CreditLimit = *dto.CreditLimit
 	}
 
 	created, err := uc.repo.CreateCustomer(ctx, c)
 	if err != nil {
 		return nil, err
 	}
-	return toCustomerResponse(created), nil
+	if analise != nil {
+		// Cliente com limite e sem trilha não pode ficar: se a trilha não
+		// gravar, desfaz o cadastro recém-criado (ainda sem nenhum uso).
+		err := uc.recordCredit(ctx, created, analise, c.CreditLimit, dto.CreditLimitReason, "CADASTRO")
+		if err == nil && analise.company != nil {
+			err = uc.life.SetCustomerRegistration(ctx, created.Code, snapshotOf(analise.company))
+		}
+		if err != nil {
+			if derr := uc.life.DeleteCustomer(ctx, created.Code, entity.CheckCanDelete); derr != nil {
+				return nil, fmt.Errorf("gravando a análise de crédito: %w (e o cadastro %d não pôde ser desfeito: %v)", err, created.Code, derr)
+			}
+			return nil, err
+		}
+		if created, err = uc.repo.GetCustomerByCode(ctx, created.Code); err != nil {
+			return nil, err
+		}
+	}
+	return uc.customerResponse(ctx, created)
 }
 
-// UpdateCustomer applies mutable fields to an existing customer identified by
-// its business code. It shares CreateCustomerDTO so the front-end uses the
-// same code-based contract for create and update; the customer code and
-// document are immutable and taken from the persisted record.
+// UpdateCustomer substitui os dados editáveis do cliente pelo que a tela
+// mandou (a VCLI0500 manda o formulário inteiro: campo vazio limpa). Código,
+// documento e limite de crédito não mudam por aqui.
 func (uc *CustomerUseCase) UpdateCustomer(ctx context.Context, code int64, dto request.CreateCustomerDTO) (*response.CustomerResponse, error) {
-	if dto.Name == "" {
+	if strings.TrimSpace(dto.Name) == "" {
 		return nil, errorsuc.NewValidationError("informe o nome")
 	}
 	existing, err := uc.repo.GetCustomerByCode(ctx, code)
 	if err != nil {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", code))
-	}
-
-	existing.Name = dto.Name
-	existing.TradeName = dto.TradeName
-	existing.StateRegistration = dto.StateRegistration
-	existing.MunicipalRegistration = dto.MunicipalRegistration
-	existing.SuframaCode = dto.SuframaCode
-	existing.SuframaExpiry = dto.SuframaExpiry
-	existing.CreditLimit = dto.CreditLimit
-	existing.Website = dto.Website
-	if dto.FinalidadeCompra != nil {
-		f, err := finalidadeDoCliente(*dto.FinalidadeCompra)
-		if err != nil {
-			return nil, err
-		}
-		existing.FinalidadeCompra = f
-	}
-	if dto.PaymentCondVisibility != "" {
-		existing.PaymentCondVisibility = entity.PaymentCondVisibility(dto.PaymentCondVisibility)
-	}
-
-	// Resolve FK codes -> IDs (only the ones provided are changed).
-	if err := uc.resolveCustomerFKs(ctx, existing, dto); err != nil {
 		return nil, err
 	}
-
+	if dto.FormVersion < 2 {
+		preserveNewFields(&dto, existing)
+	}
+	existing.Name = dto.Name
+	existing.SuframaExpiry = dto.SuframaExpiry
+	if err := uc.applyCustomerDTO(ctx, existing, dto); err != nil {
+		return nil, err
+	}
 	updated, err := uc.repo.UpdateCustomer(ctx, existing)
 	if err != nil {
 		return nil, err
 	}
-	return toCustomerResponse(updated), nil
+	return uc.customerResponse(ctx, updated)
 }
 
+var (
+	ieIndicators = map[string]bool{"CONTRIBUINTE": true, "ISENTO": true, "NAO_CONTRIBUINTE": true}
+	taxRegimes   = map[string]bool{"SIMPLES": true, "MEI": true, "NORMAL": true}
+	freightTypes = map[string]bool{"CIF": true, "FOB": true, "TERCEIROS": true, "SEM_FRETE": true}
+	emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+	cnaePattern  = regexp.MustCompile(`^\d{7}$`)
+)
+
+// applyCustomerDTO valida e copia os campos editáveis (inclusão e alteração).
+func (uc *CustomerUseCase) applyCustomerDTO(ctx context.Context, c *entity.Customer, dto request.CreateCustomerDTO) error {
+	c.CorporateCode = dto.CorporateCode
+	c.IsCorporate = dto.IsCorporate
+	c.TradeName = blankToNil(dto.TradeName)
+	c.StateRegistration = blankToNil(dto.StateRegistration)
+	c.MunicipalRegistration = blankToNil(dto.MunicipalRegistration)
+	c.SuframaCode = blankToNil(dto.SuframaCode)
+	c.Website = blankToNil(dto.Website)
+	c.FinalidadeCompra = nil
+	if dto.FinalidadeCompra != nil {
+		f, err := finalidadeDoCliente(*dto.FinalidadeCompra)
+		if err != nil {
+			return err
+		}
+		c.FinalidadeCompra = f
+	}
+	if c.CorporateCode != nil && *c.CorporateCode == c.Code {
+		return errorsuc.NewValidationError("o cliente não pode ser matriz de si mesmo")
+	}
+	if c.SuframaCode != nil && c.SuframaExpiry == nil {
+		return errorsuc.NewValidationError("informe a validade da inscrição SUFRAMA")
+	}
+
+	var err error
+	if c.IEIndicator, err = enumOrNil(dto.IEIndicator, ieIndicators, "indicador de IE"); err != nil {
+		return err
+	}
+	if c.IEIndicator != nil && *c.IEIndicator == "ISENTO" && c.StateRegistration == nil {
+		// A NF-e só declara contribuinte isento (indIEDest 2) com IE "ISENTO".
+		isento := "ISENTO"
+		c.StateRegistration = &isento
+	}
+	if c.IEIndicator != nil {
+		ie := strings.ToUpper(strings.TrimSpace(derefString(c.StateRegistration)))
+		switch {
+		case *c.IEIndicator == "CONTRIBUINTE" && (ie == "" || ie == "ISENTO"):
+			return errorsuc.NewValidationError("cliente contribuinte precisa da inscrição estadual")
+		case *c.IEIndicator == "NAO_CONTRIBUINTE" && ie != "" && ie != "ISENTO":
+			return errorsuc.NewValidationError("cliente não contribuinte não tem inscrição estadual; limpe a IE ou mude o indicador")
+		}
+	}
+	if c.TaxRegime, err = enumOrNil(dto.TaxRegime, taxRegimes, "regime tributário"); err != nil {
+		return err
+	}
+	if c.FreightType, err = enumOrNil(dto.FreightType, freightTypes, "tipo de frete"); err != nil {
+		return err
+	}
+	c.MainCNAE = blankToNil(dto.MainCNAE)
+	if c.MainCNAE != nil {
+		digits := strings.NewReplacer(".", "", "-", "", "/", "", " ", "").Replace(*c.MainCNAE)
+		if !cnaePattern.MatchString(digits) {
+			return errorsuc.NewValidationError("o CNAE tem 7 dígitos")
+		}
+		c.MainCNAE = &digits
+	}
+	for _, e := range []struct {
+		v     *string
+		label string
+	}{{dto.NFeEmail, "e-mail para NF-e"}, {dto.BillingEmail, "e-mail de cobrança"}} {
+		if v := blankToNil(e.v); v != nil {
+			for _, part := range strings.Split(*v, ";") {
+				if !emailPattern.MatchString(strings.TrimSpace(part)) {
+					return errorsuc.NewValidationError(fmt.Sprintf("%s inválido: %s", e.label, part))
+				}
+			}
+		}
+	}
+	c.NFeEmail = blankToNil(dto.NFeEmail)
+	c.BillingEmail = blankToNil(dto.BillingEmail)
+	if dto.RepresentativeCode != nil && *dto.RepresentativeCode != 0 && uc.reps != nil &&
+		(c.RepresentativeCode == nil || *c.RepresentativeCode != *dto.RepresentativeCode) {
+		if err := representativevalidation.Validate(ctx, uc.reps, dto.RepresentativeCode); err != nil {
+			return err
+		}
+	}
+	c.RepresentativeCode = dto.RepresentativeCode
+	if c.RepresentativeCode != nil && *c.RepresentativeCode == 0 {
+		c.RepresentativeCode = nil
+	}
+	c.ShippingCarrierID = dto.ShippingCarrierID
+	c.RequiresCustomerPO = dto.RequiresCustomerPO
+	c.RequiresQualityCert = dto.RequiresQualityCert
+	c.AllowsPartialBilling = dto.AllowsPartialBilling == nil || *dto.AllowsPartialBilling
+	c.ReceivingNotes = blankToNil(dto.ReceivingNotes)
+	c.CommercialNotes = blankToNil(dto.CommercialNotes)
+	c.FinancialNotes = blankToNil(dto.FinancialNotes)
+
+	if c.CorporateCode != nil {
+		if _, err := uc.repo.GetCustomerByCode(ctx, *c.CorporateCode); err != nil {
+			return errorsuc.NewValidationError(fmt.Sprintf("matriz %d não encontrada", *c.CorporateCode))
+		}
+	}
+	return uc.resolveCustomerFKs(ctx, c, dto)
+}
+
+// rejectDuplicateDocument: o mesmo CNPJ/CPF não vira dois clientes na empresa
+// (filiais têm CNPJ próprio; o grupo é ligado pela raiz).
+func (uc *CustomerUseCase) rejectDuplicateDocument(ctx context.Context, c *entity.Customer) error {
+	if uc.life != nil && onlyDigits(c.DocumentNumber) != "" {
+		// Compara só os dígitos: "11.222.333/0001-81" e "11222333000181" são o mesmo.
+		code, name, found, err := uc.life.FindCustomerByDocumentDigits(ctx, onlyDigits(c.DocumentNumber))
+		if err != nil {
+			return err
+		}
+		if found && code != c.Code {
+			return errorsuc.NewConflictError(fmt.Sprintf("o documento %s já está no cliente %d — %s", c.DocumentNumber, code, name))
+		}
+		return nil
+	}
+	other, err := uc.repo.GetCustomerByDocument(ctx, c.DocumentNumber)
+	if err == nil && other != nil && other.Code != c.Code {
+		return errorsuc.NewConflictError(fmt.Sprintf("o documento %s já está no cliente %d — %s", c.DocumentNumber, other.Code, other.Name))
+	}
+	return nil
+}
+
+// preserveNewFields: a tela antiga não manda os campos da VCLI0500 revista;
+// sem isto, editar um cliente nela apagaria IE, e-mails, logística e exigências.
+func preserveNewFields(dto *request.CreateCustomerDTO, c *entity.Customer) {
+	dto.IEIndicator, dto.TaxRegime, dto.MainCNAE = c.IEIndicator, c.TaxRegime, c.MainCNAE
+	dto.NFeEmail, dto.BillingEmail = c.NFeEmail, c.BillingEmail
+	dto.RepresentativeCode, dto.ShippingCarrierID, dto.FreightType = c.RepresentativeCode, c.ShippingCarrierID, c.FreightType
+	dto.RequiresCustomerPO, dto.RequiresQualityCert = c.RequiresCustomerPO, c.RequiresQualityCert
+	partial := c.AllowsPartialBilling
+	dto.AllowsPartialBilling = &partial
+	dto.ReceivingNotes, dto.CommercialNotes, dto.FinancialNotes = c.ReceivingNotes, c.CommercialNotes, c.FinancialNotes
+}
+
+func blankToNil(v *string) *string {
+	if v == nil || strings.TrimSpace(*v) == "" {
+		return nil
+	}
+	t := strings.TrimSpace(*v)
+	return &t
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func enumOrNil(v *string, allowed map[string]bool, label string) (*string, error) {
+	t := blankToNil(v)
+	if t == nil {
+		return nil, nil
+	}
+	u := strings.ToUpper(*t)
+	if !allowed[u] {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("%s inválido: %s", label, *t))
+	}
+	return &u, nil
+}
+
+// resolveCustomerFKs troca os códigos dos cadastros de apoio pelos ids.
+// Código ausente limpa o vínculo.
 func (uc *CustomerUseCase) resolveCustomerFKs(ctx context.Context, c *entity.Customer, dto request.CreateCustomerDTO) error {
+	c.RegionID, c.MarketSegmentID, c.CustomerTypeID, c.CarrierID, c.TaxTypeID = nil, nil, nil, nil, nil
 	if dto.RegionCode != nil {
 		r, err := uc.repo.GetRegionByCode(ctx, *dto.RegionCode)
 		if err != nil {
-			return fmt.Errorf("região não encontrada: %w", err)
+			return errorsuc.NewValidationError(fmt.Sprintf("região %d não encontrada", *dto.RegionCode))
 		}
 		c.RegionID = &r.ID
 	}
 	if dto.MarketSegmentCode != nil {
 		s, err := uc.repo.GetMarketSegmentByCode(ctx, *dto.MarketSegmentCode)
 		if err != nil {
-			return fmt.Errorf("segmento de mercado não encontrado: %w", err)
+			return errorsuc.NewValidationError(fmt.Sprintf("segmento %d não encontrado", *dto.MarketSegmentCode))
 		}
 		c.MarketSegmentID = &s.ID
 	}
 	if dto.CustomerTypeCode != nil {
 		t, err := uc.repo.GetCustomerTypeByCode(ctx, *dto.CustomerTypeCode)
 		if err != nil {
-			return fmt.Errorf("tipo de cliente não encontrado: %w", err)
+			return errorsuc.NewValidationError(fmt.Sprintf("tipo de cliente %d não encontrado", *dto.CustomerTypeCode))
 		}
 		c.CustomerTypeID = &t.ID
-	}
-	if dto.PaymentConditionCode != nil {
-		pc, err := uc.repo.GetPaymentConditionByCode(ctx, *dto.PaymentConditionCode)
-		if err != nil {
-			return fmt.Errorf("condição de pagamento não encontrada: %w", err)
-		}
-		c.PaymentConditionID = &pc.ID
-	}
-	if dto.SalesTableCode != nil {
-		st, err := uc.repo.GetSalesTableByCode(ctx, *dto.SalesTableCode)
-		if err != nil {
-			return fmt.Errorf("tabela de venda não encontrada: %w", err)
-		}
-		c.SalesTableID = &st.ID
 	}
 	if dto.CarrierCode != nil {
 		car, err := uc.repo.GetCarrierByCode(ctx, *dto.CarrierCode)
 		if err != nil {
-			return fmt.Errorf("transportadora não encontrada: %w", err)
+			return errorsuc.NewValidationError(fmt.Sprintf("portador %d não encontrado", *dto.CarrierCode))
 		}
 		c.CarrierID = &car.ID
-	}
-	if dto.CarrierGroupCode != nil {
-		cg, err := uc.repo.GetCarrierGroupByCode(ctx, *dto.CarrierGroupCode)
-		if err != nil {
-			return fmt.Errorf("grupo de transportadoras não encontrado: %w", err)
-		}
-		c.CarrierGroupID = &cg.ID
-	}
-	if dto.InvoiceTypeCode != nil {
-		it, err := uc.repo.GetInvoiceTypeByCode(ctx, *dto.InvoiceTypeCode)
-		if err != nil {
-			return fmt.Errorf("tipo de nota fiscal não encontrado: %w", err)
-		}
-		c.InvoiceTypeID = &it.ID
 	}
 	if dto.TaxTypeCode != nil {
 		tt, err := uc.repo.GetTaxTypeByCode(ctx, *dto.TaxTypeCode)
 		if err != nil {
-			return fmt.Errorf("tipo de imposto não encontrado: %w", err)
+			return errorsuc.NewValidationError(fmt.Sprintf("tipo de imposto %d não encontrado", *dto.TaxTypeCode))
 		}
 		c.TaxTypeID = &tt.ID
 	}
@@ -2456,9 +2628,12 @@ func (uc *CustomerUseCase) resolveCustomerFKs(ctx context.Context, c *entity.Cus
 func (uc *CustomerUseCase) GetCustomer(ctx context.Context, code int64) (*response.CustomerResponse, error) {
 	c, err := uc.repo.GetCustomerByCode(ctx, code)
 	if err != nil {
-		return nil, fmt.Errorf("cliente %d não encontrado: %w", code, err)
+		return nil, err
 	}
-	resp := toCustomerResponse(c)
+	resp, err := uc.customerResponse(ctx, c)
+	if err != nil {
+		return nil, err
+	}
 	// Load addresses and contacts
 	addrs, errEnderecos := uc.repo.ListAddresses(ctx, c.ID)
 	if errEnderecos != nil {
@@ -2471,8 +2646,20 @@ func (uc *CustomerUseCase) GetCustomer(ctx context.Context, code int64) (*respon
 	if errContatos != nil {
 		return nil, fmt.Errorf("lendo os contatos do cliente: %w", errContatos)
 	}
+	var tipos []*entity.CustomerContactType
+	if len(contacts) > 0 {
+		if tipos, err = uc.repo.ListContactTypes(ctx, false); err != nil {
+			return nil, err
+		}
+	}
 	for _, ct := range contacts {
-		resp.Contacts = append(resp.Contacts, toContactResponse(ct))
+		r := toContactResponse(ct)
+		for _, t := range tipos {
+			if ct.ContactTypeID != nil && t.ID == *ct.ContactTypeID {
+				r.ContactTypeCode = &t.Code
+			}
+		}
+		resp.Contacts = append(resp.Contacts, r)
 	}
 	return resp, nil
 }
@@ -2484,7 +2671,9 @@ func (uc *CustomerUseCase) ListCustomers(ctx context.Context, onlyActive bool) (
 	}
 	out := make([]*response.CustomerResponse, 0, len(customers))
 	for _, c := range customers {
-		out = append(out, toCustomerResponse(c))
+		r := toCustomerResponse(c)
+		r.CreditLimitExpired = c.CreditLimitExpiresAt != nil && c.CreditLimitExpiresAt.Before(dateOnly(uc.now()))
+		out = append(out, r)
 	}
 	return out, nil
 }
@@ -2496,7 +2685,9 @@ func (uc *CustomerUseCase) ListEstablishments(ctx context.Context, corporateCode
 	}
 	out := make([]*response.CustomerResponse, 0, len(customers))
 	for _, c := range customers {
-		out = append(out, toCustomerResponse(c))
+		r := toCustomerResponse(c)
+		r.CreditLimitExpired = c.CreditLimitExpiresAt != nil && c.CreditLimitExpiresAt.Before(dateOnly(uc.now()))
+		out = append(out, r)
 	}
 	return out, nil
 }
@@ -2578,7 +2769,7 @@ func (uc *CustomerUseCase) AddContact(ctx context.Context, dto request.AddContac
 }
 
 func toCustomerResponse(c *entity.Customer) *response.CustomerResponse {
-	return &response.CustomerResponse{
+	r := &response.CustomerResponse{
 		ID:                    c.ID,
 		Code:                  c.Code,
 		CorporateCode:         c.CorporateCode,
@@ -2594,14 +2785,9 @@ func toCustomerResponse(c *entity.Customer) *response.CustomerResponse {
 		RegionID:              c.RegionID,
 		MarketSegmentID:       c.MarketSegmentID,
 		CustomerTypeID:        c.CustomerTypeID,
-		PaymentConditionID:    c.PaymentConditionID,
-		SalesTableID:          c.SalesTableID,
 		CarrierID:             c.CarrierID,
-		CarrierGroupID:        c.CarrierGroupID,
-		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
 		FinalidadeCompra:      c.FinalidadeCompra,
-		PaymentCondVisibility: string(c.PaymentCondVisibility),
 		CreditLimit:           c.CreditLimit.InexactFloat64(),
 		Website:               c.Website,
 		IsActive:              c.IsActive,
@@ -2609,7 +2795,106 @@ func toCustomerResponse(c *entity.Customer) *response.CustomerResponse {
 		BlockReason:           c.BlockReason,
 		CreatedAt:             c.CreatedAt,
 		UpdatedAt:             c.UpdatedAt,
+		IEIndicator:           c.IEIndicator,
+		TaxRegime:             c.TaxRegime,
+		MainCNAE:              c.MainCNAE,
+		NFeEmail:              c.NFeEmail,
+		BillingEmail:          c.BillingEmail,
+		RepresentativeCode:    c.RepresentativeCode,
+		ShippingCarrierID:     c.ShippingCarrierID,
+		FreightType:           c.FreightType,
+		RequiresCustomerPO:    c.RequiresCustomerPO,
+		RequiresQualityCert:   c.RequiresQualityCert,
+		AllowsPartialBilling:  c.AllowsPartialBilling,
+		ReceivingNotes:        c.ReceivingNotes,
+		CommercialNotes:       c.CommercialNotes,
+		FinancialNotes:        c.FinancialNotes,
+		RegistrationStatus:    c.RegistrationStatus,
+		RegistrationCheckedAt: c.RegistrationCheckedAt,
+		OpeningDate:           c.OpeningDate,
+		ShareCapital:          floatPtr(c.ShareCapital),
+		CompanySize:           c.CompanySize,
+		LegalNature:           c.LegalNature,
+		CreditScore:           c.CreditScore,
+		CreditRiskClass:       c.CreditRiskClass,
+		CreditLimitSuggested:  floatPtr(c.CreditLimitSuggested),
+		CreditLimitExpiresAt:  c.CreditLimitExpiresAt,
+		CreditReviewedAt:      c.CreditReviewedAt,
 	}
+	return r
+}
+
+func floatPtr(d *decimal.Decimal) *float64 {
+	if d == nil {
+		return nil
+	}
+	f := d.InexactFloat64()
+	return &f
+}
+
+// customerResponse completa a resposta com os códigos dos cadastros de apoio
+// (a tela trabalha com código; o banco guarda o id) e a validade do limite.
+func (uc *CustomerUseCase) customerResponse(ctx context.Context, c *entity.Customer) (*response.CustomerResponse, error) {
+	r := toCustomerResponse(c)
+	if c.CreditLimitExpiresAt != nil {
+		r.CreditLimitExpired = c.CreditLimitExpiresAt.Before(dateOnly(uc.now()))
+	}
+	if c.RegionID != nil {
+		list, err := uc.repo.ListRegions(ctx, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range list {
+			if x.ID == *c.RegionID {
+				r.RegionCode = &x.Code
+			}
+		}
+	}
+	if c.MarketSegmentID != nil {
+		list, err := uc.repo.ListMarketSegments(ctx, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range list {
+			if x.ID == *c.MarketSegmentID {
+				r.MarketSegmentCode = &x.Code
+			}
+		}
+	}
+	if c.CustomerTypeID != nil {
+		list, err := uc.repo.ListCustomerTypes(ctx, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range list {
+			if x.ID == *c.CustomerTypeID {
+				r.CustomerTypeCode = &x.Code
+			}
+		}
+	}
+	if c.CarrierID != nil {
+		car, err := uc.repo.GetCarrierByID(ctx, *c.CarrierID)
+		if err != nil {
+			return nil, err
+		}
+		r.CarrierCode = &car.Code
+	}
+	if c.TaxTypeID != nil {
+		list, err := uc.repo.ListTaxTypes(ctx, false)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range list {
+			if x.ID == *c.TaxTypeID {
+				r.TaxTypeCode = &x.Code
+			}
+		}
+	}
+	return r, nil
+}
+
+func dateOnly(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 func toAddressResponse(a *entity.CustomerAddress) response.CustomerAddressResponse {

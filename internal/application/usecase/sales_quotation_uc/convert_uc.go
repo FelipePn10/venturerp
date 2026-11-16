@@ -2,6 +2,8 @@ package sales_quotation_uc
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -28,6 +30,15 @@ type ConvertUseCase struct {
 	// Alcada: o desconto das linhas convertidas respeita a alçada do pedido —
 	// sem isso, converter o orçamento contornava a alçada. Opcional.
 	Alcada AlcadaDoPedido
+	// Confirmar passa o pedido convertido pela mesma confirmação da VVND0200
+	// (crédito, pedido de compra do cliente, linhas, reserva de estoque). Sem
+	// ele (testes), o pedido nasce com o status pedido, como antes.
+	Confirmar ConfirmadorDePedido
+}
+
+// ConfirmadorDePedido: sales_order_uc.ChangeStatusSalesOrderUseCase.
+type ConfirmadorDePedido interface {
+	Execute(ctx context.Context, dto request.ChangeStatusDTO) error
 }
 
 func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQuotationDTO) (*response.SalesOrderResponse, error) {
@@ -48,11 +59,25 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if q.ConvertedSalesOrderCode != nil {
 		return nil, errorsuc.NewValidationError("o orçamento já foi convertido")
 	}
+	if q.PurchaseOrderNumber != nil && len([]rune(strings.TrimSpace(*q.PurchaseOrderNumber))) > 15 {
+		return nil, errorsuc.NewValidationError("o pedido de compra do cliente no orçamento passa de 15 caracteres (limite da NF-e); corrija antes de converter")
+	}
 	if q.Status == quoteentity.SalesQuotationStatusCancelled || q.Status == quoteentity.SalesQuotationStatusExpired {
 		return nil, errorsuc.NewValidationError("orçamento cancelado ou expirado não pode ser convertido")
 	}
 	if q.Status == quoteentity.SalesQuotationStatusAttended {
 		return nil, errorsuc.NewValidationError("orçamento atendido não pode ser convertido novamente")
+	}
+	// O orçamento pode ser de quando o cliente estava ativo: inativado na
+	// VCLI0500, não recebe pedido novo (mesma regra do pedido digitado).
+	if q.CustomerCode != nil && uc.Quotes.Customers != nil {
+		cli, err := uc.Quotes.Customers.GetCustomerByCode(ctx, *q.CustomerCode)
+		if err != nil {
+			return nil, err
+		}
+		if !cli.IsActive {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o cliente %d está inativo: reative na VCLI0500 antes de converter o orçamento", *q.CustomerCode))
+		}
 	}
 	if q.QuotationType == quoteentity.SalesQuotationTypeConsult {
 		return nil, errorsuc.NewValidationError("orçamento de consulta não pode ser convertido em pedido")
@@ -107,6 +132,12 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	if dto.Status != "" {
 		status = orderentity.SalesOrderStatus(dto.Status)
 	}
+	// Converter direto para "pedido" pulava a confirmação inteira: nasce como
+	// rascunho e é confirmado logo depois da gravação.
+	confirmarDepois := status == orderentity.SalesOrderStatusOrder && uc.Confirmar != nil
+	if confirmarDepois {
+		status = orderentity.SalesOrderStatusDraft
+	}
 	origin := orderentity.SalesOrderOriginNormal
 	if dto.Origin != "" {
 		origin = orderentity.SalesOrderOrigin(dto.Origin)
@@ -139,11 +170,13 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 			StreetNumber:        q.StreetNumber,
 			ForeignDocument:     q.ForeignDocument,
 			CarrierCode:         q.CarrierCode,
-			FreightType:         q.FreightType,
-			FreightValue:        q.FreightValue,
-			InsuranceValue:      q.InsuranceValue,
-			DiscountValue:       q.DiscountValue,
-			SurchargeValue:      q.SurchargeValue,
+			// O pedido de compra do cliente segue para o pedido e para a NF-e.
+			CustomerPONumber: q.PurchaseOrderNumber,
+			FreightType:      q.FreightType,
+			FreightValue:     q.FreightValue,
+			InsuranceValue:   q.InsuranceValue,
+			DiscountValue:    q.DiscountValue,
+			SurchargeValue:   q.SurchargeValue,
 			// No pedido, total_gross e o valor dos produtos JA com desconto de
 			// item (o orcamento guarda o bruto antes do desconto). Mandar o
 			// bruto do orcamento inflava o pedido convertido.
@@ -230,6 +263,12 @@ func (uc *ConvertUseCase) Execute(ctx context.Context, dto request.ConvertSalesQ
 	})
 	if err != nil {
 		return nil, err
+	}
+	if confirmarDepois {
+		if err := uc.Confirmar.Execute(ctx, request.ChangeStatusDTO{Code: created.Code, Status: string(orderentity.SalesOrderStatusOrder)}); err != nil {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o orçamento virou o pedido %d, mas a confirmação não passou (confira o pedido na VVND0200; recusado fica em rascunho): %s", created.Code, err.Error()))
+		}
+		created.Status = orderentity.SalesOrderStatusOrder
 	}
 	if uc.Alcada != nil {
 		if err := uc.Alcada.AplicarAlcada(ctx, created.Code); err != nil {

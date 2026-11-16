@@ -414,10 +414,10 @@ func (c *ConsultasPG) DadosDocumento(ctx context.Context, orderCode int64) (*pur
 			d.Logo, d.CorMarca = cfg.Logo, derefStr(cfg.BrandColor)
 		}
 	}
-	var supplierCode, carrierCode, termCode *int64
+	var supplierCode, shippingCarrierID, termCode *int64
 	var createdBy uuid.UUID
-	if err := c.db.QueryRow(ctx, `SELECT supplier_code, carrier_code, payment_term_code, created_by FROM purchase_orders WHERE code = $1 AND enterprise_code = $2`,
-		orderCode, code).Scan(&supplierCode, &carrierCode, &termCode, &createdBy); err != nil {
+	if err := c.db.QueryRow(ctx, `SELECT supplier_code, shipping_carrier_id, payment_term_code, created_by FROM purchase_orders WHERE code = $1 AND enterprise_code = $2`,
+		orderCode, code).Scan(&supplierCode, &shippingCarrierID, &termCode, &createdBy); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("pedido de compra %d não encontrado", orderCode))
 		}
@@ -452,15 +452,15 @@ func (c *ConsultasPG) DadosDocumento(ctx context.Context, orderCode int64) (*pur
 		f.Endereco, f.Cidade, f.UF, f.CEP = strings.TrimSpace(end), derefStr(cidade), derefStr(uf), derefStr(cep)
 		d.Fornecedor = f
 	}
-	if carrierCode != nil {
-		empresa, err := tenant.ID(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// Portador é catálogo da empresa: o mesmo código existe em cada uma.
-		err = c.db.QueryRow(ctx, `SELECT description FROM carriers WHERE code = $1 AND enterprise_id = $2`, *carrierCode, empresa).Scan(&d.Transportadora)
+	if shippingCarrierID != nil {
+		// A transportadora é o fornecedor do cadastro de transportadoras; o
+		// carrier_code do pedido é o portador de cobrança e não vai impresso aqui.
+		err = c.db.QueryRow(ctx, `
+			SELECT s.name FROM shipping_carriers sc
+			  JOIN suppliers s ON s.code = sc.supplier_code AND s.enterprise_id = sc.enterprise_id
+			 WHERE sc.id = $1 AND sc.enterprise_id = $2`, *shippingCarrierID, id).Scan(&d.Transportadora)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("portador do pedido: %w", err)
+			return nil, fmt.Errorf("transportadora do pedido: %w", err)
 		}
 	}
 	if termCode != nil {

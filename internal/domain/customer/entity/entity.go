@@ -180,14 +180,6 @@ const (
 	AddressOutro     AddressType = "OUTRO"
 )
 
-type PaymentCondVisibility string
-
-const (
-	VisibilitySomenteVinculados PaymentCondVisibility = "SOMENTE_VINCULADOS"
-	VisibilityVinculadosENenhum PaymentCondVisibility = "VINCULADOS_E_NENHUM"
-	VisibilityTodos             PaymentCondVisibility = "TODOS"
-)
-
 // ─── Region ──────────────────────────────────────────────────────────────────
 
 type Region struct {
@@ -409,6 +401,13 @@ func NewPaymentCondition(code int64, description string, analysisType PaymentAna
 	}
 	if analysisType == "" {
 		analysisType = AnalysisLiberaSemAnalise
+	}
+	// O tipo do banco também aceita FREE/BLOCK_ALWAYS/ALWAYS_ANALYZE (são da
+	// divisão de vendas); numa condição, a análise de crédito não os entende.
+	switch analysisType {
+	case AnalysisSempreAnalisa, AnalysisBloqueiaSempre, AnalysisLiberaSemAnalise:
+	default:
+		return nil, domainerr.NewValidation("tipo de análise de crédito inválido: use SEMPRE_ANALISA, BLOQUEIA_SEMPRE ou LIBERA_SEM_ANALISE")
 	}
 	return &PaymentCondition{
 		Code:         code,
@@ -1181,26 +1180,54 @@ type Customer struct {
 	RegionID              *int64
 	MarketSegmentID       *int64
 	CustomerTypeID        *int64
-	PaymentConditionID    *int64
-	SalesTableID          *int64
-	CarrierID             *int64
-	CarrierGroupID        *int64
-	InvoiceTypeID         *int64
+	CarrierID             *int64 // portador de cobrança padrão
 	TaxTypeID             *int64
 	// FinalidadeCompra: REVENDA, INDUSTRIALIZACAO ou USO_CONSUMO — o que o
 	// cliente costuma fazer com a mercadoria; nil = deduzir pela IE.
-	FinalidadeCompra      *string
-	PaymentCondVisibility PaymentCondVisibility
-	CreditLimit           decimal.Decimal
-	Website               *string
-	IsActive              bool
-	Blocked               bool
-	BlockReason           *string
-	CreatedAt             time.Time
-	CreatedBy             uuid.UUID
-	UpdatedAt             time.Time
-	Addresses             []*CustomerAddress
-	Contacts              []*CustomerContact
+	FinalidadeCompra *string
+	CreditLimit      decimal.Decimal
+	Website          *string
+
+	// Fiscal
+	IEIndicator  *string // CONTRIBUINTE, ISENTO, NAO_CONTRIBUINTE; nil = deduzir pela IE
+	TaxRegime    *string // SIMPLES, MEI, NORMAL
+	MainCNAE     *string
+	NFeEmail     *string
+	BillingEmail *string
+
+	// Comercial e logística
+	RepresentativeCode   *int64
+	ShippingCarrierID    *int64
+	FreightType          *string // CIF, FOB, TERCEIROS, SEM_FRETE
+	RequiresCustomerPO   bool
+	RequiresQualityCert  bool
+	AllowsPartialBilling bool
+	ReceivingNotes       *string
+	CommercialNotes      *string
+	FinancialNotes       *string
+
+	// Situação na Receita
+	RegistrationStatus    *string
+	RegistrationCheckedAt *time.Time
+	OpeningDate           *time.Time
+	ShareCapital          *decimal.Decimal
+	CompanySize           *string
+	LegalNature           *string
+
+	// Última análise de crédito
+	CreditScore          *int32
+	CreditRiskClass      *string
+	CreditLimitSuggested *decimal.Decimal
+	CreditLimitExpiresAt *time.Time
+	CreditReviewedAt     *time.Time
+	IsActive             bool
+	Blocked              bool
+	BlockReason          *string
+	CreatedAt            time.Time
+	CreatedBy            uuid.UUID
+	UpdatedAt            time.Time
+	Addresses            []*CustomerAddress
+	Contacts             []*CustomerContact
 }
 
 func NewCustomer(code int64, name string, docType DocumentType, docNumber string, createdBy uuid.UUID) (*Customer, error) {
@@ -1218,16 +1245,16 @@ func NewCustomer(code int64, name string, docType DocumentType, docNumber string
 	}
 	now := time.Now()
 	return &Customer{
-		Code:                  code,
-		Name:                  name,
-		DocumentType:          docType,
-		DocumentNumber:        docNumber,
-		PaymentCondVisibility: VisibilityTodos,
-		IsActive:              true,
-		Blocked:               false,
-		CreatedAt:             now,
-		CreatedBy:             createdBy,
-		UpdatedAt:             now,
+		Code:                 code,
+		Name:                 name,
+		DocumentType:         docType,
+		DocumentNumber:       docNumber,
+		AllowsPartialBilling: true,
+		IsActive:             true,
+		Blocked:              false,
+		CreatedAt:            now,
+		CreatedBy:            createdBy,
+		UpdatedAt:            now,
 	}, nil
 }
 

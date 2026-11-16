@@ -153,6 +153,12 @@ func TestContratoDeVenda(t *testing.T) {
 	if contar("COMERCIAL_CONTRATO_SALDO_BAIXO") != 0 || contar("COMERCIAL_CONTRATO_VENCENDO") != 1 {
 		t.Fatalf("alertas: saldo %d vencendo %d (vigência acaba em 20 dias, alerta de 30)", contar("COMERCIAL_CONTRATO_SALDO_BAIXO"), contar("COMERCIAL_CONTRATO_VENCENDO"))
 	}
+	// Cliente inativado não recebe pedido de chamada, como no pedido digitado.
+	testutil.Exec(t, pool, `UPDATE customers SET is_active = FALSE WHERE code = $1 AND enterprise_id = $2`, cliente, a.ID)
+	if _, err := uc.Chamar(a.Ctx, c.ID, contrato_venda_uc.ChamadaDTO{Linhas: []dom.LinhaChamada{{ContratoItemID: ci, Quantidade: d("5")}}, DataEntrega: entrega}); err == nil {
+		t.Fatal("chamada gerou pedido para cliente inativo")
+	}
+	testutil.Exec(t, pool, `UPDATE customers SET is_active = TRUE WHERE code = $1 AND enterprise_id = $2`, cliente, a.ID)
 	if _, err := uc.Chamar(a.Ctx, c.ID, contrato_venda_uc.ChamadaDTO{Linhas: []dom.LinhaChamada{{ContratoItemID: ci, Quantidade: d("5")}}, DataEntrega: entrega}); err != nil {
 		t.Fatal(err)
 	}

@@ -88,7 +88,9 @@ type SalesOrder struct {
 	TaxTypeCode               *int64
 	// FinalidadeCompra do cliente nesta venda (REVENDA, INDUSTRIALIZACAO,
 	// USO_CONSUMO); nil = a do cadastro do cliente.
-	FinalidadeCompra            *string
+	FinalidadeCompra *string
+	// CustomerPONumber: número do pedido de compra do cliente (xPed na NF-e).
+	CustomerPONumber            *string
 	PresenceIndicator           *string
 	SalesChannel                *string
 	DefaultNFType               *string

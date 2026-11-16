@@ -205,7 +205,24 @@ func (p *ParametroICMSIPI) cstICMS(destinoTipo string) string {
 	if p == nil {
 		return ""
 	}
-	return strings.TrimSpace(p.Lado(destinoTipo).CSTICMS)
+	return SemOrigem(p.Lado(destinoTipo).CSTICMS)
+}
+
+// cstsDoICMS: os CST do regime normal (tabela B).
+var cstsDoICMS = map[string]bool{"00": true, "10": true, "20": true, "30": true, "40": true, "41": true, "50": true, "51": true, "60": true, "61": true, "70": true, "90": true}
+
+// csosns: CSOSN do Simples, que também têm três dígitos e não levam origem.
+var csosns = map[string]bool{"101": true, "102": true, "103": true, "201": true, "202": true, "203": true, "300": true, "400": true, "500": true, "900": true}
+
+// SemOrigem tira a origem do CST gravado no formato antigo (tabela A + B:
+// "000", "041", "190"). A coluna aceita três caracteres e o legado grava
+// assim; a NF-e leva origem e CST em campos separados. CSOSN fica como está.
+func SemOrigem(cst string) string {
+	c := strings.TrimSpace(cst)
+	if len(c) == 3 && !csosns[c] && c[0] >= '0' && c[0] <= '8' && cstsDoICMS[c[1:]] {
+		return c[1:]
+	}
+	return c
 }
 
 // ConsultaParametroICMSIPI é o que identifica a operação na busca da regra.

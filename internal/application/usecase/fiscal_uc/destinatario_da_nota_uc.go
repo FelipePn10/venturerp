@@ -62,7 +62,6 @@ type DestinatarioDaNota struct {
 	Email            string                   `json:"email"`
 	Telefone         string                   `json:"telefone"`
 	FinalidadeCompra string                   `json:"finalidade_compra"`
-	InvoiceTypeID    *int64                   `json:"invoice_type_id,omitempty"`
 	Bloqueado        bool                     `json:"bloqueado"`
 	Enderecos        []EnderecoDoDestinatario `json:"enderecos"`
 	// CfopSemEndereco vale enquanto o cliente não tem endereço: sem UF, a
@@ -96,16 +95,15 @@ func (uc *DestinatarioDaNotaUseCase) DoCliente(ctx context.Context, code int64) 
 		tipoPessoa = "F"
 	}
 	out := &DestinatarioDaNota{
-		CustomerCode:  cliente.Code,
-		Nome:          strings.TrimSpace(cliente.Name),
-		Documento:     somenteDigitos(cliente.DocumentNumber),
-		TipoPessoa:    tipoPessoa,
-		IE:            valorOuVazio(cliente.StateRegistration),
-		Email:         primeiroEmailDoCliente(cliente),
-		Telefone:      primeiroTelefoneDoCliente(cliente),
-		InvoiceTypeID: cliente.InvoiceTypeID,
-		Bloqueado:     cliente.Blocked,
-		Enderecos:     []EnderecoDoDestinatario{},
+		CustomerCode: cliente.Code,
+		Nome:         strings.TrimSpace(cliente.Name),
+		Documento:    somenteDigitos(cliente.DocumentNumber),
+		TipoPessoa:   tipoPessoa,
+		IE:           valorOuVazio(cliente.StateRegistration),
+		Email:        primeiroEmailDoCliente(cliente),
+		Telefone:     primeiroTelefoneDoCliente(cliente),
+		Bloqueado:    cliente.Blocked,
+		Enderecos:    []EnderecoDoDestinatario{},
 	}
 	out.FinalidadeCompra = valorOuVazio(cliente.FinalidadeCompra)
 	out.CfopSemEndereco = cfopDaVenda(ufEmpresa, "", out.IE, tipoPessoa)

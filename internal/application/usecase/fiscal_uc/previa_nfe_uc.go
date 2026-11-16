@@ -580,8 +580,6 @@ func rotuloOrigemCondicao(origem string) string {
 	switch origem {
 	case "PEDIDO_DE_VENDA":
 		return "condição de pagamento do pedido de venda"
-	case "CADASTRO_DO_CLIENTE":
-		return "condição de pagamento padrão do cliente"
 	default:
 		return "sem condição de pagamento (à vista)"
 	}

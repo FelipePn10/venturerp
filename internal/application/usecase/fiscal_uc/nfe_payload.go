@@ -16,6 +16,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
 	fiscalrepository "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
+	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
@@ -29,8 +30,8 @@ type PlanoDaNota struct {
 	CondicaoCode      *int64
 	CondicaoDescricao string
 	Parcelas          []customerentity.ParcelaCalculada
-	// Origem diz de onde a condição veio (pedido de venda, cadastro do cliente
-	// ou nenhuma), para a prévia poder explicar o que o usuário está vendo.
+	// Origem diz de onde a condição veio (pedido de venda ou nenhuma), para a
+	// prévia poder explicar o que o usuário está vendo.
 	Origem string
 	// Aviso traz o problema de cadastro que impediu o cálculo, quando houver.
 	Aviso string
@@ -38,14 +39,16 @@ type PlanoDaNota struct {
 	// dele (retorno de industrialização sem serviço). Sem duplicata, sem título
 	// e, para a SEFAZ, "sem pagamento" (tPag 90).
 	SemCobranca bool
+	// PedidoCompra: o número do pedido de compra do cliente, do pedido de
+	// venda da nota. Vai no xPed do cabeçalho e de cada item.
+	PedidoCompra string
 }
 
 // resolverPlanoDaNota descobre a condição de pagamento que vale para a nota e a
 // transforma em parcelas sobre o valor total do documento.
 //
-// A condição vem do pedido de venda que originou a nota. Quando a nota foi
-// digitada solta, cai na condição padrão do cadastro do cliente — é o que o
-// vendedor combinaria de novo. Sem nenhuma das duas, a nota é à vista.
+// A condição vem do pedido de venda que originou a nota; sem pedido (ou sem
+// condição nele), a nota é à vista.
 func resolverPlanoDaNota(
 	ctx context.Context,
 	exit *entity.FiscalExit,
@@ -56,6 +59,23 @@ func resolverPlanoDaNota(
 	plano := PlanoDaNota{Origem: "SEM_CONDICAO"}
 	if exit == nil {
 		return plano, nil
+	}
+	// Pedido ou condição inexistente seguem para à vista; falha de leitura é
+	// erro. Antes qualquer falha virava "à vista" em silêncio, e a nota ia
+	// para a SEFAZ com as duplicatas erradas.
+	ausente := func(err error) bool { return err != nil && errorsuc.EhNaoEncontrado(err) }
+	var order *salesentity.SalesOrder
+	if exit.SalesOrderCode != nil && orders != nil {
+		o, err := orders.GetByCode(ctx, *exit.SalesOrderCode)
+		if err != nil && !ausente(err) {
+			return plano, fmt.Errorf("lendo o pedido da nota: %w", err)
+		}
+		if err == nil && o != nil {
+			order = o
+			if o.CustomerPONumber != nil {
+				plano.PedidoCompra = strings.TrimSpace(*o.CustomerPONumber)
+			}
+		}
 	}
 
 	// Parcela-se o que o cliente PAGA. Na nota de beneficiamento o material dele
@@ -72,41 +92,14 @@ func resolverPlanoDaNota(
 		datas.Entrega = exit.DataSaida
 	}
 
-	// Pedido, cliente ou condição inexistente seguem para a próxima fonte; falha
-	// de leitura é erro. Antes qualquer falha virava "à vista" em silêncio, e a
-	// nota ia para a SEFAZ com as duplicatas erradas.
-	ausente := func(err error) bool { return err != nil && errorsuc.EhNaoEncontrado(err) }
 	var cond *customerentity.PaymentCondition
-	if customers != nil {
-		if exit.SalesOrderCode != nil && orders != nil {
-			order, err := orders.GetByCode(ctx, *exit.SalesOrderCode)
-			if err != nil && !ausente(err) {
-				return plano, fmt.Errorf("lendo o pedido da nota para a condição de pagamento: %w", err)
-			}
-			if err == nil && order != nil && order.PaymentTermCode != nil {
-				c, err := customers.GetPaymentConditionByCode(ctx, *order.PaymentTermCode)
-				if err != nil && !ausente(err) {
-					return plano, fmt.Errorf("lendo a condição de pagamento do pedido: %w", err)
-				}
-				if err == nil && c != nil {
-					cond, plano.Origem = c, "PEDIDO_DE_VENDA"
-				}
-			}
+	if customers != nil && order != nil && order.PaymentTermCode != nil {
+		c, err := customers.GetPaymentConditionByCode(ctx, *order.PaymentTermCode)
+		if err != nil && !ausente(err) {
+			return plano, fmt.Errorf("lendo a condição de pagamento do pedido: %w", err)
 		}
-		if cond == nil && exit.CustomerCode != nil {
-			cliente, err := customers.GetCustomerByCode(ctx, *exit.CustomerCode)
-			if err != nil && !ausente(err) {
-				return plano, fmt.Errorf("lendo o cliente da nota para a condição de pagamento: %w", err)
-			}
-			if err == nil && cliente != nil && cliente.PaymentConditionID != nil {
-				c, err := customers.GetPaymentConditionByID(ctx, *cliente.PaymentConditionID)
-				if err != nil && !ausente(err) {
-					return plano, fmt.Errorf("lendo a condição de pagamento do cliente: %w", err)
-				}
-				if err == nil && c != nil {
-					cond, plano.Origem = c, "CADASTRO_DO_CLIENTE"
-				}
-			}
+		if err == nil && c != nil {
+			cond, plano.Origem = c, "PEDIDO_DE_VENDA"
 		}
 	}
 
@@ -257,10 +250,7 @@ func montarPayloadNFe(
 	itens := buildFocusItems(items, cfg)
 	ratearAcessoriasNFe(itens, exit)
 	retrato := aplicarReforma(rt, items, itens)
-	modFrete := 9
-	if exit.ValorFrete.IsPositive() {
-		modFrete = 0 // por conta do emitente (CIF)
-	}
+	modFrete := entity.ModalidadeFreteNFe(exit.TipoFrete, exit.ValorFrete)
 
 	payload := focusnfe.NFEPayload{
 		ModalidadeFrete:   modFrete,
@@ -289,23 +279,36 @@ func montarPayloadNFe(
 			RegimeTributario: crtDoRegime(cfg),
 		},
 		Destinatario: focusnfe.NFEDestinatario{
-			CNPJCPF:     cnpjDest,
-			Nome:        razaoDest,
-			Logradouro:  derefStr(exit.DestLogradouro),
-			Numero:      derefStr(exit.DestNumero),
-			Bairro:      derefStr(exit.DestBairro),
-			Municipio:   derefStr(exit.DestMunicipio),
-			UF:          ufDest,
-			CEP:         derefStr(exit.DestCEP),
-			Email:       derefStr(exit.DestEmail),
-			IndicadorIE: indicadorIE,
-			IE:          exit.IEDestinatario,
+			CNPJCPF:         cnpjDest,
+			Nome:            razaoDest,
+			Logradouro:      derefStr(exit.DestLogradouro),
+			Numero:          derefStr(exit.DestNumero),
+			Complemento:     derefStr(exit.DestComplemento),
+			Bairro:          derefStr(exit.DestBairro),
+			Municipio:       derefStr(exit.DestMunicipio),
+			CodigoMunicipio: derefStr(exit.DestCodigoMunicipio),
+			UF:              ufDest,
+			CEP:             derefStr(exit.DestCEP),
+			Telefone:        derefStr(exit.DestTelefone),
+			Email:           derefStr(exit.DestEmail),
+			IndicadorIE:     indicadorIE,
+			IE:              exit.IEDestinatario,
 		},
+		Transportador:         transportadorNFe(exit, modFrete),
+		Entrega:               entregaNFe(exit.LocalEntrega),
 		Items:                 itens,
 		InformacoesAdicionais: derefStr(exit.InformacoesComplementares),
 		FormaPagamento:        formas,
 		Duplicatas:            duplicatas,
 		NotasReferenciadas:    refs,
+	}
+	// Pedido de compra do cliente: cabeçalho (compra/xPed) e cada item
+	// (det/prod/xPed), que é onde o cliente industrial confere.
+	if po := strings.TrimSpace(plano.PedidoCompra); po != "" {
+		payload.PedidoCompra = po
+		for i := range payload.Items {
+			payload.Items[i].PedidoCompra = po
+		}
 	}
 	return payload, retrato
 }
@@ -623,4 +626,21 @@ func aplicarCodigosFiscaisDeUnidade(ctx context.Context, fonte CodigosFiscaisDeU
 		}
 	}
 	return nil
+}
+
+// transportadorNFe: o grupo transporta, se houver transportadora e transporte.
+func transportadorNFe(exit *entity.FiscalExit, modFrete int) *focusnfe.NFETransportador {
+	t := exit.Transportador
+	if t == nil || modFrete == 9 {
+		return nil
+	}
+	return &focusnfe.NFETransportador{CNPJCPF: t.CNPJCPF, Nome: t.Nome, IE: t.IE, Endereco: t.Endereco, Municipio: t.Municipio, UF: t.UF}
+}
+
+func entregaNFe(e *entity.LocalEntrega) *focusnfe.NFELocalEntrega {
+	if e == nil {
+		return nil
+	}
+	return &focusnfe.NFELocalEntrega{CNPJCPF: e.CNPJCPF, Nome: e.Nome, Logradouro: e.Logradouro, Numero: e.Numero, Complemento: e.Complemento,
+		Bairro: e.Bairro, Municipio: e.Municipio, UF: e.UF, CEP: e.CEP}
 }

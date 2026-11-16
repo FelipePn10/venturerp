@@ -20,7 +20,10 @@ type CreateSalesOrderDTO struct {
 	TaxTypeCode               *int64          `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// cliente nesta venda. Na alteração, ausente mantém e vazia limpa.
-	FinalidadeCompra            *string         `json:"finalidade_compra,omitempty"`
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
+	// CustomerPONumber: pedido de compra do cliente (até 15 caracteres, xPed).
+	// Na alteração, ausente mantém e vazio limpa.
+	CustomerPONumber            *string         `json:"customer_po_number,omitempty"`
 	PresenceIndicator           *string         `json:"presence_indicator,omitempty"`
 	SalesChannel                *string         `json:"sales_channel,omitempty"`
 	DefaultNFType               *string         `json:"default_nf_type,omitempty"`
@@ -69,7 +72,10 @@ type UpdateSalesOrderDTO struct {
 	TaxTypeCode               *int64          `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO) vence a do
 	// cliente nesta venda. Na alteração, ausente mantém e vazia limpa.
-	FinalidadeCompra            *string         `json:"finalidade_compra,omitempty"`
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
+	// CustomerPONumber: pedido de compra do cliente (até 15 caracteres, xPed).
+	// Na alteração, ausente mantém e vazio limpa.
+	CustomerPONumber            *string         `json:"customer_po_number,omitempty"`
 	PresenceIndicator           *string         `json:"presence_indicator,omitempty"`
 	SalesChannel                *string         `json:"sales_channel,omitempty"`
 	DefaultNFType               *string         `json:"default_nf_type,omitempty"`

@@ -53,6 +53,7 @@ func toResponse(c *entity.Company) *response.CNPJLookupResponse {
 		Phone:              c.Phone,
 		SimplesOptant:      c.SimplesOptant,
 		MEI:                c.MEI,
+		ShareCapital:       c.ShareCapital,
 		StateRegistration:  c.PrimaryStateRegistration(),
 		Source:             c.Source,
 		Address: response.CNPJAddressResponse{

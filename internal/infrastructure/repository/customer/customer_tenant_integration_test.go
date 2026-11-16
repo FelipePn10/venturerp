@@ -48,7 +48,7 @@ func TestCustomersAreIsolatedByTenant(t *testing.T) {
 	}
 	novo := func(nome string) *entity.Customer {
 		return &entity.Customer{Code: code, Name: nome, DocumentType: "CNPJ", DocumentNumber: "11222333000181",
-			PaymentCondVisibility: "TODOS", IsActive: true, CreatedBy: uuid.UUID(actor)}
+			IsActive: true, CreatedBy: uuid.UUID(actor)}
 	}
 	a, err := repo.CreateCustomer(ctxA, novo("CLIENTE DA EMPRESA A"))
 	if err != nil {

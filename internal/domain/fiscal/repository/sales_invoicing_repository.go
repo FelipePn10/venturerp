@@ -19,6 +19,9 @@ type SalesOrderInvoicingRepository interface {
 	RegistrarFaturamento(ctx context.Context, fiscalExitID int64, estorno bool) (ligada bool, pedidoAtendido bool, err error)
 	// NotasDoPedido lista as notas de saída ativas do pedido.
 	NotasDoPedido(ctx context.Context, salesOrderCode int64) ([]NotaResumo, error)
+	// ItensComCertificado: itens com certificado de qualidade EMITIDO para o
+	// pedido (VINS0700).
+	ItensComCertificado(ctx context.Context, salesOrderCode int64) (map[int64]bool, error)
 	// NomeRepresentante devolve o nome do representante.
 	NomeRepresentante(ctx context.Context, code int64) (string, error)
 	// TravarPedido serializa o faturamento do pedido na empresa: dois usuários

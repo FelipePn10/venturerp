@@ -509,11 +509,13 @@ type FichaCliente struct {
 	MotivoBloqueio         string
 	Cadastro               time.Time
 	LimiteCredito          decimal.Decimal
-	Condicao, Tabela       string
-	Transportadora         string
-	Enderecos              []EnderecoCliente
-	Contatos               []ContatoCliente
-	Filiais                []Parte
+	// Crédito e situação cadastral (VCLI0500): a condição de pagamento e a
+	// tabela de venda não são mais do cliente.
+	ClasseRisco, ValidadeLimite, SituacaoReceita string
+	Transportadora                               string
+	Enderecos                                    []EnderecoCliente
+	Contatos                                     []ContatoCliente
+	Filiais                                      []Parte
 	// Posição comercial na data da impressão.
 	TitulosAbertos    int
 	EmAberto, Vencido decimal.Decimal

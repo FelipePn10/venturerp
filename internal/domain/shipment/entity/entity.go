@@ -99,7 +99,8 @@ type Shipment struct {
 	SalesOrderCode      *int64
 	PurchaseOrderCode   *int64
 	ProductionOrderCode *int64
-	CarrierCode         *int64
+	CarrierCode         *int64 // portador de cobrança (legado)
+	ShippingCarrierID   *int64 // transportadora (shipping_carriers)
 	Status              ShipmentStatus
 	TotalVolumes        int
 
@@ -202,7 +203,8 @@ type ShipmentLoad struct {
 	Code              int64
 	Status            LoadStatus
 	Description       *string
-	CarrierCode       *int64
+	CarrierCode       *int64 // portador de cobrança (legado)
+	ShippingCarrierID *int64 // transportadora (shipping_carriers)
 	VehiclePlate      *string
 	DriverName        *string
 	DriverDocument    *string

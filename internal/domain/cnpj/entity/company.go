@@ -43,6 +43,9 @@ type Company struct {
 	Phone              string
 	SimplesOptant      bool // optante pelo Simples Nacional
 	MEI                bool // microempreendedor individual
+	// ShareCapital: capital social em reais, como texto decimal ("150000.00");
+	// vazio quando a fonte não informa.
+	ShareCapital string
 
 	Address             Address
 	MainActivity        Activity

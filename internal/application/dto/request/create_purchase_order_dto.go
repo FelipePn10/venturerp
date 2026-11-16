@@ -29,14 +29,16 @@ type CreatePurchaseOrderDTO struct {
 	RequestTypeCode  *int64  `json:"request_type_code,omitempty"`
 	CurrencyDate     *string `json:"currency_date,omitempty"`
 	// Transporte
-	FreightType            string          `json:"freight_type,omitempty"`
-	FreightValueType       *string         `json:"freight_value_type,omitempty"`
-	FreightValueMode       *string         `json:"freight_value_mode,omitempty"`
-	FreightValue           decimal.Decimal `json:"freight_value,omitempty"`
-	CarrierCode            *int64          `json:"carrier_code,omitempty"`
-	RedispatchCarrierCode  *int64          `json:"redispatch_carrier_code,omitempty"`
-	RedispatchFreightType  *string         `json:"redispatch_freight_type,omitempty"`
-	RedispatchFreightValue decimal.Decimal `json:"redispatch_freight_value,omitempty"`
+	FreightType                 string          `json:"freight_type,omitempty"`
+	FreightValueType            *string         `json:"freight_value_type,omitempty"`
+	FreightValueMode            *string         `json:"freight_value_mode,omitempty"`
+	FreightValue                decimal.Decimal `json:"freight_value,omitempty"`
+	CarrierCode                 *int64          `json:"carrier_code,omitempty"`
+	ShippingCarrierID           *int64          `json:"shipping_carrier_id,omitempty"`
+	RedispatchShippingCarrierID *int64          `json:"redispatch_shipping_carrier_id,omitempty"`
+	RedispatchCarrierCode       *int64          `json:"redispatch_carrier_code,omitempty"`
+	RedispatchFreightType       *string         `json:"redispatch_freight_type,omitempty"`
+	RedispatchFreightValue      decimal.Decimal `json:"redispatch_freight_value,omitempty"`
 	// Adiantamento / importação / outros
 	AdvanceDate  *string                      `json:"advance_date,omitempty"`
 	AdvanceValue decimal.Decimal              `json:"advance_value,omitempty"`

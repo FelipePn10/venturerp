@@ -781,7 +781,7 @@ func (h *CustomerHandler) ExportCustomerPDF(w http.ResponseWriter, r *http.Reque
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	rows := [][]string{{"Cliente", fmt.Sprintf("%d — %s", customer.Code, customer.Name)}, {"Documento", customer.DocumentNumber}, {"Situação", map[bool]string{true: "Ativo", false: "Inativo"}[customer.IsActive]}, {"Limite de crédito", fmt.Sprintf("R$ %.2f", customer.CreditLimit)}, {"Condição de pagamento", optionalInt(customer.PaymentConditionID)}, {"Tabela de venda", optionalInt(customer.SalesTableID)}, {"Portador", optionalInt(customer.CarrierID)}}
+	rows := [][]string{{"Cliente", fmt.Sprintf("%d — %s", customer.Code, customer.Name)}, {"Documento", customer.DocumentNumber}, {"Situação", map[bool]string{true: "Ativo", false: "Inativo"}[customer.IsActive]}, {"Limite de crédito", fmt.Sprintf("R$ %.2f", customer.CreditLimit)}, {"Classe de risco", stringValue(customer.CreditRiskClass)}, {"Validade do limite", dateValue(customer.CreditLimitExpiresAt)}, {"Situação na Receita", stringValue(customer.RegistrationStatus)}, {"Portador", optionalInt(customer.CarrierCode)}, {"Representante", optionalInt(customer.RepresentativeCode)}, {"Tipo de frete", stringValue(customer.FreightType)}, {"E-mail NF-e", stringValue(customer.NFeEmail)}, {"E-mail cobrança", stringValue(customer.BillingEmail)}}
 	for _, establishment := range establishments {
 		rows = append(rows, []string{"Estabelecimento", fmt.Sprintf("%d — %s — %s", establishment.Code, establishment.Name, establishment.DocumentNumber)})
 	}

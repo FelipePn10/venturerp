@@ -65,7 +65,11 @@ type PurchaseOrder struct {
 	FreightValueType *string // VALOR | PERCENTUAL
 	FreightValueMode *string // UNITARIO | TOTAL
 	FreightValue     decimal.Decimal
-	CarrierCode      *int64
+	CarrierCode      *int64 // portador de cobrança (legado)
+	// ShippingCarrierID: a transportadora (shipping_carriers).
+	ShippingCarrierID *int64
+	// RedispatchShippingCarrierID: a transportadora do redespacho.
+	RedispatchShippingCarrierID *int64
 	// Redespacho
 	RedispatchCarrierCode  *int64
 	RedispatchFreightType  *string

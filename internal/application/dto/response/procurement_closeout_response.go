@@ -16,6 +16,7 @@ type ReceivingNoticeResponse struct {
 	SupplierCode      *int64                        `json:"supplier_code,omitempty"`
 	PurchaseOrderCode *int64                        `json:"purchase_order_code,omitempty"`
 	CarrierCode       *int64                        `json:"carrier_code,omitempty"`
+	ShippingCarrierID *int64                        `json:"shipping_carrier_id,omitempty"`
 	Status            string                        `json:"status"`
 	Dock              *string                       `json:"dock,omitempty"`
 	ScheduledAt       *time.Time                    `json:"scheduled_at,omitempty"`

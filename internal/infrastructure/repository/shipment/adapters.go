@@ -67,9 +67,10 @@ func (a *PurchaseOrderAdapter) GetByCode(ctx context.Context, code int64) (*ship
 	// O pedido de compra não guarda peso: o romaneio nasce com peso zero e o
 	// usuário informa o da carga. Antes ia o VALOR do frete (R$) como peso (kg).
 	h := &shipment_uc.PurchaseOrderHeader{
-		Code:         po.Code,
-		CarrierCode:  po.CarrierCode,
-		SupplierCode: po.SupplierCode,
+		Code:              po.Code,
+		CarrierCode:       po.CarrierCode,
+		ShippingCarrierID: po.ShippingCarrierID,
+		SupplierCode:      po.SupplierCode,
 	}
 	for _, it := range po.Items {
 		h.Items = append(h.Items, shipment_uc.PurchaseOrderItemHeader{

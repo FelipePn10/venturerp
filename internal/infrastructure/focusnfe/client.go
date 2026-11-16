@@ -131,17 +131,32 @@ type NFEEmitente struct {
 }
 
 type NFEDestinatario struct {
-	CNPJCPF     string  `json:"cnpj_cpf"`
-	Nome        string  `json:"nome"`
-	Logradouro  string  `json:"logradouro,omitempty"`
-	Numero      string  `json:"numero,omitempty"`
-	Bairro      string  `json:"bairro,omitempty"`
-	Municipio   string  `json:"municipio,omitempty"`
-	UF          string  `json:"uf,omitempty"`
-	CEP         string  `json:"cep,omitempty"`
-	Email       string  `json:"email,omitempty"`
-	IndicadorIE int     `json:"indicador_ie"`
-	IE          *string `json:"ie,omitempty"`
+	CNPJCPF     string `json:"cnpj_cpf"`
+	Nome        string `json:"nome"`
+	Logradouro  string `json:"logradouro,omitempty"`
+	Numero      string `json:"numero,omitempty"`
+	Complemento string `json:"complemento,omitempty"`
+	Bairro      string `json:"bairro,omitempty"`
+	Municipio   string `json:"municipio,omitempty"`
+	// CodigoMunicipio (IBGE): opcional; sem ele a Focus acha pelo nome e UF.
+	CodigoMunicipio string  `json:"codigo_municipio,omitempty"`
+	Telefone        string  `json:"telefone,omitempty"`
+	UF              string  `json:"uf,omitempty"`
+	CEP             string  `json:"cep,omitempty"`
+	Email           string  `json:"email,omitempty"`
+	IndicadorIE     int     `json:"indicador_ie"`
+	IE              *string `json:"ie,omitempty"`
+}
+
+// NFETransportador é o grupo transporta (campos *_transportador da Focus).
+type NFETransportador struct {
+	CNPJCPF, Nome, IE, Endereco, Municipio, UF string
+}
+
+// NFELocalEntrega é o grupo entrega (campos *_entrega da Focus); o código do
+// município a Focus acha pelo nome e UF.
+type NFELocalEntrega struct {
+	CNPJCPF, Nome, Logradouro, Numero, Complemento, Bairro, Municipio, UF, CEP string
 }
 
 type NFEItem struct {
@@ -174,7 +189,9 @@ type NFEItem struct {
 	// com benefício). Vazio não vai no payload.
 	CodigoBeneficioFiscal string `json:"codigo_beneficio_fiscal,omitempty"`
 	// InformacoesAdicionaisItem é o infAdProd: aqui vão os números de série.
-	InformacoesAdicionaisItem      string   `json:"informacoes_adicionais_item,omitempty"`
+	InformacoesAdicionaisItem string `json:"informacoes_adicionais_item,omitempty"`
+	// PedidoCompra: det/prod/xPed (até 15 caracteres; "pedido_compra" na Focus).
+	PedidoCompra                   string   `json:"-"`
 	ValorICMSDiferido              *float64 `json:"valor_icms_diferido,omitempty"`
 	ModalidadeBaseCalculoICMSST    *int     `json:"modalidade_determinacao_bc_icms_st,omitempty"`
 	BaseCalculoICMSST              *float64 `json:"valor_base_calculo_icms_st,omitempty"`
@@ -269,10 +286,17 @@ type NFEPayload struct {
 	// NotasReferenciadas: a nota de origem (devolução, complementar, ajuste).
 	NotasReferenciadas []NFERef `json:"notas_referenciadas,omitempty"`
 	// Totais e frete da nota.
-	ModalidadeFrete                    int     `json:"modalidade_frete"`
-	ValorProdutos, ValorTotal          float64 `json:"-"`
-	ValorFrete, ValorSeguro, ValorDesc float64 `json:"-"`
-	InformacoesAdicionais              string  `json:"-"`
+	ModalidadeFrete int `json:"modalidade_frete"`
+	// Transportador (grupo transporta) e Entrega (local de entrega diferente do
+	// endereço do destinatário). nil = não vão na nota.
+	Transportador                      *NFETransportador `json:"-"`
+	Entrega                            *NFELocalEntrega  `json:"-"`
+	ValorProdutos, ValorTotal          float64           `json:"-"`
+	ValorFrete, ValorSeguro, ValorDesc float64           `json:"-"`
+	InformacoesAdicionais              string            `json:"-"`
+	// PedidoCompra: número do pedido de compra do cliente (compra/xPed,
+	// campo "pedido_compra" da Focus).
+	PedidoCompra string `json:"-"`
 }
 
 // MarshalJSON escreve a nota no formato da API v2 da Focus: campos planos
@@ -308,9 +332,38 @@ func (p NFEPayload) MarshalJSON() ([]byte, error) {
 	}
 	for k, v := range map[string]string{"logradouro_destinatario": d.Logradouro, "numero_destinatario": d.Numero,
 		"bairro_destinatario": d.Bairro, "municipio_destinatario": d.Municipio, "uf_destinatario": d.UF,
-		"cep_destinatario": soDigitos(d.CEP), "email_destinatario": d.Email} {
+		"cep_destinatario": soDigitos(d.CEP), "email_destinatario": d.Email,
+		"complemento_destinatario": d.Complemento, "codigo_municipio_destinatario": soDigitos(d.CodigoMunicipio),
+		"telefone_destinatario": soDigitos(d.Telefone)} {
 		if strings.TrimSpace(v) != "" {
 			m[k] = strings.TrimSpace(v)
+		}
+	}
+	if t := p.Transportador; t != nil {
+		if doc := soDigitos(t.CNPJCPF); len(doc) == 11 {
+			m["cpf_transportador"] = doc
+		} else if doc != "" {
+			m["cnpj_transportador"] = doc
+		}
+		for k, v := range map[string]string{"nome_transportador": t.Nome, "inscricao_estadual_transportador": soDigitos(t.IE),
+			"endereco_transportador": t.Endereco, "municipio_transportador": t.Municipio, "uf_transportador": t.UF} {
+			if v = strings.TrimSpace(v); v != "" {
+				m[k] = truncar(v, 60)
+			}
+		}
+	}
+	if e := p.Entrega; e != nil {
+		if doc := soDigitos(e.CNPJCPF); len(doc) == 11 {
+			m["cpf_entrega"] = doc
+		} else if doc != "" {
+			m["cnpj_entrega"] = doc
+		}
+		for k, v := range map[string]string{"nome_entrega": e.Nome, "logradouro_entrega": e.Logradouro, "numero_entrega": e.Numero,
+			"complemento_entrega": e.Complemento, "bairro_entrega": e.Bairro, "municipio_entrega": e.Municipio, "uf_entrega": e.UF,
+			"cep_entrega": soDigitos(e.CEP)} {
+			if v = strings.TrimSpace(v); v != "" {
+				m[k] = v
+			}
 		}
 	}
 	if p.ValorProdutos > 0 {
@@ -330,6 +383,9 @@ func (p NFEPayload) MarshalJSON() ([]byte, error) {
 	}
 	if strings.TrimSpace(p.InformacoesAdicionais) != "" {
 		m["informacoes_adicionais_contribuinte"] = p.InformacoesAdicionais
+	}
+	if po := strings.TrimSpace(p.PedidoCompra); po != "" {
+		m["pedido_compra"] = po
 	}
 	itens := make([]map[string]any, 0, len(p.Items))
 	for _, it := range p.Items {
@@ -451,6 +507,9 @@ func (it NFEItem) campos() map[string]any {
 	}
 	if strings.TrimSpace(it.InformacoesAdicionaisItem) != "" {
 		m["informacoes_adicionais_item"] = strings.TrimSpace(it.InformacoesAdicionaisItem)
+	}
+	if po := strings.TrimSpace(it.PedidoCompra); po != "" {
+		m["pedido_compra"] = po
 	}
 	if strings.TrimSpace(it.CodigoBeneficioFiscal) != "" {
 		m["codigo_beneficio_fiscal"] = strings.TrimSpace(it.CodigoBeneficioFiscal)
@@ -1281,4 +1340,13 @@ type NaoEncontradaError struct {
 
 func (e *NaoEncontradaError) Error() string {
 	return "a Focus não recebeu a NF-e com a referência " + e.Ref
+}
+
+// truncar corta em n caracteres (não bytes): o layout limita o tamanho do campo.
+func truncar(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }

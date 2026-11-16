@@ -14,6 +14,7 @@ type CNPJLookupResponse struct {
 	Phone              string `json:"phone"`
 	SimplesOptant      bool   `json:"simples_optant"`
 	MEI                bool   `json:"mei"`
+	ShareCapital       string `json:"share_capital,omitempty"` // capital social, texto decimal
 
 	// StateRegistration is the IE chosen for the company's own UF (best match);
 	// the full list is in StateRegistrations.

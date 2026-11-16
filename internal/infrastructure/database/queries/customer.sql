@@ -399,37 +399,145 @@ INSERT INTO customers (
     code, corporate_code, is_corporate, name, trade_name,
     document_type, document_number, state_registration, municipal_registration,
     suframa_code, suframa_expiry,
-    region_id, market_segment_id, customer_type_id,
-    payment_condition_id, sales_table_id, carrier_id, carrier_group_id,
-    invoice_type_id, tax_type_id, payment_cond_visibility,
-    credit_limit, website, created_by, enterprise_id, finalidade_compra
+    region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id,
+    credit_limit, website, created_by, enterprise_id, finalidade_compra,
+    ie_indicator, tax_regime, main_cnae, nfe_email, billing_email,
+    representative_code, shipping_carrier_id, freight_type,
+    requires_customer_po, requires_quality_cert, allows_partial_billing,
+    receiving_notes, commercial_notes, financial_notes
 ) VALUES (
-    $1, $2, $3, $4, $5,
-    $6, $7, $8, $9,
-    $10, $11,
-    $12, $13, $14,
-    $15, $16, $17, $18,
-    $19, $20, $21,
-    $22, $23, $24, $25, sqlc.narg(finalidade_compra)::varchar
+    sqlc.arg(code), sqlc.narg(corporate_code), sqlc.arg(is_corporate), sqlc.arg(name), sqlc.narg(trade_name),
+    sqlc.arg(document_type), sqlc.arg(document_number), sqlc.narg(state_registration), sqlc.narg(municipal_registration),
+    sqlc.narg(suframa_code), sqlc.narg(suframa_expiry),
+    sqlc.narg(region_id), sqlc.narg(market_segment_id), sqlc.narg(customer_type_id), sqlc.narg(carrier_id), sqlc.narg(tax_type_id),
+    sqlc.arg(credit_limit), sqlc.narg(website), sqlc.arg(created_by), sqlc.arg(enterprise_id), sqlc.narg(finalidade_compra)::varchar,
+    sqlc.narg(ie_indicator)::varchar, sqlc.narg(tax_regime)::varchar, sqlc.narg(main_cnae)::varchar, sqlc.narg(nfe_email)::varchar, sqlc.narg(billing_email)::varchar,
+    sqlc.narg(representative_code)::bigint, sqlc.narg(shipping_carrier_id)::bigint, sqlc.narg(freight_type)::varchar,
+    sqlc.arg(requires_customer_po), sqlc.arg(requires_quality_cert), sqlc.arg(allows_partial_billing),
+    sqlc.narg(receiving_notes)::text, sqlc.narg(commercial_notes)::text, sqlc.narg(financial_notes)::text
 ) RETURNING *;
 
 -- name: UpdateCustomer :one
+-- O limite de crédito não passa por aqui: só muda por SetCustomerCredit, que
+-- grava a trilha da análise.
 UPDATE customers
-SET name = $2, trade_name = $3, state_registration = $4, municipal_registration = $5,
-    suframa_code = $6, suframa_expiry = $7,
-    region_id = $8, market_segment_id = $9, customer_type_id = $10,
-    payment_condition_id = $11, sales_table_id = $12, carrier_id = $13,
-    carrier_group_id = $14, invoice_type_id = $15, tax_type_id = $16,
-    payment_cond_visibility = $17, credit_limit = $18, website = $19,
-    is_active = $20, finalidade_compra = sqlc.narg(finalidade_compra)::varchar, updated_at = NOW()
-WHERE id = $1 AND enterprise_id = sqlc.arg(enterprise_id)
+SET name = sqlc.arg(name), trade_name = sqlc.narg(trade_name),
+    state_registration = sqlc.narg(state_registration), municipal_registration = sqlc.narg(municipal_registration),
+    suframa_code = sqlc.narg(suframa_code), suframa_expiry = sqlc.narg(suframa_expiry),
+    corporate_code = sqlc.narg(corporate_code), is_corporate = sqlc.arg(is_corporate),
+    region_id = sqlc.narg(region_id), market_segment_id = sqlc.narg(market_segment_id),
+    customer_type_id = sqlc.narg(customer_type_id), carrier_id = sqlc.narg(carrier_id), tax_type_id = sqlc.narg(tax_type_id),
+    website = sqlc.narg(website), finalidade_compra = sqlc.narg(finalidade_compra)::varchar,
+    ie_indicator = sqlc.narg(ie_indicator)::varchar, tax_regime = sqlc.narg(tax_regime)::varchar,
+    main_cnae = sqlc.narg(main_cnae)::varchar, nfe_email = sqlc.narg(nfe_email)::varchar,
+    billing_email = sqlc.narg(billing_email)::varchar,
+    representative_code = sqlc.narg(representative_code)::bigint, shipping_carrier_id = sqlc.narg(shipping_carrier_id)::bigint,
+    freight_type = sqlc.narg(freight_type)::varchar,
+    requires_customer_po = sqlc.arg(requires_customer_po), requires_quality_cert = sqlc.arg(requires_quality_cert),
+    allows_partial_billing = sqlc.arg(allows_partial_billing),
+    receiving_notes = sqlc.narg(receiving_notes)::text, commercial_notes = sqlc.narg(commercial_notes)::text,
+    financial_notes = sqlc.narg(financial_notes)::text,
+    updated_at = NOW()
+WHERE id = sqlc.arg(id) AND enterprise_id = sqlc.arg(enterprise_id)
 RETURNING *;
+
+-- name: SetCustomerCredit :execrows
+UPDATE customers
+SET credit_limit = sqlc.arg(credit_limit), credit_limit_suggested = sqlc.arg(credit_limit_suggested),
+    credit_score = sqlc.arg(credit_score), credit_risk_class = sqlc.arg(credit_risk_class),
+    credit_limit_expires_at = sqlc.arg(credit_limit_expires_at), credit_reviewed_at = NOW(), updated_at = NOW()
+WHERE code = sqlc.arg(code) AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: SetCustomerRegistration :execrows
+-- Situação cadastral lida na Receita. Os campos que a consulta não trouxe
+-- ficam como estavam.
+UPDATE customers
+SET registration_status = sqlc.arg(registration_status), registration_checked_at = NOW(),
+    opening_date = COALESCE(sqlc.narg(opening_date), opening_date),
+    share_capital = COALESCE(sqlc.narg(share_capital), share_capital),
+    company_size = COALESCE(NULLIF(sqlc.arg(company_size)::varchar, ''), company_size),
+    legal_nature = COALESCE(NULLIF(sqlc.arg(legal_nature)::varchar, ''), legal_nature),
+    main_cnae = COALESCE(main_cnae, NULLIF(sqlc.arg(main_cnae)::varchar, '')),
+    updated_at = NOW()
+WHERE code = sqlc.arg(code) AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: SetCustomerActive :execrows
+UPDATE customers SET is_active = sqlc.arg(is_active), updated_at = NOW()
+WHERE code = sqlc.arg(code) AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: DeleteCustomer :execrows
+DELETE FROM customers WHERE code = sqlc.arg(code) AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: ListCustomersForRegistrationCheck :many
+-- Clientes CNPJ ativos cuja situação na Receita não é conferida há `days` dias,
+-- de todas as empresas (o agendador roda fora de requisição).
+SELECT c.enterprise_id, e.code AS enterprise_code, c.code, c.document_number, c.blocked, c.created_by
+  FROM customers c
+  JOIN enterprise e ON e.id = c.enterprise_id
+ WHERE c.document_type = 'CNPJ' AND c.is_active
+   AND (c.registration_checked_at IS NULL
+        OR c.registration_checked_at < NOW() - make_interval(days => COALESCE(
+             (SELECT p.registration_check_days FROM customer_credit_policies p WHERE p.enterprise_id = c.enterprise_id), 30)))
+   -- Quem falhou há menos de um dia espera a vez dos outros.
+   AND (c.registration_attempt_at IS NULL OR c.registration_attempt_at < NOW() - interval '1 day')
+ ORDER BY c.registration_attempt_at NULLS FIRST, c.registration_checked_at NULLS FIRST
+ LIMIT sqlc.arg(max_rows);
+
+-- name: MarkRegistrationAttempt :execrows
+UPDATE customers SET registration_attempt_at = NOW()
+WHERE code = sqlc.arg(code) AND enterprise_id = sqlc.arg(enterprise_id);
+
+-- name: GetCreditPolicy :one
+SELECT * FROM customer_credit_policies WHERE enterprise_id = $1;
+
+-- name: UpsertCreditPolicy :one
+INSERT INTO customer_credit_policies (
+    enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
+    overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at
+) VALUES (
+    sqlc.arg(enterprise_id), sqlc.arg(max_limit), sqlc.arg(new_customer_capital_pct), sqlc.arg(new_customer_cap), sqlc.arg(override_tolerance_pct),
+    sqlc.arg(overdue_block_days), sqlc.arg(history_months), sqlc.arg(validity_months_a), sqlc.arg(validity_months_b), sqlc.arg(validity_months_c),
+    sqlc.arg(validity_months_d), sqlc.arg(validity_months_e), sqlc.arg(registration_check_days), sqlc.arg(updated_by), NOW()
+)
+ON CONFLICT (enterprise_id) DO UPDATE SET
+    max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
+    new_customer_cap = EXCLUDED.new_customer_cap, override_tolerance_pct = EXCLUDED.override_tolerance_pct,
+    overdue_block_days = EXCLUDED.overdue_block_days, history_months = EXCLUDED.history_months,
+    validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
+    validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
+    validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
+    updated_by = EXCLUDED.updated_by, updated_at = NOW()
+RETURNING *;
+
+-- name: CreateCreditReview :one
+INSERT INTO customer_credit_reviews (
+    enterprise_id, customer_code, origin, suggested_limit, approved_limit, previous_limit,
+    score, risk_class, expires_at, deviates, reason, factors, created_by
+) VALUES (
+    sqlc.arg(enterprise_id), sqlc.arg(customer_code), sqlc.arg(origin), sqlc.arg(suggested_limit), sqlc.arg(approved_limit), sqlc.narg(previous_limit),
+    sqlc.arg(score), sqlc.arg(risk_class), sqlc.arg(expires_at), sqlc.arg(deviates), sqlc.narg(reason), sqlc.arg(factors), sqlc.arg(created_by)
+) RETURNING *;
+
+-- name: ListCreditReviews :many
+-- Só as análises do cadastro atual: a trilha de um cliente excluído fica
+-- guardada, mas não aparece para outro cliente criado depois com o mesmo código.
+SELECT r.*, COALESCE(u.name, '')::text AS created_by_name FROM customer_credit_reviews r
+  JOIN customers c ON c.code = r.customer_code AND c.enterprise_id = r.enterprise_id
+  LEFT JOIN users u ON u.id = r.created_by
+ WHERE r.enterprise_id = sqlc.arg(enterprise_id) AND r.customer_code = sqlc.arg(customer_code)
+   AND r.created_at >= c.created_at
+ ORDER BY r.created_at DESC, r.id DESC;
 
 -- name: GetCustomerByCode :one
 SELECT * FROM customers WHERE code = $1 AND enterprise_id = $2;
 
 -- name: GetCustomerByDocument :one
-SELECT * FROM customers WHERE document_number = $1 AND enterprise_id = $2 LIMIT 1;
+-- Compara só os dígitos: cadastro antigo pode ter o documento com pontuação.
+SELECT * FROM customers
+WHERE regexp_replace(document_number, '\D', '', 'g') = regexp_replace(sqlc.arg(document_number)::TEXT, '\D', '', 'g')
+  AND enterprise_id = sqlc.arg(enterprise_id)
+ORDER BY code LIMIT 1;
 
 -- name: ListCustomers :many
 SELECT * FROM customers
