@@ -525,18 +525,44 @@ type CustomerResponse struct {
 	SuframaCode           *string                   `json:"suframa_code,omitempty"`
 	SuframaExpiry         *time.Time                `json:"suframa_expiry,omitempty"`
 	RegionID              *int64                    `json:"region_id,omitempty"`
+	RegionCode            *int64                    `json:"region_code,omitempty"`
 	MarketSegmentID       *int64                    `json:"market_segment_id,omitempty"`
+	MarketSegmentCode     *int64                    `json:"market_segment_code,omitempty"`
 	CustomerTypeID        *int64                    `json:"customer_type_id,omitempty"`
-	PaymentConditionID    *int64                    `json:"payment_condition_id,omitempty"`
-	SalesTableID          *int64                    `json:"sales_table_id,omitempty"`
+	CustomerTypeCode      *int64                    `json:"customer_type_code,omitempty"`
 	CarrierID             *int64                    `json:"carrier_id,omitempty"`
-	CarrierGroupID        *int64                    `json:"carrier_group_id,omitempty"`
-	InvoiceTypeID         *int64                    `json:"invoice_type_id,omitempty"`
+	CarrierCode           *int64                    `json:"carrier_code,omitempty"`
 	TaxTypeID             *int64                    `json:"tax_type_id,omitempty"`
+	TaxTypeCode           *int64                    `json:"tax_type_code,omitempty"`
 	FinalidadeCompra      *string                   `json:"finalidade_compra,omitempty"`
-	PaymentCondVisibility string                    `json:"payment_cond_visibility"`
 	CreditLimit           float64                   `json:"credit_limit"`
 	Website               *string                   `json:"website,omitempty"`
+	IEIndicator           *string                   `json:"ie_indicator,omitempty"`
+	TaxRegime             *string                   `json:"tax_regime,omitempty"`
+	MainCNAE              *string                   `json:"main_cnae,omitempty"`
+	NFeEmail              *string                   `json:"nfe_email,omitempty"`
+	BillingEmail          *string                   `json:"billing_email,omitempty"`
+	RepresentativeCode    *int64                    `json:"representative_code,omitempty"`
+	ShippingCarrierID     *int64                    `json:"shipping_carrier_id,omitempty"`
+	FreightType           *string                   `json:"freight_type,omitempty"`
+	RequiresCustomerPO    bool                      `json:"requires_customer_po"`
+	RequiresQualityCert   bool                      `json:"requires_quality_cert"`
+	AllowsPartialBilling  bool                      `json:"allows_partial_billing"`
+	ReceivingNotes        *string                   `json:"receiving_notes,omitempty"`
+	CommercialNotes       *string                   `json:"commercial_notes,omitempty"`
+	FinancialNotes        *string                   `json:"financial_notes,omitempty"`
+	RegistrationStatus    *string                   `json:"registration_status,omitempty"`
+	RegistrationCheckedAt *time.Time                `json:"registration_checked_at,omitempty"`
+	OpeningDate           *time.Time                `json:"opening_date,omitempty"`
+	ShareCapital          *float64                  `json:"share_capital,omitempty"`
+	CompanySize           *string                   `json:"company_size,omitempty"`
+	LegalNature           *string                   `json:"legal_nature,omitempty"`
+	CreditScore           *int32                    `json:"credit_score,omitempty"`
+	CreditRiskClass       *string                   `json:"credit_risk_class,omitempty"`
+	CreditLimitSuggested  *float64                  `json:"credit_limit_suggested,omitempty"`
+	CreditLimitExpiresAt  *time.Time                `json:"credit_limit_expires_at,omitempty"`
+	CreditLimitExpired    bool                      `json:"credit_limit_expired"`
+	CreditReviewedAt      *time.Time                `json:"credit_reviewed_at,omitempty"`
 	IsActive              bool                      `json:"is_active"`
 	Blocked               bool                      `json:"blocked"`
 	BlockReason           *string                   `json:"block_reason,omitempty"`
@@ -561,12 +587,117 @@ type CustomerAddressResponse struct {
 }
 
 type CustomerContactResponse struct {
-	ID            int64   `json:"id"`
-	ContactTypeID *int64  `json:"contact_type_id,omitempty"`
-	Name          string  `json:"name"`
-	Email         *string `json:"email,omitempty"`
-	Phone         *string `json:"phone,omitempty"`
-	Mobile        *string `json:"mobile,omitempty"`
-	Position      *string `json:"position,omitempty"`
-	IsPrimary     bool    `json:"is_primary"`
+	ID              int64   `json:"id"`
+	ContactTypeID   *int64  `json:"contact_type_id,omitempty"`
+	ContactTypeCode *int64  `json:"contact_type_code,omitempty"`
+	Name            string  `json:"name"`
+	Email           *string `json:"email,omitempty"`
+	Phone           *string `json:"phone,omitempty"`
+	Mobile          *string `json:"mobile,omitempty"`
+	Position        *string `json:"position,omitempty"`
+	IsPrimary       bool    `json:"is_primary"`
+}
+
+// CreditSuggestionResponse é a análise de crédito explicada.
+type CreditSuggestionResponse struct {
+	CustomerCode    *int64                 `json:"customer_code,omitempty"`
+	Score           int                    `json:"score"`
+	RiskClass       string                 `json:"risk_class"`
+	SuggestedLimit  float64                `json:"suggested_limit"`
+	CurrentLimit    *float64               `json:"current_limit,omitempty"`
+	ExpiresAt       time.Time              `json:"expires_at"`
+	HasHistory      bool                   `json:"has_history"`
+	HardStop        bool                   `json:"hard_stop"`
+	Deteriorating   bool                   `json:"deteriorating"`
+	GroupMembers    []int64                `json:"group_members"`
+	RegistrationOK  bool                   `json:"registration_checked"`
+	MaxWithoutAdmin float64                `json:"max_without_admin"`
+	Factors         []CreditFactorResponse `json:"factors"`
+}
+
+type CreditFactorResponse struct {
+	Code      string `json:"code"`
+	Label     string `json:"label"`
+	Points    int    `json:"points"`
+	MaxPoints int    `json:"max_points"`
+	Detail    string `json:"detail"`
+	Blocking  bool   `json:"blocking,omitempty"`
+}
+
+type CreditReviewResponse struct {
+	ID             int64                  `json:"id"`
+	Origin         string                 `json:"origin"`
+	SuggestedLimit float64                `json:"suggested_limit"`
+	ApprovedLimit  float64                `json:"approved_limit"`
+	PreviousLimit  *float64               `json:"previous_limit,omitempty"`
+	Score          int                    `json:"score"`
+	RiskClass      string                 `json:"risk_class"`
+	ExpiresAt      time.Time              `json:"expires_at"`
+	Deviates       bool                   `json:"deviates"`
+	Reason         *string                `json:"reason,omitempty"`
+	Factors        []CreditFactorResponse `json:"factors"`
+	CreatedBy      string                 `json:"created_by"`
+	CreatedByName  string                 `json:"created_by_name"`
+	CreatedAt      time.Time              `json:"created_at"`
+}
+
+type CreditPolicyResponse struct {
+	MaxLimit              float64 `json:"max_limit"`
+	NewCustomerCapitalPct float64 `json:"new_customer_capital_pct"`
+	NewCustomerCap        float64 `json:"new_customer_cap"`
+	OverrideTolerancePct  float64 `json:"override_tolerance_pct"`
+	OverdueBlockDays      int     `json:"overdue_block_days"`
+	HistoryMonths         int     `json:"history_months"`
+	ValidityMonthsA       int     `json:"validity_months_a"`
+	ValidityMonthsB       int     `json:"validity_months_b"`
+	ValidityMonthsC       int     `json:"validity_months_c"`
+	ValidityMonthsD       int     `json:"validity_months_d"`
+	ValidityMonthsE       int     `json:"validity_months_e"`
+	RegistrationCheckDays int     `json:"registration_check_days"`
+}
+
+type CustomerUsageResponse struct {
+	Code  string `json:"code"`
+	Label string `json:"label"`
+	Total int64  `json:"total"`
+	Open  int64  `json:"open"`
+}
+
+// CustomerUsageReportResponse diz o que se pode fazer com o cadastro e por quê.
+type CustomerUsageReportResponse struct {
+	CanDelete        bool                    `json:"can_delete"`
+	CanInactivate    bool                    `json:"can_inactivate"`
+	DeleteReason     string                  `json:"delete_reason,omitempty"`
+	InactivateReason string                  `json:"inactivate_reason,omitempty"`
+	Usages           []CustomerUsageResponse `json:"usages"`
+}
+
+type MonthValueResponse struct {
+	Month string  `json:"month"`
+	Value float64 `json:"value"`
+}
+
+type CustomerOverviewResponse struct {
+	OpenOrders         int64                `json:"open_orders"`
+	OpenOrdersValue    float64              `json:"open_orders_value"`
+	ProductionOrders   int64                `json:"production_orders_in_progress"`
+	OpenQuotations     int64                `json:"open_quotations"`
+	OpenServiceOrders  int64                `json:"open_service_orders"`
+	OpenReceivables    float64              `json:"open_receivables"`
+	OverdueReceivables float64              `json:"overdue_receivables"`
+	MaxOpenOverdueDays int                  `json:"max_open_overdue_days"`
+	Billed12m          float64              `json:"billed_12m"`
+	LastOrderDate      *time.Time           `json:"last_order_date,omitempty"`
+	LastInvoiceDate    *time.Time           `json:"last_invoice_date,omitempty"`
+	AvgDelayDays       float64              `json:"avg_delay_days"`
+	MaxDelayDays       int                  `json:"max_delay_days"`
+	OnTimePct          *float64             `json:"on_time_pct,omitempty"`
+	GroupMembers       int                  `json:"group_members"`
+	GroupExposure      float64              `json:"group_exposure"`
+	ConcentrationPct   float64              `json:"concentration_pct"`
+	CreditLimit        float64              `json:"credit_limit"`
+	CreditUsed         float64              `json:"credit_used"`
+	CreditAvailable    float64              `json:"credit_available"`
+	BillingByMonth     []MonthValueResponse `json:"billing_by_month"`
+	Alerts             []string             `json:"alerts"`
 }

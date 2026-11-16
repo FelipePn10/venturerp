@@ -16,7 +16,8 @@ type ReceivingNotice struct {
 	NoticeNumber      int64
 	SupplierCode      *int64
 	PurchaseOrderCode *int64
-	CarrierCode       *int64
+	CarrierCode       *int64 // portador de cobrança (legado)
+	ShippingCarrierID *int64 // transportadora (shipping_carriers)
 	Status            string
 	Dock              *string
 	ScheduledAt       *time.Time

@@ -257,8 +257,8 @@ a explicação; nota com baixa passa.
 ### Destinatário
 
 Resolvido no servidor pelo cadastro do cliente da remessa, com
-`fiscal_uc.ResolvedorDeDestinatario` — o mesmo caminho da nota de venda (entrega →
-cobrança → padrão → primeiro). A tela **não** monta endereço fiscal: fazer isso em
+`fiscal_uc.ResolvedorDeDestinatario` — o mesmo caminho da nota de venda (comercial →
+cobrança → outro → entrega; no mesmo tipo, o padrão). A tela **não** monta endereço fiscal: fazer isso em
 dois lugares faria o mesmo cliente sair com endereço diferente em cada tipo de nota.
 
 `DadosDoDestinatario` é um **alias** do tipo do módulo fiscal, não uma cópia — assim

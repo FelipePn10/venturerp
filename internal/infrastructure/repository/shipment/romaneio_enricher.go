@@ -2,7 +2,11 @@ package shipment
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
@@ -11,6 +15,7 @@ import (
 	itemvo "github.com/FelipePn10/panossoerp/internal/domain/items/valueobject"
 	supplierrepo "github.com/FelipePn10/panossoerp/internal/domain/supplier/repository"
 	romaneioExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/romaneio"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
 // RomaneioEnricherAdapter fills a romaneio with real company, party, carrier and
@@ -25,6 +30,10 @@ type RomaneioEnricherAdapter struct {
 	Sales      *SalesOrderAdapter
 	Purchases  *PurchaseOrderAdapter
 	Production *ProductionOrderAdapter
+	// DB lê a transportadora (shipping_carriers + fornecedor).
+	DB interface {
+		QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	}
 }
 
 var _ shipment_uc.RomaneioEnricher = (*RomaneioEnricherAdapter)(nil)
@@ -80,15 +89,27 @@ func (a *RomaneioEnricherAdapter) GetSupplier(ctx context.Context, code int64) (
 	}, nil
 }
 
-func (a *RomaneioEnricherAdapter) GetCarrier(ctx context.Context, code int64) (romaneioExport.CarrierInfo, error) {
-	c, err := a.Customers.GetCarrierByCode(ctx, code)
-	if err != nil || c == nil {
+func (a *RomaneioEnricherAdapter) GetCarrier(ctx context.Context, shippingCarrierID int64) (romaneioExport.CarrierInfo, error) {
+	if a.DB == nil {
+		return romaneioExport.CarrierInfo{}, nil
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
 		return romaneioExport.CarrierInfo{}, err
 	}
-	return romaneioExport.CarrierInfo{
-		Name:        c.Description,
-		FreightType: string(c.BillingType),
-	}, nil
+	var nome, doc string
+	err = a.DB.QueryRow(ctx, `
+		SELECT s.name, s.document_number
+		  FROM shipping_carriers c
+		  JOIN suppliers s ON s.code = c.supplier_code AND s.enterprise_id = c.enterprise_id
+		 WHERE c.id = $1 AND c.enterprise_id = $2`, shippingCarrierID, empresa).Scan(&nome, &doc)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return romaneioExport.CarrierInfo{}, nil
+	}
+	if err != nil {
+		return romaneioExport.CarrierInfo{}, fmt.Errorf("lendo a transportadora do romaneio: %w", err)
+	}
+	return romaneioExport.CarrierInfo{Name: nome, CNPJCPF: maskCNPJ(doc)}, nil
 }
 
 func (a *RomaneioEnricherAdapter) GetItemDetails(ctx context.Context, code int64) (romaneioExport.RomaneioItem, error) {

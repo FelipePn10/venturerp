@@ -254,19 +254,19 @@ func (c *Consultas) FichaCliente(ctx context.Context, t uc.Tenant, code int64) (
 		       COALESCE(cu.municipal_registration,''), COALESCE(cu.suframa_code,''), COALESCE(cu.website,''), cu.is_active, cu.blocked, COALESCE(cu.block_reason,''),
 		       cu.created_at, COALESCE(cu.credit_limit,0)::text, COALESCE(cu.finalidade_compra,''),
 		       COALESCE(ct.description,''), COALESCE(rg.description,''), COALESCE(ms.description,''),
-		       COALESCE(pc.description,''), COALESCE(st.code||' — '||st.description,''), COALESCE(tr.name,''),
+		       COALESCE(cu.credit_risk_class,''), COALESCE(to_char(cu.credit_limit_expires_at, 'DD/MM/YYYY'),''),
+		       COALESCE(cu.registration_status,''), COALESCE(tr.name,''),
 		       COALESCE((SELECT m.code||' — '||m.name FROM customers m WHERE m.code = cu.corporate_code AND m.enterprise_id = cu.enterprise_id AND m.code <> cu.code),'')
 		  FROM customers cu
 		  LEFT JOIN customer_types ct ON ct.id = cu.customer_type_id
 		  LEFT JOIN regions rg ON rg.id = cu.region_id
 		  LEFT JOIN market_segments ms ON ms.id = cu.market_segment_id
-		  LEFT JOIN payment_conditions pc ON pc.id = cu.payment_condition_id
-		  LEFT JOIN sales_tables st ON st.id = cu.sales_table_id
-		  LEFT JOIN suppliers tr ON tr.id = cu.carrier_id
+		  LEFT JOIN shipping_carriers sc ON sc.id = cu.shipping_carrier_id AND sc.enterprise_id = cu.enterprise_id
+		  LEFT JOIN suppliers tr ON tr.code = sc.supplier_code AND tr.enterprise_id = sc.enterprise_id
 		 WHERE cu.code = $1 AND cu.enterprise_id = $2`, code, t.ID).
 		Scan(&id, &f.Cliente.Codigo, &f.Cliente.Nome, &f.Cliente.Fantasia, &f.Cliente.CNPJCPF, &f.Cliente.IE, &f.InscricaoMunicipal, &f.Suframa, &f.Site,
 			&f.Ativo, &f.Bloqueado, &f.MotivoBloqueio, &f.Cadastro, &limite, &f.Finalidade, &f.Tipo, &f.Regiao, &f.Segmento,
-			&f.Condicao, &f.Tabela, &f.Transportadora, &matriz)
+			&f.ClasseRisco, &f.ValidadeLimite, &f.SituacaoReceita, &f.Transportadora, &matriz)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

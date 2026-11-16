@@ -19,8 +19,9 @@ type cnpjwsProvider struct {
 }
 
 type cnpjwsResponse struct {
-	RazaoSocial string `json:"razao_social"`
-	Porte       struct {
+	RazaoSocial   string     `json:"razao_social"`
+	CapitalSocial flexNumber `json:"capital_social"`
+	Porte         struct {
 		Descricao string `json:"descricao"`
 	} `json:"porte"`
 	NaturezaJuridica struct {
@@ -94,6 +95,7 @@ func (p *cnpjwsProvider) Lookup(ctx context.Context, cnpj string) (*entity.Compa
 		OpeningDate:        e.DataInicioAtividade,
 		SimplesOptant:      strings.EqualFold(strings.TrimSpace(r.Simples.Simples), "sim"),
 		MEI:                strings.EqualFold(strings.TrimSpace(r.Simples.MEI), "sim"),
+		ShareCapital:       capitalSocial(string(r.CapitalSocial)),
 		Source:             "cnpj.ws",
 		Address: entity.Address{
 			ZipCode:      onlyDigits(e.CEP),

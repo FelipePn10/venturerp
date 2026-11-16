@@ -1,12 +1,80 @@
 package entity
 
 import (
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/google/uuid"
 )
+
+// Transportador é o grupo transporta da NF-e.
+type Transportador struct {
+	CNPJCPF   string `json:"cnpj_cpf"`
+	Nome      string `json:"nome"`
+	IE        string `json:"ie,omitempty"`
+	Endereco  string `json:"endereco,omitempty"`
+	Municipio string `json:"municipio,omitempty"`
+	UF        string `json:"uf,omitempty"`
+}
+
+// LocalEntrega é o grupo entrega da NF-e: outro endereço do mesmo destinatário.
+type LocalEntrega struct {
+	CNPJCPF     string `json:"cnpj_cpf"`
+	Nome        string `json:"nome,omitempty"`
+	Logradouro  string `json:"logradouro"`
+	Numero      string `json:"numero"`
+	Complemento string `json:"complemento,omitempty"`
+	Bairro      string `json:"bairro"`
+	Municipio   string `json:"municipio"`
+	UF          string `json:"uf"`
+	CEP         string `json:"cep,omitempty"`
+}
+
+// TipoFreteDaNota traduz o tipo de frete do orçamento/pedido/cliente para um dos
+// quatro da nota (CIF, FOB, TERCEIROS, SEM_FRETE). O orçamento usa a lista
+// comercial (CIF/FOB contratado ou próprio, DAF, cortesia, retira…) e ela
+// chega ao pedido sem conversão. ok=false: sem equivalente (CONVENIO) ou vazio.
+//
+// shortcut: CIF/FOB próprio viram 0/1, não os modFrete 3/4 (transporte próprio);
+// separar quando algum cliente exigir a distinção na NF-e.
+func TipoFreteDaNota(tipo string) (string, bool) {
+	t := strings.ReplaceAll(strings.ToUpper(strings.Join(strings.Fields(tipo), " ")), "Ó", "O")
+	switch t {
+	case "CIF", "CIF CONTRAT.", "CIF PROPRIO", "DAF", "CORTESIA":
+		return "CIF", true
+	case "FOB", "FOB CONTRAT.", "FOB PROPRIO", "RETIRA":
+		return "FOB", true
+	case "TERCEIROS":
+		return "TERCEIROS", true
+	case "SEM_FRETE", "SEM FRETE":
+		return "SEM_FRETE", true
+	}
+	return "", false
+}
+
+// ModalidadeFreteNFe é o modFrete: 0 por conta do remetente (CIF), 1 do
+// destinatário (FOB), 2 de terceiros, 9 sem transporte. Sem tipo informado,
+// frete na nota é do remetente e sem frete é sem transporte.
+func ModalidadeFreteNFe(tipo *string, valorFrete decimal.Decimal) int {
+	if tipo != nil {
+		switch *tipo {
+		case "CIF":
+			return 0
+		case "FOB":
+			return 1
+		case "TERCEIROS":
+			return 2
+		case "SEM_FRETE":
+			return 9
+		}
+	}
+	if valorFrete.IsPositive() {
+		return 0
+	}
+	return 9
+}
 
 type FiscalExitStatus string
 
@@ -83,6 +151,16 @@ type FiscalExit struct {
 	// InformacoesComplementares (infCpl): o texto do usuário mais o que a lei
 	// manda constar (Simples Nacional, base legal dos benefícios).
 	InformacoesComplementares *string
+	// TipoFrete: CIF, FOB, TERCEIROS ou SEM_FRETE (modFrete da NF-e); nil =
+	// deduzido do valor do frete.
+	TipoFrete *string
+	// ShippingCarrierID e Transportador: a transportadora e a foto dos dados
+	// dela no momento da nota (grupo transporta da NF-e).
+	ShippingCarrierID *int64
+	Transportador     *Transportador
+	// LocalEntrega: endereço de entrega quando é outro que o do destinatário
+	// (grupo entrega da NF-e).
+	LocalEntrega *LocalEntrega
 	// SupplierCode: o fornecedor destinatário da devolução.
 	SupplierCode          *int64
 	ShipmentLoadCode      *int64

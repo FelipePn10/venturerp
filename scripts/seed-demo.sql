@@ -262,7 +262,7 @@ JOIN machines m ON m.machine_type_code = o.default_work_center_id;
 
 -- ─── 6. Clientes (50) e Fornecedores (35) ────────────────────────────────────
 INSERT INTO customers (id, code, name, trade_name, document_type, document_number, state_registration,
-  payment_condition_id, payment_cond_visibility, credit_limit, is_active, created_at, created_by, updated_at)
+  credit_limit, is_active, created_at, created_by, updated_at)
 SELECT i, i,
   (ARRAY['Estruturas Metálicas','Indústria Mecânica','Construtora','Montadora','Serralheria',
          'Metalúrgica','Implementos','Caldeiraria','Engenharia','Equipamentos'])[1 + (i % 10)]
@@ -270,7 +270,7 @@ SELECT i, i,
     || ' Ltda',
   'Cliente ' || lpad(i::text, 3, '0'),
   'CNPJ', lpad((10000000000000 + i*137)::text, 14, '0'), lpad((100000000 + i*271)::text, 9, '0'),
-  1 + (i % 4), 'TODOS', (10000 + (i % 10) * 9000)::numeric, true, :'START_TS', :'ADMIN'::uuid, :'START_TS'
+  (10000 + (i % 10) * 9000)::numeric, true, :'START_TS', :'ADMIN'::uuid, :'START_TS'
 FROM generate_series(1, 50) i;
 
 INSERT INTO suppliers (id, code, name, trade_name, person_type, document_type, document_number, state_registration,

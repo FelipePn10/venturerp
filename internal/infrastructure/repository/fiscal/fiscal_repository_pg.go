@@ -2,6 +2,7 @@ package fiscal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -298,9 +299,10 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
 			 dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
 			 customer_material_remittance_id, finalidade, nfe_referenciada, fiscal_entry_id, supplier_code,
-			 finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id)
+			 finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id,
+			 tipo_frete, shipping_carrier_id, transportador, local_entrega)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52)
+		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
@@ -313,6 +315,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		e.DestCodigoMunicipio, e.DestCEP, e.DestEmail, e.DestTelefone, e.CustomerCode,
 		e.CustomerMaterialRemittanceID, finalidadeOuVenda(e.Finalidade), e.NFeReferenciada, e.FiscalEntryID, e.SupplierCode,
 		e.FinalidadeCompra, e.InvoiceTypeID, e.InformacoesComplementares, tipoOuSaida(e.TipoDocumento), e.DevolucaoVendaID,
+		e.TipoFrete, e.ShippingCarrierID, jsonOuNulo(e.Transportador), jsonOuNulo(e.LocalEntrega),
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -357,6 +360,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		return nil, err
 	}
 	var e entity.FiscalExit
+	var transportador, localEntrega []byte
 	err = r.db.QueryRow(ctx,
 		`SELECT id, chave_acesso, numero_nf, serie, data_emissao, data_saida,
 		        cnpj_destinatario, razao_social_destinatario, ie_destinatario, uf_destinatario,
@@ -368,7 +372,8 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		        fiscal_coupon_date, fiscal_coupon_ecf_serial,
 		        dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
 		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
-		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code, finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id
+		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code, finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id,
+		        tipo_frete, shipping_carrier_id, transportador, local_entrega
 		 FROM public.fiscal_exits WHERE id = $1 AND enterprise_id=$2`, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -380,12 +385,19 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		&e.FiscalCouponDate, &e.FiscalCouponECFSerial,
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
 		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
-		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode, &e.FinalidadeCompra, &e.InvoiceTypeID, &e.InformacoesComplementares, &e.TipoDocumento, &e.DevolucaoVendaID)
+		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode, &e.FinalidadeCompra, &e.InvoiceTypeID, &e.InformacoesComplementares, &e.TipoDocumento, &e.DevolucaoVendaID,
+		&e.TipoFrete, &e.ShippingCarrierID, &transportador, &localEntrega)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
 		}
 		return nil, fmt.Errorf("getting fiscal exit: %w", err)
+	}
+	if err := lerJSON(transportador, &e.Transportador); err != nil {
+		return nil, fmt.Errorf("lendo a transportadora da nota %d: %w", id, err)
+	}
+	if err := lerJSON(localEntrega, &e.LocalEntrega); err != nil {
+		return nil, fmt.Errorf("lendo o local de entrega da nota %d: %w", id, err)
 	}
 	return &e, nil
 }
@@ -1331,4 +1343,28 @@ func (r *FiscalRepositoryPG) AliquotaIPIDoNCM(ctx context.Context, ncm string) (
 		return decimal.Zero, false, fmt.Errorf("lendo o IPI do NCM %s: %w", ncm, err)
 	}
 	return aliq.Mul(decimal.NewFromInt(100)), true, nil
+}
+
+// jsonOuNulo grava a foto (transportadora, local de entrega) ou NULL.
+func jsonOuNulo[T any](v *T) []byte {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+func lerJSON[T any](raw []byte, dest **T) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	var v T
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	*dest = &v
+	return nil
 }

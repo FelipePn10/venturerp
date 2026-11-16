@@ -182,6 +182,15 @@ func (uc *ChangeStatusSalesOrderUseCase) Execute(ctx context.Context, dto reques
 	// eles e o crédito os conta como exposição. Sem linha com quantidade não há
 	// o que vender — antes o pedido vazio era confirmado e ficava na carteira.
 	if newStatus == entity.SalesOrderStatusOrder || newStatus == entity.SalesOrderStatusAnalysis {
+		if uc.CreditChecker != nil {
+			pedido, err := uc.Repo.GetByCode(ctx, dto.Code)
+			if err != nil {
+				return err
+			}
+			if err := exigirPedidoDeCompra(ctx, uc.CreditChecker.CustomerRepo, pedido.CustomerCode, pedido.CustomerPONumber); err != nil {
+				return err
+			}
+		}
 		if err := conferirLinhasParaConfirmar(ctx, uc.Repo, dto.Code); err != nil {
 			return err
 		}

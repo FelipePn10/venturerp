@@ -22,7 +22,8 @@ type cnpjaResponse struct {
 	Alias   string `json:"alias"`
 	Founded string `json:"founded"`
 	Company struct {
-		Name   string `json:"name"`
+		Name   string     `json:"name"`
+		Equity flexNumber `json:"equity"`
 		Nature struct {
 			Text string `json:"text"`
 		} `json:"nature"`
@@ -85,6 +86,7 @@ func (p *cnpjaProvider) Lookup(ctx context.Context, cnpj string) (*entity.Compan
 		OpeningDate:        r.Founded,
 		SimplesOptant:      r.Company.Simples.Optant,
 		MEI:                r.Company.Simei.Optant,
+		ShareCapital:       capitalSocial(string(r.Company.Equity)),
 		Source:             "cnpja",
 		Address: entity.Address{
 			ZipCode:      onlyDigits(r.Address.Zip),

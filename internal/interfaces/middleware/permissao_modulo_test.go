@@ -56,6 +56,9 @@ func TestClassificarRota(t *testing.T) {
 		// Condição de pagamento: grava quem tem Financeiro; ler é referência para todos.
 		{"POST", "/api/customers/support/payment-conditions", acesso.Financeiro, acesso.IncluirAlterar, false},
 		{"GET", "/api/customers/support/payment-conditions", acesso.Financeiro, acesso.Ler, true},
+		{"PUT", "/api/customers/support/invoice-types/3", acesso.Fiscal, acesso.IncluirAlterar, false},
+		{"PATCH", "/api/customers/support/invoice-types/3/active", acesso.Fiscal, acesso.IncluirAlterar, false},
+		{"GET", "/api/customers/support/invoice-types/", acesso.Fiscal, acesso.Ler, true},
 	}
 	for _, c := range casos {
 		got := ClassificarRota(c.metodo, c.caminho)
@@ -65,6 +68,9 @@ func TestClassificarRota(t *testing.T) {
 	}
 	if !ClassificarRota("POST", "/api/password-change-requests/").Livre || !ClassificarRota("GET", "/api/acesso/minhas-permissoes").Livre {
 		t.Error("pedido de troca de senha e minhas permissões são livres")
+	}
+	if !ClassificarRota("GET", "/api/acesso/minhas-preferencias").Livre || !ClassificarRota("PUT", "/api/acesso/minhas-preferencias").Livre {
+		t.Error("as preferências do próprio usuário são livres")
 	}
 	if ClassificarRota("GET", "/api/nao-existe").Conhecida {
 		t.Error("rota desconhecida não pode ser classificada")

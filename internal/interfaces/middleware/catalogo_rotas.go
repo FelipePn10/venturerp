@@ -114,6 +114,9 @@ var rotasPorModulo = []struct {
 	// A condição de pagamento é cadastrada na VFIN0110 (Financeiro); a rota mora no
 	// apoio do cliente. A leitura segue livre como referência (pedido, cliente…).
 	{"/api/customers/support/payment-conditions", acesso.Financeiro},
+	// O tipo de nota fiscal é cadastrado na VFIS0305 (Fiscal); a rota mora no
+	// apoio do cliente por compatibilidade. Leitura livre como referência.
+	{"/api/customers/support/invoice-types", acesso.Fiscal},
 	// Contabilidade
 	{"/api/accounting", acesso.Contabilidade},
 	{"/api/cost-center", acesso.Contabilidade},
@@ -161,6 +164,9 @@ var rotasLivres = []struct {
 	{http.MethodPost, regexp.MustCompile(`^/api/password-change-requests/?$`)},
 	{http.MethodPost, regexp.MustCompile(`^/api/password-change-requests/[^/]+/complete$`)},
 	{http.MethodGet, regexp.MustCompile(`^/api/acesso/minhas-permissoes$`)},
+	// Preferências de exibição: cada um grava as suas, com qualquer perfil.
+	{http.MethodGet, regexp.MustCompile(`^/api/acesso/minhas-preferencias$`)},
+	{http.MethodPut, regexp.MustCompile(`^/api/acesso/minhas-preferencias$`)},
 	{http.MethodGet, regexp.MustCompile(`^/api/version$`)},
 	// Aprovações: quem pode aprovar é decidido pela alçada da política, não
 	// pelo módulo — o aprovador de crédito pode ter perfil só financeiro.

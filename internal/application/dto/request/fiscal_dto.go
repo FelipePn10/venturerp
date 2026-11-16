@@ -169,9 +169,15 @@ type CreateFiscalExitDTO struct {
 	IEDestinatario          *string `json:"ie_destinatario,omitempty"`
 	UFDestinatario          *string `json:"uf_destinatario,omitempty"`
 	TipoPessoa              *string `json:"tipo_pessoa,omitempty"`
+	// TipoFrete: CIF, FOB, TERCEIROS ou SEM_FRETE. Vazio = o do pedido, senão o
+	// do cliente. ShippingCarrierID: a transportadora; vazio = a preferencial do
+	// cliente.
+	TipoFrete         *string `json:"tipo_frete,omitempty"`
+	ShippingCarrierID *int64  `json:"shipping_carrier_id,omitempty"`
 	// Endereço do destinatário. Quando a nota nasce de um pedido de venda ou de
-	// uma carga, o que vier vazio aqui é preenchido pelo endereço de entrega do
-	// cliente (ou pelo de cobrança, quando não há um de entrega).
+	// uma carga, o que vier vazio aqui é preenchido pelo endereço cadastral do
+	// cliente (comercial, depois cobrança); o de entrega, se for outro, vai no
+	// grupo de local de entrega.
 	DestLogradouro        *string         `json:"dest_logradouro,omitempty"`
 	DestNumero            *string         `json:"dest_numero,omitempty"`
 	DestComplemento       *string         `json:"dest_complemento,omitempty"`

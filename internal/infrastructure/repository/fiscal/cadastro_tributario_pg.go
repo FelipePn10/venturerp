@@ -131,3 +131,35 @@ func (r *CadastroTributarioPG) TipoNota(ctx context.Context, id int64) (*entity.
 	}
 	return &tn, nil
 }
+
+// TransportadorDaNota monta o grupo transporta da NF-e com os dados do
+// fornecedor da transportadora (documento, nome, IE) e o endereço padrão dele.
+func (r *CadastroTributarioPG) TransportadorDaNota(ctx context.Context, shippingCarrierID int64) (*entity.Transportador, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var t entity.Transportador
+	var ativa bool
+	err = r.pool.QueryRow(ctx, `
+		SELECT s.document_number, s.name, COALESCE(s.state_registration, ''),
+		       COALESCE(NULLIF(concat_ws(', ', NULLIF(a.street, ''), NULLIF(a.number, ''), NULLIF(a.complement, ''), NULLIF(a.neighborhood, '')), ''), ''),
+		       COALESCE(a.city, ''), COALESCE(a.uf, ''), c.is_active
+		  FROM shipping_carriers c
+		  JOIN suppliers s ON s.code = c.supplier_code AND s.enterprise_id = c.enterprise_id
+		  LEFT JOIN LATERAL (
+		        SELECT street, number, complement, neighborhood, city, uf FROM supplier_addresses
+		         WHERE supplier_id = s.id ORDER BY is_default DESC, id LIMIT 1) a ON TRUE
+		 WHERE c.id = $1 AND c.enterprise_id = $2`, shippingCarrierID, empresa).Scan(
+		&t.CNPJCPF, &t.Nome, &t.IE, &t.Endereco, &t.Municipio, &t.UF, &ativa)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a transportadora %d não existe nesta empresa", shippingCarrierID))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo a transportadora da nota: %w", err)
+	}
+	if !ativa {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a transportadora %d (%s) está inativa", shippingCarrierID, t.Nome))
+	}
+	return &t, nil
+}

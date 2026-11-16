@@ -550,7 +550,7 @@ func calculateItemTax(
 	// (isenta, não tributada, suspensão, ST anterior) zera o ICMS, o diferido e o DIFAL.
 	r.ReducaoBaseICMSPct = redBase
 	cstForcado := item.Parametro.cstICMS(params.DestinoTipo)
-	if c := strings.TrimSpace(flags.CSTICMSOperacao); c != "" {
+	if c := SemOrigem(flags.CSTICMSOperacao); c != "" {
 		cstForcado = c
 		nota("CST %s do ICMS imposto pelo tipo de nota", c)
 	}

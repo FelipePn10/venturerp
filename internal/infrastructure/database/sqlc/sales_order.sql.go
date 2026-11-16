@@ -233,7 +233,7 @@ INSERT INTO public.sales_orders (
     collection_establishment_code, nf_type_description, carrier_code, freight_type,
     freight_value, insurance_value, volume_quantity, volume_type, net_weight,
     gross_weight, discount_value, surcharge_value, project_code, project_name,
-    created_by, finalidade_compra
+    created_by, finalidade_compra, customer_po_number
 )
 VALUES (
     $1, $2, $3, $4,
@@ -250,9 +250,10 @@ VALUES (
     $42, $43, $44, $45,
     $46, $47, $48, $49, $50,
     $51, $52, $53, $54, $55,
-    $56, NULLIF($57::varchar, '')
+    $56, NULLIF($57::varchar, ''),
+    NULLIF(btrim($58::varchar), '')
 )
-RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra
+RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number
 `
 
 type CreateSalesOrderParams struct {
@@ -313,6 +314,7 @@ type CreateSalesOrderParams struct {
 	ProjectName                 pgtype.Text
 	CreatedBy                   pgtype.UUID
 	FinalidadeCompra            pgtype.Text
+	CustomerPoNumber            pgtype.Text
 }
 
 func (q *Queries) CreateSalesOrder(ctx context.Context, arg CreateSalesOrderParams) (SalesOrder, error) {
@@ -374,6 +376,7 @@ func (q *Queries) CreateSalesOrder(ctx context.Context, arg CreateSalesOrderPara
 		arg.ProjectName,
 		arg.CreatedBy,
 		arg.FinalidadeCompra,
+		arg.CustomerPoNumber,
 	)
 	var i SalesOrder
 	err := row.Scan(
@@ -448,6 +451,7 @@ func (q *Queries) CreateSalesOrder(ctx context.Context, arg CreateSalesOrderPara
 		&i.DelayReason,
 		&i.DelayAction,
 		&i.FinalidadeCompra,
+		&i.CustomerPoNumber,
 	)
 	return i, err
 }
@@ -602,7 +606,7 @@ func (q *Queries) CreateSalesOrderItem(ctx context.Context, arg CreateSalesOrder
 }
 
 const getSalesOrderByCode = `-- name: GetSalesOrderByCode :one
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders WHERE code = $1 AND enterprise_code = $2
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders WHERE code = $1 AND enterprise_code = $2
 `
 
 type GetSalesOrderByCodeParams struct {
@@ -685,6 +689,7 @@ func (q *Queries) GetSalesOrderByCode(ctx context.Context, arg GetSalesOrderByCo
 		&i.DelayReason,
 		&i.DelayAction,
 		&i.FinalidadeCompra,
+		&i.CustomerPoNumber,
 	)
 	return i, err
 }
@@ -854,7 +859,7 @@ func (q *Queries) ListSalesOrderItems(ctx context.Context, arg ListSalesOrderIte
 }
 
 const listSalesOrders = `-- name: ListSalesOrders :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders WHERE enterprise_code = $1 AND is_active = TRUE ORDER BY emission_date DESC, order_number DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders WHERE enterprise_code = $1 AND is_active = TRUE ORDER BY emission_date DESC, order_number DESC
 `
 
 func (q *Queries) ListSalesOrders(ctx context.Context, tenantEnterpriseCode int64) ([]SalesOrder, error) {
@@ -938,6 +943,7 @@ func (q *Queries) ListSalesOrders(ctx context.Context, tenantEnterpriseCode int6
 			&i.DelayReason,
 			&i.DelayAction,
 			&i.FinalidadeCompra,
+			&i.CustomerPoNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -950,7 +956,7 @@ func (q *Queries) ListSalesOrders(ctx context.Context, tenantEnterpriseCode int6
 }
 
 const listSalesOrdersAdvanced = `-- name: ListSalesOrdersAdvanced :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders
 WHERE enterprise_code = $1 AND is_active = TRUE
   AND ($2::text IS NULL OR EXISTS (
     SELECT 1 FROM public.customers c
@@ -1111,6 +1117,7 @@ func (q *Queries) ListSalesOrdersAdvanced(ctx context.Context, arg ListSalesOrde
 			&i.DelayReason,
 			&i.DelayAction,
 			&i.FinalidadeCompra,
+			&i.CustomerPoNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1123,7 +1130,7 @@ func (q *Queries) ListSalesOrdersAdvanced(ctx context.Context, arg ListSalesOrde
 }
 
 const listSalesOrdersByCustomer = `-- name: ListSalesOrdersByCustomer :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders WHERE customer_code = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders WHERE customer_code = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
 type ListSalesOrdersByCustomerParams struct {
@@ -1212,6 +1219,7 @@ func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, arg ListSalesOr
 			&i.DelayReason,
 			&i.DelayAction,
 			&i.FinalidadeCompra,
+			&i.CustomerPoNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1224,7 +1232,7 @@ func (q *Queries) ListSalesOrdersByCustomer(ctx context.Context, arg ListSalesOr
 }
 
 const listSalesOrdersByDateRange = `-- name: ListSalesOrdersByDateRange :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders
 WHERE emission_date BETWEEN $1 AND $2 AND enterprise_code = $3 AND is_active = TRUE
 ORDER BY emission_date DESC
 `
@@ -1316,6 +1324,7 @@ func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesO
 			&i.DelayReason,
 			&i.DelayAction,
 			&i.FinalidadeCompra,
+			&i.CustomerPoNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1328,7 +1337,7 @@ func (q *Queries) ListSalesOrdersByDateRange(ctx context.Context, arg ListSalesO
 }
 
 const listSalesOrdersByStatus = `-- name: ListSalesOrdersByStatus :many
-SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra FROM public.sales_orders WHERE status = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
+SELECT code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number FROM public.sales_orders WHERE status = $1 AND enterprise_code = $2 AND is_active = TRUE ORDER BY emission_date DESC
 `
 
 type ListSalesOrdersByStatusParams struct {
@@ -1417,6 +1426,7 @@ func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, arg ListSalesOrde
 			&i.DelayReason,
 			&i.DelayAction,
 			&i.FinalidadeCompra,
+			&i.CustomerPoNumber,
 		); err != nil {
 			return nil, err
 		}
@@ -1426,6 +1436,23 @@ func (q *Queries) ListSalesOrdersByStatus(ctx context.Context, arg ListSalesOrde
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCustomerCredit = `-- name: LockCustomerCredit :exec
+SELECT pg_advisory_xact_lock(hashtextextended('credito-cliente:' || $1::bigint || ':' || $2::bigint, 0))
+`
+
+type LockCustomerCreditParams struct {
+	TenantEnterpriseCode int64
+	CustomerCode         int64
+}
+
+// Serializa a análise de crédito do mesmo cliente até o fim da transação da
+// confirmação: sem isso, dois pedidos confirmados juntos não se enxergam e
+// passam ambos do limite.
+func (q *Queries) LockCustomerCredit(ctx context.Context, arg LockCustomerCreditParams) error {
+	_, err := q.db.Exec(ctx, lockCustomerCredit, arg.TenantEnterpriseCode, arg.CustomerCode)
+	return err
 }
 
 const nextSalesOrderNumber = `-- name: NextSalesOrderNumber :one
@@ -1732,9 +1759,11 @@ SET
     project_name         = $49,
     -- Ausente mantém; vazia limpa.
     finalidade_compra    = NULLIF(COALESCE($51::varchar, finalidade_compra), ''),
+    -- Ausente mantém; vazio limpa.
+    customer_po_number   = NULLIF(btrim(COALESCE($52::varchar, customer_po_number)), ''),
     updated_at           = NOW()
-WHERE code = $50 AND enterprise_code = $52 AND is_active = TRUE
-RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra
+WHERE code = $50 AND enterprise_code = $53 AND is_active = TRUE
+RETURNING code, order_number, enterprise_code, status, origin, emission_date, delivery_date, delivery_date_firm, digit_date, customer_code, billing_address_code, shipping_address_code, representative_code, plan_code, sales_division_code, commission_pct, tax_type_code, presence_indicator, sales_channel, default_nf_type, price_table_code, currency_code, payment_term_code, additional_days, bearer_code, sale_date, total_weight_net, total_weight_gross, total_gross, total_net, total_net_no_st, total_with_ipi_with_st, notes, obs_customer, is_blocked, block_reason, is_firm, is_active, created_at, updated_at, created_by, representative_order_number, is_nfce, street, street_number, foreign_document, collection_establishment_code, nf_type_description, carrier_code, freight_type, freight_value, insurance_value, volume_quantity, volume_type, net_weight, gross_weight, discount_value, surcharge_value, project_code, project_name, commercial_analysis_status, financial_analysis_status, release_status, conference_status, cancel_reason, cancel_complement, attended_reason, attended_at, delay_reason, delay_action, finalidade_compra, customer_po_number
 `
 
 type UpdateSalesOrderParams struct {
@@ -1789,6 +1818,7 @@ type UpdateSalesOrderParams struct {
 	ProjectName                 pgtype.Text
 	Code                        int64
 	FinalidadeCompra            pgtype.Text
+	CustomerPoNumber            pgtype.Text
 	TenantEnterpriseCode        int64
 }
 
@@ -1845,6 +1875,7 @@ func (q *Queries) UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderPara
 		arg.ProjectName,
 		arg.Code,
 		arg.FinalidadeCompra,
+		arg.CustomerPoNumber,
 		arg.TenantEnterpriseCode,
 	)
 	var i SalesOrder
@@ -1920,6 +1951,7 @@ func (q *Queries) UpdateSalesOrder(ctx context.Context, arg UpdateSalesOrderPara
 		&i.DelayReason,
 		&i.DelayAction,
 		&i.FinalidadeCompra,
+		&i.CustomerPoNumber,
 	)
 	return i, err
 }

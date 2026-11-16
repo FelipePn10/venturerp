@@ -21,7 +21,7 @@ INSERT INTO public.sales_orders (
     collection_establishment_code, nf_type_description, carrier_code, freight_type,
     freight_value, insurance_value, volume_quantity, volume_type, net_weight,
     gross_weight, discount_value, surcharge_value, project_code, project_name,
-    created_by, finalidade_compra
+    created_by, finalidade_compra, customer_po_number
 )
 VALUES (
     $1, $2, $3, $4,
@@ -38,7 +38,8 @@ VALUES (
     $42, $43, $44, $45,
     $46, $47, $48, $49, $50,
     $51, $52, $53, $54, $55,
-    $56, NULLIF(sqlc.narg(finalidade_compra)::varchar, '')
+    $56, NULLIF(sqlc.narg(finalidade_compra)::varchar, ''),
+    NULLIF(btrim(sqlc.narg(customer_po_number)::varchar), '')
 )
 RETURNING *;
 
@@ -96,6 +97,8 @@ SET
     project_name         = $49,
     -- Ausente mantém; vazia limpa.
     finalidade_compra    = NULLIF(COALESCE(sqlc.narg(finalidade_compra)::varchar, finalidade_compra), ''),
+    -- Ausente mantém; vazio limpa.
+    customer_po_number   = NULLIF(btrim(COALESCE(sqlc.narg(customer_po_number)::varchar, customer_po_number)), ''),
     updated_at           = NOW()
 WHERE code = $50 AND enterprise_code = sqlc.arg(tenant_enterprise_code) AND is_active = TRUE
 RETURNING *;
@@ -225,6 +228,12 @@ WHERE so.code = soi.sales_order_code
   AND so.code = $1
   AND so.enterprise_code = sqlc.arg(tenant_enterprise_code)
   AND soi.status IN ('OPEN', 'PARTIAL');
+
+-- name: LockCustomerCredit :exec
+-- Serializa a análise de crédito do mesmo cliente até o fim da transação da
+-- confirmação: sem isso, dois pedidos confirmados juntos não se enxergam e
+-- passam ambos do limite.
+SELECT pg_advisory_xact_lock(hashtextextended('credito-cliente:' || sqlc.arg(tenant_enterprise_code)::bigint || ':' || sqlc.arg(customer_code)::bigint, 0));
 
 -- name: BlockSalesOrder :execrows
 UPDATE public.sales_orders

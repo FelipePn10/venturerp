@@ -34,6 +34,7 @@ type LoadFilter struct {
 // TransportInput carries the trip/transport data set on a romaneio.
 type TransportInput struct {
 	CarrierCode       *int64
+	ShippingCarrierID *int64
 	FreightModality   *string
 	FreightValue      decimal.Decimal
 	InsuranceValue    decimal.Decimal
@@ -48,6 +49,7 @@ type TransportInput struct {
 type CreateLoadInput struct {
 	Description       *string
 	CarrierCode       *int64
+	ShippingCarrierID *int64
 	VehiclePlate      *string
 	DriverName        *string
 	DriverDocument    *string

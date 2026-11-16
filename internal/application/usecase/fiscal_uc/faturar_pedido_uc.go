@@ -57,9 +57,13 @@ type FaturarPedidoDTO struct {
 	ValorDesconto    *decimal.Decimal `json:"valor_desconto,omitempty"`
 	// FinalidadeCompra e InvoiceTypeID: vazios = a finalidade do pedido (ou do
 	// cliente) e nenhum tipo de nota.
-	FinalidadeCompra *string             `json:"finalidade_compra,omitempty"`
-	InvoiceTypeID    *int64              `json:"invoice_type_id,omitempty"`
-	Itens            []FaturarPedidoItem `json:"itens,omitempty"`
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
+	InvoiceTypeID    *int64  `json:"invoice_type_id,omitempty"`
+	// TipoFrete e ShippingCarrierID: vazios = o frete do pedido e a
+	// transportadora preferencial do cliente.
+	TipoFrete         *string             `json:"tipo_frete,omitempty"`
+	ShippingCarrierID *int64              `json:"shipping_carrier_id,omitempty"`
+	Itens             []FaturarPedidoItem `json:"itens,omitempty"`
 }
 
 type FaturarPedidoItem struct {
@@ -113,6 +117,14 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 	out.CustomerUF = deref(dest.UFDestinatario)
 	out.CustomerCity = deref(dest.DestMunicipio)
 	out.EnderecoCompleto = dest.DestLogradouro != nil && dest.DestMunicipio != nil && dest.DestCEP != nil && dest.UFDestinatario != nil
+	out.TipoFretePadrao, out.ShippingCarrierID = dest.TipoFrete, dest.ShippingCarrierID
+	entrega, err := localDeEntrega(ctx, &dest, uc.Clientes, uc.Pedidos)
+	if err != nil {
+		return nil, err
+	}
+	if entrega != nil {
+		out.LocalEntrega = fmt.Sprintf("%s, %s — %s/%s", entrega.Logradouro, entrega.Numero, entrega.Municipio, entrega.UF)
+	}
 
 	if pedido.RepresentativeCode != nil {
 		nome, err := uc.Faturamento.NomeRepresentante(ctx, *pedido.RepresentativeCode)
@@ -179,6 +191,18 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 	}
 	out.ValorPendente = pendente.InexactFloat64()
 	out.Impedimentos = impedimentosDoPedido(pedido, linhas, out.EnderecoCompleto)
+	// A prévia fatura o saldo inteiro: as exigências do cliente valem sobre ele.
+	var inteiro []linhaParaNota
+	for i := range linhas {
+		if linhas[i].pendente.IsPositive() {
+			inteiro = append(inteiro, linhaParaNota{&linhas[i], linhas[i].pendente})
+		}
+	}
+	exig, err := uc.exigenciasDoPedido(ctx, pedido.CustomerCode, pedido.Code, linhas, inteiro)
+	if err != nil {
+		return nil, err
+	}
+	out.Impedimentos = append(out.Impedimentos, exig...)
 	out.PodeFaturar = len(out.Impedimentos) == 0
 
 	notas, err := uc.Faturamento.NotasDoPedido(ctx, pedido.Code)
@@ -275,6 +299,15 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	if len(escolhidas) == 0 {
 		return nil, errorsuc.NewValidationError("não há quantidade pendente para faturar neste pedido")
 	}
+	faturadas := make([]linhaParaNota, 0, len(escolhidas))
+	for _, e := range escolhidas {
+		faturadas = append(faturadas, linhaParaNota{e.linha, e.qtd})
+	}
+	if exig, err := uc.exigenciasDoPedido(ctx, pedido.CustomerCode, pedido.Code, linhas, faturadas); err != nil {
+		return nil, err
+	} else if len(exig) > 0 {
+		return nil, errorsuc.NewValidationError("o pedido não pode ser faturado: " + strings.Join(exig, "; "))
+	}
 
 	itens := make([]request.CreateFiscalExitItemDTO, 0, len(escolhidas))
 	produtos := decimal.Zero
@@ -336,21 +369,23 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	}
 	origem := "SALES_ORDER"
 	create := request.CreateFiscalExitDTO{
-		Serie:            dto.Serie,
-		DataEmissao:      emissao.Format("2006-01-02"),
-		DataSaida:        dataSaida,
-		CustomerCode:     pedido.CustomerCode,
-		Cfop:             cfop,
-		NaturezaOperacao: strings.ToUpper(strings.TrimSpace(dto.NaturezaOperacao)),
-		ValorProdutos:    produtos,
-		ValorFrete:       rateado(dto.ValorFrete, pedido.FreightValue),
-		ValorSeguro:      rateado(dto.ValorSeguro, pedido.InsuranceValue),
-		ValorDesconto:    rateado(dto.ValorDesconto, pedido.DiscountValue),
-		SalesOrderCode:   &pedido.Code,
-		SourceType:       &origem,
-		FinalidadeCompra: dto.FinalidadeCompra,
-		InvoiceTypeID:    dto.InvoiceTypeID,
-		Itens:            itens,
+		Serie:             dto.Serie,
+		DataEmissao:       emissao.Format("2006-01-02"),
+		DataSaida:         dataSaida,
+		CustomerCode:      pedido.CustomerCode,
+		Cfop:              cfop,
+		NaturezaOperacao:  strings.ToUpper(strings.TrimSpace(dto.NaturezaOperacao)),
+		ValorProdutos:     produtos,
+		ValorFrete:        rateado(dto.ValorFrete, pedido.FreightValue),
+		ValorSeguro:       rateado(dto.ValorSeguro, pedido.InsuranceValue),
+		ValorDesconto:     rateado(dto.ValorDesconto, pedido.DiscountValue),
+		SalesOrderCode:    &pedido.Code,
+		SourceType:        &origem,
+		FinalidadeCompra:  dto.FinalidadeCompra,
+		InvoiceTypeID:     dto.InvoiceTypeID,
+		TipoFrete:         dto.TipoFrete,
+		ShippingCarrierID: dto.ShippingCarrierID,
+		Itens:             itens,
 	}
 	return uc.Create.Execute(ctx, create)
 }

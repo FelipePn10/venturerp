@@ -543,8 +543,8 @@ Retorna as alíquotas internas de ICMS e FCP por estado.
 ### `GET /api/fiscal/exits/destinatario/{code}` e `GET /api/fiscal/exits/sugestao-cfop`
 
 Alimentam a nota avulsa da VFIS0200. O primeiro devolve documento, IE, contato, os
-endereços do cliente (o `sugerido` segue a regra de `enderecoDaNota`: entrega,
-cobrança, padrão, primeiro) e o CFOP de cada um. O segundo atende destinatário sem
+endereços do cliente (o `sugerido` segue a regra de `enderecoDaNota`: comercial,
+cobrança, outro e só então entrega) e o CFOP de cada um. O segundo atende destinatário sem
 cadastro (`uf`, `ie`, `tipo_pessoa`). A regra do CFOP é `cfopDaVenda`, a mesma do
 faturamento do pedido.
 
@@ -3601,3 +3601,60 @@ combustíveis. Nenhum dos três ocorre em indústria metalúrgica ou moveleira, 
 emissão os recusa com mensagem. O crédito presumido (`cCredPres`) e o Imposto
 Seletivo continuam sem cálculo.
 
+### Destinatário, local de entrega, frete e transportadora (000492)
+
+- **Destinatário** = endereço cadastral do cliente (`enderecoDaNota`: COMERCIAL →
+  COBRANÇA → OUTRO → ENTREGA; no mesmo tipo, o padrão). A IE e a UF do
+  destinatário são desse endereço, e a UF decide CFOP e DIFAL.
+- **Local de entrega** (grupo `entrega`, campos `*_entrega` da Focus): o
+  endereço de ENTREGA do pedido (`shipping_address_code`) ou o de entrega
+  padrão do cliente, quando difere do destinatário. A Focus resolve o código do
+  município pelo nome e UF. Cadastro só com endereço de entrega sai como antes,
+  sem o grupo.
+- **Frete** (`fiscal_exits.tipo_frete`): o informado no faturamento, senão o do
+  pedido, senão o do cliente. `modFrete` = CIF 0, FOB 1, TERCEIROS 2,
+  SEM_FRETE 9; sem tipo, frete na nota é 0 e sem frete é 9
+  (`entity.ModalidadeFreteNFe`). Antes a nota ignorava o CIF/FOB do pedido.
+  O pedido convertido do orçamento traz o tipo comercial; `entity.TipoFreteDaNota`
+  traduz: CIF contratado/próprio, DAF e cortesia → CIF; FOB contratado/próprio
+  e retira → FOB; "SEM FRETE" → SEM_FRETE. CONVENIO não tem equivalente: o
+  pedido fica sem tipo e vale o do cliente ou o valor do frete — não trava o
+  faturamento. Transporte próprio (modFrete 3/4) ainda não é distinguido.
+- **Conferência antes da transmissão**: transportadora com CNPJ/CPF ou UF
+  inválidos e local de entrega sem logradouro, número, bairro, município ou UF
+  impedem a nota. A IE do destinatário e a da transportadora têm o dígito
+  conferido pela regra da UF (`validation.IEValida`, roteiros SINTEGRA) como
+  AVISO: uma divergência da nossa regra não trava nota boa, e a SEFAZ ainda
+  recusa IE válida mas não cadastrada (233).
+- **CST com origem**: a regra de ICMS/IPI (`cst_icms_*`, VARCHAR(3)) aceita o
+  formato legado origem + CST ("000", "041"). `engine.SemOrigem` tira a origem
+  (a NF-e manda origem em campo próprio); antes o "000" travava a prévia como
+  "CSOSN do Simples" e o "041" não zerava o ICMS. CSOSN fica intacto.
+- Validado em homologação (Tecnofer, 2026-11-15): NF 67, cStat 100, com
+  destinatário comercial, grupo de entrega, `modFrete` 1 + transportadora e DIFAL;
+  NF 68 (cStat 100) sem frete: `modFrete` 9 e sem transportadora, mesmo informada.
+- **Transportadora** (`shipping_carrier_id` + foto em `transportador` JSONB):
+  a informada, senão a preferencial do cliente. Os dados (CNPJ, nome, IE,
+  endereço) vêm do fornecedor da transportadora no momento da nota. Não vai
+  com SEM_FRETE. A impressão do pedido de venda e do romaneio usa a mesma
+  transportadora (a da NF-e; sem nota, a preferencial do cliente): antes ela
+  procurava o `carrier_code` — que é o portador de cobrança — entre os
+  fornecedores e imprimia um fornecedor qualquer.
+- **Transportadora × portador (000494)**: romaneio, carga, pedido de compra
+  (inclusive o redespacho) e aviso de recebimento tinham só `carrier_code`, que
+  a tela preenchia com um PORTADOR embora chamasse de "Transportadora". Agora
+  têm `shipping_carrier_id` (cadastro de transportadoras), conferido por
+  `repository/transportadora.Conferir` (da empresa e ativa). `carrier_code`
+  ficou como portador legado, sem conversão. A NF-e gerada pela carga leva a
+  transportadora da carga; o romaneio exportado e os documentos impressos usam
+  a transportadora, não o portador. Sem transportadora informada, o romaneio
+  de pedido de venda herda a preferencial do cliente (exceto pedido SEM FRETE)
+  e o romaneio de pedido de compra e o aviso de recebimento herdam a do pedido
+  de compra — sempre só se ativa.
+- O destinatário agora também leva complemento, telefone e o código IBGE do
+  município quando a nota os tem.
+- **Cliente da nota** (`fiscal_exits.customer_code`): a 000369 criou a coluna sem
+  preencher as notas antigas, e a Visão 360 não via o faturamento delas. A
+  000493 preenche pelo pedido da nota e, sem pedido, pelo CNPJ/CPF quando ele é
+  de um único cliente da empresa. Daqui para a frente, a nota avulsa digitada com
+  o documento de um cliente cadastrado também fica ligada a ele.

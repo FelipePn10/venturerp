@@ -101,7 +101,9 @@ func (c *Consultas) PedidoVenda(ctx context.Context, t uc.Tenant, code int64) (*
 		  LEFT JOIN sales_tables st ON st.code = so.price_table_code AND st.enterprise_id = $3
 		  LEFT JOIN payment_conditions pc ON pc.code = so.payment_term_code AND pc.enterprise_id = $3
 		  LEFT JOIN production_plans pp ON pp.code = so.plan_code AND pp.enterprise_id = $3
-		  LEFT JOIN suppliers tr ON tr.code = so.carrier_code AND tr.enterprise_id = $3
+		  -- so.carrier_code é o PORTADOR de cobrança; a transportadora é a preferencial do cliente.
+		  LEFT JOIN shipping_carriers sc ON sc.id = cu.shipping_carrier_id AND sc.enterprise_id = $3
+		  LEFT JOIN suppliers tr ON tr.code = sc.supplier_code AND tr.enterprise_id = sc.enterprise_id
 		 WHERE so.code = $1 AND so.enterprise_code = $2`, code, t.Code, t.ID).
 		Scan(&p.Numero, &p.Emissao, &entrega, &p.EntregaFirme, &p.Situacao, &p.Bloqueado, &p.MotivoBloqueio,
 			&p.Origem, &p.Canal, &p.Divisao, &p.Representante, &comissao, &p.Tabela,
@@ -998,7 +1000,9 @@ func (c *Consultas) Romaneio(ctx context.Context, t uc.Tenant, code int64) (*uc.
 		SELECT s.id, s.status, s.created_at, s.separated_at, s.conferred_at, s.shipped_at, s.estimated_delivery, s.sales_order_code,
 		       COALESCE(cu.id,0), COALESCE(cu.code,0), COALESCE(cu.name, fx.razao_social_destinatario, ''), COALESCE(cu.trade_name,''),
 		       COALESCE(cu.document_number, fx.cnpj_destinatario, ''), COALESCE(cu.state_registration, fx.ie_destinatario, ''),
-		       COALESCE(tr.id,0), COALESCE(tr.code,0), COALESCE(tr.name,''), COALESCE(tr.document_number,''), COALESCE(tr.state_registration,''),
+		       COALESCE(tr.id,0), COALESCE(tr.code,0), CASE WHEN s.shipping_carrier_id IS NULL THEN COALESCE(NULLIF(fx.transportador->>'nome',''), tr.name, '') ELSE COALESCE(tr.name, '') END,
+		       CASE WHEN s.shipping_carrier_id IS NULL THEN COALESCE(NULLIF(fx.transportador->>'cnpj_cpf',''), tr.document_number, '') ELSE COALESCE(tr.document_number, '') END,
+		       CASE WHEN s.shipping_carrier_id IS NULL THEN COALESCE(NULLIF(fx.transportador->>'ie',''), tr.state_registration, '') ELSE COALESCE(tr.state_registration, '') END,
 		       COALESCE(s.vehicle_plate,''), COALESCE(s.driver_name,''), COALESCE(s.driver_document,''), COALESCE(s.antt_code,''), COALESCE(s.seals,''),
 		       COALESCE(s.freight_modality, so.freight_type, ''), COALESCE(s.freight_value,0)::text, COALESCE(s.insurance_value,0)::text,
 		       COALESCE(s.nfe_number, fx.numero_nf), COALESCE(fx.serie,''), COALESCE(s.nfe_key, fx.chave_acesso, ''), COALESCE(fx.valor_total,0)::text,
@@ -1010,7 +1014,13 @@ func (c *Consultas) Romaneio(ctx context.Context, t uc.Tenant, code int64) (*uc.
 		  LEFT JOIN sales_orders so ON so.code = s.sales_order_code AND so.enterprise_code = $3
 		  LEFT JOIN fiscal_exits fx ON fx.id = s.fiscal_exit_id AND fx.enterprise_id = s.enterprise_id
 		  LEFT JOIN customers cu ON cu.code = COALESCE(so.customer_code, fx.customer_code) AND cu.enterprise_id = s.enterprise_id
-		  LEFT JOIN suppliers tr ON tr.code = COALESCE(s.carrier_code, so.carrier_code) AND tr.enterprise_id = s.enterprise_id
+		  -- carrier_code (romaneio e pedido) é o PORTADOR. A transportadora é a do
+		  -- romaneio, senão a da NF-e; sem as duas, a preferencial do cliente.
+		  LEFT JOIN shipping_carriers sc ON sc.enterprise_id = s.enterprise_id AND sc.id = COALESCE(
+		        s.shipping_carrier_id,
+		        CASE WHEN fx.transportador IS NOT NULL THEN fx.shipping_carrier_id END,
+		        CASE WHEN COALESCE(fx.tipo_frete, '') <> 'SEM_FRETE' THEN cu.shipping_carrier_id END)
+		  LEFT JOIN suppliers tr ON tr.code = sc.supplier_code AND tr.enterprise_id = sc.enterprise_id
 		 WHERE s.code = $1 AND s.enterprise_id = $2`, code, t.ID, t.Code).
 		Scan(&id, &r.Situacao, &r.Criado, &r.Separado, &r.Conferido, &r.Despachado, &r.PrevisaoEntrega, &pedido,
 			&clienteID, &r.Destinatario.Codigo, &r.Destinatario.Nome, &r.Destinatario.Fantasia, &r.Destinatario.CNPJCPF, &r.Destinatario.IE,

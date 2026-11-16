@@ -9,6 +9,7 @@ import (
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 )
 
@@ -20,9 +21,10 @@ import (
 // logradouro/bairro/município/CEP a cada nota, e a nota tirada do pedido já sabe
 // quem é o cliente: o endereço vem do cadastro.
 //
-// A preferência é o endereço de ENTREGA — é para lá que a mercadoria vai e é o
-// que a NF-e pede. Sem ele, cai no de COBRANÇA (o único que a maioria dos
-// cadastros tem), e depois em qualquer um marcado como padrão.
+// O endereço do destinatário é o cadastral: COMERCIAL, depois COBRANÇA, depois
+// OUTRO; o de ENTREGA só quando o cliente não tem outro. O destinatário é a
+// pessoa jurídica (a IE dela é desse endereço e a UF decide CFOP e DIFAL); se a
+// mercadoria vai para outro endereço, ele vai no grupo de local de entrega.
 //
 // O que o usuário digitou na nota nunca é sobrescrito: só campo vazio é
 // preenchido. Uma entrega pontual num endereço diferente continua valendo.
@@ -40,14 +42,37 @@ func resolverDestinatario(
 	// que falta); falha de leitura é erro — antes sumia e a nota saía sem
 	// destinatário sem ninguém saber por quê.
 	customerCode := dto.CustomerCode
-	if customerCode == nil && dto.SalesOrderCode != nil && orders != nil {
+	if dto.SalesOrderCode != nil && orders != nil {
 		order, err := orders.GetByCode(ctx, *dto.SalesOrderCode)
 		if err != nil && !errorsuc.EhNaoEncontrado(err) {
 			return fmt.Errorf("lendo o pedido da nota: %w", err)
 		}
-		if err == nil && order != nil && order.CustomerCode != nil {
-			c := *order.CustomerCode
-			customerCode = &c
+		if err == nil && order != nil {
+			if customerCode == nil && order.CustomerCode != nil {
+				c := *order.CustomerCode
+				customerCode = &c
+			}
+			// Tipo comercial sem equivalente na nota (CONVENIO) não trava o
+			// faturamento: fica sem tipo e o modFrete sai do valor do frete.
+			if order.FreightType != nil {
+				if t, ok := fiscalentity.TipoFreteDaNota(*order.FreightType); ok {
+					preencher(&dto.TipoFrete, t)
+				}
+			}
+		}
+	}
+	// Nota avulsa com o CNPJ/CPF de um cliente cadastrado fica ligada a ele:
+	// sem o vínculo, o faturamento dele (Visão 360, crédito) não vê a nota.
+	if customerCode == nil && dto.CnpjDestinatario != nil {
+		if doc := somenteDigitos(*dto.CnpjDestinatario); len(doc) == 11 || len(doc) == 14 {
+			c, err := customers.GetCustomerByDocument(ctx, doc)
+			if err != nil && !errorsuc.EhNaoEncontrado(err) {
+				return fmt.Errorf("procurando o cliente pelo documento da nota: %w", err)
+			}
+			if err == nil && c != nil {
+				code := c.Code
+				customerCode = &code
+			}
 		}
 	}
 	if customerCode == nil {
@@ -73,6 +98,13 @@ func resolverDestinatario(
 		dto.TipoPessoa = &f
 	}
 	preencher(&dto.DestEmail, primeiroEmailDoCliente(cliente))
+	if cliente.FreightType != nil {
+		preencher(&dto.TipoFrete, *cliente.FreightType)
+	}
+	if dto.ShippingCarrierID == nil && cliente.ShippingCarrierID != nil {
+		id := *cliente.ShippingCarrierID
+		dto.ShippingCarrierID = &id
+	}
 
 	end, err := enderecoDaNota(ctx, customers, cliente)
 	if err != nil {
@@ -105,48 +137,122 @@ func resolverDestinatario(
 	return nil
 }
 
-// enderecoDaNota escolhe o endereço na ordem ENTREGA → COBRANÇA → padrão → primeiro.
+// enderecoDaNota escolhe o endereço cadastral do destinatário: COMERCIAL →
+// COBRANÇA → OUTRO → ENTREGA; no mesmo tipo, o padrão e depois o primeiro.
 func enderecoDaNota(ctx context.Context, customers customerrepo.CustomerRepository, cliente *customerentity.Customer) (*customerentity.CustomerAddress, error) {
-	enderecos := cliente.Addresses
-	if len(enderecos) == 0 {
-		var err error
-		if enderecos, err = customers.ListAddresses(ctx, cliente.ID); err != nil {
-			return nil, fmt.Errorf("lendo os endereços do cliente: %w", err)
-		}
+	enderecos, err := enderecosDoCliente(ctx, customers, cliente)
+	if err != nil {
+		return nil, err
 	}
-	if len(enderecos) == 0 {
-		return nil, nil
-	}
-	var cobranca, padrao, primeiro *customerentity.CustomerAddress
-	for _, e := range enderecos {
-		if e == nil {
-			continue
-		}
-		if primeiro == nil {
-			primeiro = e
-		}
-		switch e.AddressType {
-		case customerentity.AddressEntrega:
-			return e, nil
-		case customerentity.AddressCobranca:
-			if cobranca == nil {
-				cobranca = e
-			}
-		}
-		if e.IsDefault && padrao == nil {
-			padrao = e
-		}
-	}
-	if cobranca != nil {
-		return cobranca, nil
-	}
-	if padrao != nil {
-		return padrao, nil
-	}
-	return primeiro, nil
+	return melhorEndereco(enderecos, map[customerentity.AddressType]int{
+		customerentity.AddressComercial: 0, customerentity.AddressCobranca: 1, customerentity.AddressOutro: 2, customerentity.AddressEntrega: 3,
+	}), nil
 }
 
+func enderecosDoCliente(ctx context.Context, customers customerrepo.CustomerRepository, cliente *customerentity.Customer) ([]*customerentity.CustomerAddress, error) {
+	if len(cliente.Addresses) > 0 {
+		return cliente.Addresses, nil
+	}
+	enderecos, err := customers.ListAddresses(ctx, cliente.ID)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os endereços do cliente: %w", err)
+	}
+	return enderecos, nil
+}
+
+// melhorEndereco: o de menor posição pelo tipo; empate, o padrão; depois o primeiro.
+func melhorEndereco(enderecos []*customerentity.CustomerAddress, posicao map[customerentity.AddressType]int) *customerentity.CustomerAddress {
+	var melhor *customerentity.CustomerAddress
+	rank := func(e *customerentity.CustomerAddress) int {
+		p, ok := posicao[e.AddressType]
+		if !ok {
+			p = len(posicao)
+		}
+		p *= 2
+		if !e.IsDefault {
+			p++
+		}
+		return p
+	}
+	for _, e := range enderecos {
+		if e != nil && (melhor == nil || rank(e) < rank(melhor)) {
+			melhor = e
+		}
+	}
+	return melhor
+}
+
+// localDeEntrega: o grupo de entrega da NF-e quando a mercadoria vai para um
+// endereço de ENTREGA do cliente diferente do endereço do destinatário. O
+// endereço de entrega do pedido (shipping_address_code) tem preferência.
+func localDeEntrega(ctx context.Context, dto *request.CreateFiscalExitDTO, customers customerrepo.CustomerRepository, orders salesrepo.SalesOrderRepository) (*fiscalentity.LocalEntrega, error) {
+	if dto == nil || customers == nil || dto.CustomerCode == nil {
+		return nil, nil
+	}
+	cliente, err := customers.GetCustomerByCode(ctx, *dto.CustomerCode)
+	if err != nil {
+		if errorsuc.EhNaoEncontrado(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("lendo o cliente da nota: %w", err)
+	}
+	enderecos, err := enderecosDoCliente(ctx, customers, cliente)
+	if err != nil {
+		return nil, err
+	}
+	var entrega *customerentity.CustomerAddress
+	if dto.SalesOrderCode != nil && orders != nil {
+		if order, err := orders.GetByCode(ctx, *dto.SalesOrderCode); err == nil && order != nil && order.ShippingAddressCode != nil {
+			for _, e := range enderecos {
+				if e != nil && e.ID == *order.ShippingAddressCode {
+					entrega = e
+				}
+			}
+		}
+	}
+	if entrega == nil {
+		var soEntrega []*customerentity.CustomerAddress
+		for _, e := range enderecos {
+			if e != nil && e.AddressType == customerentity.AddressEntrega {
+				soEntrega = append(soEntrega, e)
+			}
+		}
+		entrega = melhorEndereco(soEntrega, nil)
+	}
+	if entrega == nil || mesmoEndereco(entrega, dto) {
+		return nil, nil
+	}
+	return &fiscalentity.LocalEntrega{
+		CNPJCPF: somenteDigitos(cliente.DocumentNumber), Nome: cliente.Name,
+		Logradouro: valorOuVazio(entrega.Street), Numero: valorOuVazio(entrega.Number), Complemento: valorOuVazio(entrega.Complement),
+		Bairro: valorOuVazio(entrega.Neighborhood), Municipio: valorOuVazio(entrega.City), UF: valorOuVazio(entrega.UF),
+		CEP: somenteDigitos(valorOuVazio(entrega.ZipCode)),
+	}, nil
+}
+
+// mesmoEndereco compara o endereço de entrega com o do destinatário da nota.
+func mesmoEndereco(e *customerentity.CustomerAddress, dto *request.CreateFiscalExitDTO) bool {
+	norm := func(s string) string { return strings.ToUpper(strings.Join(strings.Fields(s), " ")) }
+	d := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	return norm(valorOuVazio(e.Street)) == norm(d(dto.DestLogradouro)) &&
+		norm(valorOuVazio(e.Number)) == norm(d(dto.DestNumero)) &&
+		norm(valorOuVazio(e.City)) == norm(d(dto.DestMunicipio)) &&
+		norm(valorOuVazio(e.UF)) == norm(d(dto.UFDestinatario))
+}
+
+// primeiroEmailDoCliente: o e-mail de NF-e do cadastro (o primeiro, se houver
+// vários separados por ";"); sem ele, o do primeiro contato que tiver.
 func primeiroEmailDoCliente(cliente *customerentity.Customer) string {
+	if cliente.NFeEmail != nil {
+		if e := strings.TrimSpace(strings.Split(*cliente.NFeEmail, ";")[0]); e != "" {
+			return e
+		}
+	}
 	for _, c := range cliente.Contacts {
 		if c != nil && c.Email != nil && strings.TrimSpace(*c.Email) != "" {
 			return strings.TrimSpace(*c.Email)
@@ -199,8 +305,8 @@ type DadosFiscaisDoDestinatario struct {
 // ResolvedorDeDestinatario expõe a resolução do destinatário para quem emite nota
 // fora do módulo fiscal — hoje, o faturamento do beneficiamento.
 //
-// Existe para a regra de qual endereço vale (entrega, depois cobrança, depois
-// padrão, depois o primeiro) morar num lugar só. Duplicá-la faria a nota de
+// Existe para a regra de qual endereço vale (comercial, cobrança, outro e só
+// então entrega) morar num lugar só. Duplicá-la faria a nota de
 // beneficiamento sair com endereço diferente da nota de venda do mesmo cliente.
 type ResolvedorDeDestinatario struct {
 	Customers customerrepo.CustomerRepository

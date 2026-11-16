@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 func toPgInt2(v *int16) pgtype.Int2 {
@@ -1911,16 +1912,25 @@ func (r *CustomerRepositorySQLC) CreateCustomer(ctx context.Context, c *entity.C
 		RegionID:              c.RegionID,
 		MarketSegmentID:       c.MarketSegmentID,
 		CustomerTypeID:        c.CustomerTypeID,
-		PaymentConditionID:    c.PaymentConditionID,
-		SalesTableID:          c.SalesTableID,
 		CarrierID:             c.CarrierID,
-		CarrierGroupID:        c.CarrierGroupID,
-		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
-		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
 		CreditLimit:           pgutil.ToPgNumericFromDecimal(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
 		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
+		IeIndicator:           pgutil.ToPgTextFromPtr(c.IEIndicator),
+		TaxRegime:             pgutil.ToPgTextFromPtr(c.TaxRegime),
+		MainCnae:              pgutil.ToPgTextFromPtr(c.MainCNAE),
+		NfeEmail:              pgutil.ToPgTextFromPtr(c.NFeEmail),
+		BillingEmail:          pgutil.ToPgTextFromPtr(c.BillingEmail),
+		RepresentativeCode:    c.RepresentativeCode,
+		ShippingCarrierID:     c.ShippingCarrierID,
+		FreightType:           pgutil.ToPgTextFromPtr(c.FreightType),
+		RequiresCustomerPo:    c.RequiresCustomerPO,
+		RequiresQualityCert:   c.RequiresQualityCert,
+		AllowsPartialBilling:  c.AllowsPartialBilling,
+		ReceivingNotes:        pgutil.ToPgTextFromPtr(c.ReceivingNotes),
+		CommercialNotes:       pgutil.ToPgTextFromPtr(c.CommercialNotes),
+		FinancialNotes:        pgutil.ToPgTextFromPtr(c.FinancialNotes),
 		CreatedBy:             pgutil.ToPgUUID(c.CreatedBy),
 	})
 	if err != nil {
@@ -1947,20 +1957,29 @@ func (r *CustomerRepositorySQLC) UpdateCustomer(ctx context.Context, c *entity.C
 		MunicipalRegistration: pgutil.ToPgTextFromPtr(c.MunicipalRegistration),
 		SuframaCode:           pgutil.ToPgTextFromPtr(c.SuframaCode),
 		SuframaExpiry:         pgutil.ToPgDateFromPtr(c.SuframaExpiry),
+		CorporateCode:         c.CorporateCode,
+		IsCorporate:           c.IsCorporate,
 		RegionID:              c.RegionID,
 		MarketSegmentID:       c.MarketSegmentID,
 		CustomerTypeID:        c.CustomerTypeID,
-		PaymentConditionID:    c.PaymentConditionID,
-		SalesTableID:          c.SalesTableID,
 		CarrierID:             c.CarrierID,
-		CarrierGroupID:        c.CarrierGroupID,
-		InvoiceTypeID:         c.InvoiceTypeID,
 		TaxTypeID:             c.TaxTypeID,
-		PaymentCondVisibility: sqltypes.PaymentCondVisibilityEnum(c.PaymentCondVisibility),
-		CreditLimit:           pgutil.ToPgNumericFromDecimal(c.CreditLimit),
 		Website:               pgutil.ToPgTextFromPtr(c.Website),
 		FinalidadeCompra:      pgutil.ToPgTextFromPtr(c.FinalidadeCompra),
-		IsActive:              c.IsActive,
+		IeIndicator:           pgutil.ToPgTextFromPtr(c.IEIndicator),
+		TaxRegime:             pgutil.ToPgTextFromPtr(c.TaxRegime),
+		MainCnae:              pgutil.ToPgTextFromPtr(c.MainCNAE),
+		NfeEmail:              pgutil.ToPgTextFromPtr(c.NFeEmail),
+		BillingEmail:          pgutil.ToPgTextFromPtr(c.BillingEmail),
+		RepresentativeCode:    c.RepresentativeCode,
+		ShippingCarrierID:     c.ShippingCarrierID,
+		FreightType:           pgutil.ToPgTextFromPtr(c.FreightType),
+		RequiresCustomerPo:    c.RequiresCustomerPO,
+		RequiresQualityCert:   c.RequiresQualityCert,
+		AllowsPartialBilling:  c.AllowsPartialBilling,
+		ReceivingNotes:        pgutil.ToPgTextFromPtr(c.ReceivingNotes),
+		CommercialNotes:       pgutil.ToPgTextFromPtr(c.CommercialNotes),
+		FinancialNotes:        pgutil.ToPgTextFromPtr(c.FinancialNotes),
 	})
 	if err != nil {
 		return nil, naoAchou(err, fmt.Sprintf("cliente %d não encontrado", c.Code))
@@ -2074,13 +2093,8 @@ func customerToEntity(row sqlc.Customer) *entity.Customer {
 		RegionID:              row.RegionID,
 		MarketSegmentID:       row.MarketSegmentID,
 		CustomerTypeID:        row.CustomerTypeID,
-		PaymentConditionID:    row.PaymentConditionID,
-		SalesTableID:          row.SalesTableID,
 		CarrierID:             row.CarrierID,
-		CarrierGroupID:        row.CarrierGroupID,
-		InvoiceTypeID:         row.InvoiceTypeID,
 		TaxTypeID:             row.TaxTypeID,
-		PaymentCondVisibility: entity.PaymentCondVisibility(row.PaymentCondVisibility),
 		CreditLimit:           pgutil.FromPgNumericToDecimal(row.CreditLimit),
 		Website:               pgutil.FromPgTextPtr(row.Website),
 		FinalidadeCompra:      pgutil.FromPgTextPtr(row.FinalidadeCompra),
@@ -2090,7 +2104,40 @@ func customerToEntity(row sqlc.Customer) *entity.Customer {
 		CreatedAt:             pgutil.FromPgTimestamptz(row.CreatedAt),
 		CreatedBy:             pgutil.FromPgUUID(row.CreatedBy),
 		UpdatedAt:             pgutil.FromPgTimestamptz(row.UpdatedAt),
+		IEIndicator:           pgutil.FromPgTextPtr(row.IeIndicator),
+		TaxRegime:             pgutil.FromPgTextPtr(row.TaxRegime),
+		MainCNAE:              pgutil.FromPgTextPtr(row.MainCnae),
+		NFeEmail:              pgutil.FromPgTextPtr(row.NfeEmail),
+		BillingEmail:          pgutil.FromPgTextPtr(row.BillingEmail),
+		RepresentativeCode:    row.RepresentativeCode,
+		ShippingCarrierID:     row.ShippingCarrierID,
+		FreightType:           pgutil.FromPgTextPtr(row.FreightType),
+		RequiresCustomerPO:    row.RequiresCustomerPo,
+		RequiresQualityCert:   row.RequiresQualityCert,
+		AllowsPartialBilling:  row.AllowsPartialBilling,
+		ReceivingNotes:        pgutil.FromPgTextPtr(row.ReceivingNotes),
+		CommercialNotes:       pgutil.FromPgTextPtr(row.CommercialNotes),
+		FinancialNotes:        pgutil.FromPgTextPtr(row.FinancialNotes),
+		RegistrationStatus:    pgutil.FromPgTextPtr(row.RegistrationStatus),
+		RegistrationCheckedAt: timestamptzPtr(row.RegistrationCheckedAt),
+		OpeningDate:           pgutil.FromPgDateToPtr(row.OpeningDate),
+		ShareCapital:          pgutil.FromPgNumericToDecimalPtr(row.ShareCapital),
+		CompanySize:           pgutil.FromPgTextPtr(row.CompanySize),
+		LegalNature:           pgutil.FromPgTextPtr(row.LegalNature),
+		CreditScore:           row.CreditScore,
+		CreditRiskClass:       pgutil.FromPgTextPtr(row.CreditRiskClass),
+		CreditLimitSuggested:  pgutil.FromPgNumericToDecimalPtr(row.CreditLimitSuggested),
+		CreditLimitExpiresAt:  pgutil.FromPgDateToPtr(row.CreditLimitExpiresAt),
+		CreditReviewedAt:      timestamptzPtr(row.CreditReviewedAt),
 	}
+}
+
+func timestamptzPtr(v pgtype.Timestamptz) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	t := v.Time
+	return &t
 }
 
 // ─── Customer Addresses ───────────────────────────────────────────────────────

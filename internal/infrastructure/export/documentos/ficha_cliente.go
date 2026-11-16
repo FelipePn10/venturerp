@@ -137,7 +137,7 @@ func (Gerador) FichaCliente(d uc.FichaCliente) []byte {
 	})
 	grade("CLASSIFICAÇÃO E CONDIÇÕES COMERCIAIS", [][]c{
 		{{"Tipo de cliente", d.Tipo, 1, false}, {"Região", d.Regiao, 1, false}, {"Segmento de mercado", d.Segmento, 1.2, false}, {"Finalidade da compra", rotuloFinalidade(d.Finalidade), 1, true}},
-		{{"Condição de pagamento", ou(d.Condicao, "não definida"), 1.1, false}, {"Tabela de venda", ou(d.Tabela, "não definida"), 1.2, false}, {"Transportadora", ou(d.Transportadora, "não definida"), 1.3, false}, {"Limite de crédito", limiteTexto(d.LimiteCredito), 0.9, true}},
+		{{"Classe de risco", ou(d.ClasseRisco, "sem análise"), 0.9, false}, {"Validade do limite", ou(d.ValidadeLimite, "—"), 0.9, false}, {"Situação na Receita", ou(d.SituacaoReceita, "não conferida"), 1, false}, {"Transportadora", ou(d.Transportadora, "não definida"), 1.3, false}, {"Limite de crédito", limiteTexto(d.LimiteCredito), 0.9, true}},
 	})
 
 	// Posição comercial.

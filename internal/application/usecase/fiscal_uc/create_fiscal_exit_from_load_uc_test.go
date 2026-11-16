@@ -107,8 +107,9 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 	fiscal := &loadFiscalRepo{nextNF: 123}
 	shipment := &loadShipmentRepo{
 		load: &shipentity.ShipmentLoad{
-			Code:   9001,
-			Status: shipentity.LoadStatusReleased,
+			Code:              9001,
+			Status:            shipentity.LoadStatusReleased,
+			ShippingCarrierID: i64p(4),
 			Shipments: []*shipentity.ShipmentLoadShipment{
 				{ShipmentCode: 5001},
 			},
@@ -126,7 +127,7 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 		{Code: 1, ItemCode: 1001, UnitPrice: decimal.NewFromInt(50)},
 	}}
 	uc := &CreateFiscalExitFromLoadUseCase{
-		CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}},
+		CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}, Transportadoras: transportadoraFake{}},
 		FiscalRepo:     fiscal,
 		ShipmentRepo:   shipment,
 		SalesOrderRepo: sales,
@@ -154,6 +155,9 @@ func TestCreateFiscalExitFromLoad_UsesSalesOrderPricesAndLinksLoad(t *testing.T)
 	}
 	if len(shipment.linkedFiscalExit) != 1 || shipment.linkedFiscalExit[0] != 5001 {
 		t.Fatalf("shipment fiscal link not written: %v", shipment.linkedFiscalExit)
+	}
+	if fiscal.created.ShippingCarrierID == nil || *fiscal.created.ShippingCarrierID != 4 {
+		t.Fatalf("a nota da carga leva a transportadora da carga: %v", fiscal.created.ShippingCarrierID)
 	}
 	if len(shipment.loadNotes) != 1 || shipment.loadNotes[0].FiscalExitID != 77 {
 		t.Fatalf("load fiscal note not written: %+v", shipment.loadNotes)
@@ -235,4 +239,10 @@ func TestCompletarDoCadastro_OverrideVenceOCadastro(t *testing.T) {
 	if *items[0].Ncm != "99999999" || *items[0].Description != "Texto escolhido" {
 		t.Fatalf("o override foi ignorado: %+v", items[0])
 	}
+}
+
+type transportadoraFake struct{}
+
+func (transportadoraFake) TransportadorDaNota(_ context.Context, id int64) (*fiscalentity.Transportador, error) {
+	return &fiscalentity.Transportador{CNPJCPF: "11222333000181", Nome: "Transportadora de teste"}, nil
 }

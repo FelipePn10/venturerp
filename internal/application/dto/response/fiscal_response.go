@@ -473,17 +473,23 @@ type NcmTaxTableResponse struct {
 // já foi faturado, o que está em nota ainda não autorizada e o que falta, com
 // cliente, representante/comissão e condição de pagamento que a nota herdará.
 type PedidoParaFaturarResponse struct {
-	SalesOrderCode       int64                   `json:"sales_order_code"`
-	OrderNumber          int64                   `json:"order_number"`
-	Status               string                  `json:"status"`
-	EmissionDate         string                  `json:"emission_date"`
-	CustomerCode         *int64                  `json:"customer_code,omitempty"`
-	CustomerName         string                  `json:"customer_name"`
-	CustomerDocument     string                  `json:"customer_document"`
-	CustomerIE           string                  `json:"customer_ie,omitempty"`
-	CustomerUF           string                  `json:"customer_uf,omitempty"`
-	CustomerCity         string                  `json:"customer_city,omitempty"`
-	EnderecoCompleto     bool                    `json:"endereco_completo"`
+	SalesOrderCode   int64  `json:"sales_order_code"`
+	OrderNumber      int64  `json:"order_number"`
+	Status           string `json:"status"`
+	EmissionDate     string `json:"emission_date"`
+	CustomerCode     *int64 `json:"customer_code,omitempty"`
+	CustomerName     string `json:"customer_name"`
+	CustomerDocument string `json:"customer_document"`
+	CustomerIE       string `json:"customer_ie,omitempty"`
+	CustomerUF       string `json:"customer_uf,omitempty"`
+	CustomerCity     string `json:"customer_city,omitempty"`
+	EnderecoCompleto bool   `json:"endereco_completo"`
+	// TipoFretePadrao e ShippingCarrierID: o que a nota usa se o faturamento
+	// não disser outro (pedido, depois cliente). LocalEntrega: o endereço de
+	// entrega quando é outro que o do destinatário.
+	TipoFretePadrao      *string                 `json:"tipo_frete_padrao,omitempty"`
+	ShippingCarrierID    *int64                  `json:"shipping_carrier_id,omitempty"`
+	LocalEntrega         string                  `json:"local_entrega,omitempty"`
 	RepresentativeCode   *int64                  `json:"representative_code,omitempty"`
 	RepresentativeName   string                  `json:"representative_name,omitempty"`
 	CommissionPct        float64                 `json:"commission_pct"`

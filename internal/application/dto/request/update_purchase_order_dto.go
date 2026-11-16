@@ -21,22 +21,24 @@ type UpdatePurchaseOrderDTO struct {
 	TotalDiscount       decimal.Decimal `json:"total_discount"`
 	IsFirm              bool            `json:"is_firm"`
 
-	PriceTableCode         *int64          `json:"price_table_code,omitempty"`
-	InvoiceTypeCode        *int64          `json:"invoice_type_code,omitempty"`
-	FinancialAccount       *string         `json:"financial_account,omitempty"`
-	FreightType            string          `json:"freight_type,omitempty"`
-	FreightValueType       *string         `json:"freight_value_type,omitempty"`
-	FreightValueMode       *string         `json:"freight_value_mode,omitempty"`
-	FreightValue           decimal.Decimal `json:"freight_value,omitempty"`
-	CarrierCode            *int64          `json:"carrier_code,omitempty"`
-	RedispatchCarrierCode  *int64          `json:"redispatch_carrier_code,omitempty"`
-	RedispatchFreightType  *string         `json:"redispatch_freight_type,omitempty"`
-	RedispatchFreightValue decimal.Decimal `json:"redispatch_freight_value,omitempty"`
-	AdvanceDate            *string         `json:"advance_date,omitempty"`
-	AdvanceValue           decimal.Decimal `json:"advance_value,omitempty"`
-	IncotermCode           *string         `json:"incoterm_code,omitempty"`
-	ShipmentDate           *string         `json:"shipment_date,omitempty"`
-	TalaoNumber            *string         `json:"talao_number,omitempty"`
+	PriceTableCode              *int64          `json:"price_table_code,omitempty"`
+	InvoiceTypeCode             *int64          `json:"invoice_type_code,omitempty"`
+	FinancialAccount            *string         `json:"financial_account,omitempty"`
+	FreightType                 string          `json:"freight_type,omitempty"`
+	FreightValueType            *string         `json:"freight_value_type,omitempty"`
+	FreightValueMode            *string         `json:"freight_value_mode,omitempty"`
+	FreightValue                decimal.Decimal `json:"freight_value,omitempty"`
+	CarrierCode                 *int64          `json:"carrier_code,omitempty"`
+	ShippingCarrierID           *int64          `json:"shipping_carrier_id,omitempty"`
+	RedispatchShippingCarrierID *int64          `json:"redispatch_shipping_carrier_id,omitempty"`
+	RedispatchCarrierCode       *int64          `json:"redispatch_carrier_code,omitempty"`
+	RedispatchFreightType       *string         `json:"redispatch_freight_type,omitempty"`
+	RedispatchFreightValue      decimal.Decimal `json:"redispatch_freight_value,omitempty"`
+	AdvanceDate                 *string         `json:"advance_date,omitempty"`
+	AdvanceValue                decimal.Decimal `json:"advance_value,omitempty"`
+	IncotermCode                *string         `json:"incoterm_code,omitempty"`
+	ShipmentDate                *string         `json:"shipment_date,omitempty"`
+	TalaoNumber                 *string         `json:"talao_number,omitempty"`
 }
 
 // UpdatePurchaseOrderItemDTO altera uma linha de pedido ainda não aprovado.

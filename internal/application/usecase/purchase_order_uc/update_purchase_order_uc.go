@@ -98,6 +98,8 @@ func (uc *UpdatePurchaseOrderUseCase) Execute(
 	o.FreightValueMode = dto.FreightValueMode
 	o.FreightValue = dto.FreightValue
 	o.CarrierCode = dto.CarrierCode
+	o.ShippingCarrierID = dto.ShippingCarrierID
+	o.RedispatchShippingCarrierID = dto.RedispatchShippingCarrierID
 	o.RedispatchCarrierCode = dto.RedispatchCarrierCode
 	o.RedispatchFreightType = dto.RedispatchFreightType
 	o.RedispatchFreightValue = dto.RedispatchFreightValue

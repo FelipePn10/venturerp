@@ -4622,13 +4622,8 @@ type Customer struct {
 	RegionID              *int64
 	MarketSegmentID       *int64
 	CustomerTypeID        *int64
-	PaymentConditionID    *int64
-	SalesTableID          *int64
 	CarrierID             *int64
-	CarrierGroupID        *int64
-	InvoiceTypeID         *int64
 	TaxTypeID             *int64
-	PaymentCondVisibility sqltypes.PaymentCondVisibilityEnum
 	CreditLimit           pgtype.Numeric
 	Website               pgtype.Text
 	IsActive              bool
@@ -4639,6 +4634,32 @@ type Customer struct {
 	UpdatedAt             pgtype.Timestamptz
 	EnterpriseID          int64
 	FinalidadeCompra      pgtype.Text
+	IeIndicator           pgtype.Text
+	TaxRegime             pgtype.Text
+	MainCnae              pgtype.Text
+	NfeEmail              pgtype.Text
+	BillingEmail          pgtype.Text
+	RepresentativeCode    *int64
+	ShippingCarrierID     *int64
+	FreightType           pgtype.Text
+	RequiresCustomerPo    bool
+	RequiresQualityCert   bool
+	AllowsPartialBilling  bool
+	ReceivingNotes        pgtype.Text
+	CommercialNotes       pgtype.Text
+	FinancialNotes        pgtype.Text
+	RegistrationStatus    pgtype.Text
+	RegistrationCheckedAt pgtype.Timestamptz
+	RegistrationAttemptAt pgtype.Timestamptz
+	OpeningDate           pgtype.Date
+	ShareCapital          pgtype.Numeric
+	CompanySize           pgtype.Text
+	LegalNature           pgtype.Text
+	CreditScore           *int32
+	CreditRiskClass       pgtype.Text
+	CreditLimitSuggested  pgtype.Numeric
+	CreditLimitExpiresAt  pgtype.Date
+	CreditReviewedAt      pgtype.Timestamptz
 }
 
 type CustomerAddress struct {
@@ -4678,6 +4699,42 @@ type CustomerContactType struct {
 	IsActive     bool
 	CreatedAt    pgtype.Timestamptz
 	EnterpriseID int64
+}
+
+type CustomerCreditPolicy struct {
+	EnterpriseID          int64
+	MaxLimit              pgtype.Numeric
+	NewCustomerCapitalPct pgtype.Numeric
+	NewCustomerCap        pgtype.Numeric
+	OverrideTolerancePct  pgtype.Numeric
+	OverdueBlockDays      int32
+	HistoryMonths         int32
+	ValidityMonthsA       int32
+	ValidityMonthsB       int32
+	ValidityMonthsC       int32
+	ValidityMonthsD       int32
+	ValidityMonthsE       int32
+	RegistrationCheckDays int32
+	UpdatedAt             pgtype.Timestamptz
+	UpdatedBy             pgtype.UUID
+}
+
+type CustomerCreditReview struct {
+	ID             int64
+	EnterpriseID   int64
+	CustomerCode   int64
+	Origin         string
+	SuggestedLimit pgtype.Numeric
+	ApprovedLimit  pgtype.Numeric
+	PreviousLimit  pgtype.Numeric
+	Score          int32
+	RiskClass      string
+	ExpiresAt      pgtype.Date
+	Deviates       bool
+	Reason         pgtype.Text
+	Factors        []byte
+	CreatedBy      pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
 }
 
 type CustomerMaterialAudit struct {
@@ -4777,6 +4834,18 @@ type CustomerType struct {
 	IsActive     bool
 	CreatedAt    pgtype.Timestamptz
 	EnterpriseID int64
+}
+
+type CustomersCamposRetirado struct {
+	CustomerID            int64
+	EnterpriseID          int64
+	Code                  int64
+	PaymentConditionID    *int64
+	SalesTableID          *int64
+	InvoiceTypeID         *int64
+	CarrierGroupID        *int64
+	PaymentCondVisibility NullPaymentConditionVisibilityEnum
+	RetiradoEm            pgtype.Timestamptz
 }
 
 type CuttingPattern struct {
@@ -5694,6 +5763,10 @@ type FiscalExit struct {
 	InformacoesComplementares    pgtype.Text
 	TipoDocumento                int16
 	DevolucaoVendaID             *int64
+	TipoFrete                    pgtype.Text
+	ShippingCarrierID            *int64
+	Transportador                []byte
+	LocalEntrega                 []byte
 }
 
 type FiscalExitItem struct {
@@ -9005,49 +9078,51 @@ type PurchaseApprovalLimit struct {
 }
 
 type PurchaseOrder struct {
-	Code                   int64
-	OrderNumber            int64
-	EnterpriseCode         int64
-	Status                 string
-	Origin                 string
-	EmissionDate           pgtype.Date
-	DeliveryDate           pgtype.Date
-	SupplierCode           *int64
-	PaymentTermCode        *int64
-	CurrencyCode           string
-	ShippingAddressCode    *int64
-	Notes                  pgtype.Text
-	TotalGross             pgtype.Numeric
-	TotalNet               pgtype.Numeric
-	TotalDiscount          pgtype.Numeric
-	IsActive               bool
-	IsFirm                 bool
-	CreatedAt              pgtype.Timestamptz
-	UpdatedAt              pgtype.Timestamptz
-	CreatedBy              pgtype.UUID
-	PriceTableCode         *int64
-	InvoiceTypeCode        *int64
-	FinancialAccount       pgtype.Text
-	RequestTypeCode        *int64
-	CurrencyDate           pgtype.Date
-	FreightType            string
-	FreightValueType       pgtype.Text
-	FreightValueMode       pgtype.Text
-	FreightValue           pgtype.Numeric
-	CarrierCode            *int64
-	RedispatchCarrierCode  *int64
-	RedispatchFreightType  pgtype.Text
-	RedispatchFreightValue pgtype.Numeric
-	AdvanceDate            pgtype.Date
-	AdvanceValue           pgtype.Numeric
-	IncotermCode           pgtype.Text
-	ShipmentDate           pgtype.Date
-	TalaoNumber            pgtype.Text
-	AlcadaStatus           string
-	BuyerEmployeeCode      *int64
-	OrderType              string
-	KanbanOrigin           bool
-	CustomerCode           *int64
+	Code                        int64
+	OrderNumber                 int64
+	EnterpriseCode              int64
+	Status                      string
+	Origin                      string
+	EmissionDate                pgtype.Date
+	DeliveryDate                pgtype.Date
+	SupplierCode                *int64
+	PaymentTermCode             *int64
+	CurrencyCode                string
+	ShippingAddressCode         *int64
+	Notes                       pgtype.Text
+	TotalGross                  pgtype.Numeric
+	TotalNet                    pgtype.Numeric
+	TotalDiscount               pgtype.Numeric
+	IsActive                    bool
+	IsFirm                      bool
+	CreatedAt                   pgtype.Timestamptz
+	UpdatedAt                   pgtype.Timestamptz
+	CreatedBy                   pgtype.UUID
+	PriceTableCode              *int64
+	InvoiceTypeCode             *int64
+	FinancialAccount            pgtype.Text
+	RequestTypeCode             *int64
+	CurrencyDate                pgtype.Date
+	FreightType                 string
+	FreightValueType            pgtype.Text
+	FreightValueMode            pgtype.Text
+	FreightValue                pgtype.Numeric
+	CarrierCode                 *int64
+	RedispatchCarrierCode       *int64
+	RedispatchFreightType       pgtype.Text
+	RedispatchFreightValue      pgtype.Numeric
+	AdvanceDate                 pgtype.Date
+	AdvanceValue                pgtype.Numeric
+	IncotermCode                pgtype.Text
+	ShipmentDate                pgtype.Date
+	TalaoNumber                 pgtype.Text
+	AlcadaStatus                string
+	BuyerEmployeeCode           *int64
+	OrderType                   string
+	KanbanOrigin                bool
+	CustomerCode                *int64
+	ShippingCarrierID           *int64
+	RedispatchShippingCarrierID *int64
 }
 
 type PurchaseOrderAttachment struct {
@@ -9810,6 +9885,7 @@ type ReceivingNotice struct {
 	CreatedBy         pgtype.UUID
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	ShippingCarrierID *int64
 }
 
 type ReceivingNoticeItem struct {
@@ -10470,6 +10546,7 @@ type SalesOrder struct {
 	DelayReason                 pgtype.Text
 	DelayAction                 pgtype.Text
 	FinalidadeCompra            pgtype.Text
+	CustomerPoNumber            pgtype.Text
 }
 
 type SalesOrderDemand struct {
@@ -10892,6 +10969,7 @@ type Shipment struct {
 	CancelledAt         pgtype.Timestamptz
 	UpdatedBy           pgtype.UUID
 	EnterpriseID        int64
+	ShippingCarrierID   *int64
 }
 
 type ShipmentDeliveryInstruction struct {
@@ -10977,6 +11055,7 @@ type ShipmentLoad struct {
 	CreatedBy         pgtype.UUID
 	UpdatedBy         pgtype.UUID
 	EnterpriseID      int64
+	ShippingCarrierID *int64
 }
 
 type ShipmentLoadFiscalNote struct {
@@ -12441,6 +12520,12 @@ type UserEnterprise struct {
 	EnterpriseID int64
 	CreatedAt    pgtype.Timestamptz
 	Role         string
+}
+
+type UserPreference struct {
+	UserID              pgtype.UUID
+	CustomerNameDisplay string
+	UpdatedAt           pgtype.Timestamptz
 }
 
 type UsoCliente struct {

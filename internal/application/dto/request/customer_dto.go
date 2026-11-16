@@ -644,42 +644,69 @@ type CreateCustomerDTO struct {
 	RegionCode            *int64     `json:"region_code,omitempty"`
 	MarketSegmentCode     *int64     `json:"market_segment_code,omitempty"`
 	CustomerTypeCode      *int64     `json:"customer_type_code,omitempty"`
-	PaymentConditionCode  *int64     `json:"payment_condition_code,omitempty"`
-	SalesTableCode        *int64     `json:"sales_table_code,omitempty"`
-	CarrierCode           *int64     `json:"carrier_code,omitempty"`
-	CarrierGroupCode      *int64     `json:"carrier_group_code,omitempty"`
-	InvoiceTypeCode       *int64     `json:"invoice_type_code,omitempty"`
+	CarrierCode           *int64     `json:"carrier_code,omitempty"` // portador de cobrança
 	TaxTypeCode           *int64     `json:"tax_type_code,omitempty"`
 	// FinalidadeCompra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO). Na alteração,
 	// ausente mantém a atual e vazia ("") limpa.
-	FinalidadeCompra      *string         `json:"finalidade_compra,omitempty"`
-	PaymentCondVisibility string          `json:"payment_cond_visibility"` // SOMENTE_VINCULADOS | VINCULADOS_E_NENHUM | TODOS
-	CreditLimit           decimal.Decimal `json:"credit_limit"`
-	Website               *string         `json:"website,omitempty"`
-	CreatedBy             uuid.UUID       `json:"created_by"`
+	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
+	Website          *string `json:"website,omitempty"`
+
+	IEIndicator          *string `json:"ie_indicator,omitempty"` // CONTRIBUINTE | ISENTO | NAO_CONTRIBUINTE
+	TaxRegime            *string `json:"tax_regime,omitempty"`   // SIMPLES | MEI | NORMAL
+	MainCNAE             *string `json:"main_cnae,omitempty"`
+	NFeEmail             *string `json:"nfe_email,omitempty"`
+	BillingEmail         *string `json:"billing_email,omitempty"`
+	RepresentativeCode   *int64  `json:"representative_code,omitempty"`
+	ShippingCarrierID    *int64  `json:"shipping_carrier_id,omitempty"`
+	FreightType          *string `json:"freight_type,omitempty"` // CIF | FOB | TERCEIROS | SEM_FRETE
+	RequiresCustomerPO   bool    `json:"requires_customer_po"`
+	RequiresQualityCert  bool    `json:"requires_quality_cert"`
+	AllowsPartialBilling *bool   `json:"allows_partial_billing,omitempty"` // ausente = permite
+	ReceivingNotes       *string `json:"receiving_notes,omitempty"`
+	CommercialNotes      *string `json:"commercial_notes,omitempty"`
+	FinancialNotes       *string `json:"financial_notes,omitempty"`
+
+	// Só na inclusão: o limite passa pela análise de crédito; diferente do
+	// sugerido exige CreditLimitReason. Na alteração, o limite muda pela
+	// revisão de crédito (PUT /customers/{code}/credit-limit).
+	// FormVersion: a VCLI0500 revista manda 2. Sem ele (desktop antigo), a
+	// alteração preserva os campos que a tela antiga não conhece.
+	FormVersion int `json:"form_version,omitempty"`
+
+	CreditLimit       *decimal.Decimal `json:"credit_limit,omitempty"`
+	CreditLimitReason string           `json:"credit_limit_reason,omitempty"`
+	CreatedBy         uuid.UUID        `json:"created_by"`
 }
 
-type UpdateCustomerDTO struct {
-	ID                    int64           `json:"id"`
-	Name                  string          `json:"name"`
-	TradeName             *string         `json:"trade_name,omitempty"`
-	StateRegistration     *string         `json:"state_registration,omitempty"`
-	MunicipalRegistration *string         `json:"municipal_registration,omitempty"`
-	SuframaCode           *string         `json:"suframa_code,omitempty"`
-	SuframaExpiry         *time.Time      `json:"suframa_expiry,omitempty"`
-	RegionID              *int64          `json:"region_id,omitempty"`
-	MarketSegmentID       *int64          `json:"market_segment_id,omitempty"`
-	CustomerTypeID        *int64          `json:"customer_type_id,omitempty"`
-	PaymentConditionID    *int64          `json:"payment_condition_id,omitempty"`
-	SalesTableID          *int64          `json:"sales_table_id,omitempty"`
-	CarrierID             *int64          `json:"carrier_id,omitempty"`
-	CarrierGroupID        *int64          `json:"carrier_group_id,omitempty"`
-	InvoiceTypeID         *int64          `json:"invoice_type_id,omitempty"`
-	TaxTypeID             *int64          `json:"tax_type_id,omitempty"`
-	PaymentCondVisibility string          `json:"payment_cond_visibility"`
-	CreditLimit           decimal.Decimal `json:"credit_limit"`
-	Website               *string         `json:"website,omitempty"`
-	IsActive              *bool           `json:"is_active,omitempty"`
+// SetCreditLimitDTO grava um limite revisado.
+type SetCreditLimitDTO struct {
+	CreditLimit decimal.Decimal `json:"credit_limit"`
+	Reason      string          `json:"reason"`
+}
+
+// CreditPolicyDTO é a política de crédito da empresa.
+type CreditPolicyDTO struct {
+	MaxLimit              decimal.Decimal `json:"max_limit"`
+	NewCustomerCapitalPct decimal.Decimal `json:"new_customer_capital_pct"`
+	NewCustomerCap        decimal.Decimal `json:"new_customer_cap"`
+	OverrideTolerancePct  decimal.Decimal `json:"override_tolerance_pct"`
+	OverdueBlockDays      int             `json:"overdue_block_days"`
+	HistoryMonths         int             `json:"history_months"`
+	ValidityMonthsA       int             `json:"validity_months_a"`
+	ValidityMonthsB       int             `json:"validity_months_b"`
+	ValidityMonthsC       int             `json:"validity_months_c"`
+	ValidityMonthsD       int             `json:"validity_months_d"`
+	ValidityMonthsE       int             `json:"validity_months_e"`
+	RegistrationCheckDays int             `json:"registration_check_days"`
+}
+
+// UpdateAddressDTO / UpdateContactDTO: edição na VCLI0500.
+type UpdateAddressDTO struct {
+	AddAddressDTO
+}
+
+type UpdateContactDTO struct {
+	AddContactDTO
 }
 
 type BlockCustomerDTO struct {

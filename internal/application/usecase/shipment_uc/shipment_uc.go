@@ -91,6 +91,7 @@ type CreateShipmentInput struct {
 	PurchaseOrderCode   *int64
 	ProductionOrderCode *int64
 	CarrierCode         *int64
+	ShippingCarrierID   *int64
 	TotalVolumes        int
 	TotalNetWeight      decimal.Decimal
 	TotalGrossWeight    decimal.Decimal
@@ -111,6 +112,7 @@ func (uc *ShipmentUseCase) Create(ctx context.Context, in CreateShipmentInput) (
 		PurchaseOrderCode:   in.PurchaseOrderCode,
 		ProductionOrderCode: in.ProductionOrderCode,
 		CarrierCode:         in.CarrierCode,
+		ShippingCarrierID:   in.ShippingCarrierID,
 		Status:              entity.ShipmentStatusOpen,
 		TotalVolumes:        in.TotalVolumes,
 		TotalNetWeight:      in.TotalNetWeight,

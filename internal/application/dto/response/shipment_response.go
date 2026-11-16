@@ -15,6 +15,7 @@ type ShipmentResponse struct {
 	PurchaseOrderCode   *int64  `json:"purchase_order_code,omitempty"`
 	ProductionOrderCode *int64  `json:"production_order_code,omitempty"`
 	CarrierCode         *int64  `json:"carrier_code,omitempty"`
+	ShippingCarrierID   *int64  `json:"shipping_carrier_id,omitempty"`
 	Status              string  `json:"status"`
 	StatusLabel         string  `json:"status_label"`
 
@@ -103,6 +104,7 @@ type ShipmentLoadResponse struct {
 	StatusLabel       string     `json:"status_label"`
 	Description       *string    `json:"description,omitempty"`
 	CarrierCode       *int64     `json:"carrier_code,omitempty"`
+	ShippingCarrierID *int64     `json:"shipping_carrier_id,omitempty"`
 	VehiclePlate      *string    `json:"vehicle_plate,omitempty"`
 	DriverName        *string    `json:"driver_name,omitempty"`
 	DriverDocument    *string    `json:"driver_document,omitempty"`

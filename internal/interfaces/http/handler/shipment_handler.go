@@ -60,6 +60,7 @@ type createShipmentRequest struct {
 	PurchaseOrderCode   *int64          `json:"purchase_order_code,omitempty"`
 	ProductionOrderCode *int64          `json:"production_order_code,omitempty"`
 	CarrierCode         *int64          `json:"carrier_code,omitempty"`
+	ShippingCarrierID   *int64          `json:"shipping_carrier_id,omitempty"`
 	TotalVolumes        int             `json:"total_volumes"`
 	TotalNetWeight      decimal.Decimal `json:"total_net_weight"`
 	TotalGrossWeight    decimal.Decimal `json:"total_gross_weight"`
@@ -77,6 +78,7 @@ func (h *ShipmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PurchaseOrderCode:   req.PurchaseOrderCode,
 		ProductionOrderCode: req.ProductionOrderCode,
 		CarrierCode:         req.CarrierCode,
+		ShippingCarrierID:   req.ShippingCarrierID,
 		TotalVolumes:        req.TotalVolumes,
 		TotalNetWeight:      req.TotalNetWeight,
 		TotalGrossWeight:    req.TotalGrossWeight,
@@ -174,6 +176,7 @@ func (h *ShipmentHandler) List(w http.ResponseWriter, r *http.Request) {
 type createLoadRequest struct {
 	Description       *string `json:"description,omitempty"`
 	CarrierCode       *int64  `json:"carrier_code,omitempty"`
+	ShippingCarrierID *int64  `json:"shipping_carrier_id,omitempty"`
 	VehiclePlate      *string `json:"vehicle_plate,omitempty"`
 	DriverName        *string `json:"driver_name,omitempty"`
 	DriverDocument    *string `json:"driver_document,omitempty"`
@@ -194,6 +197,7 @@ func (h *ShipmentHandler) CreateLoad(w http.ResponseWriter, r *http.Request) {
 	result, err := h.uc.CreateLoad(r.Context(), shipment_uc.CreateLoadInput{
 		Description:       req.Description,
 		CarrierCode:       req.CarrierCode,
+		ShippingCarrierID: req.ShippingCarrierID,
 		VehiclePlate:      req.VehiclePlate,
 		DriverName:        req.DriverName,
 		DriverDocument:    req.DriverDocument,
@@ -577,6 +581,7 @@ func (h *ShipmentHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 type updateTransportRequest struct {
 	CarrierCode       *int64          `json:"carrier_code,omitempty"`
+	ShippingCarrierID *int64          `json:"shipping_carrier_id,omitempty"`
 	FreightModality   *string         `json:"freight_modality,omitempty"`
 	FreightValue      decimal.Decimal `json:"freight_value"`
 	InsuranceValue    decimal.Decimal `json:"insurance_value"`
@@ -599,15 +604,16 @@ func (h *ShipmentHandler) UpdateTransport(w http.ResponseWriter, r *http.Request
 		return
 	}
 	t := shiprepo.TransportInput{
-		CarrierCode:     req.CarrierCode,
-		FreightModality: req.FreightModality,
-		FreightValue:    req.FreightValue,
-		InsuranceValue:  req.InsuranceValue,
-		VehiclePlate:    req.VehiclePlate,
-		DriverName:      req.DriverName,
-		DriverDocument:  req.DriverDocument,
-		ANTTCode:        req.ANTTCode,
-		Seals:           req.Seals,
+		CarrierCode:       req.CarrierCode,
+		ShippingCarrierID: req.ShippingCarrierID,
+		FreightModality:   req.FreightModality,
+		FreightValue:      req.FreightValue,
+		InsuranceValue:    req.InsuranceValue,
+		VehiclePlate:      req.VehiclePlate,
+		DriverName:        req.DriverName,
+		DriverDocument:    req.DriverDocument,
+		ANTTCode:          req.ANTTCode,
+		Seals:             req.Seals,
 	}
 	if d, msg := datetime.Opcional("previsão de entrega", req.EstimatedDelivery); msg != "" {
 		jsonError(w, http.StatusUnprocessableEntity, msg)

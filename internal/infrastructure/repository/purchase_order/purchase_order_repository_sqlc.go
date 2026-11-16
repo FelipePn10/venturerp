@@ -10,6 +10,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/pgutil"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/transportadora"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -99,6 +100,11 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 		alcada = "N"
 	}
 
+	for _, id := range []*int64{o.ShippingCarrierID, o.RedispatchShippingCarrierID} {
+		if err := transportadora.Conferir(ctx, q, id); err != nil {
+			return nil, err
+		}
+	}
 	var row purchaseOrderRow
 	err = q.QueryRow(ctx,
 		`INSERT INTO public.purchase_orders (
@@ -109,9 +115,9 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
 			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
 			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
-			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status, shipping_carrier_id, redispatch_shipping_carrier_id
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-			$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)
+			$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
 		RETURNING code, order_number, enterprise_code, status, origin, emission_date,
 			delivery_date, supplier_code, payment_term_code, currency_code,
 			shipping_address_code, notes, total_gross, total_net, total_discount,
@@ -119,7 +125,7 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
 			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
 			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
-			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status`,
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status, shipping_carrier_id, redispatch_shipping_carrier_id`,
 		o.OrderNumber, o.EnterpriseCode, string(o.Status), string(o.Origin), o.EmissionDate,
 		deliveryDate, o.SupplierCode, o.PaymentTermCode, o.CurrencyCode,
 		o.ShippingAddressCode, o.Notes, o.TotalGross, o.TotalNet, o.TotalDiscount,
@@ -127,7 +133,7 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 		o.PriceTableCode, o.InvoiceTypeCode, pgutil.ToPgTextFromPtr(o.FinancialAccount), o.RequestTypeCode, pgutil.ToPgDateFromPtr(o.CurrencyDate),
 		freightType, pgutil.ToPgTextFromPtr(o.FreightValueType), pgutil.ToPgTextFromPtr(o.FreightValueMode), o.FreightValue, o.CarrierCode,
 		o.RedispatchCarrierCode, pgutil.ToPgTextFromPtr(o.RedispatchFreightType), o.RedispatchFreightValue,
-		pgutil.ToPgDateFromPtr(o.AdvanceDate), o.AdvanceValue, pgutil.ToPgTextFromPtr(o.IncotermCode), pgutil.ToPgDateFromPtr(o.ShipmentDate), pgutil.ToPgTextFromPtr(o.TalaoNumber), alcada,
+		pgutil.ToPgDateFromPtr(o.AdvanceDate), o.AdvanceValue, pgutil.ToPgTextFromPtr(o.IncotermCode), pgutil.ToPgDateFromPtr(o.ShipmentDate), pgutil.ToPgTextFromPtr(o.TalaoNumber), alcada, o.ShippingCarrierID, o.RedispatchShippingCarrierID,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
 		&row.DeliveryDate, &row.SupplierCode, &row.PaymentTermCode, &row.CurrencyCode,
@@ -136,7 +142,7 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
 		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
 		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
-		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus, &row.ShippingCarrierID, &row.RedispatchShippingCarrierID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating purchase order: %w", err)
@@ -170,6 +176,11 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 	// RETORNAVA menos colunas ainda: o frete, a transportadora e — o que mais
 	// doía — a situação de alçada nunca eram gravados, e a autorização de
 	// alçada não encontrava pedido bloqueado.
+	for _, id := range []*int64{o.ShippingCarrierID, o.RedispatchShippingCarrierID} {
+		if err := transportadora.Conferir(ctx, r.db, id); err != nil {
+			return nil, err
+		}
+	}
 	var row purchaseOrderRow
 	err = r.db.QueryRow(ctx,
 		`UPDATE public.purchase_orders SET
@@ -181,7 +192,7 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 			freight_type = $21, freight_value_type = $22, freight_value_mode = $23, freight_value = $24, carrier_code = $25,
 			redispatch_carrier_code = $26, redispatch_freight_type = $27, redispatch_freight_value = $28,
 			advance_date = $29, advance_value = $30, incoterm_code = $31, shipment_date = $32, talao_number = $33,
-			alcada_status = $34, updated_at = NOW()
+			alcada_status = $34, shipping_carrier_id = $35, redispatch_shipping_carrier_id = $36, updated_at = NOW()
 		WHERE code = $1 AND enterprise_code = $14 AND is_active = true
 		RETURNING `+orderColumns,
 		o.Code, string(o.Status), string(o.Origin), deliveryDate, o.SupplierCode,
@@ -191,7 +202,7 @@ func (r *PurchaseOrderRepositorySQLC) Update(ctx context.Context, o *entity.Purc
 		freightType, pgutil.ToPgTextFromPtr(o.FreightValueType), pgutil.ToPgTextFromPtr(o.FreightValueMode), o.FreightValue, o.CarrierCode,
 		o.RedispatchCarrierCode, pgutil.ToPgTextFromPtr(o.RedispatchFreightType), o.RedispatchFreightValue,
 		pgutil.ToPgDateFromPtr(o.AdvanceDate), o.AdvanceValue, pgutil.ToPgTextFromPtr(o.IncotermCode), pgutil.ToPgDateFromPtr(o.ShipmentDate), pgutil.ToPgTextFromPtr(o.TalaoNumber),
-		alcada,
+		alcada, o.ShippingCarrierID, o.RedispatchShippingCarrierID,
 	).Scan(row.dest()...)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -212,7 +223,7 @@ const orderColumns = `code, order_number, enterprise_code, status, origin, emiss
 			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
 			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
 			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
-			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status`
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status, shipping_carrier_id, redispatch_shipping_carrier_id`
 
 func (row *purchaseOrderRow) dest() []any {
 	return []any{
@@ -223,7 +234,7 @@ func (row *purchaseOrderRow) dest() []any {
 		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
 		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
 		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
-		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus, &row.ShippingCarrierID, &row.RedispatchShippingCarrierID,
 	}
 }
 
@@ -241,7 +252,7 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 			price_table_code, invoice_type_code, financial_account, request_type_code, currency_date,
 			freight_type, freight_value_type, freight_value_mode, freight_value, carrier_code,
 			redispatch_carrier_code, redispatch_freight_type, redispatch_freight_value,
-			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status
+			advance_date, advance_value, incoterm_code, shipment_date, talao_number, alcada_status, shipping_carrier_id, redispatch_shipping_carrier_id
 		FROM public.purchase_orders WHERE code = $1 AND enterprise_code = $2`, code, enterpriseCode,
 	).Scan(
 		&row.Code, &row.OrderNumber, &row.EnterpriseCode, &row.Status, &row.Origin, &row.EmissionDate,
@@ -251,7 +262,7 @@ func (r *PurchaseOrderRepositorySQLC) GetByCode(ctx context.Context, code int64)
 		&row.PriceTableCode, &row.InvoiceTypeCode, &row.FinancialAccount, &row.RequestTypeCode, &row.CurrencyDate,
 		&row.FreightType, &row.FreightValueType, &row.FreightValueMode, &row.FreightValue, &row.CarrierCode,
 		&row.RedispatchCarrierCode, &row.RedispatchFreightType, &row.RedispatchFreightValue,
-		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus,
+		&row.AdvanceDate, &row.AdvanceValue, &row.IncotermCode, &row.ShipmentDate, &row.TalaoNumber, &row.AlcadaStatus, &row.ShippingCarrierID, &row.RedispatchShippingCarrierID,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -801,25 +812,27 @@ type purchaseOrderRow struct {
 	UpdatedAt           time.Time
 	CreatedBy           [16]byte
 	// extended (migration 000140)
-	PriceTableCode         *int64
-	InvoiceTypeCode        *int64
-	FinancialAccount       pgtype.Text
-	RequestTypeCode        *int64
-	CurrencyDate           pgtype.Date
-	FreightType            string
-	FreightValueType       pgtype.Text
-	FreightValueMode       pgtype.Text
-	FreightValue           decimal.Decimal
-	CarrierCode            *int64
-	RedispatchCarrierCode  *int64
-	RedispatchFreightType  pgtype.Text
-	RedispatchFreightValue decimal.Decimal
-	AdvanceDate            pgtype.Date
-	AdvanceValue           decimal.Decimal
-	IncotermCode           pgtype.Text
-	ShipmentDate           pgtype.Date
-	TalaoNumber            pgtype.Text
-	AlcadaStatus           string
+	PriceTableCode              *int64
+	InvoiceTypeCode             *int64
+	FinancialAccount            pgtype.Text
+	RequestTypeCode             *int64
+	CurrencyDate                pgtype.Date
+	FreightType                 string
+	FreightValueType            pgtype.Text
+	FreightValueMode            pgtype.Text
+	FreightValue                decimal.Decimal
+	CarrierCode                 *int64
+	RedispatchCarrierCode       *int64
+	RedispatchFreightType       pgtype.Text
+	RedispatchFreightValue      decimal.Decimal
+	AdvanceDate                 pgtype.Date
+	AdvanceValue                decimal.Decimal
+	IncotermCode                pgtype.Text
+	ShipmentDate                pgtype.Date
+	TalaoNumber                 pgtype.Text
+	AlcadaStatus                string
+	ShippingCarrierID           *int64
+	RedispatchShippingCarrierID *int64
 }
 
 type purchaseOrderItemRow struct {
@@ -919,6 +932,8 @@ func rowToEntity(row purchaseOrderRow) *entity.PurchaseOrder {
 	e.ShipmentDate = pgutil.FromPgDateToPtr(row.ShipmentDate)
 	e.TalaoNumber = pgutil.FromPgTextPtr(row.TalaoNumber)
 	e.AlcadaStatus = row.AlcadaStatus
+	e.ShippingCarrierID = row.ShippingCarrierID
+	e.RedispatchShippingCarrierID = row.RedispatchShippingCarrierID
 
 	copy(e.CreatedBy[:], row.CreatedBy[:])
 

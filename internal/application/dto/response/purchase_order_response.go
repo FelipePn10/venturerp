@@ -31,11 +31,13 @@ type PurchaseOrderResponse struct {
 	RequestTypeCode  *int64     `json:"request_type_code,omitempty"`
 	CurrencyDate     *time.Time `json:"currency_date,omitempty"`
 
-	FreightType      string  `json:"freight_type"`
-	FreightValueType *string `json:"freight_value_type,omitempty"`
-	FreightValueMode *string `json:"freight_value_mode,omitempty"`
-	FreightValue     float64 `json:"freight_value"`
-	CarrierCode      *int64  `json:"carrier_code,omitempty"`
+	FreightType                 string  `json:"freight_type"`
+	FreightValueType            *string `json:"freight_value_type,omitempty"`
+	FreightValueMode            *string `json:"freight_value_mode,omitempty"`
+	FreightValue                float64 `json:"freight_value"`
+	CarrierCode                 *int64  `json:"carrier_code,omitempty"`
+	ShippingCarrierID           *int64  `json:"shipping_carrier_id,omitempty"`
+	RedispatchShippingCarrierID *int64  `json:"redispatch_shipping_carrier_id,omitempty"`
 
 	RedispatchCarrierCode  *int64  `json:"redispatch_carrier_code,omitempty"`
 	RedispatchFreightType  *string `json:"redispatch_freight_type,omitempty"`

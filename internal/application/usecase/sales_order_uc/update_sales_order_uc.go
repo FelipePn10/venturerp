@@ -8,6 +8,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/representativevalidation"
+	custrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
@@ -17,6 +18,8 @@ type UpdateSalesOrderUseCase struct {
 	Repo            repository.SalesOrderRepository
 	Auth            ports.AuthService
 	Representatives representativevalidation.Repository
+	// Customers confere que o cliente está ativo (nil = não confere).
+	Customers custrepo.CustomerRepository
 }
 
 func (uc *UpdateSalesOrderUseCase) Execute(
@@ -30,6 +33,12 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 		return nil, errorsuc.ErrUnauthorized
 	}
 	if err := representativevalidation.Validate(ctx, uc.Representatives, dto.RepresentativeCode); err != nil {
+		return nil, err
+	}
+	if err := exigirClienteAtivo(ctx, uc.Customers, dto.CustomerCode); err != nil {
+		return nil, err
+	}
+	if err := validarPedidoDeCompra(dto.CustomerPONumber); err != nil {
 		return nil, err
 	}
 	finalidade, err := normalizarFinalidade(dto.FinalidadeCompra)
@@ -52,6 +61,7 @@ func (uc *UpdateSalesOrderUseCase) Execute(
 		CommissionPct:               dto.CommissionPct,
 		TaxTypeCode:                 dto.TaxTypeCode,
 		FinalidadeCompra:            dto.FinalidadeCompra,
+		CustomerPONumber:            dto.CustomerPONumber,
 		PresenceIndicator:           dto.PresenceIndicator,
 		SalesChannel:                dto.SalesChannel,
 		DefaultNFType:               dto.DefaultNFType,

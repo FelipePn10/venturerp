@@ -12,6 +12,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/transportadora"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -66,7 +67,7 @@ const shipmentCols = `id, code, sales_order_code, carrier_code, status, total_vo
 	fiscal_exit_id, nfe_number, nfe_key,
 	notes, separated_at, conferred_at, shipped_at, cancelled_at,
 	created_at, updated_at, created_by, updated_by,
-	reference_type, purchase_order_code, production_order_code`
+	reference_type, purchase_order_code, production_order_code, shipping_carrier_id`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -82,7 +83,7 @@ func scanShipmentRow(row rowScanner) (*entity.Shipment, error) {
 		&s.FiscalExitID, &s.NFeNumber, &s.NFeKey,
 		&s.Notes, &s.SeparatedAt, &s.ConferredAt, &s.ShippedAt, &s.CancelledAt,
 		&s.CreatedAt, &s.UpdatedAt, &s.CreatedBy, &s.UpdatedBy,
-		&refType, &s.PurchaseOrderCode, &s.ProductionOrderCode,
+		&refType, &s.PurchaseOrderCode, &s.ProductionOrderCode, &s.ShippingCarrierID,
 	); err != nil {
 		return nil, err
 	}
@@ -127,16 +128,51 @@ func (r *ShipmentRepositoryPG) criar(ctx context.Context, s *entity.Shipment) (*
 	if err != nil {
 		return nil, err
 	}
+	if s.ShippingCarrierID == nil && s.SalesOrderCode != nil {
+		empresaCode, err := tenant.Code(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Romaneio de pedido de venda sem transportadora: herda a preferencial do
+		// cliente (ativa), salvo pedido sem frete.
+		err = r.pool.QueryRow(ctx, `
+			SELECT c.shipping_carrier_id FROM sales_orders so
+			JOIN customers c ON c.code = so.customer_code AND c.enterprise_id = $2
+			JOIN shipping_carriers sc ON sc.id = c.shipping_carrier_id AND sc.enterprise_id = $2 AND sc.is_active
+			WHERE so.code = $1 AND so.enterprise_code = $3
+			  AND upper(replace(COALESCE(so.freight_type, ''), ' ', '_')) <> 'SEM_FRETE'`,
+			*s.SalesOrderCode, enterpriseID, empresaCode).Scan(&s.ShippingCarrierID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lendo a transportadora do cliente: %w", err)
+		}
+	} else if s.ShippingCarrierID == nil && s.PurchaseOrderCode != nil {
+		empresaCode, err := tenant.Code(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// Romaneio de pedido de compra: herda a transportadora do pedido (ativa).
+		err = r.pool.QueryRow(ctx, `
+			SELECT po.shipping_carrier_id FROM purchase_orders po
+			JOIN shipping_carriers sc ON sc.id = po.shipping_carrier_id AND sc.enterprise_id = $2 AND sc.is_active
+			WHERE po.code = $1 AND po.enterprise_code = $3`,
+			*s.PurchaseOrderCode, enterpriseID, empresaCode).Scan(&s.ShippingCarrierID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("lendo a transportadora do pedido de compra: %w", err)
+		}
+	}
+	if err := transportadora.Conferir(ctx, r.pool, s.ShippingCarrierID); err != nil {
+		return nil, err
+	}
 	err = r.pool.QueryRow(ctx,
 		`INSERT INTO public.shipments
 			(code, sales_order_code, carrier_code, status, total_volumes,
 			 total_weight, total_net_weight, total_gross_weight, total_cubage_m3,
-			 notes, created_by, reference_type, purchase_order_code, production_order_code, enterprise_id)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			 notes, created_by, reference_type, purchase_order_code, production_order_code, enterprise_id, shipping_carrier_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		 RETURNING id, created_at, updated_at`,
 		s.Code, s.SalesOrderCode, s.CarrierCode, string(s.Status), s.TotalVolumes,
 		s.TotalGrossWeight, s.TotalNetWeight, s.TotalGrossWeight, s.TotalCubageM3,
-		s.Notes, s.CreatedBy, s.ReferenceType, s.PurchaseOrderCode, s.ProductionOrderCode, enterpriseID,
+		s.Notes, s.CreatedBy, s.ReferenceType, s.PurchaseOrderCode, s.ProductionOrderCode, enterpriseID, s.ShippingCarrierID,
 	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating shipment: %w", err)
@@ -316,6 +352,9 @@ func (r *ShipmentRepositoryPG) UpdateTransport(ctx context.Context, code int64, 
 	if err != nil {
 		return err
 	}
+	if err := transportadora.Conferir(ctx, r.pool, t.ShippingCarrierID); err != nil {
+		return err
+	}
 	var id int64
 	err = r.pool.QueryRow(ctx,
 		`UPDATE public.shipments SET
@@ -323,10 +362,11 @@ func (r *ShipmentRepositoryPG) UpdateTransport(ctx context.Context, code int64, 
 			freight_modality = $3, freight_value = $4, insurance_value = $5,
 			vehicle_plate = $6, driver_name = $7, driver_document = $8,
 			antt_code = $9, seals = $10, estimated_delivery = $11,
-			updated_at = NOW(), updated_by = $12
+			updated_at = NOW(), updated_by = $12,
+			shipping_carrier_id = COALESCE($14, shipping_carrier_id)
 		 WHERE code = $1 AND enterprise_id = $13 RETURNING id`,
 		code, t.CarrierCode, t.FreightModality, t.FreightValue, t.InsuranceValue,
-		t.VehiclePlate, t.DriverName, t.DriverDocument, t.ANTTCode, t.Seals, t.EstimatedDelivery, by, enterpriseID,
+		t.VehiclePlate, t.DriverName, t.DriverDocument, t.ANTTCode, t.Seals, t.EstimatedDelivery, by, enterpriseID, t.ShippingCarrierID,
 	).Scan(&id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -592,7 +632,7 @@ const loadCols = `id, code, status, description, carrier_code, vehicle_plate, dr
 	route_code, origin, destination, dispatch_box_code, planned_ship_date, estimated_delivery,
 	started_loading_at, loaded_at, released_at, shipped_at, cancelled_at,
 	total_shipments, total_fiscal_notes, total_volumes, total_net_weight, total_gross_weight, total_cubage_m3,
-	notes, created_at, updated_at, created_by, updated_by`
+	notes, created_at, updated_at, created_by, updated_by, shipping_carrier_id`
 
 func scanLoadRow(row rowScanner) (*entity.ShipmentLoad, error) {
 	var l entity.ShipmentLoad
@@ -602,7 +642,7 @@ func scanLoadRow(row rowScanner) (*entity.ShipmentLoad, error) {
 		&l.RouteCode, &l.Origin, &l.Destination, &l.DispatchBoxCode, &l.PlannedShipDate, &l.EstimatedDelivery,
 		&l.StartedLoadingAt, &l.LoadedAt, &l.ReleasedAt, &l.ShippedAt, &l.CancelledAt,
 		&l.TotalShipments, &l.TotalFiscalNotes, &l.TotalVolumes, &l.TotalNetWeight, &l.TotalGrossWeight, &l.TotalCubageM3,
-		&l.Notes, &l.CreatedAt, &l.UpdatedAt, &l.CreatedBy, &l.UpdatedBy,
+		&l.Notes, &l.CreatedAt, &l.UpdatedAt, &l.CreatedBy, &l.UpdatedBy, &l.ShippingCarrierID,
 	); err != nil {
 		return nil, err
 	}
@@ -643,6 +683,9 @@ func (r *ShipmentRepositoryPG) criarCarga(ctx context.Context, in repository.Cre
 	if tenantErr != nil {
 		return nil, tenantErr
 	}
+	if err := transportadora.Conferir(ctx, r.pool, in.ShippingCarrierID); err != nil {
+		return nil, err
+	}
 	code, err := r.NextLoadCode(ctx)
 	if err != nil {
 		return nil, err
@@ -651,12 +694,12 @@ func (r *ShipmentRepositoryPG) criarCarga(ctx context.Context, in repository.Cre
 		`INSERT INTO public.shipment_loads
 			(code, status, description, carrier_code, vehicle_plate, driver_name, driver_document,
 			 route_code, origin, destination, dispatch_box_code, planned_ship_date, estimated_delivery,
-			 notes, created_by, enterprise_id)
-		 VALUES ($1,'PLANNED',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+			 notes, created_by, enterprise_id, shipping_carrier_id)
+		 VALUES ($1,'PLANNED',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
 		 RETURNING `+loadCols,
 		code, in.Description, in.CarrierCode, in.VehiclePlate, in.DriverName, in.DriverDocument,
 		in.RouteCode, in.Origin, in.Destination, in.DispatchBoxCode, in.PlannedShipDate, in.EstimatedDelivery,
-		in.Notes, in.CreatedBy, enterpriseID,
+		in.Notes, in.CreatedBy, enterpriseID, in.ShippingCarrierID,
 	))
 	if err != nil {
 		return nil, fmt.Errorf("creating shipment load: %w", err)
