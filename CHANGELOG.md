@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.18.2] — 2026-11-16
+
+- feat(cliente): cadastro VCLI0500 com crédito calculado e auditado, NF-e com transportadora e entrega (`f3e9f01c`)
+
 ## [v1.18.1] — 2026-11-13
 
 - fix(conciliacao): extrato OFX visível e conciliável, sem lançamento perdido nem saldo dobrado (`2eb88ca4`)
