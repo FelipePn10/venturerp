@@ -155,8 +155,9 @@ func (h *ShippingCarrierHandler) CreateOccurrence(w http.ResponseWriter, r *http
 func (h *ShippingCarrierHandler) Quote(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	carga := carrierentity.Carga{
-		UF:  strings.ToUpper(strings.TrimSpace(q.Get("uf"))),
-		CEP: strings.TrimSpace(q.Get("cep")),
+		UF:     strings.ToUpper(strings.TrimSpace(q.Get("uf"))),
+		Cidade: strings.TrimSpace(q.Get("city")),
+		CEP:    strings.TrimSpace(q.Get("cep")),
 	}
 	var err error
 	if carga.PesoKg, err = decimalDaQuery(q.Get("weight_kg")); err != nil {
@@ -171,6 +172,7 @@ func (h *ShippingCarrierHandler) Quote(w http.ResponseWriter, r *http.Request) {
 		security.RespondError(w, http.StatusBadRequest, "valor da carga inválido")
 		return
 	}
+	carga.ProdutoPerigoso = q.Get("dangerous") == "true"
 	if base := strings.TrimSpace(q.Get("base_date")); base != "" {
 		d, err := time.Parse("2006-01-02", base)
 		if err != nil {
@@ -211,4 +213,115 @@ func decimalDaQuery(v string) (decimal.Decimal, error) {
 		return decimal.Zero, nil
 	}
 	return decimal.NewFromString(v)
+}
+
+// Usage diz onde a transportadora está gravada: a tela usa antes de oferecer
+// excluir ou inativar.
+func (h *ShippingCarrierHandler) Usage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseCarrierID(w, r, "id")
+	if !ok {
+		return
+	}
+	out, err := h.uc.Uso(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+func (h *ShippingCarrierHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseCarrierID(w, r, "id")
+	if !ok {
+		return
+	}
+	if err := h.uc.Excluir(r.Context(), id); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ShippingCarrierHandler) ListVehicleTypes(w http.ResponseWriter, r *http.Request) {
+	out, err := h.uc.ListarTiposVeiculo(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+func (h *ShippingCarrierHandler) SaveVehicleType(w http.ResponseWriter, r *http.Request) {
+	var id int64
+	if chi.URLParam(r, "typeId") != "" {
+		var ok bool
+		if id, ok = parseCarrierID(w, r, "typeId"); !ok {
+			return
+		}
+	}
+	var dto request.SalvarTipoVeiculoDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler o tipo de veículo enviado")
+		return
+	}
+	out, err := h.uc.SalvarTipoVeiculo(r.Context(), id, &dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+func (h *ShippingCarrierHandler) DeleteVehicleType(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseCarrierID(w, r, "typeId")
+	if !ok {
+		return
+	}
+	if err := h.uc.ExcluirTipoVeiculo(r.Context(), id); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ShippingCarrierHandler) ListOccurrenceTypes(w http.ResponseWriter, r *http.Request) {
+	out, err := h.uc.ListarTiposOcorrencia(r.Context())
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+func (h *ShippingCarrierHandler) SaveOccurrenceType(w http.ResponseWriter, r *http.Request) {
+	var id int64
+	if chi.URLParam(r, "typeId") != "" {
+		var ok bool
+		if id, ok = parseCarrierID(w, r, "typeId"); !ok {
+			return
+		}
+	}
+	var dto request.SalvarTipoOcorrenciaDTO
+	if err := json.NewDecoder(r.Body).Decode(&dto); err != nil {
+		security.RespondError(w, http.StatusBadRequest, "não foi possível ler o tipo de ocorrência enviado")
+		return
+	}
+	out, err := h.uc.SalvarTipoOcorrencia(r.Context(), id, &dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}
+
+func (h *ShippingCarrierHandler) DeleteOccurrenceType(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseCarrierID(w, r, "typeId")
+	if !ok {
+		return
+	}
+	if err := h.uc.ExcluirTipoOcorrencia(r.Context(), id); err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

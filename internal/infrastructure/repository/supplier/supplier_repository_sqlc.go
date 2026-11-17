@@ -388,6 +388,9 @@ func (r *SupplierRepositorySQLC) DeleteSupplier(ctx context.Context, code int64)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			if pgErr.TableName == "shipping_carriers" {
+				return errorsuc.NewValidationError("não é possível excluir o fornecedor: ele está cadastrado como transportadora (VSUP0140) — exclua a transportadora primeiro; se ela já foi usada em documentos, inative a transportadora e depois o fornecedor")
+			}
 			return errorsuc.NewValidationError("não é possível excluir o fornecedor: há pedidos de compra ou processos de importação vinculados — inative-o ou desvincule-o primeiro")
 		}
 		return fmt.Errorf("deleting supplier: %w", err)

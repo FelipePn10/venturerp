@@ -168,6 +168,12 @@ fiscal), esta serve para **digitar menos** ao criar o fornecedor. Detalhes em
 
 ### Consulta Cadastral SEFAZ (via FocusNFE)
 
+> A VSUP0500 não tem mais os botões "Consultar SEFAZ" e "Padrões de compra"
+> (removidos em 2026-11: o primeiro falhava sempre e nenhum dos dois cabia no
+> cadastro). As rotas continuam para uso interno. O perfil de transporte do
+> fornecedor fica na VSUP0140 — ver [`cadastro-transportadora.md`](cadastro-transportadora.md);
+> fornecedor com transportadora ativa não pode ser inativado.
+
 `POST /api/suppliers/{code}/sefaz-query` consulta a situação cadastral do fornecedor
 junto à SEFAZ/Receita via FocusNFE (usa o token de `fiscal_config`) e grava o snapshot
 no cadastro: `last_sefaz_query`, `billing_receipt_status` (`LIBERADO`/`BLOQUEADO`),
