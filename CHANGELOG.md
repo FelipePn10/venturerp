@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.2] — 2026-11-17
+
+- fix(estrutura): componente excluído pode voltar para a mesma estrutura (`564ac286`)
+
 ## [v1.19.1] — 2026-11-17
 
 - feat(credito): revisão trimestral automática, faturamento declarado e saneamento do cadastro (`5bb99e29`)
