@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.6] — 2026-11-17
+
+- fix(fiscal): PIS/COFINS sem o ICMS destacado na base (STF, Tema 69) (`f1c0ae08`)
+
 ## [v1.19.5] — 2026-11-17
 
 - fix(mrp): tempo do roteiro dispensa o tempo da produtividade; prévia da NF-e em PDF (`5f5adf03`)
