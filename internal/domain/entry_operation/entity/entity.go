@@ -40,15 +40,12 @@ func NewStateGroup(code int64, description string, createdBy uuid.UUID) (*StateG
 // ─── Entry Operation Type ──────────────────────────────────────────────────────
 
 type EntryOperationType struct {
-	ID                 int64
-	Code               int64
-	Description        string
-	InvoiceTypeCode    *int64
-	NatureOperation    string
-	ClassificationType *string
-	ClassificationCode *string
-	StateGroupCode     *int64
-	SupplierTypeCode   *int64
+	ID              int64
+	Code            int64
+	Description     string
+	InvoiceTypeCode *int64
+	NatureOperation string
+	StateGroupCode  *int64
 	// Comportamento da nota (equivalente à TES): movimenta estoque, gera
 	// contas a pagar e quais impostos viram crédito em vez de custo.
 	MovimentaEstoque bool

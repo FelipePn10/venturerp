@@ -141,7 +141,9 @@ func storedProfile(c *entity.Customer) entity.CompanyProfile {
 // Receita só é consultada de novo se a última conferência passou do prazo da
 // política; se a Receita não responder, vale o que está gravado e a análise
 // diz isso.
-func (uc *CustomerUseCase) analyzeCredit(ctx context.Context, existing *entity.Customer, docType entity.DocumentType, document string, _ *cnpjentity.Company) (*creditAnalysis, error) {
+// semReceita: a revisão automática usa o que está gravado e não gasta a cota
+// da consulta de CNPJ (quem mantém a situação em dia é o agendador da Receita).
+func (uc *CustomerUseCase) analyzeCredit(ctx context.Context, existing *entity.Customer, docType entity.DocumentType, document string, semReceita bool) (*creditAnalysis, error) {
 	if err := uc.requireLifecycle(); err != nil {
 		return nil, err
 	}
@@ -165,8 +167,8 @@ func (uc *CustomerUseCase) analyzeCredit(ctx context.Context, existing *entity.C
 	a := &creditAnalysis{policy: pol, group: group}
 	var profile entity.CompanyProfile
 	var aviso *entity.CreditFactor
-	fresh := existing != nil && existing.RegistrationCheckedAt != nil &&
-		uc.now().Sub(*existing.RegistrationCheckedAt) < time.Duration(pol.RegistrationCheckDays)*24*time.Hour
+	fresh := existing != nil && (semReceita || existing.RegistrationCheckedAt != nil &&
+		uc.now().Sub(*existing.RegistrationCheckedAt) < time.Duration(pol.RegistrationCheckDays)*24*time.Hour)
 	switch {
 	case docType != entity.DocumentCNPJ:
 		if existing != nil {
@@ -184,6 +186,17 @@ func (uc *CustomerUseCase) analyzeCredit(ctx context.Context, existing *entity.C
 			}
 			aviso = &entity.CreditFactor{Code: "RECEITA_INDISPONIVEL", Label: "Consulta à Receita indisponível",
 				Detail: "a análise usou os dados já gravados no cadastro; reconsulte antes de aprovar valores altos"}
+		}
+	}
+	if existing != nil {
+		// A declaração mais recente (DRE, balanço, IRPF) mede o porte de quem
+		// não tem dado público; a análise diz se ela venceu.
+		decl, err := uc.life.ListFinancialStatements(ctx, existing.Code)
+		if err != nil {
+			return nil, err
+		}
+		if len(decl) > 0 {
+			profile.Declared = decl[0]
 		}
 	}
 	seller, err := uc.life.SellerVolume(ctx, today)
@@ -270,7 +283,7 @@ func (uc *CustomerUseCase) SuggestCredit(ctx context.Context, code *int64, docTy
 		if err != nil {
 			return nil, err
 		}
-		a, err := uc.analyzeCredit(ctx, c, c.DocumentType, c.DocumentNumber, nil)
+		a, err := uc.analyzeCredit(ctx, c, c.DocumentType, c.DocumentNumber, false)
 		if err != nil {
 			return nil, err
 		}
@@ -292,7 +305,7 @@ func (uc *CustomerUseCase) SuggestCredit(ctx context.Context, code *int64, docTy
 	if (dt == entity.DocumentCNPJ && len(digits) != 14) || (dt == entity.DocumentCPF && len(digits) != 11) {
 		return nil, errorsuc.NewValidationError("informe o CNPJ (14 dígitos) ou o CPF (11 dígitos) para calcular o limite")
 	}
-	a, err := uc.analyzeCredit(ctx, nil, dt, digits, nil)
+	a, err := uc.analyzeCredit(ctx, nil, dt, digits, false)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +318,7 @@ func (uc *CustomerUseCase) SetCreditLimit(ctx context.Context, code int64, dto r
 	if err != nil {
 		return nil, err
 	}
-	a, err := uc.analyzeCredit(ctx, c, c.DocumentType, c.DocumentNumber, nil)
+	a, err := uc.analyzeCredit(ctx, c, c.DocumentType, c.DocumentNumber, false)
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +338,151 @@ func (uc *CustomerUseCase) SetCreditLimit(ctx context.Context, code int64, dto r
 		return nil, err
 	}
 	return uc.customerResponse(ctx, updated)
+}
+
+// RevisarCreditoAutomatico é o passo do agendador (sessão da empresa do
+// cliente no contexto): refaz a análise com o comportamento do período e
+// grava a decisão na trilha com origem AUTOMATICA — reduz na hora, aumenta com
+// teto e só para quem tem histórico, mantém a exceção aprovada enquanto o
+// cliente não piora. Devolve se o limite mudou.
+func (uc *CustomerUseCase) RevisarCreditoAutomatico(ctx context.Context, code int64) (bool, error) {
+	if err := uc.requireLifecycle(); err != nil {
+		return false, err
+	}
+	if err := uc.life.MarkCreditReviewAttempt(ctx, code); err != nil {
+		return false, err
+	}
+	c, err := uc.repo.GetCustomerByCode(ctx, code)
+	if err != nil {
+		return false, err
+	}
+	a, err := uc.analyzeCredit(ctx, c, c.DocumentType, c.DocumentNumber, true)
+	if err != nil {
+		return false, err
+	}
+	ultima, err := uc.life.LastCreditReview(ctx, code)
+	if err != nil {
+		return false, err
+	}
+	d := entity.DecideAutoReview(a.suggestion, c.CreditLimit, ultima, a.policy)
+	if d.Skip {
+		return false, nil
+	}
+	if err := uc.recordCredit(ctx, c, a, d.NewLimit, d.Reason, "AUTOMATICA"); err != nil {
+		return false, err
+	}
+	return d.Changed, nil
+}
+
+// AddFinancialStatement registra o faturamento declarado do cliente.
+func (uc *CustomerUseCase) AddFinancialStatement(ctx context.Context, code int64, dto request.FinancialStatementDTO) (*response.FinancialStatementResponse, error) {
+	if err := uc.requireLifecycle(); err != nil {
+		return nil, err
+	}
+	src := strings.ToUpper(strings.TrimSpace(dto.Source))
+	if !entity.FinancialStatementSources[src] {
+		return nil, errorsuc.NewValidationError("informe a fonte: DRE, BALANCO, DECLARACAO, IRPF ou OUTRO")
+	}
+	// NUMERIC(15,2): acima disso o banco recusaria com erro 500.
+	if !dto.AnnualRevenue.IsPositive() || dto.AnnualRevenue.Exponent() < -2 ||
+		dto.AnnualRevenue.GreaterThanOrEqual(decimal.New(1, 13)) {
+		return nil, errorsuc.NewValidationError("informe o faturamento anual (maior que zero, menor que R$ 10 trilhões, até 2 casas decimais)")
+	}
+	ref, err := time.Parse("2006-01-02", strings.TrimSpace(dto.ReferenceDate))
+	if err != nil {
+		return nil, errorsuc.NewValidationError("informe a data de referência (AAAA-MM-DD): o fim do período da DRE, do balanço ou do IRPF")
+	}
+	if ref.After(dateOnly(uc.now())) {
+		return nil, errorsuc.NewValidationError("a data de referência não pode estar no futuro")
+	}
+	_, actor := sessionUser(ctx)
+	f := &entity.FinancialStatement{CustomerCode: code, AnnualRevenue: dto.AnnualRevenue, ReferenceDate: ref, Source: src}
+	if n := strings.TrimSpace(dto.Notes); n != "" {
+		f.Notes = &n
+	}
+	if err := uc.life.AddFinancialStatement(ctx, f, actor); err != nil {
+		return nil, err
+	}
+	r := toFinancialStatementResponse(f, dateOnly(uc.now()))
+	return &r, nil
+}
+
+func (uc *CustomerUseCase) ListFinancialStatements(ctx context.Context, code int64) ([]response.FinancialStatementResponse, error) {
+	if err := uc.requireLifecycle(); err != nil {
+		return nil, err
+	}
+	list, err := uc.life.ListFinancialStatements(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	hoje := dateOnly(uc.now())
+	out := make([]response.FinancialStatementResponse, 0, len(list))
+	for i, f := range list {
+		r := toFinancialStatementResponse(f, hoje)
+		r.InUse = i == 0 && r.Valid
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+func (uc *CustomerUseCase) DeleteFinancialStatement(ctx context.Context, code, id int64) error {
+	if err := uc.requireLifecycle(); err != nil {
+		return err
+	}
+	return uc.life.DeleteFinancialStatement(ctx, code, id)
+}
+
+// Saneamento lista o que no cadastro dos clientes ativos faz a NF-e ser
+// rejeitada, o pedido travar ou a análise de crédito errar (VCLI0510).
+func (uc *CustomerUseCase) Saneamento(ctx context.Context) (*response.SaneamentoResponse, error) {
+	if err := uc.requireLifecycle(); err != nil {
+		return nil, err
+	}
+	pol, err := uc.life.GetCreditPolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	clientes, err := uc.life.ListSaneamento(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hoje := dateOnly(uc.now())
+	porCat := map[string]*response.SaneamentoCategoria{}
+	out := &response.SaneamentoResponse{GeradoEm: uc.now(), ClientesAtivos: len(clientes), Categorias: []response.SaneamentoCategoria{}}
+	for _, c := range clientes {
+		ps := entity.PendenciasDoCliente(c, pol, hoje)
+		if len(ps) > 0 {
+			out.ClientesComErro++
+		}
+		for _, p := range ps {
+			cat := porCat[p.Categoria]
+			if cat == nil {
+				cat = &response.SaneamentoCategoria{Code: p.Categoria, Gravidade: p.Gravidade}
+				porCat[p.Categoria] = cat
+			}
+			cat.Total++
+			if p.Gravidade == entity.SaneamentoImpede {
+				out.Impedem++
+			}
+			cat.Clientes = append(cat.Clientes, response.SaneamentoPendencia{CustomerCode: c.Code, Name: c.Name,
+				Document: c.DocumentNumber, Detalhe: p.Detalhe, ComoResolver: p.ComoResolver})
+		}
+	}
+	for _, def := range entity.CategoriasSaneamento {
+		if cat := porCat[def.Code]; cat != nil {
+			cat.Titulo = def.Titulo
+			out.Categorias = append(out.Categorias, *cat)
+		}
+	}
+	return out, nil
+}
+
+func toFinancialStatementResponse(f *entity.FinancialStatement, hoje time.Time) response.FinancialStatementResponse {
+	return response.FinancialStatementResponse{
+		ID: f.ID, CustomerCode: f.CustomerCode, AnnualRevenue: f.AnnualRevenue, ReferenceDate: f.ReferenceDate.Format("2006-01-02"),
+		Source: f.Source, Notes: f.Notes, CreatedByName: f.CreatedByName, CreatedAt: f.CreatedAt,
+		Valid: !f.ReferenceDate.AddDate(0, entity.DeclaredValidMonths, 0).Before(hoje),
+	}
 }
 
 func (uc *CustomerUseCase) ListCreditReviews(ctx context.Context, code int64) ([]response.CreditReviewResponse, error) {
@@ -357,6 +515,8 @@ func toPolicyResponse(p entity.CreditPolicy) *response.CreditPolicyResponse {
 		ValidityMonthsA: p.ValidityMonths[entity.RiskA], ValidityMonthsB: p.ValidityMonths[entity.RiskB],
 		ValidityMonthsC: p.ValidityMonths[entity.RiskC], ValidityMonthsD: p.ValidityMonths[entity.RiskD],
 		ValidityMonthsE: p.ValidityMonths[entity.RiskE], RegistrationCheckDays: p.RegistrationCheckDays,
+		CustomerRevenuePct: p.CustomerRevenuePct.InexactFloat64(), DeclaredMonthlyRevenue: p.DeclaredMonthlyRevenue.InexactFloat64(),
+		AutoReviewMonths: p.AutoReviewMonths, AutoIncreaseMaxPct: p.AutoIncreaseMaxPct.InexactFloat64(),
 	}
 }
 
@@ -387,14 +547,27 @@ func (uc *CustomerUseCase) SaveCreditPolicy(ctx context.Context, dto request.Cre
 		},
 		RegistrationCheckDays: dto.RegistrationCheckDays,
 	}
+	// Campo ausente (desktop antigo) mantém o valor gravado.
+	atual, err := uc.life.GetCreditPolicy(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p.NewCustomerRevenuePct, p.CustomerRevenuePct, p.DeclaredMonthlyRevenue, p.AutoReviewMonths, p.AutoIncreaseMaxPct =
+		atual.NewCustomerRevenuePct, atual.CustomerRevenuePct, atual.DeclaredMonthlyRevenue, atual.AutoReviewMonths, atual.AutoIncreaseMaxPct
 	if dto.NewCustomerRevenuePct != nil {
 		p.NewCustomerRevenuePct = *dto.NewCustomerRevenuePct
-	} else {
-		atual, err := uc.life.GetCreditPolicy(ctx)
-		if err != nil {
-			return nil, err
-		}
-		p.NewCustomerRevenuePct = atual.NewCustomerRevenuePct
+	}
+	if dto.CustomerRevenuePct != nil {
+		p.CustomerRevenuePct = *dto.CustomerRevenuePct
+	}
+	if dto.DeclaredMonthlyRevenue != nil {
+		p.DeclaredMonthlyRevenue = *dto.DeclaredMonthlyRevenue
+	}
+	if dto.AutoReviewMonths != nil {
+		p.AutoReviewMonths = *dto.AutoReviewMonths
+	}
+	if dto.AutoIncreaseMaxPct != nil {
+		p.AutoIncreaseMaxPct = *dto.AutoIncreaseMaxPct
 	}
 	if err := p.Validate(); err != nil {
 		return nil, err

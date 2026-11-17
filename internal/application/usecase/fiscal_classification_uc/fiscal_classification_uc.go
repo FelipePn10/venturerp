@@ -70,7 +70,6 @@ func applyFields(c *entity.FiscalClassification, f request.FiscalClassificationF
 	c.NCM = f.NCM
 	c.CEST = f.CEST
 	c.IPIRate = f.IPIRate
-	c.Apuracao = f.Apuracao
 	c.CSTIPIEntrada = f.CSTIPIEntrada
 	c.CSTIPISaida = f.CSTIPISaida
 	c.PISRate = f.PISRate

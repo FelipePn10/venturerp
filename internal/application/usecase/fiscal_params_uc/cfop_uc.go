@@ -28,13 +28,8 @@ func (uc *CFOPUseCase) Create(ctx context.Context, dto request.CreateCFOPDTO) (*
 		Code:            dto.Code,
 		Description:     dto.Description,
 		DescriptionFull: dto.DescriptionFull,
-		Utilization:     entity.CfopUtilization(dto.Utilization),
 		OrigemClasIPI:   dto.OrigemClasIPI,
-		IndOperacao:     entity.CfopIndOperacao(dto.IndOperacao),
-		TipoUtilizacao:  entity.CfopTipoUtilizacao(dto.TipoUtilizacao),
 		CodigoAnexoSN:   dto.CodigoAnexoSN,
-		DIFAL:           dto.DIFAL,
-		Doacao:          dto.Doacao,
 		IsActive:        true,
 	}
 	if err := normalizaCFOP(c); err != nil {
@@ -56,13 +51,8 @@ func (uc *CFOPUseCase) Update(ctx context.Context, dto request.UpdateCFOPDTO) (*
 		Code:            dto.Code,
 		Description:     dto.Description,
 		DescriptionFull: dto.DescriptionFull,
-		Utilization:     entity.CfopUtilization(dto.Utilization),
 		OrigemClasIPI:   dto.OrigemClasIPI,
-		IndOperacao:     entity.CfopIndOperacao(dto.IndOperacao),
-		TipoUtilizacao:  entity.CfopTipoUtilizacao(dto.TipoUtilizacao),
 		CodigoAnexoSN:   dto.CodigoAnexoSN,
-		DIFAL:           dto.DIFAL,
-		Doacao:          dto.Doacao,
 		IsActive:        ptrutil.BoolOrTrue(dto.IsActive),
 	}
 	if dto.ID <= 0 {
@@ -125,31 +115,6 @@ func (uc *CFOPUseCase) ListByDirection(ctx context.Context, direction string, on
 func normalizaCFOP(c *entity.CFOP) error {
 	if c.Code <= 0 {
 		return errorsuc.NewValidationError("informe o código do CFOP")
-	}
-	if c.Utilization == "" {
-		c.Utilization = entity.CfopUtilizationIndustrializacaoComercio
-	}
-	if c.IndOperacao == "" {
-		c.IndOperacao = entity.CfopIndOperacaoNormal
-	}
-	if c.TipoUtilizacao == "" {
-		c.TipoUtilizacao = entity.CfopTipoUtilizacaoNormal
-	}
-	switch c.Utilization {
-	case entity.CfopUtilizationIndustrializacaoComercio, entity.CfopUtilizationImobilizado, entity.CfopUtilizationUsoConsumo:
-	default:
-		return errorsuc.NewValidationError("utilização inválida: use INDUSTRIALIZACAO_COMERCIO, IMOBILIZADO ou USO_CONSUMO")
-	}
-	switch c.IndOperacao {
-	case entity.CfopIndOperacaoNormal, entity.CfopIndOperacaoEnergiaEletrica, entity.CfopIndOperacaoTelecomunicacao:
-	default:
-		return errorsuc.NewValidationError("indicador de operação inválido: use NORMAL, ENERGIA_ELETRICA ou TELECOMUNICACAO")
-	}
-	switch c.TipoUtilizacao {
-	case entity.CfopTipoUtilizacaoNormal, entity.CfopTipoUtilizacaoVendaComercialExportadora,
-		entity.CfopTipoUtilizacaoCompraFimEspecificoExportacao, entity.CfopTipoUtilizacaoExportacao:
-	default:
-		return errorsuc.NewValidationError("tipo de utilização inválido: use NORMAL, VENDA_COMERCIAL_EXPORTADORA, COMPRA_FIM_ESPECIFICO_EXPORTACAO ou EXPORTACAO")
 	}
 	if c.OrigemClasIPI != nil && *c.OrigemClasIPI == "" {
 		c.OrigemClasIPI = nil

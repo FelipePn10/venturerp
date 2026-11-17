@@ -29,7 +29,6 @@ func TestNotasEspeciaisIsoladasPorEmpresa(t *testing.T) {
 	}
 	t.Cleanup(func() {
 		for _, e := range []int64{a, b} {
-			_, _ = pool.Exec(bg, `DELETE FROM special_adjustment_note_items WHERE note_id IN (SELECT id FROM special_adjustment_notes WHERE empresa_id=$1)`, e)
 			_, _ = pool.Exec(bg, `DELETE FROM special_adjustment_notes WHERE empresa_id=$1`, e)
 			_, _ = pool.Exec(bg, `DELETE FROM icms_st_restitutions WHERE empresa_id=$1`, e)
 			if _, err := pool.Exec(bg, `DELETE FROM enterprise WHERE id=$1`, e); err != nil {
@@ -61,12 +60,6 @@ func TestNotasEspeciaisIsoladasPorEmpresa(t *testing.T) {
 	}
 	if l, err := repo.ListSpecialAdjustmentNotes(ctxA, 0, "2026-08"); err != nil || len(l) != 1 {
 		t.Errorf("empresa A não vê a própria nota: %v %d", err, len(l))
-	}
-	if _, err := repo.AddSpecialAdjustmentNoteItem(ctxB, &entity.SpecialAdjustmentNoteItem{NoteID: n.ID}); !errors.As(err, &nf) {
-		t.Errorf("empresa B inclui item na nota de A: %v", err)
-	}
-	if _, err := repo.ListSpecialAdjustmentNoteItems(ctxB, n.ID); !errors.As(err, &nf) {
-		t.Errorf("empresa B lê os itens da nota de A: %v", err)
 	}
 
 	r, err := repo.CreateICMSSTRestitution(ctxA, &entity.ICMSSTRestitution{EmpresaID: int(b), Period: "2026-08", RestitutionType: entity.ICMSSTRestitutionType("RESTITUICAO"), UF: "PR"})

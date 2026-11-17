@@ -35,21 +35,18 @@ SELECT EXISTS (
 
 -- name: CreateEntryOperationType :one
 INSERT INTO entry_operation_types (
-    enterprise_id, code, description, invoice_type_code, nature_operation,
-    classification_type, classification_code, state_group_code, supplier_type_code, created_by,
+    enterprise_id, code, description, invoice_type_code, nature_operation, state_group_code, created_by,
     movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 )
-VALUES ($15, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+VALUES ($12, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: UpdateEntryOperationType :one
 UPDATE entry_operation_types SET
-    description = $2, invoice_type_code = $3, nature_operation = $4,
-    classification_type = $5, classification_code = $6, state_group_code = $7,
-    supplier_type_code = $8, is_active = $9,
-    movimenta_estoque = $10, gera_financeiro = $11, credita_icms = $12,
-    credita_ipi = $13, credita_pis_cofins = $14
-WHERE code = $1 AND enterprise_id = $15
+    description = $2, invoice_type_code = $3, nature_operation = $4, state_group_code = $5, is_active = $6,
+    movimenta_estoque = $7, gera_financeiro = $8, credita_icms = $9,
+    credita_ipi = $10, credita_pis_cofins = $11
+WHERE code = $1 AND enterprise_id = $12
 RETURNING *;
 
 -- name: GetEntryOperationTypeByCode :one

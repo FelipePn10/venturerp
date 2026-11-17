@@ -188,7 +188,9 @@ A resposta final deve incluir:
 
 `ci-backend.yml` roda a cada push em `main`/`develop` e em todo PR: `gofmt`,
 `go vet`, `go test ./...` e — a parte que faltava — `go test -tags=integration
-./internal/...` contra um Postgres criado do zero (migrações + `scripts/seed-test.sql`).
+./internal/... ./api/...` contra um Postgres criado do zero (migrações + `scripts/seed-test.sql`).
+O `./api/...` entrou na v1.19.1: o teste que exige módulo de permissão em toda rota
+ficava fora e as impressões (`/api/impressao`) davam 403 a perfil restrito.
 
 A suíte de integração exige dois registros que ela não cria: um usuário (toda
 linha auditável referencia `users.id` em `created_by`) e uma empresa

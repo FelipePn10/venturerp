@@ -75,25 +75,13 @@ type UpdateCustomerTypeDTO struct {
 // ─── Carriers ─────────────────────────────────────────────────────────────────
 
 type CreateCarrierDTO struct {
-	Description       string `json:"description"`
-	BillingType       string `json:"billing_type"` // CARTEIRA | COBRANCA_ESCRITURAL | BOLETO
-	UsesCreditLimit   bool   `json:"uses_credit_limit"`
-	ConsiderAvailable bool   `json:"consider_available"`
-	PostponeDueDate   bool   `json:"postpone_due_date"`
-	ReceiptDays       int16  `json:"receipt_days"`
-	PaymentDays       int16  `json:"payment_days"`
+	Description string `json:"description"`
 }
 
 type UpdateCarrierDTO struct {
-	ID                int64  `json:"id"`
-	Description       string `json:"description"`
-	BillingType       string `json:"billing_type"`
-	UsesCreditLimit   bool   `json:"uses_credit_limit"`
-	ConsiderAvailable bool   `json:"consider_available"`
-	PostponeDueDate   bool   `json:"postpone_due_date"`
-	ReceiptDays       int16  `json:"receipt_days"`
-	PaymentDays       int16  `json:"payment_days"`
-	IsActive          *bool  `json:"is_active,omitempty"`
+	ID          int64  `json:"id"`
+	Description string `json:"description"`
+	IsActive    *bool  `json:"is_active,omitempty"`
 }
 
 // ─── Carrier Groups ───────────────────────────────────────────────────────────
@@ -197,151 +185,39 @@ type CreateInvoiceTypeDTO struct {
 	Type                    string          `json:"type"`
 	StockMovement           string          `json:"stock_movement"`
 	ICMSType                string          `json:"icms_type"`
-	ICMSPct                 decimal.Decimal `json:"icms_pct"`
 	ICMSReductionPct        decimal.Decimal `json:"icms_reduction_pct"`
-	IPIPct                  decimal.Decimal `json:"ipi_pct"`
-	PISPct                  decimal.Decimal `json:"pis_pct"`
-	COFINSPct               decimal.Decimal `json:"cofins_pct"`
-	ISSQNPct                decimal.Decimal `json:"issqn_pct"`
-	IRPct                   decimal.Decimal `json:"ir_pct"`
-	CSLLPct                 decimal.Decimal `json:"csll_pct"`
-	INSSPct                 decimal.Decimal `json:"inss_pct"`
 	GeneratesRevenue        bool            `json:"generates_revenue"`
 	UpdatesInventory        bool            `json:"updates_inventory"`
 	GeneratesFinancialTitle bool            `json:"generates_financial_title"`
-	ConsidersGoals          bool            `json:"considers_goals"`
 	CalcSubstitutionTax     bool            `json:"calc_substitution_tax"`
 	CalcICMSDeferral        bool            `json:"calc_icms_deferral"`
 	CalcPISCOFINS           bool            `json:"calc_pis_cofins"`
 	CalcDIFAL               bool            `json:"calc_difal"`
 	RequiresSalesOrder      bool            `json:"requires_sales_order"`
-	ListsFiscalBooks        bool            `json:"lists_fiscal_books"`
 	// NF-e / FocusNFE fields
-	ModelNF            *string         `json:"model_nf,omitempty"`
-	CSTICMS            *string         `json:"cst_icms,omitempty"`
-	CSOSNTICMS         *string         `json:"csosn_icms,omitempty"`
-	CSTIPI             *string         `json:"cst_ipi,omitempty"`
-	CSTPIS             *string         `json:"cst_pis,omitempty"`
-	CSTCOFINS          *string         `json:"cst_cofins,omitempty"`
-	BaixaPedido        bool            `json:"baixa_pedido"`
-	GeraTituloDev      bool            `json:"gera_titulo_dev"`
-	ExigeSuframa       bool            `json:"exige_suframa"`
-	IRPctPresumption   decimal.Decimal `json:"ir_pct_presumption"`
-	CSLLPctPresumption decimal.Decimal `json:"csll_pct_presumption"`
+	BaixaPedido  bool `json:"baixa_pedido"`
+	ExigeSuframa bool `json:"exige_suframa"`
 	// Extended fields (migration 000126)
-	DescriptionNF            *string `json:"description_nf,omitempty"`
-	ImpostosNFe              *string `json:"impostos_nfe,omitempty"`
-	CFOPId                   *int64  `json:"cfop_id,omitempty"`
-	DispositivoLegalIPIId    *int64  `json:"dispositivo_legal_ipi_id,omitempty"`
-	DispositivoLegalICMSId   *int64  `json:"dispositivo_legal_icms_id,omitempty"`
-	DispositivoLegalICMSSTId *int64  `json:"dispositivo_legal_icms_st_id,omitempty"`
-	DispositivoLegalPISId    *int64  `json:"dispositivo_legal_pis_id,omitempty"`
-	DispositivoLegalCOFINSId *int64  `json:"dispositivo_legal_cofins_id,omitempty"`
-	HierarchyIPI             *string `json:"hierarchy_ipi,omitempty"`
-	HierarchyICMS            *string `json:"hierarchy_icms,omitempty"`
-	HierarchyICMSST          *string `json:"hierarchy_icms_st,omitempty"`
-	HierarchyPIS             *string `json:"hierarchy_pis,omitempty"`
-	HierarchyCOFINS          *string `json:"hierarchy_cofins,omitempty"`
-	IPITransferSalesTableId  *int64  `json:"ipi_transfer_sales_table_id,omitempty"`
-	ListaValorContabil       bool    `json:"lista_valor_contabil"`
-	ListaRegistroSaida       bool    `json:"lista_registro_saida"`
-	ListaICMSIPI             bool    `json:"lista_icms_ipi"`
-	SintegraSpedFiscal       bool    `json:"sintegra_sped_fiscal"`
-	CalcFomentar             bool    `json:"calc_fomentar"`
-	ExcecaoFomentar          bool    `json:"excecao_fomentar"`
-	CompRessRetST            bool    `json:"comp_ress_ret_st"`
-	CalcReducao              bool    `json:"calc_reducao"`
-	ComplementoItens         bool    `json:"complemento_itens"`
-	BuscaTipoNF              bool    `json:"busca_tipo_nf"`
-	ICMSSTUltEntrada         bool    `json:"icms_st_ult_entrada"`
-	SomenteConsultaLotes     bool    `json:"somente_consulta_lotes"`
-	CalcImpIBPT              bool    `json:"calc_imp_ibpt"`
-	CredPresumidoICMS        bool    `json:"cred_presumido_icms"`
-	CIAP                     bool    `json:"ciap"`
-	VlrAgregadoBaseSubst     bool    `json:"vlr_agregado_base_subst"`
-	ContratoFacon            bool    `json:"contrato_facon"`
-	DescICMSLicitacoes       bool    `json:"desc_icms_licitacoes"`
-	Sisdeclara               bool    `json:"sisdeclara"`
-	CodClasTrib              *string `json:"cod_clas_trib,omitempty"`
-	CodClasTribTribReg       *string `json:"cod_clas_trib_trib_reg,omitempty"`
-	CodMotivoRestCompICMSST  *string `json:"cod_motivo_rest_comp_icms_st,omitempty"`
-	CodBeneficioFiscal       *string `json:"cod_beneficio_fiscal,omitempty"`
 }
 
 type UpdateInvoiceTypeDTO struct {
-	Code                     int64           `json:"code"`
-	Description              string          `json:"description"`
-	Type                     string          `json:"type"`
-	StockMovement            string          `json:"stock_movement"`
-	ICMSType                 string          `json:"icms_type"`
-	ICMSPct                  decimal.Decimal `json:"icms_pct"`
-	ICMSReductionPct         decimal.Decimal `json:"icms_reduction_pct"`
-	IPIPct                   decimal.Decimal `json:"ipi_pct"`
-	PISPct                   decimal.Decimal `json:"pis_pct"`
-	COFINSPct                decimal.Decimal `json:"cofins_pct"`
-	ISSQNPct                 decimal.Decimal `json:"issqn_pct"`
-	IRPct                    decimal.Decimal `json:"ir_pct"`
-	CSLLPct                  decimal.Decimal `json:"csll_pct"`
-	INSSPct                  decimal.Decimal `json:"inss_pct"`
-	GeneratesRevenue         bool            `json:"generates_revenue"`
-	UpdatesInventory         bool            `json:"updates_inventory"`
-	GeneratesFinancialTitle  bool            `json:"generates_financial_title"`
-	ConsidersGoals           bool            `json:"considers_goals"`
-	CalcSubstitutionTax      bool            `json:"calc_substitution_tax"`
-	CalcICMSDeferral         bool            `json:"calc_icms_deferral"`
-	CalcPISCOFINS            bool            `json:"calc_pis_cofins"`
-	CalcDIFAL                bool            `json:"calc_difal"`
-	RequiresSalesOrder       bool            `json:"requires_sales_order"`
-	ListsFiscalBooks         bool            `json:"lists_fiscal_books"`
-	IsActive                 *bool           `json:"is_active,omitempty"`
-	ModelNF                  *string         `json:"model_nf,omitempty"`
-	CSTICMS                  *string         `json:"cst_icms,omitempty"`
-	CSOSNTICMS               *string         `json:"csosn_icms,omitempty"`
-	CSTIPI                   *string         `json:"cst_ipi,omitempty"`
-	CSTPIS                   *string         `json:"cst_pis,omitempty"`
-	CSTCOFINS                *string         `json:"cst_cofins,omitempty"`
-	BaixaPedido              bool            `json:"baixa_pedido"`
-	GeraTituloDev            bool            `json:"gera_titulo_dev"`
-	ExigeSuframa             bool            `json:"exige_suframa"`
-	IRPctPresumption         decimal.Decimal `json:"ir_pct_presumption"`
-	CSLLPctPresumption       decimal.Decimal `json:"csll_pct_presumption"`
-	DescriptionNF            *string         `json:"description_nf,omitempty"`
-	ImpostosNFe              *string         `json:"impostos_nfe,omitempty"`
-	CFOPId                   *int64          `json:"cfop_id,omitempty"`
-	DispositivoLegalIPIId    *int64          `json:"dispositivo_legal_ipi_id,omitempty"`
-	DispositivoLegalICMSId   *int64          `json:"dispositivo_legal_icms_id,omitempty"`
-	DispositivoLegalICMSSTId *int64          `json:"dispositivo_legal_icms_st_id,omitempty"`
-	DispositivoLegalPISId    *int64          `json:"dispositivo_legal_pis_id,omitempty"`
-	DispositivoLegalCOFINSId *int64          `json:"dispositivo_legal_cofins_id,omitempty"`
-	HierarchyIPI             *string         `json:"hierarchy_ipi,omitempty"`
-	HierarchyICMS            *string         `json:"hierarchy_icms,omitempty"`
-	HierarchyICMSST          *string         `json:"hierarchy_icms_st,omitempty"`
-	HierarchyPIS             *string         `json:"hierarchy_pis,omitempty"`
-	HierarchyCOFINS          *string         `json:"hierarchy_cofins,omitempty"`
-	IPITransferSalesTableId  *int64          `json:"ipi_transfer_sales_table_id,omitempty"`
-	ListaValorContabil       bool            `json:"lista_valor_contabil"`
-	ListaRegistroSaida       bool            `json:"lista_registro_saida"`
-	ListaICMSIPI             bool            `json:"lista_icms_ipi"`
-	SintegraSpedFiscal       bool            `json:"sintegra_sped_fiscal"`
-	CalcFomentar             bool            `json:"calc_fomentar"`
-	ExcecaoFomentar          bool            `json:"excecao_fomentar"`
-	CompRessRetST            bool            `json:"comp_ress_ret_st"`
-	CalcReducao              bool            `json:"calc_reducao"`
-	ComplementoItens         bool            `json:"complemento_itens"`
-	BuscaTipoNF              bool            `json:"busca_tipo_nf"`
-	ICMSSTUltEntrada         bool            `json:"icms_st_ult_entrada"`
-	SomenteConsultaLotes     bool            `json:"somente_consulta_lotes"`
-	CalcImpIBPT              bool            `json:"calc_imp_ibpt"`
-	CredPresumidoICMS        bool            `json:"cred_presumido_icms"`
-	CIAP                     bool            `json:"ciap"`
-	VlrAgregadoBaseSubst     bool            `json:"vlr_agregado_base_subst"`
-	ContratoFacon            bool            `json:"contrato_facon"`
-	DescICMSLicitacoes       bool            `json:"desc_icms_licitacoes"`
-	Sisdeclara               bool            `json:"sisdeclara"`
-	CodClasTrib              *string         `json:"cod_clas_trib,omitempty"`
-	CodClasTribTribReg       *string         `json:"cod_clas_trib_trib_reg,omitempty"`
-	CodMotivoRestCompICMSST  *string         `json:"cod_motivo_rest_comp_icms_st,omitempty"`
-	CodBeneficioFiscal       *string         `json:"cod_beneficio_fiscal,omitempty"`
+	Code                    int64           `json:"code"`
+	Description             string          `json:"description"`
+	Type                    string          `json:"type"`
+	StockMovement           string          `json:"stock_movement"`
+	ICMSType                string          `json:"icms_type"`
+	ICMSReductionPct        decimal.Decimal `json:"icms_reduction_pct"`
+	GeneratesRevenue        bool            `json:"generates_revenue"`
+	UpdatesInventory        bool            `json:"updates_inventory"`
+	GeneratesFinancialTitle bool            `json:"generates_financial_title"`
+	CalcSubstitutionTax     bool            `json:"calc_substitution_tax"`
+	CalcICMSDeferral        bool            `json:"calc_icms_deferral"`
+	CalcPISCOFINS           bool            `json:"calc_pis_cofins"`
+	CalcDIFAL               bool            `json:"calc_difal"`
+	RequiresSalesOrder      bool            `json:"requires_sales_order"`
+	IsActive                *bool           `json:"is_active,omitempty"`
+	BaixaPedido             bool            `json:"baixa_pedido"`
+	ExigeSuframa            bool            `json:"exige_suframa"`
 }
 
 // ─── Sales Table Prices ────────────────────────────────────────────────────────
@@ -603,28 +479,8 @@ type EvaluateCommercialPoliciesDTO struct {
 // ─── Tax Types ────────────────────────────────────────────────────────────────
 
 type CreateTaxTypeDTO struct {
-	Description                   string `json:"description"`
-	IPIBaseTotalItems             bool   `json:"ipi_base_total_items"`
-	IPIBaseSubtractDiscount       bool   `json:"ipi_base_subtract_discount"`
-	IPIBaseAddFreight             bool   `json:"ipi_base_add_freight"`
-	IPIBaseAddExpenses            bool   `json:"ipi_base_add_expenses"`
-	ICMSBaseTotalItems            bool   `json:"icms_base_total_items"`
-	ICMSBaseSubtractDiscount      bool   `json:"icms_base_subtract_discount"`
-	ICMSBaseAddFreight            bool   `json:"icms_base_add_freight"`
-	ICMSBaseAddIPI                bool   `json:"icms_base_add_ipi"`
-	ICMSBaseAddExpenses           bool   `json:"icms_base_add_expenses"`
-	PISCOFINSBaseTotalItems       bool   `json:"pis_cofins_base_total_items"`
-	PISCOFINSBaseSubtractDiscount bool   `json:"pis_cofins_base_subtract_discount"`
-	PISCOFINSBaseAddFreight       bool   `json:"pis_cofins_base_add_freight"`
-	PISCOFINSBaseAddInsurance     bool   `json:"pis_cofins_base_add_insurance"`
-	PISCOFINSBaseAddExpenses      bool   `json:"pis_cofins_base_add_expenses"`
-	CSLLBaseTotalItems            bool   `json:"csll_base_total_items"`
-	CSLLBaseSubtractDiscount      bool   `json:"csll_base_subtract_discount"`
-	CSLLBaseAddFreight            bool   `json:"csll_base_add_freight"`
-	IRBaseTotalItems              bool   `json:"ir_base_total_items"`
-	IRBaseSubtractDiscount        bool   `json:"ir_base_subtract_discount"`
-	IRBaseAddFreight              bool   `json:"ir_base_add_freight"`
-	IsConsumer                    bool   `json:"is_consumer"`
+	Description string `json:"description"`
+	IsConsumer  bool   `json:"is_consumer"`
 }
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -700,6 +556,19 @@ type CreditPolicyDTO struct {
 	ValidityMonthsD       int              `json:"validity_months_d"`
 	ValidityMonthsE       int              `json:"validity_months_e"`
 	RegistrationCheckDays int              `json:"registration_check_days"`
+	// Ausentes (desktop antigo) mantêm o valor gravado.
+	CustomerRevenuePct     *decimal.Decimal `json:"customer_revenue_pct,omitempty"`
+	DeclaredMonthlyRevenue *decimal.Decimal `json:"declared_monthly_revenue,omitempty"`
+	AutoReviewMonths       *int             `json:"auto_review_months,omitempty"`
+	AutoIncreaseMaxPct     *decimal.Decimal `json:"auto_increase_max_pct,omitempty"`
+}
+
+// FinancialStatementDTO: faturamento anual declarado pelo cliente.
+type FinancialStatementDTO struct {
+	AnnualRevenue decimal.Decimal `json:"annual_revenue"`
+	ReferenceDate string          `json:"reference_date"`
+	Source        string          `json:"source"`
+	Notes         string          `json:"notes"`
 }
 
 // UpdateAddressDTO / UpdateContactDTO: edição na VCLI0500.

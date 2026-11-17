@@ -19,7 +19,6 @@ func toFiscalClassificationResponse(c *entity.FiscalClassification) *response.Fi
 		CEST:                      c.CEST,
 		IPIRate:                   c.IPIRate.InexactFloat64(),
 		IPIIndicator:              string(c.IPIIndicator),
-		Apuracao:                  c.Apuracao,
 		CSTIPIEntrada:             c.CSTIPIEntrada,
 		CSTIPISaida:               c.CSTIPISaida,
 		PISRate:                   c.PISRate.InexactFloat64(),

@@ -17,6 +17,21 @@ var rotasPorModulo = []struct {
 	modulo  acesso.Modulo
 }{
 	// Comercial
+	// Impressões: cada uma no módulo da rotina que ela imprime (sem isto o perfil
+	// restrito recebia 403 em toda impressão).
+	{"/api/impressao/pedido-venda", acesso.Comercial},
+	{"/api/impressao/proposta", acesso.Comercial},
+	{"/api/impressao/cliente", acesso.Comercial},
+	{"/api/impressao/cotacao", acesso.Suprimentos},
+	{"/api/impressao/nota-entrada", acesso.Fiscal},
+	{"/api/impressao/contas-receber", acesso.Financeiro},
+	{"/api/impressao/contas-pagar", acesso.Financeiro},
+	{"/api/impressao/plano-materiais", acesso.Planejamento},
+	{"/api/impressao/capacidade", acesso.Planejamento},
+	{"/api/impressao/programacao", acesso.Planejamento},
+	{"/api/impressao/kardex", acesso.Estoque},
+	{"/api/impressao/romaneio", acesso.Estoque},
+	{"/api/impressao/custo-producao", acesso.Custos},
 	{"/api/sales-order", acesso.Comercial},
 	{"/api/sales-quotation", acesso.Comercial},
 	{"/api/sales-division", acesso.Comercial},

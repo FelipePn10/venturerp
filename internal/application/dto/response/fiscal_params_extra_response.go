@@ -143,52 +143,22 @@ type ICMSSTRestitutionResponse struct {
 
 // SpecialAdjustmentNoteResponse is the API representation of a special adjustment note.
 type SpecialAdjustmentNoteResponse struct {
-	ID                      int64                               `json:"id"`
-	EmpresaID               int                                 `json:"empresa_id"`
-	Purpose                 string                              `json:"purpose"`
-	Status                  string                              `json:"status"`
-	Number                  *string                             `json:"number,omitempty"`
-	Series                  *string                             `json:"series,omitempty"`
-	IssueDate               time.Time                           `json:"issue_date"`
-	Period                  string                              `json:"period"`
-	InvoiceTypeID           *int64                              `json:"invoice_type_id,omitempty"`
-	CFOPID                  *int64                              `json:"cfop_id,omitempty"`
-	ICMSApuracaoLineID      *int64                              `json:"icms_apuracao_line_id,omitempty"`
-	AdjustmentCodeID        *int64                              `json:"adjustment_code_id,omitempty"`
-	AdjustmentDocCodeID     *int64                              `json:"adjustment_doc_code_id,omitempty"`
-	History                 *string                             `json:"history,omitempty"`
-	AutoGenerateSummary     bool                                `json:"auto_generate_summary"`
-	GeneratedSummaryEntryID *int64                              `json:"generated_summary_entry_id,omitempty"`
-	TotalValue              float64                             `json:"total_value"`
-	TotalICMS               float64                             `json:"total_icms"`
-	TotalIPI                float64                             `json:"total_ipi"`
-	Observation             *string                             `json:"observation,omitempty"`
-	Items                   []SpecialAdjustmentNoteItemResponse `json:"items,omitempty"`
-	CreatedAt               time.Time                           `json:"created_at"`
-}
-
-// SpecialAdjustmentNoteItemResponse is the API representation of a special adjustment note line.
-type SpecialAdjustmentNoteItemResponse struct {
-	ID                int64     `json:"id"`
-	NoteID            int64     `json:"note_id"`
-	Sequence          int       `json:"sequence"`
-	ItemID            *int64    `json:"item_id,omitempty"`
-	ItemCode          *string   `json:"item_code,omitempty"`
-	Description       *string   `json:"description,omitempty"`
-	Quantity          float64   `json:"quantity"`
-	Unit              *string   `json:"unit,omitempty"`
-	UnitValue         float64   `json:"unit_value"`
-	TotalValue        float64   `json:"total_value"`
-	ICMSBase          float64   `json:"icms_base"`
-	ICMSPct           float64   `json:"icms_pct"`
-	ICMSDeferralPct   float64   `json:"icms_deferral_pct"`
-	ICMSValue         float64   `json:"icms_value"`
-	ICMSDeferredValue float64   `json:"icms_deferred_value"`
-	IPIBase           float64   `json:"ipi_base"`
-	IPIPct            float64   `json:"ipi_pct"`
-	IPIValue          float64   `json:"ipi_value"`
-	CSTICMS           *string   `json:"cst_icms,omitempty"`
-	CSTIPI            *string   `json:"cst_ipi,omitempty"`
-	CFOPID            *int64    `json:"cfop_id,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
+	ID                      int64     `json:"id"`
+	EmpresaID               int       `json:"empresa_id"`
+	Purpose                 string    `json:"purpose"`
+	Status                  string    `json:"status"`
+	Number                  *string   `json:"number,omitempty"`
+	Series                  *string   `json:"series,omitempty"`
+	IssueDate               time.Time `json:"issue_date"`
+	Period                  string    `json:"period"`
+	InvoiceTypeID           *int64    `json:"invoice_type_id,omitempty"`
+	ICMSApuracaoLineID      *int64    `json:"icms_apuracao_line_id,omitempty"`
+	AdjustmentCodeID        *int64    `json:"adjustment_code_id,omitempty"`
+	AdjustmentDocCodeID     *int64    `json:"adjustment_doc_code_id,omitempty"`
+	History                 *string   `json:"history,omitempty"`
+	GeneratedSummaryEntryID *int64    `json:"generated_summary_entry_id,omitempty"`
+	TotalICMS               float64   `json:"total_icms"`
+	TotalIPI                float64   `json:"total_ipi"`
+	Observation             *string   `json:"observation,omitempty"`
+	CreatedAt               time.Time `json:"created_at"`
 }
