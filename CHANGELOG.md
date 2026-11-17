@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.1] — 2026-11-17
+
+- feat(credito): revisão trimestral automática, faturamento declarado e saneamento do cadastro (`5bb99e29`)
+
 ## [v1.19.0] — 2026-11-17
 
 - feat(fiscal): Zona Franca com SUFRAMA, crédito por apetite da empresa e notas especiais emitidas no SPED (`5d03587b`)
