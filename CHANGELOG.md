@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.5] — 2026-11-17
+
+- fix(mrp): tempo do roteiro dispensa o tempo da produtividade; prévia da NF-e em PDF (`5f5adf03`)
+
 ## [v1.19.4] — 2026-11-17
 
 - feat(transportadora): VSUP0140 completa, cadastros de apoio, travas de uso e cotação corrigida (`cf95d572`)
