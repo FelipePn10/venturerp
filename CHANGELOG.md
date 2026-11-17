@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.3] — 2026-11-17
+
+- chore(release): min_client 1.19.1, publicado e servido pelo portal (`cb961750`)
+
 ## [v1.19.2] — 2026-11-17
 
 - fix(estrutura): componente excluído pode voltar para a mesma estrutura (`564ac286`)
