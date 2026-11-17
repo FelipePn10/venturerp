@@ -103,6 +103,9 @@ func (uc *CalculateProductionTimeUseCase) Execute(
 		return nil, err
 	}
 
+	if imt.ProductionTime == 0 && imt.ProductionBaseQty > 0 {
+		return nil, errorsuc.NewValidationError("esta produtividade não tem tempo próprio: o tempo vem do roteiro do item, e o simulador só calcula pelo tempo da máquina")
+	}
 	if !finitePositive(imt.ProductionTime) || imt.ProductionBaseQty <= 0 {
 		return nil, errorsuc.NewValidationError("tempo de produção cadastrado inválido; revise a produtividade do item")
 	}

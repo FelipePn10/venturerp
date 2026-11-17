@@ -1424,6 +1424,7 @@ func (app *application) mount() chi.Router {
 	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
 	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
 	previaNFeUC := &fiscalUC.PreviaNFeUseCase{Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Repo: fiscalRepository, Auth: authService, Customers: custRepo, Orders: soRepo, Reforma: reformaRepo, Series: serieRepository}
+	previaNFeUC.Desenho = documentosExport.Gerador{}
 	previaNFeHandler := handler.NewPreviaNFeHandler(previaNFeUC)
 	destinatarioNotaHandler := handler.NewDestinatarioNotaHandler(&fiscalUC.DestinatarioDaNotaUseCase{Customers: custRepo, Fiscal: fiscalRepository, Auth: authService})
 	// Nota de entrada completa: XML lido por inteiro, conciliação dos itens com
@@ -2883,6 +2884,7 @@ func (app *application) mount() chi.Router {
 			// Prévia da nota: monta o documento que iria para a SEFAZ e lista as
 			// pendências, sem transmitir nada.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa", previaNFeHandler.Previa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa/pdf", previaNFeHandler.PreviaPDF)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/exits/{id}/itens/{itemId}/cclass-trib", reformaTributariaHandler.DefinirClassTribDaLinha)
 			// Número de série das linhas de item que controla série.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/series", serieHandler.LinhasDaNota)

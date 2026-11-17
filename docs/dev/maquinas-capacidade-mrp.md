@@ -30,6 +30,9 @@ MRP propõe materiais e ordens; CRP compara carga; APS sequencia ordens liberada
 - Prioriza a máscara exata e depois a prioridade da máquina; não usa perfil de outra máscara.
 - Roteiros com várias operações reservam todos os recursos, em ordem de precedência.
   Tempo explícito da operação prevalece sobre a taxa do item; sem override, usa a taxa medida.
+  Com tempo no roteiro, da produtividade (VMAQ0200) valem só a máquina — uma por centro
+  do roteiro — e a eficiência; o tempo dela pode ficar em branco (zero = "vem do roteiro").
+  O tempo da produtividade só é exigido na etapa que não tem tempo no roteiro.
 - Turnos sobrepostos são unidos. Paradas e reservas de outros planos são descontadas.
 - Produção proporcional pode continuar na próxima janela. Ciclos fechados só entram inteiros.
 - Sem janela suficiente no horizonte de um ano, retorna erro e desfaz o replanejamento.

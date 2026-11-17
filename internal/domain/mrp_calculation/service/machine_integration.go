@@ -46,6 +46,19 @@ func equivalentes(list []*entity.MachineTimeInfo, escolhida *entity.MachineTimeI
 	return out
 }
 
+// eficienciaValida confere o rendimento antes de usá-lo com o tempo do
+// roteiro. Zero (não informado) vale 100 %, como em eficienciaDe; negativo ou
+// acima de 100 % é cadastro errado e não pode virar 100 % calado.
+func eficienciaValida(mt *entity.MachineTimeInfo) error {
+	if mt.EfficiencyRate != nil && (*mt.EfficiencyRate <= 0 || *mt.EfficiencyRate > 1) {
+		return fmt.Errorf("eficiência inválida (%.4g) na produtividade", *mt.EfficiencyRate)
+	}
+	if mt.EfficiencyRate == nil && (mt.MachineEfficiencyRate < 0 || mt.MachineEfficiencyRate > 1) {
+		return fmt.Errorf("eficiência inválida (%.4g) na máquina", mt.MachineEfficiencyRate)
+	}
+	return nil
+}
+
 // eficienciaDe é o rendimento aplicável do item naquela máquina: o valor do
 // item (VMAQ0200 · Produtividade) sobrepõe o da máquina, e valor fora de (0,1]
 // é tratado como 100 % — a mesma regra de CalculateProductionTime.
