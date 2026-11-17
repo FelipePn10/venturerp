@@ -164,6 +164,14 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 	for _, it := range items {
 		campo := fmt.Sprintf("itens[%d]", it.Sequence)
 		linha := fmt.Sprintf("linha %d", it.Sequence)
+		if it.ICMSMotivoDesoneracao == "7" && it.Cfop != "6109" && it.Cfop != "6110" {
+			impede(fmt.Sprintf("itens[%d].cfop", it.Sequence), fmt.Sprintf("%s: venda isenta para a Zona Franca exige CFOP 6109 ou 6110, não %s (a SEFAZ recusa com 626)", linha, it.Cfop),
+				"gere a nota de novo: com o benefício aplicado, o CFOP de venda é trocado sozinho")
+		}
+		if it.ICMSMotivoDesoneracao == "7" && strings.TrimSpace(derefStr(exit.SuframaDestinatario)) == "" {
+			impede("suframa_destinatario", fmt.Sprintf("%s: ICMS desonerado para a Zona Franca sem a inscrição SUFRAMA do destinatário", linha),
+				"confira a inscrição e a validade na VCLI0500 → Fiscal e gere a nota de novo")
+		}
 		if strings.TrimSpace(descricaoDaLinha(it)) == "" {
 			impede(campo+".descricao", linha+": falta a descrição do produto", refazerLinha)
 		}
@@ -194,11 +202,22 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 	if len(items) > 0 && somaLinhas.Sub(produtos).Abs().GreaterThan(toleranciaTotal) {
 		impede("valor_produtos", fmt.Sprintf("a soma das linhas (%s) não fecha com o total de produtos da nota (%s)", somaLinhas.StringFixed(2), produtos.StringFixed(2)), refazerLinha)
 	}
+	// O ICMS desonerado da Zona Franca sai do total (indDeduzDeson 1).
+	desonerado := decimal.Zero
+	for _, it := range items {
+		if it.ICMSMotivoDesoneracao != "" {
+			desonerado = desonerado.Add(it.ICMSValorDesonerado)
+		}
+	}
 	esperado := produtos.Add(exit.ValorIPI).Add(exit.ValorICMSST).
-		Add(exit.ValorFrete).Add(exit.ValorSeguro).Sub(exit.ValorDesconto)
+		Add(exit.ValorFrete).Add(exit.ValorSeguro).Sub(exit.ValorDesconto).Sub(desonerado)
 	total := exit.ValorTotal
 	if total.Sub(esperado).Abs().GreaterThan(toleranciaTotal) {
-		impede("valor_total", fmt.Sprintf("o total da nota (%s) não fecha com produtos + IPI + ICMS-ST + frete + seguro − desconto (%s)", total.StringFixed(2), esperado.StringFixed(2)), refazerLinha)
+		formula := "produtos + IPI + ICMS-ST + frete + seguro − desconto"
+		if desonerado.IsPositive() {
+			formula += " − ICMS desonerado"
+		}
+		impede("valor_total", fmt.Sprintf("o total da nota (%s) não fecha com %s (%s)", total.StringFixed(2), formula, esperado.StringFixed(2)), refazerLinha)
 	}
 	if normal && !total.IsPositive() {
 		impede("valor_total", "o total da nota precisa ser maior que zero", "confira o desconto e gere a nota novamente")

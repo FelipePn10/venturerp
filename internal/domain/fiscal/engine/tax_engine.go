@@ -151,6 +151,9 @@ type TaxCalculationParams struct {
 	// Finalidade da compra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO); vazio =
 	// deduzir do destinatário. Ver ConsumidorFinal.
 	Finalidade string
+	// SuframaDestino: o destinatário tem inscrição SUFRAMA válida na data da
+	// nota — condição do benefício da Zona Franca.
+	SuframaDestino bool
 }
 
 // ConsumidorFinal: a mercadoria sai do ciclo comercial — destinatário não
@@ -206,6 +209,12 @@ type TaxItemResult struct {
 	ValorICMSST       decimal.Decimal // ICMS-ST a recolher (substituto tributário)
 	MVA               decimal.Decimal // margem de valor agregado aplicada (ratio)
 	CSTICMS           string
+	// Desoneração do ICMS (vICMSDeson e motDesICMS): na venda para a Zona
+	// Franca, o ICMS que seria devido, abatido do total da nota (motivo 7).
+	ValorICMSDesonerado decimal.Decimal
+	MotivoDesoneracao   string
+	// EnquadramentoIPI: cEnq da regra; vazio = 999.
+	EnquadramentoIPI string
 	// ReducaoBaseICMSPct é o percentual de redução da base do ICMS (pRedBC,
 	// 33.33 = 33,33%) aplicado pela regra do cadastro; 0 = sem redução.
 	ReducaoBaseICMSPct decimal.Decimal
@@ -257,6 +266,8 @@ type TaxTotals struct {
 	ValorFomentar decimal.Decimal
 	BaseICMSST    decimal.Decimal
 	ValorICMSST   decimal.Decimal
+	// ValorICMSDesonerado: o total desonerado, que sai do valor da nota.
+	ValorICMSDesonerado decimal.Decimal
 }
 
 type TaxScenarioConfig struct {
@@ -312,6 +323,7 @@ func CalcularImpostos(
 		result.Totais.ValorFomentar = result.Totais.ValorFomentar.Add(itemResult.ValorFomentar)
 		result.Totais.BaseICMSST = result.Totais.BaseICMSST.Add(itemResult.BaseICMSST)
 		result.Totais.ValorICMSST = result.Totais.ValorICMSST.Add(itemResult.ValorICMSST)
+		result.Totais.ValorICMSDesonerado = result.Totais.ValorICMSDesonerado.Add(itemResult.ValorICMSDesonerado)
 	}
 
 	return result, nil
@@ -569,6 +581,18 @@ func calculateItemTax(
 	} else if redBase.IsPositive() && r.CSTICMS == "00" {
 		r.CSTICMS = "20"
 	}
+	if item.Parametro != nil {
+		r.EnquadramentoIPI = strings.TrimSpace(item.Parametro.EnquadramentoIPI)
+	}
+	if item.Parametro != nil && item.Parametro.ZonaFranca {
+		// O desonerado é o ICMS que a operação teria: o já calculado (com a redução
+		// do tipo de nota) ou, se a regra impôs CST sem imposto, o da operação.
+		devido := r.ValorICMS
+		if !devido.IsPositive() {
+			devido = valorICMS
+		}
+		zonaFranca(&r, devido, isInterno, simples, params.SuframaDestino, consumidorFinal, nota)
+	}
 
 	// ── Substituição Tributária (ICMS-ST) ──────────────────────────────────────
 	// A MVA vem da linha (informada à mão, já como fração e possivelmente
@@ -602,6 +626,12 @@ func calculateItemTax(
 		} else {
 			nota("sem ST da regra: destinatário é consumidor final")
 		}
+	}
+	if mva.IsPositive() && r.MotivoDesoneracao != "" {
+		// Venda isenta para a Zona Franca: sem ICMS próprio não há o que
+		// substituir (a base zerada faria ST sobre o IPI).
+		nota("sem ST: venda isenta para a Zona Franca")
+		mva = decimal.Zero
 	}
 	if mva.IsPositive() {
 		aliqST := aliqSTInformada
@@ -689,6 +719,52 @@ func calculateItemTax(
 
 	roundResult(&r)
 	return r
+}
+
+// zonaFranca aplica o benefício da venda para a Zona Franca de Manaus / ALC
+// (Convênio ICMS 65/88; Lei 10.996/2004): ICMS isento com o valor que seria
+// devido informado como desonerado (motivo 7, SUFRAMA) e abatido do total, e
+// PIS/COFINS a alíquota zero. Só vale para operação interestadual de empresa
+// do regime normal com destinatário de SUFRAMA válida; fora disso a venda é
+// tributada normalmente e a linha diz por quê. O IPI segue o CST da regra.
+func zonaFranca(r *TaxItemResult, icmsDaOperacao decimal.Decimal, interno, simples, suframa, consumidorFinal bool, nota func(string, ...any)) {
+	switch {
+	case interno:
+		nota("sem benefício da Zona Franca: a operação é interna")
+		return
+	case simples:
+		nota("sem benefício da Zona Franca na nota: o optante do Simples Nacional recolhe o ICMS no DAS")
+		return
+	case !suframa:
+		nota("sem benefício da Zona Franca: o destinatário não tem inscrição SUFRAMA válida")
+		return
+	case consumidorFinal:
+		nota("sem benefício da Zona Franca: o Convênio ICM 65/88 isenta só a mercadoria para comercialização ou industrialização (destinatário não contribuinte ou compra para uso e consumo)")
+		return
+	}
+	r.ValorICMSDesonerado = icmsDaOperacao.Round(2)
+	r.MotivoDesoneracao = "7"
+	r.CSTICMS = "40"
+	r.BaseICMS, r.AliquotaICMS, r.ValorICMS, r.ReducaoBaseICMSPct = decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
+	r.ValorICMSDiferido, r.DiferimentoICMSPct, r.ValorDIFAL, r.ValorFCP = decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
+	r.BaseUFDest, r.AliqInternaUFDestPct, r.AliqInterestadualPct, r.FCPUFDestPct = decimal.Zero, decimal.Zero, decimal.Zero, decimal.Zero
+	r.semDiferimento("sem diferimento: venda para a Zona Franca")
+	r.BasePIS, r.AliquotaPIS, r.ValorPIS, r.CSTPIS = decimal.Zero, decimal.Zero, decimal.Zero, "06"
+	r.BaseCOFINS, r.AliquotaCOFINS, r.ValorCOFINS, r.CSTCOFINS = decimal.Zero, decimal.Zero, decimal.Zero, "06"
+	nota("Zona Franca (SUFRAMA): ICMS de %s desonerado (CST 40, motivo 7) e abatido do total; PIS/COFINS a alíquota zero (CST 06)", "R$ "+pctBR(r.ValorICMSDesonerado))
+}
+
+// CFOPZonaFranca: o CFOP da venda isenta para a Zona Franca / ALC — 6109
+// (produção do estabelecimento) e 6110 (mercadoria de terceiros). A SEFAZ recusa
+// a isenção com outro CFOP (rejeição 626). Devolve "" quando não há equivalente.
+func CFOPZonaFranca(cfop string) string {
+	switch strings.TrimSpace(cfop) {
+	case "6101", "6107", "6109":
+		return "6109"
+	case "6102", "6108", "6110":
+		return "6110"
+	}
+	return ""
 }
 
 // semDiferimento troca a nota explicativa do diferimento quando um passo

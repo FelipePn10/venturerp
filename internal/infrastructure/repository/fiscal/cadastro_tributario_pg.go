@@ -91,6 +91,24 @@ func (r *CadastroTributarioPG) EfeitosDoTipoNota(ctx context.Context, id int64) 
 }
 
 // ExigePedidoNoTipoNota diz se o tipo de nota só vale com pedido de venda.
+// ExigeSuframaNoTipoNota: o tipo de nota (venda para a Zona Franca) exige a
+// inscrição SUFRAMA do destinatário.
+func (r *CadastroTributarioPG) ExigeSuframaNoTipoNota(ctx context.Context, id int64) (bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	var exige bool
+	err = r.pool.QueryRow(ctx, `SELECT exige_suframa FROM invoice_types WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&exige)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("lendo o tipo de nota: %w", err)
+	}
+	return exige, nil
+}
+
 func (r *CadastroTributarioPG) ExigePedidoNoTipoNota(ctx context.Context, id int64) (bool, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {

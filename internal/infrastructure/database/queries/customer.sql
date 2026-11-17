@@ -494,11 +494,11 @@ SELECT * FROM customer_credit_policies WHERE enterprise_id = $1;
 INSERT INTO customer_credit_policies (
     enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
     overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
-    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct
 ) VALUES (
     sqlc.arg(enterprise_id), sqlc.arg(max_limit), sqlc.arg(new_customer_capital_pct), sqlc.arg(new_customer_cap), sqlc.arg(override_tolerance_pct),
     sqlc.arg(overdue_block_days), sqlc.arg(history_months), sqlc.arg(validity_months_a), sqlc.arg(validity_months_b), sqlc.arg(validity_months_c),
-    sqlc.arg(validity_months_d), sqlc.arg(validity_months_e), sqlc.arg(registration_check_days), sqlc.arg(updated_by), NOW()
+    sqlc.arg(validity_months_d), sqlc.arg(validity_months_e), sqlc.arg(registration_check_days), sqlc.arg(updated_by), NOW(), sqlc.arg(new_customer_revenue_pct)
 )
 ON CONFLICT (enterprise_id) DO UPDATE SET
     max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
@@ -507,7 +507,7 @@ ON CONFLICT (enterprise_id) DO UPDATE SET
     validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
     validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
     validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
-    updated_by = EXCLUDED.updated_by, updated_at = NOW()
+    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct
 RETURNING *;
 
 -- name: CreateCreditReview :one

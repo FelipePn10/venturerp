@@ -4717,6 +4717,7 @@ type CustomerCreditPolicy struct {
 	RegistrationCheckDays int32
 	UpdatedAt             pgtype.Timestamptz
 	UpdatedBy             pgtype.UUID
+	NewCustomerRevenuePct pgtype.Numeric
 }
 
 type CustomerCreditReview struct {
@@ -5767,6 +5768,7 @@ type FiscalExit struct {
 	ShippingCarrierID            *int64
 	Transportador                []byte
 	LocalEntrega                 []byte
+	SuframaDestinatario          pgtype.Text
 }
 
 type FiscalExitItem struct {
@@ -5834,6 +5836,9 @@ type FiscalExitItem struct {
 	Mask                   string
 	Lot                    pgtype.Text
 	Address                pgtype.Text
+	IcmsValorDesonerado    pgtype.Numeric
+	IcmsMotivoDesoneracao  pgtype.Text
+	IpiCodigoEnquadramento pgtype.Text
 }
 
 type FiscalExitItemSeries struct {
@@ -6238,7 +6243,8 @@ type IcmsIpiTaxParam struct {
 	// fornecedor (suppliers.code) — restringe regra de entrada; não vale na saída
 	SupplierCode *int64
 	// icms_reduction_substitutions.id de onde a regra foi copiada (migração 000433)
-	OrigemReducaoID *int64
+	OrigemReducaoID        *int64
+	IpiCodigoEnquadramento pgtype.Text
 }
 
 type IcmsReductionSubstitution struct {

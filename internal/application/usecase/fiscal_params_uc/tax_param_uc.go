@@ -182,6 +182,7 @@ func dtoToTaxParamEntity(dto request.CreateTaxParamDTO) *entity.ICMSIPITaxParam 
 		ICMSSubstPctOrigins1238:          dto.ICMSSubstPctOrigins1238,
 		CSTICMSFci:                       dto.CSTICMSFci,
 		UsesICMSZonaFranca:               dto.UsesICMSZonaFranca,
+		IPICodigoEnquadramento:           enquadramentoIPI(dto.IPICodigoEnquadramento),
 		DifAliqSTContribUC:               dto.DifAliqSTContribUC,
 		CodBenefContrib:                  dto.CodBenefContrib,
 		CodBenefNonContrib:               dto.CodBenefNonContrib,
@@ -234,4 +235,21 @@ func conferirCenario(dto request.CreateTaxParamDTO) error {
 		}
 	}
 	return nil
+}
+
+// enquadramentoIPI: o cEnq tem 3 dígitos (tabela da Receita); vazio = 999.
+func enquadramentoIPI(v *string) *string {
+	if v == nil {
+		return nil
+	}
+	d := strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		return -1
+	}, *v)
+	if d == "" {
+		return nil
+	}
+	return &d
 }

@@ -114,6 +114,9 @@ type FiscalExitItemResponse struct {
 	ICMSDiferimentoPct    float64   `json:"icms_diferimento_pct"`
 	AliqCreditoSimples    float64   `json:"aliq_credito_simples"`
 	ValorCreditoSimples   float64   `json:"valor_credito_simples"`
+	ValorICMSDesonerado   float64   `json:"icms_valor_desonerado,omitempty"`
+	MotivoDesoneracao     string    `json:"icms_motivo_desoneracao,omitempty"`
+	IPIEnquadramento      string    `json:"ipi_codigo_enquadramento,omitempty"`
 	ICMSUFDestBase        float64   `json:"icms_uf_dest_base"`
 	ICMSUFDestAliqInterna float64   `json:"icms_uf_dest_aliq_interna"`
 	ICMSAliqInterestadual float64   `json:"icms_aliq_interestadual"`
@@ -487,7 +490,10 @@ type PedidoParaFaturarResponse struct {
 	// TipoFretePadrao e ShippingCarrierID: o que a nota usa se o faturamento
 	// não disser outro (pedido, depois cliente). LocalEntrega: o endereço de
 	// entrega quando é outro que o do destinatário.
-	TipoFretePadrao      *string                 `json:"tipo_frete_padrao,omitempty"`
+	TipoFretePadrao *string `json:"tipo_frete_padrao,omitempty"`
+	// InvoiceTypeID: o tipo de NF padrão do pedido, que a nota usa se o
+	// faturamento não escolher outro.
+	InvoiceTypeID        *int64                  `json:"invoice_type_id,omitempty"`
 	ShippingCarrierID    *int64                  `json:"shipping_carrier_id,omitempty"`
 	LocalEntrega         string                  `json:"local_entrega,omitempty"`
 	RepresentativeCode   *int64                  `json:"representative_code,omitempty"`
@@ -505,8 +511,11 @@ type PedidoParaFaturarResponse struct {
 	Itens                []PedidoItemParaFaturar `json:"itens"`
 	ValorPendente        float64                 `json:"valor_pendente"`
 	Impedimentos         []string                `json:"impedimentos,omitempty"`
-	PodeFaturar          bool                    `json:"pode_faturar"`
-	NotasDoPedido        []NotaDoPedido          `json:"notas_do_pedido,omitempty"`
+	// Avisos: não impedem o faturamento, mas pedem atenção (ex.: tipos de NF
+	// diferentes entre as linhas).
+	Avisos        []string       `json:"avisos,omitempty"`
+	PodeFaturar   bool           `json:"pode_faturar"`
+	NotasDoPedido []NotaDoPedido `json:"notas_do_pedido,omitempty"`
 }
 
 type ComissaoDoPedido struct {

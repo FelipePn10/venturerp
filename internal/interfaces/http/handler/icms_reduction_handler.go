@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"context"
+
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	"net/http"
 	"strconv"
@@ -231,6 +234,31 @@ func (h *ICMSReductionHandler) UpdateSpecialNote(w http.ResponseWriter, r *http.
 		return
 	}
 	result, err := h.specialNoteUC.Update(r.Context(), &body)
+	if err != nil {
+		respondFiscalError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, result)
+}
+
+// EmitirSpecialNote handles POST /api/fiscal/notas-especiais/{id}/emitir.
+func (h *ICMSReductionHandler) EmitirSpecialNote(w http.ResponseWriter, r *http.Request) {
+	h.mudarSituacaoNota(w, r, h.specialNoteUC.Emitir)
+}
+
+// CancelarSpecialNote handles POST /api/fiscal/notas-especiais/{id}/cancelar.
+func (h *ICMSReductionHandler) CancelarSpecialNote(w http.ResponseWriter, r *http.Request) {
+	h.mudarSituacaoNota(w, r, h.specialNoteUC.Cancelar)
+}
+
+func (h *ICMSReductionHandler) mudarSituacaoNota(w http.ResponseWriter, r *http.Request,
+	acao func(context.Context, int64) (*response.SpecialAdjustmentNoteResponse, error)) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := acao(r.Context(), id)
 	if err != nil {
 		respondFiscalError(w, err)
 		return

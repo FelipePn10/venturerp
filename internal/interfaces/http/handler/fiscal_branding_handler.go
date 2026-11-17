@@ -71,7 +71,8 @@ func (h *FiscalBrandingHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Logo handles GET /api/fiscal/config/logo, serving the stored image so the
-// front-end can preview it. Returns 404 when no logo is configured.
+// front-end can preview it. Sem logo configurado responde 204: não é erro, e o
+// 404 sujava o console a cada abertura da VFIS0100.
 func (h *FiscalBrandingHandler) Logo(w http.ResponseWriter, r *http.Request) {
 	data, mime, err := h.get.Logo(r.Context())
 	if err != nil {
@@ -79,7 +80,7 @@ func (h *FiscalBrandingHandler) Logo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(data) == 0 {
-		h.NotFound(w, "logo não configurado")
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	w.Header().Set("Content-Type", mime)

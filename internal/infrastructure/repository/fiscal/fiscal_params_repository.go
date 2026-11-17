@@ -483,6 +483,7 @@ func taxParamToCreateParams(p *fiscalEntity.ICMSIPITaxParam) sqlc.CreateTaxParam
 		MvaPct:                           pgutil.ToPgNumericFromDecimal(p.MvaPct),
 		MvaAjustarInterestadual:          p.MvaAjustarInterestadual,
 		SupplierCode:                     p.SupplierCode,
+		IpiCodigoEnquadramento:           pgutil.ToPgTextFromPtr(p.IPICodigoEnquadramento),
 	}
 }
 
@@ -573,6 +574,7 @@ func taxParamToUpdateParams(p *fiscalEntity.ICMSIPITaxParam) sqlc.UpdateTaxParam
 		MvaPct:                           cp.MvaPct,
 		MvaAjustarInterestadual:          cp.MvaAjustarInterestadual,
 		SupplierCode:                     cp.SupplierCode,
+		IpiCodigoEnquadramento:           cp.IpiCodigoEnquadramento,
 	}
 }
 
@@ -661,6 +663,7 @@ func taxParamToEntity(row sqlc.IcmsIpiTaxParam) *fiscalEntity.ICMSIPITaxParam {
 		MvaPct:                           pgutil.FromPgNumericToDecimal(row.MvaPct),
 		MvaAjustarInterestadual:          row.MvaAjustarInterestadual,
 		SupplierCode:                     row.SupplierCode,
+		IPICodigoEnquadramento:           pgutil.FromPgTextPtr(row.IpiCodigoEnquadramento),
 		OrigemReducaoID:                  row.OrigemReducaoID,
 		IsActive:                         row.IsActive,
 		CreatedAt:                        pgutil.FromPgTimestamptz(row.CreatedAt),
@@ -1694,19 +1697,24 @@ func (r *FiscalParamsRepositorySQLC) UpdateSpecialAdjustmentNote(ctx context.Con
 		return nil, err
 	}
 	tag, err := r.pool.Exec(ctx,
+		// Período, data, código de ajuste e linha também se gravam: antes a
+		// alteração os descartava e a nota nunca ganhava o código do E111.
 		`UPDATE special_adjustment_notes SET
 		 status=$1, number=$2, series=$3, history=$4, total_value=$5, total_icms=$6, total_ipi=$7,
-		 generated_summary_entry_id=$8, observation=$9
+		 generated_summary_entry_id=$8, observation=$9,
+		 issue_date=$12, period=$13, adjustment_code_id=$14, icms_apuracao_line_id=$15
 		 WHERE id=$10 AND empresa_id=$11
-		   AND ($8::bigint IS NULL OR EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $8 AND s.enterprise_id = $11))`,
+		   AND ($8::bigint IS NULL OR EXISTS (SELECT 1 FROM icms_summary_entries s WHERE s.id = $8 AND s.enterprise_id = $11))
+		   AND ($15::bigint IS NULL OR EXISTS (SELECT 1 FROM icms_apuracao_lines l WHERE l.id = $15 AND l.enterprise_id = $11))`,
 		string(n.Status), pgutil.ToPgTextFromPtr(n.Number), pgutil.ToPgTextFromPtr(n.Series),
 		pgutil.ToPgTextFromPtr(n.History), n.TotalValue, n.TotalICMS, n.TotalIPI,
-		pgutil.ToPgInt8Ptr(n.GeneratedSummaryEntryID), pgutil.ToPgTextFromPtr(n.Observation), n.ID, empresa)
+		pgutil.ToPgInt8Ptr(n.GeneratedSummaryEntryID), pgutil.ToPgTextFromPtr(n.Observation), n.ID, empresa,
+		n.IssueDate, n.Period, pgutil.ToPgInt8Ptr(n.AdjustmentCodeID), pgutil.ToPgInt8Ptr(n.ICMSApuracaoLineID))
 	if err != nil {
 		return nil, fmt.Errorf("updating special adjustment note %d: %w", n.ID, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d (ou o totalizador informado) não encontrada nesta empresa", n.ID))
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota de ajuste especial %d (ou o totalizador ou a linha de apuração informados) não encontrada nesta empresa", n.ID))
 	}
 	return n, nil
 }

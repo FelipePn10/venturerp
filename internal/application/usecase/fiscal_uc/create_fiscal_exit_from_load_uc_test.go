@@ -10,6 +10,9 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	customerentity "github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
+	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	fiscalentity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	fiscalrepo "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
@@ -96,7 +99,25 @@ func (r *loadShipmentRepo) RecalcLoadTotals(context.Context, int64) error { retu
 
 type loadSalesRepo struct {
 	salesrepo.SalesOrderRepository
-	items []*salesentity.SalesOrderItem
+	items  []*salesentity.SalesOrderItem
+	tipoNF *string
+}
+
+func (r loadSalesRepo) GetByCode(_ context.Context, code int64) (*salesentity.SalesOrder, error) {
+	return &salesentity.SalesOrder{Code: code, DefaultNFType: r.tipoNF}, nil
+}
+
+// tiposNotaFake: o cadastro de clientes só responde o tipo de NF.
+type tiposNotaFake struct {
+	customerrepo.CustomerRepository
+	tipos map[int64]*customerentity.InvoiceType
+}
+
+func (f tiposNotaFake) GetInvoiceTypeByCode(_ context.Context, code int64) (*customerentity.InvoiceType, error) {
+	if t, ok := f.tipos[code]; ok {
+		return t, nil
+	}
+	return nil, errorsuc.NewNotFoundError("tipo de nota não encontrado")
 }
 
 func (r loadSalesRepo) ListItems(context.Context, int64) ([]*salesentity.SalesOrderItem, error) {
@@ -245,4 +266,31 @@ type transportadoraFake struct{}
 
 func (transportadoraFake) TransportadorDaNota(_ context.Context, id int64) (*fiscalentity.Transportador, error) {
 	return &fiscalentity.Transportador{CNPJCPF: "11222333000181", Nome: "Transportadora de teste"}, nil
+}
+
+// Carga de um pedido só leva o tipo de NF do pedido, como o faturamento pelo
+// pedido (antes a nota da carga saía sem tipo).
+func TestCreateFiscalExitFromLoad_LevaOTipoDeNFDoPedido(t *testing.T) {
+	fiscal := &loadFiscalRepo{nextNF: 1}
+	shipment := &loadShipmentRepo{
+		load: &shipentity.ShipmentLoad{Code: 9002, Status: shipentity.LoadStatusReleased, Shipments: []*shipentity.ShipmentLoadShipment{{ShipmentCode: 5002}}},
+		shipments: map[int64]*shipentity.Shipment{
+			5002: {ID: 2, Code: 5002, Status: shipentity.ShipmentStatusConferred, SalesOrderCode: i64p(7002),
+				Items: []*shipentity.ShipmentItem{{ItemCode: 1001, Quantity: decimal.NewFromInt(1), IsConferred: true, ConferredQty: decimal.NewFromInt(1)}}},
+		},
+	}
+	tipo := "77"
+	uc := &CreateFiscalExitFromLoadUseCase{
+		CreateUC: &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}, Transportadoras: transportadoraFake{},
+			Customers: tiposNotaFake{tipos: map[int64]*customerentity.InvoiceType{77: {ID: 500, Code: 77, IsActive: true}}}},
+		FiscalRepo: fiscal, ShipmentRepo: shipment,
+		SalesOrderRepo: loadSalesRepo{tipoNF: &tipo, items: []*salesentity.SalesOrderItem{{Code: 1, ItemCode: 1001, UnitPrice: decimal.NewFromInt(50)}}},
+	}
+	if _, err := uc.Execute(context.Background(), request.CreateFiscalExitFromLoadDTO{LoadCode: 9002, Serie: "1", DataEmissao: "2026-07-06",
+		Cfop: "5102", NaturezaOperacao: "Venda", UFDestinatario: strp("SP")}); err != nil {
+		t.Fatal(err)
+	}
+	if fiscal.created.InvoiceTypeID == nil || *fiscal.created.InvoiceTypeID != 500 {
+		t.Fatalf("tipo de NF da nota da carga: %v, quer 500", fiscal.created.InvoiceTypeID)
+	}
 }

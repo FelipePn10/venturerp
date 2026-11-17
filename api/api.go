@@ -1404,7 +1404,7 @@ func (app *application) mount() chi.Router {
 	// fiscal module
 	// Customers/SalesOrders completam o destinatário da nota (endereço exigido
 	// pela NF-e) e resolvem a condição de pagamento que vira duplicata e título.
-	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool), Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), Transportadoras: fiscalRepo.NewCadastroTributarioPG(app.db.Pool)}
+	createFiscalExitUC := &fiscalUC.CreateFiscalExitUseCase{Repo: fiscalRepository, Auth: authService, Customers: custRepo, SalesOrders: soRepo, Beneficios: fiscalRepo.NewBeneficioFiscalPG(app.db.Pool), Parametros: fiscalRepo.NewParametroICMSIPIPG(app.db.Pool), Cadastro: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), Transportadoras: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), IBPT: ibptRepo.NewIBPTRepositoryPG(app.db.Pool)}
 	reformaTributariaHandler := handler.NewReformaTributariaHandler(reformaTributariaUC)
 	// CFOP da nota conferido contra a tabela oficial na prévia e na autorização.
 	cfopCatalogo := fiscalParamsRepo.NewFiscalParamsRepository(queries, app.db.Pool)
@@ -2988,6 +2988,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/", icmsReductionHandler.UpdateSpecialNote)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", icmsReductionHandler.ListSpecialNotes)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.GetSpecialNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/emitir", icmsReductionHandler.EmitirSpecialNote)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelar", icmsReductionHandler.CancelarSpecialNote)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/itens", icmsReductionHandler.AddSpecialNoteItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/itens", icmsReductionHandler.ListSpecialNoteItems)
 		})

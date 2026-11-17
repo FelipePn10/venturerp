@@ -186,7 +186,11 @@ func (uc *CustomerUseCase) analyzeCredit(ctx context.Context, existing *entity.C
 				Detail: "a análise usou os dados já gravados no cadastro; reconsulte antes de aprovar valores altos"}
 		}
 	}
-	a.suggestion = entity.SuggestCreditLimit(hist, profile, pol, today)
+	seller, err := uc.life.SellerVolume(ctx, today)
+	if err != nil {
+		return nil, err
+	}
+	a.suggestion = entity.SuggestCreditLimit(hist, profile, pol, seller, today)
 	if aviso != nil {
 		a.suggestion.Factors = append(a.suggestion.Factors, *aviso)
 	}
@@ -347,8 +351,9 @@ func (uc *CustomerUseCase) ListCreditReviews(ctx context.Context, code int64) ([
 func toPolicyResponse(p entity.CreditPolicy) *response.CreditPolicyResponse {
 	return &response.CreditPolicyResponse{
 		MaxLimit: p.MaxLimit.InexactFloat64(), NewCustomerCapitalPct: p.NewCustomerCapitalPct.InexactFloat64(),
-		NewCustomerCap: p.NewCustomerCap.InexactFloat64(), OverrideTolerancePct: p.OverrideTolerancePct.InexactFloat64(),
-		OverdueBlockDays: p.OverdueBlockDays, HistoryMonths: p.HistoryMonths,
+		NewCustomerCap: p.NewCustomerCap.InexactFloat64(), NewCustomerRevenuePct: p.NewCustomerRevenuePct.InexactFloat64(),
+		OverrideTolerancePct: p.OverrideTolerancePct.InexactFloat64(),
+		OverdueBlockDays:     p.OverdueBlockDays, HistoryMonths: p.HistoryMonths,
 		ValidityMonthsA: p.ValidityMonths[entity.RiskA], ValidityMonthsB: p.ValidityMonths[entity.RiskB],
 		ValidityMonthsC: p.ValidityMonths[entity.RiskC], ValidityMonthsD: p.ValidityMonths[entity.RiskD],
 		ValidityMonthsE: p.ValidityMonths[entity.RiskE], RegistrationCheckDays: p.RegistrationCheckDays,
@@ -381,6 +386,15 @@ func (uc *CustomerUseCase) SaveCreditPolicy(ctx context.Context, dto request.Cre
 			entity.RiskD: dto.ValidityMonthsD, entity.RiskE: dto.ValidityMonthsE,
 		},
 		RegistrationCheckDays: dto.RegistrationCheckDays,
+	}
+	if dto.NewCustomerRevenuePct != nil {
+		p.NewCustomerRevenuePct = *dto.NewCustomerRevenuePct
+	} else {
+		atual, err := uc.life.GetCreditPolicy(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.NewCustomerRevenuePct = atual.NewCustomerRevenuePct
 	}
 	if err := p.Validate(); err != nil {
 		return nil, err

@@ -176,6 +176,7 @@ func toTaxParamResponse(t *entity.ICMSIPITaxParam) *response.TaxParamResponse {
 		ICMSSubstPctOrigins1238:          t.ICMSSubstPctOrigins1238.InexactFloat64(),
 		CSTICMSFci:                       t.CSTICMSFci,
 		UsesICMSZonaFranca:               t.UsesICMSZonaFranca,
+		IPICodigoEnquadramento:           t.IPICodigoEnquadramento,
 		DifAliqSTContribUC:               t.DifAliqSTContribUC.InexactFloat64(),
 		CodBenefContrib:                  t.CodBenefContrib,
 		CodBenefNonContrib:               t.CodBenefNonContrib,

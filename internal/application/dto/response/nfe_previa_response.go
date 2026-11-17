@@ -78,6 +78,9 @@ type PreviaItemNFe struct {
 	// Redução de base (%), crédito do Simples e DIFAL (ICMS e FCP da UF de destino).
 	ReducaoBaseICMSPct  float64 `json:"icms_reducao_base_pct,omitempty"`
 	ValorCreditoSimples float64 `json:"valor_credito_simples,omitempty"`
+	// Zona Franca: ICMS desonerado (abatido do total) e o motivo (7 = SUFRAMA).
+	ValorICMSDesonerado float64 `json:"icms_valor_desonerado,omitempty"`
+	MotivoDesoneracao   string  `json:"icms_motivo_desoneracao,omitempty"`
 	ValorDIFAL          float64 `json:"valor_difal,omitempty"`
 	ValorFCPUFDest      float64 `json:"valor_fcp_uf_dest,omitempty"`
 	BaseICMS            float64 `json:"base_icms"`

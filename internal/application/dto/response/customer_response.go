@@ -645,6 +645,7 @@ type CreditPolicyResponse struct {
 	MaxLimit              float64 `json:"max_limit"`
 	NewCustomerCapitalPct float64 `json:"new_customer_capital_pct"`
 	NewCustomerCap        float64 `json:"new_customer_cap"`
+	NewCustomerRevenuePct float64 `json:"new_customer_revenue_pct"`
 	OverrideTolerancePct  float64 `json:"override_tolerance_pct"`
 	OverdueBlockDays      int     `json:"overdue_block_days"`
 	HistoryMonths         int     `json:"history_months"`

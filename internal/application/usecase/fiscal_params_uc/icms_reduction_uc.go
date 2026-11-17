@@ -165,11 +165,72 @@ func (uc *SpecialAdjustmentNoteUseCase) Update(ctx context.Context, n *entity.Sp
 	if n.ID == 0 {
 		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
+	if err := validatePeriod(n.Period); err != nil {
+		return nil, err
+	}
+	if n.IssueDate.IsZero() {
+		return nil, errorsuc.NewValidationError("informe a data de emissão")
+	}
+	// A situação é da nota gravada, não do que a tela manda (antes chegava vazia
+	// e o banco recusava a alteração). Só o rascunho se altera.
+	atual, err := uc.Repo.GetSpecialAdjustmentNote(ctx, n.ID)
+	if err != nil {
+		return nil, err
+	}
+	if atual.Status != entity.SpecialNoteRascunho {
+		return nil, errorsuc.NewValidationError("só a nota em rascunho pode ser alterada: a emitida já vale para o SPED; cancele-a e lance outra")
+	}
+	n.Status = atual.Status
 	updated, err := uc.Repo.UpdateSpecialAdjustmentNote(ctx, n)
 	if err != nil {
 		return nil, err
 	}
 	return toSpecialAdjustmentNoteResponse(updated), nil
+}
+
+// Emitir: o rascunho passa a valer na apuração do mês e o SPED o leva ao E111.
+// Sem código de ajuste (da nota ou da linha de apuração) o E111 sairia sem
+// código; sem ICMS, não há ajuste.
+func (uc *SpecialAdjustmentNoteUseCase) Emitir(ctx context.Context, id int64) (*response.SpecialAdjustmentNoteResponse, error) {
+	n, err := uc.Repo.GetSpecialAdjustmentNote(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if n.Status != entity.SpecialNoteRascunho {
+		return nil, errorsuc.NewValidationError("só a nota em rascunho pode ser emitida")
+	}
+	if n.Purpose != entity.SpecialNoteAjuste {
+		return nil, errorsuc.NewValidationError("só o ajuste da apuração vai ao SPED; nota complementar de ICMS é NF-e e se emite na VFIS0200")
+	}
+	if n.AdjustmentCodeID == nil && n.ICMSApuracaoLineID == nil {
+		return nil, errorsuc.NewValidationError("informe o código de ajuste ou a linha de apuração antes de emitir: é o código que vai ao SPED (E111)")
+	}
+	if !n.TotalICMS.IsPositive() {
+		return nil, errorsuc.NewValidationError("informe o valor do ICMS do ajuste antes de emitir")
+	}
+	n.Status = entity.SpecialNoteEmitida
+	out, err := uc.Repo.UpdateSpecialAdjustmentNote(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return toSpecialAdjustmentNoteResponse(out), nil
+}
+
+// Cancelar: a nota sai da apuração (o SPED só leva as emitidas).
+func (uc *SpecialAdjustmentNoteUseCase) Cancelar(ctx context.Context, id int64) (*response.SpecialAdjustmentNoteResponse, error) {
+	n, err := uc.Repo.GetSpecialAdjustmentNote(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if n.Status == entity.SpecialNoteCancelada {
+		return nil, errorsuc.NewValidationError("a nota já está cancelada")
+	}
+	n.Status = entity.SpecialNoteCancelada
+	out, err := uc.Repo.UpdateSpecialAdjustmentNote(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	return toSpecialAdjustmentNoteResponse(out), nil
 }
 
 func (uc *SpecialAdjustmentNoteUseCase) GetByID(ctx context.Context, id int64) (*response.SpecialAdjustmentNoteResponse, error) {

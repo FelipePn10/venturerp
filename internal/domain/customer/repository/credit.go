@@ -21,6 +21,9 @@ type CustomerLifecycleRepository interface {
 	// CNPJ (grupo econômico), incluindo o próprio; para CPF, só o próprio.
 	GroupCustomerCodes(ctx context.Context, docType entity.DocumentType, document string) ([]int64, error)
 	GetCreditHistory(ctx context.Context, customerCodes []int64, historyMonths int, today time.Time) (entity.CreditHistory, error)
+	// SellerVolume: o faturamento da própria empresa nos 12 meses até today
+	// (notas de venda autorizadas) e em quantos meses houve nota.
+	SellerVolume(ctx context.Context, today time.Time) (entity.SellerVolume, error)
 
 	// ApplyCreditReview grava a trilha e o limite do cliente na mesma transação.
 	ApplyCreditReview(ctx context.Context, r *entity.CreditReview) error

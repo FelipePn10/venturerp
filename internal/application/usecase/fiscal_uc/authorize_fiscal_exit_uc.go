@@ -460,6 +460,10 @@ func buildFocusItems(items []*entity.FiscalExitItem, cfg *entity.FiscalConfig) [
 		if it.CodigoBeneficioFiscal != nil {
 			nfeIt.CodigoBeneficioFiscal = *it.CodigoBeneficioFiscal
 		}
+		if it.ICMSMotivoDesoneracao != "" && it.ICMSValorDesonerado.IsPositive() {
+			nfeIt.ValorICMSDesonerado, nfeIt.MotivoDesoneracao = it.ICMSValorDesonerado.InexactFloat64(), it.ICMSMotivoDesoneracao
+		}
+		nfeIt.EnquadramentoIPI = it.IPIEnquadramento
 
 		// Substituição Tributária (CST 10/70) — populated when the engine computed ST
 		if it.ValorICMSST.IsPositive() || it.BaseICMSST.IsPositive() {

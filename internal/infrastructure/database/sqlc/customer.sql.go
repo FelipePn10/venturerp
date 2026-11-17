@@ -1381,7 +1381,7 @@ func (q *Queries) GetContactTypeByCode(ctx context.Context, arg GetContactTypeBy
 }
 
 const getCreditPolicy = `-- name: GetCreditPolicy :one
-SELECT enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by FROM customer_credit_policies WHERE enterprise_id = $1
+SELECT enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct FROM customer_credit_policies WHERE enterprise_id = $1
 `
 
 func (q *Queries) GetCreditPolicy(ctx context.Context, enterpriseID int64) (CustomerCreditPolicy, error) {
@@ -1403,6 +1403,7 @@ func (q *Queries) GetCreditPolicy(ctx context.Context, enterpriseID int64) (Cust
 		&i.RegistrationCheckDays,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.NewCustomerRevenuePct,
 	)
 	return i, err
 }
@@ -4050,11 +4051,11 @@ const upsertCreditPolicy = `-- name: UpsertCreditPolicy :one
 INSERT INTO customer_credit_policies (
     enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
     overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
-    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, NOW()
+    $11, $12, $13, $14, NOW(), $15
 )
 ON CONFLICT (enterprise_id) DO UPDATE SET
     max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
@@ -4063,8 +4064,8 @@ ON CONFLICT (enterprise_id) DO UPDATE SET
     validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
     validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
     validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
-    updated_by = EXCLUDED.updated_by, updated_at = NOW()
-RETURNING enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by
+    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct
+RETURNING enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct
 `
 
 type UpsertCreditPolicyParams struct {
@@ -4082,6 +4083,7 @@ type UpsertCreditPolicyParams struct {
 	ValidityMonthsE       int32
 	RegistrationCheckDays int32
 	UpdatedBy             pgtype.UUID
+	NewCustomerRevenuePct pgtype.Numeric
 }
 
 func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicyParams) (CustomerCreditPolicy, error) {
@@ -4100,6 +4102,7 @@ func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicy
 		arg.ValidityMonthsE,
 		arg.RegistrationCheckDays,
 		arg.UpdatedBy,
+		arg.NewCustomerRevenuePct,
 	)
 	var i CustomerCreditPolicy
 	err := row.Scan(
@@ -4118,6 +4121,7 @@ func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicy
 		&i.RegistrationCheckDays,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.NewCustomerRevenuePct,
 	)
 	return i, err
 }

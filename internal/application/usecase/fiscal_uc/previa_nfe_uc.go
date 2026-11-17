@@ -173,6 +173,7 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 			Origem:  it.OrigemMercadoria,
 			CstICMS: derefStr(it.CstICMS), RegraICMSIPI: it.RegraICMSIPIID,
 			ReducaoBaseICMSPct: it.ICMSReducaoBasePct.InexactFloat64(), ValorCreditoSimples: it.ValorCreditoSimples.InexactFloat64(),
+			ValorICMSDesonerado: it.ICMSValorDesonerado.InexactFloat64(), MotivoDesoneracao: it.ICMSMotivoDesoneracao,
 			ValorDIFAL: it.ICMSUFDestValor.InexactFloat64(), ValorFCPUFDest: it.FCPUFDestValor.InexactFloat64(), BaseICMS: it.BaseICMS.InexactFloat64(), AliqICMS: it.AliqICMS.InexactFloat64(), ValorICMS: it.ValorICMS.InexactFloat64(),
 			CstIPI: derefStr(it.CstIPI), AliqIPI: it.AliqIPI.InexactFloat64(), ValorIPI: it.ValorIPI.InexactFloat64(),
 			CstPIS: derefStr(it.CstPIS), ValorPIS: it.ValorPIS.InexactFloat64(),
@@ -254,6 +255,17 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 		})
 	}
 	out.Pendencias = append(out.Pendencias, avisoPISCOFINSExtintos(exit, items)...)
+	// SUFRAMA vencida ou com dígito errado: não vai para a nota (a SEFAZ recusaria).
+	if exit.CustomerCode != nil && uc.Customers != nil && (exit.SuframaDestinatario == nil || *exit.SuframaDestinatario == "") {
+		if c, err := uc.Customers.GetCustomerByCode(ctx, *exit.CustomerCode); err == nil && c != nil && c.SuframaCode != nil &&
+			soDigitos(*c.SuframaCode) != "" && SuframaValida(c.SuframaCode, c.SuframaExpiry, time.Now()) == "" {
+			out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
+				Nivel: NivelAtencao, Campo: "suframa_destinatario",
+				Mensagem:     fmt.Sprintf("a inscrição SUFRAMA do cliente (%s) está vencida ou com o dígito errado e não vai na nota", *c.SuframaCode),
+				ComoResolver: "confira a inscrição e a validade na VCLI0500 → Fiscal e gere a nota de novo",
+			})
+		}
+	}
 	if rt.SomenteAtual {
 		out.Pendencias = append(out.Pendencias, response.PreviaPendenciaNFe{
 			Nivel: NivelAtencao, Campo: "itens.ibs_cbs",
