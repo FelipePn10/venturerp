@@ -3,9 +3,12 @@
 package fiscal_uc_test
 
 import (
+	"bytes"
+
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/export/documentos"
 	"math"
 	"strings"
 	"testing"
@@ -192,6 +195,16 @@ func TestIntegration_TributacaoPorCenario(t *testing.T) {
 	}
 	if p := pendencia(out.Pendencias, "itens.regra_icms_ipi"); p == nil || p.Nivel != fiscal_uc.NivelAtencao {
 		t.Fatalf("pendência da regra sem exigência: %+v", p)
+	}
+
+	// 5b. A mesma prévia sai em PDF (imprimir/exportar), pela mesma montagem.
+	if _, _, err := previa.PDF(ctx, exit.ID); err == nil {
+		t.Fatal("PDF sem gerador deveria avisar que não está disponível")
+	}
+	previa.Desenho = documentos.Gerador{}
+	nome, pdf, err := previa.PDF(ctx, exit.ID)
+	if err != nil || !bytes.HasPrefix(pdf, []byte("%PDF")) || !strings.HasPrefix(nome, "previa-nfe-") {
+		t.Fatalf("PDF da prévia: nome %q, %d bytes, err %v", nome, len(pdf), err)
 	}
 
 	// 6. Finalidade inválida é erro de validação, não 500.

@@ -113,27 +113,42 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 				candidates = append(candidates, profile)
 			}
 		}
-		mt := selectMachineTime(candidates, sug.Mask)
-		if mt == nil {
-			return nil, domainerr.NewValidation(fmt.Sprintf("cadastre a produtividade do item %d em uma máquina do centro %d antes de planejar", sug.ItemCode, *op.EffectiveWorkCenterID))
-		}
-		qtdeDaEtapa := quantidadeDa(op)
-		minutes, err := machineMinutes(mt, qtdeDaEtapa)
-		if err != nil {
-			return nil, err
-		}
 		// Regra única de tempo: o ROTEIRO manda (sobreposição da etapa ∘
 		// operação de biblioteca). A produtividade da VMAQ0200 só dimensiona a
-		// etapa quando o roteiro não tem tempo. Antes só a sobreposição da etapa
-		// contava: o tempo cadastrado na biblioteca era ignorado aqui, enquanto
-		// a OP, o CRP e o custo o usavam — e a VMAQ0200 avisava o usuário que
-		// "o roteiro prevalece".
+		// etapa quando o roteiro não tem tempo. Com tempo no roteiro, da
+		// produtividade só valem a máquina (que diz onde a etapa roda) e o
+		// rendimento; antes o tempo dela era conferido primeiro e, zerado,
+		// recusava o plano com "produtividade inválida" — o usuário tinha de
+		// digitar o tempo duas vezes, e o da produtividade nunca era usado.
 		if op.EffTime.SemMedida {
 			return nil, routing.ErroSemMedida(op)
 		}
 		peloRoteiro := op.EffTime.Run > 0
+		mt := selectMachineTime(candidates, sug.Mask)
+		if mt == nil {
+			if peloRoteiro {
+				return nil, domainerr.NewValidation(fmt.Sprintf(
+					"cadastre o %s na produtividade de uma máquina de cada centro do roteiro (o tempo vem do roteiro) — falta no %s, etapa %d",
+					s.rotuloDoItem(ctx, sug.ItemCode), nomeDoCentro(op), op.Sequence))
+			}
+			return nil, domainerr.NewValidation(fmt.Sprintf(
+				"cadastre o %s na produtividade de uma máquina do %s com o tempo de produção: a etapa %d (%s) do roteiro não tem tempo",
+				s.rotuloDoItem(ctx, sug.ItemCode), nomeDoCentro(op), op.Sequence, op.OperationName))
+		}
+		qtdeDaEtapa := quantidadeDa(op)
+		var minutes float64
 		if peloRoteiro {
+			if err := eficienciaValida(mt); err != nil {
+				return nil, domainerr.NewValidation(fmt.Sprintf("%s do %s na máquina %d", err.Error(), s.rotuloDoItem(ctx, sug.ItemCode), mt.MachineCode))
+			}
 			minutes = minutosDoRoteiro(mt, op.EffTime, qtdeDaEtapa)
+		} else {
+			var err error
+			if minutes, err = machineMinutes(mt, qtdeDaEtapa); err != nil {
+				return nil, domainerr.NewValidation(fmt.Sprintf(
+					"a etapa %d (%s) do roteiro não tem tempo e a produtividade do %s na máquina %d não tem tempo válido: informe o tempo no roteiro ou na produtividade",
+					op.Sequence, op.OperationName, s.rotuloDoItem(ctx, sug.ItemCode), mt.MachineCode))
+			}
 		}
 		if minutes <= 0 {
 			return nil, domainerr.NewValidation(fmt.Sprintf("tempo inválido na etapa %d (%s) do roteiro", op.Sequence, op.OperationName))
@@ -202,6 +217,24 @@ func orderMachineRoute(ops []*routing.RouteOperation, edges []*routing.NetworkEd
 		}
 	}
 	return out, nil
+}
+
+// rotuloDoItem é o código que o usuário conhece (o comercial, RN-01001), não a
+// chave interna. Só é buscado nas mensagens de erro; sem ele, sai "item N".
+func (s *MRPServiceImpl) rotuloDoItem(ctx context.Context, itemCode int64) string {
+	if l, ok := s.MRPRepo.(itemLabeler); ok {
+		if codigos, err := l.ItemBusinessCodes(ctx, []int64{itemCode}); err == nil && codigos[itemCode] != "" {
+			return codigos[itemCode]
+		}
+	}
+	return fmt.Sprintf("item %d", itemCode)
+}
+
+func nomeDoCentro(op *routing.RouteOperation) string {
+	if op.WorkCenterName != "" {
+		return fmt.Sprintf("centro %s", op.WorkCenterName)
+	}
+	return fmt.Sprintf("centro %d", *op.EffectiveWorkCenterID)
 }
 
 func measuredMachineStep(mt *entity.MachineTimeInfo, qty, minutes float64) machineStep {

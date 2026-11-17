@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -32,6 +33,26 @@ func (h *PreviaNFeHandler) Previa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// PreviaPDF entrega a prévia em PDF (layout do DANFE, sem valor fiscal).
+// GET /api/fiscal/exits/{id}/previa/pdf
+func (h *PreviaNFeHandler) PreviaPDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "nota de saída inválida")
+		return
+	}
+	nome, pdf, err := h.previaUC.PDF(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, nome))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdf)
 }
 
 // DestinatarioNotaHandler entrega à nota avulsa os dados do cliente já cadastrados.

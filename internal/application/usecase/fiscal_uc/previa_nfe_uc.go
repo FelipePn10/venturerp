@@ -58,6 +58,30 @@ type PreviaNFeUseCase struct {
 	Reforma repository.ReformaTributariaRepository
 	// Series: linhas de item que controla número de série (pós-venda 3.1).
 	Series SeriesDaNota
+	// Desenho gera o PDF da prévia no layout do DANFE (imprimir/exportar).
+	Desenho DesenhoDaPreviaNFe
+}
+
+// DesenhoDaPreviaNFe desenha a prévia em PDF com os mesmos campos da tela.
+type DesenhoDaPreviaNFe interface {
+	PreviaNFe(d response.PreviaNFeResponse) []byte
+}
+
+// PDF é a prévia em PDF: a mesma conferência, para imprimir ou guardar. Passa
+// pela mesma permissão e pela mesma montagem da prévia na tela.
+func (uc *PreviaNFeUseCase) PDF(ctx context.Context, id int64) (string, []byte, error) {
+	if uc.Desenho == nil {
+		return "", nil, errorsuc.NewValidationError("a impressão da prévia não está disponível nesta instalação")
+	}
+	previa, err := uc.Execute(ctx, id)
+	if err != nil {
+		return "", nil, err
+	}
+	nome := fmt.Sprintf("previa-nfe-%d.pdf", previa.FiscalExitID)
+	if previa.NumeroNF > 0 {
+		nome = fmt.Sprintf("previa-nfe-%d-serie-%s.pdf", previa.NumeroNF, previa.Serie)
+	}
+	return nome, uc.Desenho.PreviaNFe(*previa), nil
 }
 
 // SeriesDaNota lê as linhas da nota de item com série e as séries escolhidas.

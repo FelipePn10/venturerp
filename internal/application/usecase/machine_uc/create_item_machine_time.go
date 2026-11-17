@@ -32,8 +32,12 @@ func (uc *CreateItemMachineTimeUseCase) Execute(
 	if err != nil {
 		return nil, err
 	}
-	if !finitePositive(dto.ProductionTime) || dto.ProductionBaseQty <= 0 || dto.ProductionBaseQty > math.MaxInt32 || math.IsNaN(dto.SetupTime) || math.IsInf(dto.SetupTime, 0) || dto.SetupTime < 0 || dto.Priority < 0 {
-		return nil, errorsuc.NewValidationError("informe tempo e quantidade-base positivos, preparação e prioridade não negativas")
+	// Tempo zero é válido: quer dizer "o tempo vem do roteiro". Com tempo na
+	// etapa, a produtividade só diz em que máquina a etapa roda e o rendimento;
+	// exigir o tempo aqui obrigava a digitá-lo duas vezes. O MRP recusa, com o
+	// motivo, a etapa que fica sem tempo nos dois lugares.
+	if math.IsNaN(dto.ProductionTime) || math.IsInf(dto.ProductionTime, 0) || dto.ProductionTime < 0 || dto.ProductionBaseQty <= 0 || dto.ProductionBaseQty > math.MaxInt32 || math.IsNaN(dto.SetupTime) || math.IsInf(dto.SetupTime, 0) || dto.SetupTime < 0 || dto.Priority < 0 {
+		return nil, errorsuc.NewValidationError("informe quantidade-base positiva e tempo, preparação e prioridade não negativos (tempo em branco: vale o do roteiro)")
 	}
 	basis := strings.ToUpper(strings.TrimSpace(dto.TimeBasis))
 	if basis == "" {
