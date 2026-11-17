@@ -19,6 +19,9 @@ import (
 type SupplierUseCase struct {
 	repo repository.SupplierRepository
 	auth ports.AuthService
+	// TransportadoraAtiva diz se o fornecedor tem perfil de transportadora
+	// ativo (VSUP0140). Opcional: sem ele, a conferência não é feita.
+	TransportadoraAtiva func(ctx context.Context, supplierCode int64) (bool, error)
 }
 
 func NewSupplierUseCase(repo repository.SupplierRepository, auth ...ports.AuthService) *SupplierUseCase {
@@ -239,6 +242,17 @@ func (uc *SupplierUseCase) UpdateSupplier(ctx context.Context, dto request.Updat
 
 	s.CorporateCode = dto.CorporateCode
 	if dto.IsActive != nil {
+		// Fornecedor inativo com transportadora ativa faria a NF-e e a carga
+		// usarem um cadastro que ninguém mais mantém.
+		if s.IsActive && !*dto.IsActive && uc.TransportadoraAtiva != nil {
+			ativa, err := uc.TransportadoraAtiva(ctx, s.Code)
+			if err != nil {
+				return nil, err
+			}
+			if ativa {
+				return nil, errorsuc.NewConflictError("este fornecedor é uma transportadora ativa: inative-a primeiro na VSUP0140 (Cadastro de Transportadora)")
+			}
+		}
 		s.IsActive = *dto.IsActive
 	}
 	s.IsRepresentative = dto.IsRepresentative

@@ -10,6 +10,7 @@ package entity
 import (
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"regexp"
 	"strings"
 	"time"
@@ -103,9 +104,13 @@ type Transportadora struct {
 	ContactPhone       *string
 	ContactEmail       *string
 	Notes              *string
-	IsActive           bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// CubageFactor é o kg por m³ do peso cubado; zero cobra só o peso real.
+	CubageFactor          decimal.Decimal
+	DispatchFee           decimal.Decimal
+	AcceptsDangerousGoods bool
+	IsActive              bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 
 	Vehicles     []*Veiculo
 	ServiceAreas []*RegiaoAtendida
@@ -202,6 +207,8 @@ func (t *Transportadora) Validar() error {
 		{"valor por quilo", t.FreightKgRate},
 		{"pedágio por 100 kg", t.TollPer100Kg},
 		{"cobertura do seguro", t.InsuranceCoverage},
+		{"fator de cubagem", t.CubageFactor},
+		{"taxa de despacho", t.DispatchFee},
 	} {
 		if d.valor.IsNegative() {
 			return domainerr.NewValidation(fmt.Sprintf("o %s não pode ser negativo", d.nome))
@@ -242,12 +249,8 @@ func (t *Transportadora) Alertas(hoje time.Time) []string {
 	if t.ANTTRNTRC == nil && t.Modal == ModalRodoviario {
 		out = append(out, "transportadora rodoviária sem RNTRC informado")
 	}
-	if t.ANTTExpiry != nil && t.ANTTExpiry.Before(hoje) {
-		out = append(out, fmt.Sprintf("RNTRC vencido em %s", t.ANTTExpiry.Format("02/01/2006")))
-	}
-	if t.InsuranceExpiry != nil && t.InsuranceExpiry.Before(hoje) {
-		out = append(out, fmt.Sprintf("seguro vencido em %s", t.InsuranceExpiry.Format("02/01/2006")))
-	}
+	out = append(out, vencimento("RNTRC", "vencido", t.ANTTExpiry, hoje)...)
+	out = append(out, vencimento("seguro", "vencido", t.InsuranceExpiry, hoje)...)
 	if t.InsuranceCompany == nil {
 		out = append(out, "sem seguro de carga cadastrado")
 	}
@@ -265,10 +268,71 @@ func (t *Transportadora) Alertas(hoje time.Time) []string {
 			out = append(out, "nenhum veículo ativo cadastrado")
 		}
 	}
+	for _, v := range t.Vehicles {
+		if !v.IsActive {
+			continue
+		}
+		// O MDF-e exige UF da placa e tara do veículo de tração.
+		if v.PlateState == nil || v.TareKg.IsZero() {
+			out = append(out, fmt.Sprintf("veículo %s sem UF da placa ou tara: o MDF-e não pode ser emitido com ele", v.Plate))
+		}
+		if v.DriverName != nil {
+			out = append(out, vencimento(fmt.Sprintf("CNH do motorista %s (%s)", *v.DriverName, v.Plate), "vencida", v.DriverCNHExpiry, hoje)...)
+		}
+	}
 	if len(t.ServiceAreas) == 0 {
 		out = append(out, "nenhuma região atendida cadastrada: o prazo de entrega não pode ser calculado")
 	}
 	return out
+}
+
+// AvisoDeVencimento é a antecedência com que o documento a vencer vira
+// pendência: dá tempo de pedir a renovação antes de a carga parar.
+const AvisoDeVencimento = 30
+
+// vencimento: `vencido` vem no gênero do documento ("RNTRC vencido", "CNH vencida").
+func vencimento(oque, vencido string, validade *time.Time, hoje time.Time) []string {
+	if validade == nil {
+		return nil
+	}
+	if validade.Before(hoje) {
+		return []string{fmt.Sprintf("%s %s em %s", oque, vencido, validade.Format("02/01/2006"))}
+	}
+	if validade.Before(hoje.AddDate(0, 0, AvisoDeVencimento+1)) {
+		return []string{fmt.Sprintf("%s vence em %s", oque, validade.Format("02/01/2006"))}
+	}
+	return nil
+}
+
+var (
+	tiposRodado     = map[string]bool{"01": true, "02": true, "03": true, "04": true, "05": true, "06": true}
+	tiposCarroceria = map[string]bool{"00": true, "01": true, "02": true, "03": true, "04": true, "05": true}
+	categoriasCNH   = map[string]bool{"A": true, "B": true, "C": true, "D": true, "E": true, "AB": true, "AC": true, "AD": true, "AE": true}
+)
+
+// RodadoValido e CarroceriaValida conferem os códigos tpRod e tpCar do MDF-e.
+func RodadoValido(c string) bool     { return tiposRodado[c] }
+func CarroceriaValida(c string) bool { return tiposCarroceria[c] }
+
+// RenavamValido confere o dígito verificador do RENAVAM (11 dígitos; o antigo,
+// de 9, é completado com zeros à esquerda como o DETRAN faz).
+func RenavamValido(r string) bool {
+	if !somenteDigitos.MatchString(r) || (len(r) != 9 && len(r) != 11) {
+		return false
+	}
+	if len(r) == 9 {
+		r = "00" + r
+	}
+	pesos := []int{3, 2, 9, 8, 7, 6, 5, 4, 3, 2}
+	soma := 0
+	for i, p := range pesos {
+		soma += int(r[i]-'0') * p
+	}
+	dv := (soma * 10) % 11
+	if dv == 10 {
+		dv = 0
+	}
+	return dv == int(r[10]-'0')
 }
 
 type Veiculo struct {
@@ -285,9 +349,20 @@ type Veiculo struct {
 	DriverName     *string
 	DriverDocument *string
 	DriverLicense  *string
-	IsActive       bool
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	VehicleTypeID  *int64
+	PlateState     *string
+	Renavam        *string
+	TareKg         decimal.Decimal
+	WheelType      *string // MDF-e tpRod
+	BodyType       *string // MDF-e tpCar
+	// OwnerType é o tpProp do MDF-e: 0 TAC agregado, 1 TAC independente, 2
+	// outros; vazio = veículo da própria transportadora.
+	OwnerType         *string
+	DriverCNHCategory *string
+	DriverCNHExpiry   *time.Time
+	IsActive          bool
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 func (v *Veiculo) Normalizar() {
@@ -298,7 +373,30 @@ func (v *Veiculo) Normalizar() {
 	v.DriverName = limparTexto(v.DriverName)
 	v.DriverDocument = limparTexto(v.DriverDocument)
 	v.DriverLicense = limparTexto(v.DriverLicense)
+	v.PlateState = maiusculo(v.PlateState)
+	v.Renavam = soDigitos(v.Renavam)
+	v.WheelType = limparTexto(v.WheelType)
+	v.BodyType = limparTexto(v.BodyType)
+	v.OwnerType = limparTexto(v.OwnerType)
+	v.DriverCNHCategory = maiusculo(v.DriverCNHCategory)
+	if v.ANTTOwner != nil {
+		v.ANTTOwner = soDigitos(v.ANTTOwner)
+	}
+	if v.DriverDocument != nil {
+		v.DriverDocument = soDigitos(v.DriverDocument)
+	}
 }
+
+func maiusculo(v *string) *string {
+	v = limparTexto(v)
+	if v == nil {
+		return nil
+	}
+	u := strings.ToUpper(*v)
+	return &u
+}
+
+func soDigitos(v *string) *string { return limparCEP(v) }
 
 func (v *Veiculo) Validar() error {
 	if v.Plate == "" {
@@ -314,6 +412,42 @@ func (v *Veiculo) Validar() error {
 	}
 	if v.Axles != nil && (*v.Axles < 2 || *v.Axles > 12) {
 		return domainerr.NewValidation("o número de eixos deve estar entre 2 e 12")
+	}
+	if v.TareKg.IsNegative() {
+		return domainerr.NewValidation(fmt.Sprintf("a tara do veículo %s não pode ser negativa", v.Plate))
+	}
+	if v.PlateState != nil && !validation.UFValida(*v.PlateState) {
+		return domainerr.NewValidation(fmt.Sprintf("UF da placa %s inválida: %s", v.Plate, *v.PlateState))
+	}
+	if v.Renavam != nil && !RenavamValido(*v.Renavam) {
+		return domainerr.NewValidation(fmt.Sprintf("RENAVAM do veículo %s inválido (dígito verificador não confere)", v.Plate))
+	}
+	if v.WheelType != nil && !tiposRodado[*v.WheelType] {
+		return domainerr.NewValidation(fmt.Sprintf("tipo de rodado inválido no veículo %s: %s", v.Plate, *v.WheelType))
+	}
+	if v.BodyType != nil && !tiposCarroceria[*v.BodyType] {
+		return domainerr.NewValidation(fmt.Sprintf("tipo de carroceria inválido no veículo %s: %s", v.Plate, *v.BodyType))
+	}
+	if v.OwnerType != nil {
+		switch *v.OwnerType {
+		case "0", "1":
+			// Veículo de TAC: o MDF-e leva o RNTRC do proprietário.
+			if v.ANTTOwner == nil || len(*v.ANTTOwner) != 8 {
+				return domainerr.NewValidation(fmt.Sprintf("veículo %s é de TAC: informe o RNTRC do proprietário (8 dígitos)", v.Plate))
+			}
+		case "2":
+		default:
+			return domainerr.NewValidation(fmt.Sprintf("tipo de proprietário inválido no veículo %s: %s", v.Plate, *v.OwnerType))
+		}
+	}
+	if v.ANTTOwner != nil && len(*v.ANTTOwner) != 8 {
+		return domainerr.NewValidation(fmt.Sprintf("o RNTRC do proprietário do veículo %s deve ter 8 dígitos", v.Plate))
+	}
+	if v.DriverDocument != nil && !validation.ValidateCPF(*v.DriverDocument) {
+		return domainerr.NewValidation(fmt.Sprintf("CPF do motorista do veículo %s inválido", v.Plate))
+	}
+	if v.DriverCNHCategory != nil && !categoriasCNH[*v.DriverCNHCategory] {
+		return domainerr.NewValidation(fmt.Sprintf("categoria de CNH inválida no veículo %s: %s", v.Plate, *v.DriverCNHCategory))
 	}
 	return nil
 }
@@ -403,9 +537,9 @@ func (a *RegiaoAtendida) Validar() error {
 	return nil
 }
 
-// Atende diz se o destino cai nesta região. UF sozinha atende o estado todo;
-// com faixa de CEP, a faixa é quem manda.
-func (a *RegiaoAtendida) Atende(uf, cep string) bool {
+// Atende diz se o destino cai nesta região. A faixa de CEP é a mais
+// específica; depois a cidade (dentro da UF); por último a UF inteira.
+func (a *RegiaoAtendida) Atende(uf, cidade, cep string) bool {
 	if !a.IsActive {
 		return false
 	}
@@ -429,8 +563,48 @@ func (a *RegiaoAtendida) Atende(uf, cep string) bool {
 		}
 		return cep >= *a.PostalCodeFrom && cep <= fim
 	}
-	if a.State != nil {
-		return strings.EqualFold(*a.State, uf)
+	if a.State == nil || !strings.EqualFold(*a.State, uf) {
+		return false
 	}
-	return false
+	// Região de uma cidade não vale para o estado todo: antes a cidade era
+	// ignorada e o preço e o prazo de "Curitiba" eram aplicados a todo o PR.
+	if a.City != nil {
+		return cidade != "" && semAcento(*a.City) == semAcento(cidade)
+	}
+	return true
+}
+
+// Especificidade ordena as regiões que atendem o mesmo destino: CEP, cidade, UF.
+func (a *RegiaoAtendida) Especificidade() int {
+	switch {
+	case a.PostalCodeFrom != nil:
+		return 3
+	case a.City != nil:
+		return 2
+	default:
+		return 1
+	}
+}
+
+var acentos = strings.NewReplacer(
+	"á", "a", "à", "a", "â", "a", "ã", "a", "ä", "a", "é", "e", "ê", "e", "è", "e", "ë", "e",
+	"í", "i", "ì", "i", "î", "i", "ï", "i", "ó", "o", "ò", "o", "ô", "o", "õ", "o", "ö", "o",
+	"ú", "u", "ù", "u", "û", "u", "ü", "u", "ç", "c", "ñ", "n",
+)
+
+func semAcento(s string) string {
+	return strings.Join(strings.Fields(acentos.Replace(strings.ToLower(s))), " ")
+}
+
+// SomarDiasUteis conta o prazo em dias úteis (segunda a sexta), como as
+// transportadoras informam. Feriado não entra: cada praça tem os seus.
+func SomarDiasUteis(base time.Time, dias int) time.Time {
+	d := base
+	for dias > 0 {
+		d = d.AddDate(0, 0, 1)
+		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
+			dias--
+		}
+	}
+	return d
 }

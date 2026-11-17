@@ -32,6 +32,10 @@ type CustomerUseCase struct {
 	cnpj cnpjservice.Provider
 	reps representativevalidation.Repository
 	now  func() time.Time
+	// ConferirTransportadora recusa transportadora inexistente na empresa ou
+	// inativa — a mesma conferência de carga, romaneio e pedido de compra.
+	// Opcional: sem ela, vale só a trava de empresa do banco.
+	ConferirTransportadora func(ctx context.Context, id int64) error
 }
 
 func NewCustomerUseCase(repo repository.CustomerRepository) *CustomerUseCase {
@@ -2305,6 +2309,14 @@ func (uc *CustomerUseCase) applyCustomerDTO(ctx context.Context, c *entity.Custo
 	c.RepresentativeCode = dto.RepresentativeCode
 	if c.RepresentativeCode != nil && *c.RepresentativeCode == 0 {
 		c.RepresentativeCode = nil
+	}
+	// Só a transportadora NOVA é conferida: o cliente inativo que ainda aponta
+	// para uma transportadora inativada continua editável.
+	if dto.ShippingCarrierID != nil && uc.ConferirTransportadora != nil &&
+		(c.ShippingCarrierID == nil || *c.ShippingCarrierID != *dto.ShippingCarrierID) {
+		if err := uc.ConferirTransportadora(ctx, *dto.ShippingCarrierID); err != nil {
+			return err
+		}
 	}
 	c.ShippingCarrierID = dto.ShippingCarrierID
 	c.RequiresCustomerPO = dto.RequiresCustomerPO

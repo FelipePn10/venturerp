@@ -55,6 +55,7 @@ import (
 	employeeUC "github.com/FelipePn10/panossoerp/internal/application/usecase/employee"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/enterprise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/entry_operation_uc"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/estoque_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/financial_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_classification_uc"
@@ -241,6 +242,7 @@ import (
 	technicalAssistanceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/technical_assistance"
 	thirdPartyServiceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/third_party_service"
 	toolRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/tool"
+	transportadoraRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/transportadora"
 	unitOfMeasureRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/unit_of_measure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
@@ -892,6 +894,16 @@ func (app *application) mount() chi.Router {
 	// supplier (created before purchase order so it can provide purchasing defaults)
 	suppRepo := supplierRepo.New(queries, app.db.Pool)
 	supplierUC := supplier_uc.NewSupplierUseCase(suppRepo, authService)
+	supplierUC.TransportadoraAtiva = func(ctx context.Context, supplierCode int64) (bool, error) {
+		t, err := shippingCarrierRepo.New(app.db.Pool).ObterPorFornecedor(ctx, supplierCode)
+		if err != nil {
+			if _, naoTem := errorsuc.AsNotFound(err); naoTem {
+				return false, nil
+			}
+			return false, err
+		}
+		return t.IsActive, nil
+	}
 	supplierHandler := handler.NewSupplierHandler(supplierUC)
 
 	// fiscal classifications (Cadastro de Classificações Fiscais)
@@ -1641,6 +1653,9 @@ func (app *application) mount() chi.Router {
 	// customer
 	custLifecycle := customerRepo.NewLifecycle(custRepo)
 	customerUC := customer_uc.NewCustomerUseCase(custRepo).WithLifecycle(custLifecycle, cnpjProvider, representativeRepository)
+	customerUC.ConferirTransportadora = func(ctx context.Context, id int64) error {
+		return transportadoraRepo.Conferir(ctx, app.db.Pool, &id)
+	}
 	app.clienteReceitaScheduler = clientereceita.NewScheduler(custLifecycle, customerUC, app.logger)
 	app.creditoRevisaoScheduler = creditorevisao.NewScheduler(custLifecycle, customerUC, app.logger)
 	createSalesOrderItemUC.Prices = custRepo
@@ -2273,10 +2288,21 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", shippingCarrierHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/quote", shippingCarrierHandler.Quote)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/supplier/{supplierCode}", shippingCarrierHandler.GetBySupplier)
+			// Cadastros de apoio da transportadora (antes das rotas /{id}).
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/vehicle-types", shippingCarrierHandler.ListVehicleTypes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/vehicle-types", shippingCarrierHandler.SaveVehicleType)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/vehicle-types/{typeId}", shippingCarrierHandler.SaveVehicleType)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/vehicle-types/{typeId}", shippingCarrierHandler.DeleteVehicleType)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/occurrence-types", shippingCarrierHandler.ListOccurrenceTypes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/occurrence-types", shippingCarrierHandler.SaveOccurrenceType)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/occurrence-types/{typeId}", shippingCarrierHandler.SaveOccurrenceType)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/occurrence-types/{typeId}", shippingCarrierHandler.DeleteOccurrenceType)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", shippingCarrierHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", shippingCarrierHandler.Get)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", shippingCarrierHandler.Update)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{id}/status", shippingCarrierHandler.SetStatus)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/usage", shippingCarrierHandler.Usage)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{id}", shippingCarrierHandler.Delete)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/occurrences", shippingCarrierHandler.ListOccurrences)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/occurrences", shippingCarrierHandler.CreateOccurrence)
 		})

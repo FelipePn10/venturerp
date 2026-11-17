@@ -36,7 +36,7 @@ c.antt_rntrc, c.antt_expiry, c.shipper_type::text, c.modal::text, c.issues_cte, 
 c.freight_min_value, c.freight_kg_rate, c.freight_pct_value, c.gris_pct, c.toll_per_100kg,
 c.insurance_company, c.insurance_policy, c.insurance_expiry, c.insurance_coverage,
 c.average_lead_days, c.tracking_url, c.contact_name, c.contact_phone, c.contact_email,
-c.notes, c.is_active, c.created_at, c.updated_at`
+c.notes, c.is_active, c.created_at, c.updated_at, c.cubage_factor, c.dispatch_fee, c.accepts_dangerous_goods`
 
 func scanCapa(row pgx.Row) (*entity.Transportadora, error) {
 	var t entity.Transportadora
@@ -47,7 +47,7 @@ func scanCapa(row pgx.Row) (*entity.Transportadora, error) {
 		&t.FreightMinValue, &t.FreightKgRate, &t.FreightPctValue, &t.GrisPct, &t.TollPer100Kg,
 		&t.InsuranceCompany, &t.InsurancePolicy, &t.InsuranceExpiry, &t.InsuranceCoverage,
 		&t.AverageLeadDays, &t.TrackingURL, &t.ContactName, &t.ContactPhone, &t.ContactEmail,
-		&t.Notes, &t.IsActive, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		&t.Notes, &t.IsActive, &t.CreatedAt, &t.UpdatedAt, &t.CubageFactor, &t.DispatchFee, &t.AcceptsDangerousGoods); err != nil {
 		return nil, err
 	}
 	t.Modal = entity.Modal(modal)
@@ -121,7 +121,9 @@ func (r *Repository) carregarFilhos(ctx context.Context, enterpriseID int64, lis
 	}
 	rows, err := r.pool.Query(ctx, `
 SELECT id, enterprise_id, carrier_id, plate, description, vehicle_type, axles, capacity_kg, capacity_m3,
-       antt_owner, driver_name, driver_document, driver_license, is_active, created_at, updated_at
+       antt_owner, driver_name, driver_document, driver_license, is_active, created_at, updated_at,
+       vehicle_type_id, plate_state, renavam, tare_kg, wheel_type, body_type, owner_type,
+       driver_cnh_category, driver_cnh_expiry
 FROM public.shipping_carrier_vehicles
 WHERE carrier_id = ANY($1) AND enterprise_id = $2
 ORDER BY plate`, ids, enterpriseID)
@@ -132,7 +134,9 @@ ORDER BY plate`, ids, enterpriseID)
 		var v entity.Veiculo
 		if err := rows.Scan(&v.ID, &v.EnterpriseID, &v.CarrierID, &v.Plate, &v.Description, &v.VehicleType,
 			&v.Axles, &v.CapacityKg, &v.CapacityM3, &v.ANTTOwner, &v.DriverName, &v.DriverDocument,
-			&v.DriverLicense, &v.IsActive, &v.CreatedAt, &v.UpdatedAt); err != nil {
+			&v.DriverLicense, &v.IsActive, &v.CreatedAt, &v.UpdatedAt,
+			&v.VehicleTypeID, &v.PlateState, &v.Renavam, &v.TareKg, &v.WheelType, &v.BodyType, &v.OwnerType,
+			&v.DriverCNHCategory, &v.DriverCNHExpiry); err != nil {
 			rows.Close()
 			return fmt.Errorf("ler veículo: %w", err)
 		}
@@ -253,7 +257,7 @@ UPDATE public.shipping_carriers SET
  freight_min_value=$10, freight_kg_rate=$11, freight_pct_value=$12, gris_pct=$13, toll_per_100kg=$14,
  insurance_company=$15, insurance_policy=$16, insurance_expiry=$17, insurance_coverage=$18,
  average_lead_days=$19, tracking_url=$20, contact_name=$21, contact_phone=$22, contact_email=$23,
- notes=$24, is_active=$25, updated_at=NOW()
+ notes=$24, is_active=$25, cubage_factor=$26, dispatch_fee=$27, accepts_dangerous_goods=$28, updated_at=NOW()
 WHERE id=$1 AND enterprise_id=$2
 RETURNING id`,
 			t.ID, enterpriseID, t.SupplierCode, t.ANTTRNTRC, t.ANTTExpiry, tipoTexto(t.ShipperType),
@@ -261,7 +265,7 @@ RETURNING id`,
 			t.FreightMinValue, t.FreightKgRate, t.FreightPctValue, t.GrisPct, t.TollPer100Kg,
 			t.InsuranceCompany, t.InsurancePolicy, t.InsuranceExpiry, t.InsuranceCoverage,
 			t.AverageLeadDays, t.TrackingURL, t.ContactName, t.ContactPhone, t.ContactEmail,
-			t.Notes, t.IsActive).Scan(&id)
+			t.Notes, t.IsActive, t.CubageFactor, t.DispatchFee, t.AcceptsDangerousGoods).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("transportadora %d não encontrada", t.ID))
 		}
@@ -271,16 +275,17 @@ INSERT INTO public.shipping_carriers
  (enterprise_id, supplier_code, antt_rntrc, antt_expiry, shipper_type, modal, issues_cte,
   default_freight_type, freight_min_value, freight_kg_rate, freight_pct_value, gris_pct, toll_per_100kg,
   insurance_company, insurance_policy, insurance_expiry, insurance_coverage, average_lead_days,
-  tracking_url, contact_name, contact_phone, contact_email, notes, is_active)
+  tracking_url, contact_name, contact_phone, contact_email, notes, is_active,
+  cubage_factor, dispatch_fee, accepts_dangerous_goods)
 VALUES ($1,$2,$3,$4,$5::carrier_shipper_type_enum,$6::carrier_modal_enum,$7,$8,$9,$10,$11,$12,$13,
-        $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        $14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
 RETURNING id`,
 			enterpriseID, t.SupplierCode, t.ANTTRNTRC, t.ANTTExpiry, tipoTexto(t.ShipperType),
 			string(t.Modal), t.IssuesCTe, t.DefaultFreightType,
 			t.FreightMinValue, t.FreightKgRate, t.FreightPctValue, t.GrisPct, t.TollPer100Kg,
 			t.InsuranceCompany, t.InsurancePolicy, t.InsuranceExpiry, t.InsuranceCoverage,
 			t.AverageLeadDays, t.TrackingURL, t.ContactName, t.ContactPhone, t.ContactEmail,
-			t.Notes, t.IsActive).Scan(&id)
+			t.Notes, t.IsActive, t.CubageFactor, t.DispatchFee, t.AcceptsDangerousGoods).Scan(&id)
 	}
 	if err != nil {
 		return nil, traduzirErro(err)
@@ -293,10 +298,14 @@ RETURNING id`,
 		if _, err := tx.Exec(ctx, `
 INSERT INTO public.shipping_carrier_vehicles
  (enterprise_id, carrier_id, plate, description, vehicle_type, axles, capacity_kg, capacity_m3,
-  antt_owner, driver_name, driver_document, driver_license, is_active)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+  antt_owner, driver_name, driver_document, driver_license, is_active,
+  vehicle_type_id, plate_state, renavam, tare_kg, wheel_type, body_type, owner_type,
+  driver_cnh_category, driver_cnh_expiry)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
 			enterpriseID, id, v.Plate, v.Description, v.VehicleType, v.Axles, v.CapacityKg, v.CapacityM3,
-			v.ANTTOwner, v.DriverName, v.DriverDocument, v.DriverLicense, v.IsActive); err != nil {
+			v.ANTTOwner, v.DriverName, v.DriverDocument, v.DriverLicense, v.IsActive,
+			v.VehicleTypeID, v.PlateState, v.Renavam, v.TareKg, v.WheelType, v.BodyType, v.OwnerType,
+			v.DriverCNHCategory, v.DriverCNHExpiry); err != nil {
 			return nil, traduzirErro(err)
 		}
 	}
@@ -340,6 +349,8 @@ func traduzirErro(err error) error {
 		return errorsuc.NewConflictError("a mesma placa aparece duas vezes na frota")
 	case strings.Contains(msg, "shipping_carriers_supplier_code_fkey"):
 		return errorsuc.NewValidationError("o fornecedor informado não existe")
+	case strings.Contains(msg, "vehicle_type_id"):
+		return errorsuc.NewValidationError("o tipo de veículo informado não existe nesta empresa")
 	}
 	return fmt.Errorf("gravar transportadora: %w", err)
 }
@@ -370,14 +381,43 @@ func (r *Repository) RegistrarOcorrencia(ctx context.Context, o *domrepo.Ocorren
 	if user, ok := ctx.Value(contextkey.UserKey).(*appsecurity.AuthUser); ok && user != nil && user.ID != "" {
 		autor = user.ID
 	}
+	// O usuário informa o CÓDIGO do romaneio; o id é resolvido na empresa da
+	// sessão — código de outra empresa não acha nada.
+	var romaneio *int64
+	if o.ShipmentCode != nil {
+		var id int64
+		err := r.pool.QueryRow(ctx, `SELECT id FROM public.shipments WHERE code = $1 AND enterprise_id = $2`, *o.ShipmentCode, enterpriseID).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d não existe nesta empresa", *o.ShipmentCode))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("conferir romaneio da ocorrência: %w", err)
+		}
+		romaneio = &id
+	}
+	// Pedido de venda é da convenção enterprise_code.
+	if o.SalesOrderCode != nil {
+		empresaCode, err := tenant.Code(ctx)
+		if err != nil {
+			return nil, err
+		}
+		var existe bool
+		if err := r.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM public.sales_orders WHERE code = $1 AND enterprise_code = $2)`,
+			*o.SalesOrderCode, empresaCode).Scan(&existe); err != nil {
+			return nil, fmt.Errorf("conferir pedido da ocorrência: %w", err)
+		}
+		if !existe {
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido de venda %d não existe nesta empresa", *o.SalesOrderCode))
+		}
+	}
 	err = r.pool.QueryRow(ctx, `
 INSERT INTO public.shipping_carrier_occurrences
- (enterprise_id, carrier_id, occurrence_date, occurrence_type, sales_order_code, delay_days, cost_impact, description, created_by)
-SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9
+ (enterprise_id, carrier_id, occurrence_date, occurrence_type, sales_order_code, delay_days, cost_impact, description, created_by, shipment_id)
+SELECT $1, c.id, $3, $4, $5, $6, $7, $8, $9, $10
 FROM public.shipping_carriers c WHERE c.id = $2 AND c.enterprise_id = $1
 RETURNING id, occurrence_date, created_at`,
 		enterpriseID, o.CarrierID, o.OccurrenceDate, o.OccurrenceType, o.SalesOrderCode,
-		o.DelayDays, o.CostImpact, o.Description, autor).
+		o.DelayDays, o.CostImpact, o.Description, autor, romaneio).
 		Scan(&o.ID, &o.OccurrenceDate, &o.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("transportadora %d não encontrada", o.CarrierID))
@@ -399,9 +439,10 @@ func (r *Repository) ListarOcorrencias(ctx context.Context, carrierID int64, lim
 	}
 	rows, err := r.pool.Query(ctx, `
 SELECT id, enterprise_id, carrier_id, occurrence_date, occurrence_type, sales_order_code,
-       delay_days, cost_impact, description, created_at
-FROM public.shipping_carrier_occurrences
-WHERE carrier_id=$1 AND enterprise_id=$2
+       delay_days, cost_impact, description, created_at,
+       (SELECT s.code FROM public.shipments s WHERE s.id = o.shipment_id AND s.enterprise_id = o.enterprise_id)
+FROM public.shipping_carrier_occurrences o
+WHERE o.carrier_id=$1 AND o.enterprise_id=$2
 ORDER BY occurrence_date DESC, id DESC
 LIMIT $3`, carrierID, enterpriseID, limite)
 	if err != nil {
@@ -412,7 +453,7 @@ LIMIT $3`, carrierID, enterpriseID, limite)
 	for rows.Next() {
 		var o domrepo.Ocorrencia
 		if err := rows.Scan(&o.ID, &o.EnterpriseID, &o.CarrierID, &o.OccurrenceDate, &o.OccurrenceType,
-			&o.SalesOrderCode, &o.DelayDays, &o.CostImpact, &o.Description, &o.CreatedAt); err != nil {
+			&o.SalesOrderCode, &o.DelayDays, &o.CostImpact, &o.Description, &o.CreatedAt, &o.ShipmentCode); err != nil {
 			return nil, fmt.Errorf("ler ocorrência: %w", err)
 		}
 		out = append(out, &o)
@@ -428,10 +469,12 @@ func (r *Repository) Desempenho(ctx context.Context, carrierID int64, desde time
 	var d domrepo.Desempenho
 	var media, custo decimal.Decimal
 	err = r.pool.QueryRow(ctx, `
-SELECT COUNT(*), COALESCE(AVG(delay_days),0), COALESCE(SUM(cost_impact),0), MAX(occurrence_date)
-FROM public.shipping_carrier_occurrences
-WHERE carrier_id=$1 AND enterprise_id=$2 AND occurrence_date >= $3`,
-		carrierID, enterpriseID, desde).Scan(&d.Ocorrencias, &media, &custo, &d.UltimaData)
+SELECT COUNT(*), COALESCE(AVG(o.delay_days),0), COALESCE(SUM(o.cost_impact),0), MAX(o.occurrence_date),
+       COUNT(*) FILTER (WHERE COALESCE(t.counts_as_failure, TRUE))
+FROM public.shipping_carrier_occurrences o
+LEFT JOIN public.shipping_occurrence_types t ON t.enterprise_id = o.enterprise_id AND t.code = o.occurrence_type
+WHERE o.carrier_id=$1 AND o.enterprise_id=$2 AND o.occurrence_date >= $3`,
+		carrierID, enterpriseID, desde).Scan(&d.Ocorrencias, &media, &custo, &d.UltimaData, &d.Falhas)
 	if err != nil {
 		return domrepo.Desempenho{}, fmt.Errorf("desempenho da transportadora: %w", err)
 	}

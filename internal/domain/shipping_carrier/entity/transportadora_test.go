@@ -84,19 +84,19 @@ func TestPlacaAceitaOsDoisPadroes(t *testing.T) {
 func TestRegiaoAtendePorFaixaDeCEPEPorUF(t *testing.T) {
 	uf := "SP"
 	porUF := &RegiaoAtendida{State: &uf, IsActive: true}
-	if !porUF.Atende("sp", "") || porUF.Atende("RJ", "") {
+	if !porUF.Atende("sp", "", "") || porUF.Atende("RJ", "", "") {
 		t.Fatal("região por UF errada")
 	}
 	de, ate := "01000000", "01999999"
 	porCEP := &RegiaoAtendida{PostalCodeFrom: &de, PostalCodeTo: &ate, IsActive: true}
-	if !porCEP.Atende("SP", "01310-100") {
+	if !porCEP.Atende("SP", "", "01310-100") {
 		t.Fatal("CEP dentro da faixa deveria ser atendido")
 	}
-	if porCEP.Atende("SP", "02000000") {
+	if porCEP.Atende("SP", "", "02000000") {
 		t.Fatal("CEP fora da faixa não deveria ser atendido")
 	}
 	inativa := &RegiaoAtendida{State: &uf}
-	if inativa.Atende("SP", "") {
+	if inativa.Atende("SP", "", "") {
 		t.Fatal("região inativa não atende")
 	}
 }
@@ -132,7 +132,8 @@ func TestCotacaoAbreOsComponentesEAplicaOPedagioPorFracao(t *testing.T) {
 		t.Fatal("o piso não deveria ter sido aplicado")
 	}
 	// O prazo da região manda sobre o prazo médio da capa.
-	if cot.PrazoDias != 3 || !cot.PrevisaoEntrega.Equal(base.AddDate(0, 0, 3)) {
+	// Sexta + 3 dias úteis = quarta (o fim de semana não conta).
+	if cot.PrazoDias != 3 || !cot.PrevisaoEntrega.Equal(time.Date(2026, 9, 30, 0, 0, 0, 0, time.UTC)) {
 		t.Fatalf("prazo errado: %d / %s", cot.PrazoDias, cot.PrevisaoEntrega)
 	}
 }
