@@ -305,6 +305,15 @@ normal) e CSOSN 101/201 sem pCredSN.
 
 Tipo de nota que não calcula PIS/COFINS: CST 49 com valor zero.
 
+**Base do PIS/COFINS sem o ICMS destacado (STF, RE 574.706 — Tema 69).** Nos dois
+regimes (Real e Presumido): `base = produtos + frete − desconto − ICMS destacado`.
+O destacado é o `vICMS` da nota — no CST 51, o da operação menos o diferido. ICMS-ST,
+DIFAL e FCP não saem da base; sem ICMS destacado (CST 40/41/50…, Simples) a base é a
+cheia. Ex.: 6.950,00 com ICMS 7% (486,50) → base 6.463,50, PIS 106,65, COFINS 491,23.
+O motor calcula (`aplicarPISCOFINS`) e o payload da Focus envia a mesma base
+(`basePISCOFINS`); rascunho gravado antes da regra mantém a base que reproduz o seu
+valor, para o XML não sair incoerente — recrie o rascunho para recalcular.
+
 ### IPI
 
 Alíquota e CST da tabela de NCM; a regra pode trocar o CST (51–55 zeram) e

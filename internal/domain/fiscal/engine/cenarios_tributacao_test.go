@@ -55,7 +55,8 @@ func comRegime(r Regime, credito float64) FiscalConfig {
 // ── Finalidade da compra ────────────────────────────────────────────────────
 
 // Tecnofer vendendo no PR para quem revende: IPI fora da base, diferimento
-// parcial (CST 51). É o cálculo de sempre, que não pode mudar.
+// parcial (CST 51). PIS/COFINS sobre 1000 − ICMS destacado (120 − 46,15 =
+// 73,85): base 926,15 (STF, Tema 69).
 func TestCenario_PR_ContribuinteRevenda_Diferimento(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", finalidade: FinalidadeRevenda})
 	near(t, "base ICMS", 1000, r.BaseICMS)
@@ -63,8 +64,9 @@ func TestCenario_PR_ContribuinteRevenda_Diferimento(t *testing.T) {
 	near(t, "diferido", 46.15, r.ValorICMSDiferido)
 	querCST(t, "CST", "51", r.CSTICMS)
 	near(t, "IPI", 50, r.ValorIPI)
-	near(t, "PIS", 16.50, r.ValorPIS)
-	near(t, "COFINS", 76, r.ValorCOFINS)
+	near(t, "base PIS/COFINS sem o ICMS destacado", 926.15, r.BasePIS)
+	near(t, "PIS", 15.28, r.ValorPIS)
+	near(t, "COFINS", 70.39, r.ValorCOFINS)
 }
 
 // Contribuinte comprando para uso/consumo é consumidor final: IPI na base e
@@ -113,8 +115,9 @@ func TestCenario_Importado_NaoContribuinte_DIFALSobre4(t *testing.T) {
 
 func TestCenario_LucroPresumido_PISCOFINSCumulativo(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte", cfg: comRegime(RegimePresumido, 0)})
-	near(t, "PIS 0,65%", 6.50, r.ValorPIS)
-	near(t, "COFINS 3%", 30, r.ValorCOFINS)
+	// Tema 69 vale também no cumulativo: base 1000 − 73,85 de ICMS destacado.
+	near(t, "PIS 0,65%", 6.02, r.ValorPIS)
+	near(t, "COFINS 3%", 27.78, r.ValorCOFINS)
 	querCST(t, "CST PIS", "01", r.CSTPIS)
 	near(t, "ICMS segue igual", 120, r.ValorICMS)
 	near(t, "IPI segue igual", 50, r.ValorIPI)
@@ -131,8 +134,9 @@ func TestCenario_LucroPresumido_MonofasicoDaTabela(t *testing.T) {
 func TestCenario_LucroReal_SemNCMNaTabela_AliquotaBasica(t *testing.T) {
 	r := calcularCenario(t, cenario{destUF: "PR", destTipo: "contribuinte",
 		item: TaxItem{Ncm: "99999999", ValorUnitario: decimal.NewFromFloat(1000), Quantidade: decimal.NewFromFloat(1), OrigemMercadoria: "0"}})
-	near(t, "PIS", 16.50, r.ValorPIS)
-	near(t, "COFINS", 76, r.ValorCOFINS)
+	near(t, "base PIS/COFINS sem o ICMS destacado", 926.15, r.BasePIS)
+	near(t, "PIS", 15.28, r.ValorPIS)
+	near(t, "COFINS", 70.39, r.ValorCOFINS)
 }
 
 // Simples para contribuinte que revende: CSOSN 101 com crédito; sem destaque

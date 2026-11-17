@@ -59,10 +59,11 @@ func TestMascaraDoNCMNaoDecideSeOItemETributado(t *testing.T) {
 			}
 			item := res.Itens[0]
 
-			// base 1000: IPI 5% = 50, PIS 1,65% = 16,50, COFINS 7,6% = 76.
+			// base 1000: IPI 5% = 50; PIS 1,65% e COFINS 7,6% sobre 1000 − 73,85
+			// de ICMS destacado = 926,15 → 15,28 e 70,39.
 			near(t, "ValorIPI", 50.00, item.ValorIPI)
-			near(t, "ValorPIS", 16.50, item.ValorPIS)
-			near(t, "ValorCOFINS", 76.00, item.ValorCOFINS)
+			near(t, "ValorPIS", 15.28, item.ValorPIS)
+			near(t, "ValorCOFINS", 70.39, item.ValorCOFINS)
 			if item.CSTIPI != "50" {
 				t.Errorf("CSTIPI = %q, esperado 50 (veio da tabela?)", item.CSTIPI)
 			}
