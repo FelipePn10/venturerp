@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.0] — 2026-11-17
+
+- feat(fiscal): Zona Franca com SUFRAMA, crédito por apetite da empresa e notas especiais emitidas no SPED (`5d03587b`)
+
 ## [v1.18.2] — 2026-11-16
 
 - feat(cliente): cadastro VCLI0500 com crédito calculado e auditado, NF-e com transportadora e entrega (`f3e9f01c`)
