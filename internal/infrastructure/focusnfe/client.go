@@ -572,12 +572,9 @@ func (it NFEItem) campos() map[string]any {
 			m["ipi_valor"] = it.ValorIPI
 		}
 	}
-	// Base do PIS/COFINS = a do motor de tributos (produtos + frete − desconto
-	// da linha), em decimal e com centavos: base × alíquota tem de bater com o
-	// valor enviado. Antes ia bruto − desconto em float (sem o frete, e com
-	// resíduo como 457.73999999999995).
-	baseContrib := decimal.NewFromFloat(it.ValorBruto).Add(decimal.NewFromFloat(it.ValorFrete)).
-		Sub(decimal.NewFromFloat(it.ValorDesconto)).Round(2).InexactFloat64()
+	// Base do PIS/COFINS = a do motor de tributos, em decimal e com centavos:
+	// base × alíquota tem de bater com o valor enviado. Ver basePISCOFINS.
+	baseContrib := basePISCOFINS(it)
 	if it.ValorPIS > 0 {
 		m["pis_base_calculo"] = baseContrib
 		m["pis_aliquota_porcentual"] = it.AliquotaPIS
@@ -616,6 +613,46 @@ func (it NFEItem) campos() map[string]any {
 		m["cbs_valor"] = g.ValorCBS
 	}
 	return m
+}
+
+// basePISCOFINS: produtos + frete − desconto da linha − ICMS destacado (STF,
+// Tema 69), como o motor calcula. O destacado é o vICMS da nota: no CST 51, o
+// da operação menos o diferido. Nota gravada antes da exclusão (rascunho com
+// PIS/COFINS sobre a base cheia) mantém a base cheia: a base enviada é sempre
+// a que reproduz (ou mais se aproxima de) o valor da linha, para o XML não
+// sair incoerente.
+func basePISCOFINS(it NFEItem) float64 {
+	cheia := decimal.NewFromFloat(it.ValorBruto).Add(decimal.NewFromFloat(it.ValorFrete)).
+		Sub(decimal.NewFromFloat(it.ValorDesconto)).Round(2)
+	destacado := decimal.Zero
+	if cstComICMS[it.CodigoSituacaoTributariaICMS] {
+		destacado = decimal.NewFromFloat(it.ValorICMS)
+		if it.CodigoSituacaoTributariaICMS == "51" && it.ValorICMSDiferido != nil {
+			destacado = destacado.Sub(decimal.NewFromFloat(*it.ValorICMSDiferido))
+		}
+	}
+	if !destacado.IsPositive() {
+		return cheia.InexactFloat64()
+	}
+	semICMS := cheia.Sub(destacado).Round(2)
+	if semICMS.IsNegative() {
+		semICMS = decimal.Zero
+	}
+	aliq, valor := it.AliquotaPIS, it.ValorPIS
+	if valor <= 0 {
+		aliq, valor = it.AliquotaCOFINS, it.ValorCOFINS
+	}
+	// Distância entre o valor gravado e o que a base produz. Linha copiada de
+	// outra nota (devolução, retorno) pode trazer valor proporcional com
+	// arredondamento próprio: vale a base mais próxima; no empate, sem o ICMS.
+	distancia := func(base decimal.Decimal) decimal.Decimal {
+		return base.Mul(decimal.NewFromFloat(aliq)).Div(decimal.NewFromInt(100)).
+			Sub(decimal.NewFromFloat(valor)).Abs()
+	}
+	if valor > 0 && aliq > 0 && distancia(cheia).LessThan(distancia(semICMS)) {
+		return cheia.InexactFloat64()
+	}
+	return semICMS.InexactFloat64()
 }
 
 func soDigitos(s string) string {

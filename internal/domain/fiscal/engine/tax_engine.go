@@ -422,14 +422,14 @@ func calculateItemTax(
 		nota("PIS/COFINS não calculados: o tipo de nota não calcula PIS/COFINS")
 	}
 
+	// A base e o valor saem no fim (aplicarPISCOFINS), depois do ICMS final:
+	// o ICMS destacado não compõe a base (STF, Tema 69).
 	r.BasePIS = basePisCofins.Round(2)
 	r.AliquotaPIS = aliqPIS
 	r.CSTPIS = cstPIS
 	r.BaseCOFINS = basePisCofins.Round(2)
 	r.AliquotaCOFINS = aliqCOFINS
 	r.CSTCOFINS = cstCOFINS
-	r.ValorPIS = basePisCofins.Mul(aliqPIS).Round(2)
-	r.ValorCOFINS = basePisCofins.Mul(aliqCOFINS).Round(2)
 
 	// ICMS. A base leva o IPI quando a mercadoria vai para consumidor final —
 	// não contribuinte, ou contribuinte comprando para uso, consumo ou ativo (CF
@@ -717,8 +717,37 @@ func calculateItemTax(
 			Mul(flags.FomentarRetentionPct).Round(2)
 	}
 
+	aplicarPISCOFINS(&r, basePisCofins, nota)
 	roundResult(&r)
 	return r
+}
+
+// aplicarPISCOFINS fecha a base e o valor do PIS e da COFINS. O ICMS destacado
+// na nota não é receita da empresa e sai da base (STF, RE 574.706 — Tema 69,
+// modulado pelos embargos de 2021: o ICMS a excluir é o destacado). Vale nos
+// dois regimes, cumulativo e não cumulativo:
+//
+//	base = produtos + frete − desconto − ICMS destacado
+//
+// O destacado é o próprio da operação menos o diferido (CST 51: a nota leva
+// vICMS = vICMSOp − vICMSDif). ICMS-ST, DIFAL e FCP não entram na conta; o
+// Simples não destaca ICMS. A Zona Franca já zerou PIS/COFINS (CST 06).
+func aplicarPISCOFINS(r *TaxItemResult, basePisCofins decimal.Decimal, nota func(string, ...any)) {
+	if r.MotivoDesoneracao == "7" {
+		return
+	}
+	icmsDestacado := r.ValorICMS.Sub(r.ValorICMSDiferido)
+	if icmsDestacado.IsPositive() && (r.AliquotaPIS.IsPositive() || r.AliquotaCOFINS.IsPositive()) {
+		basePisCofins = basePisCofins.Sub(icmsDestacado)
+		if basePisCofins.IsNegative() {
+			basePisCofins = decimal.Zero
+		}
+		nota("base do PIS/COFINS sem o ICMS destacado de R$ %s (STF, Tema 69)", pctBR(icmsDestacado.Round(2)))
+	}
+	r.BasePIS = basePisCofins.Round(2)
+	r.BaseCOFINS = basePisCofins.Round(2)
+	r.ValorPIS = r.BasePIS.Mul(r.AliquotaPIS).Round(2)
+	r.ValorCOFINS = r.BaseCOFINS.Mul(r.AliquotaCOFINS).Round(2)
 }
 
 // zonaFranca aplica o benefício da venda para a Zona Franca de Manaus / ALC

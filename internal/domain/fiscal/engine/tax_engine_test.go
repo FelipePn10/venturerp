@@ -130,9 +130,9 @@ func TestScenario_IntraState_Contributor_Diferimento(t *testing.T) {
 	// IPI: 5% of 1000
 	near(t, "ValorIPI", 50.00, item.ValorIPI)
 
-	// PIS/COFINS: 1.65% and 7.6% of 1000
-	near(t, "ValorPIS", 16.50, item.ValorPIS)
-	near(t, "ValorCOFINS", 76.00, item.ValorCOFINS)
+	// PIS/COFINS: 1.65% and 7.6% of 1000 − ICMS destacado (120 − 46.15) = 926.15
+	near(t, "ValorPIS", 15.28, item.ValorPIS)
+	near(t, "ValorCOFINS", 70.39, item.ValorCOFINS)
 
 	// DIFAL should be zero (intra-state)
 	near(t, "ValorDIFAL", 0, item.ValorDIFAL)
@@ -401,9 +401,9 @@ func TestScenario_NCM_Custom_PIS_COFINS(t *testing.T) {
 	res, _ := CalcularImpostos(params, defaultNcmTable(), defaultInterstateTable(), defaultInternalTable(), TaxScenarioConfig{}, defaultFiscalConfig())
 	item := res.Itens[0]
 
-	// base 1000, PIS 1.65% = 16.50, COFINS 7.6% = 76
-	near(t, "ValorPIS", 16.50, item.ValorPIS)
-	near(t, "ValorCOFINS", 76.00, item.ValorCOFINS)
+	// base 1000 − ICMS destacado 73.85 = 926.15: PIS 1.65% = 15.28, COFINS 7.6% = 70.39
+	near(t, "ValorPIS", 15.28, item.ValorPIS)
+	near(t, "ValorCOFINS", 70.39, item.ValorCOFINS)
 
 	// IPI 10%: 100
 	near(t, "ValorIPI", 100.00, item.ValorIPI)
@@ -474,10 +474,11 @@ func TestScenario_Totals_Aggregation(t *testing.T) {
 	near(t, "TotalValorICMS", 360.00, res.Totais.ValorICMS)
 	// ValorIPI total: 50 + 100 = 150
 	near(t, "TotalValorIPI", 150.00, res.Totais.ValorIPI)
-	// ValorPIS total: 16.50 + 33 = 49.50
-	near(t, "TotalValorPIS", 49.50, res.Totais.ValorPIS)
-	// ValorCOFINS total: 76 + 152 = 228
-	near(t, "TotalValorCOFINS", 228.00, res.Totais.ValorCOFINS)
+	// PIS/COFINS sem o ICMS destacado: bases 926.15 e 1852.30 (2000 − 147.70)
+	// ValorPIS total: 15.28 + 30.56 = 45.84
+	near(t, "TotalValorPIS", 45.84, res.Totais.ValorPIS)
+	// ValorCOFINS total: 70.39 + 140.77 = 211.16
+	near(t, "TotalValorCOFINS", 211.16, res.Totais.ValorCOFINS)
 	// Diferimento: 38.46% of 120 = 46.15, 38.46% of 240 = 92.30, sum = 138.45
 	near(t, "TotalValorDiferido", 138.45, res.Totais.ValorDiferido)
 }

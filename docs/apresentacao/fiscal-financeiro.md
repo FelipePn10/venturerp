@@ -79,6 +79,7 @@ O sistema identifica sozinho se o cliente é contribuinte (pela inscrição esta
 ### 3.2 PIS e COFINS (Lucro Real)
 
 - Alíquotas padrão: **PIS 1,65%** e **COFINS 7,6%** (regime não-cumulativo).
+- O ICMS destacado na nota sai da base do PIS/COFINS, como decidiu o STF (Tema 69).
 - Produtos com tributação específica têm suas alíquotas próprias respeitadas (a partir de uma tabela por NCM).
 - Produtos **monofásicos** são reconhecidos e têm o imposto zerado no documento, como exige a lei.
 

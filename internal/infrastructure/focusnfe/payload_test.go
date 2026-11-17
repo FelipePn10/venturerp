@@ -16,8 +16,8 @@ func TestNFEPayloadFormatoFocus(t *testing.T) {
 		Destinatario: NFEDestinatario{CNPJCPF: "111.222.333-44", Nome: "FULANO", IndicadorIE: 1, IE: &ie, CEP: "80.000-000", Municipio: "CURITIBA", UF: "PR"},
 		Items: []NFEItem{{NumeroItem: 1, CodigoProduto: "10", Descricao: "X", CFOP: "5102", CodigoNCM: "73181500", UnidadeComercial: "UN",
 			QuantidadeComercial: 2, ValorUnitarioComercial: 5, ValorBruto: 10, CodigoSituacaoTributariaICMS: "00", ModalidadeBaseCalculoICMS: 3,
-			ValorBaseCalculoICMS: 10, AliquotaICMS: 18, ValorICMS: 1.8, CodigoSituacaoTributariaPIS: "01", AliquotaPIS: 1.65, ValorPIS: 0.17,
-			CodigoSituacaoTributariaCOFINS: "01", AliquotaCOFINS: 7.6, ValorCOFINS: 0.76, CodigoSituacaoTributariaIPI: "53", ValorFrete: 3,
+			ValorBaseCalculoICMS: 10, AliquotaICMS: 18, ValorICMS: 1.8, CodigoSituacaoTributariaPIS: "01", AliquotaPIS: 1.65, ValorPIS: 0.18,
+			CodigoSituacaoTributariaCOFINS: "01", AliquotaCOFINS: 7.6, ValorCOFINS: 0.85, CodigoSituacaoTributariaIPI: "53", ValorFrete: 3,
 			IBSCBS: &NFEItemIBSCBS{CST: "000", ClassTrib: "000001", Base: 7.27, AliqIBSUF: 0.1, ValorIBSUF: 0.01, AliqCBS: 0.9, ValorCBS: 0.07, ValorIBS: 0.01}},
 			{NumeroItem: 2, CodigoSituacaoTributariaICMS: "40", CodigoSituacaoTributariaPIS: "07", CodigoSituacaoTributariaCOFINS: "07"}},
 		FormaPagamento:     []NFEFormaPagamento{{FormaPagamento: "90", Valor: 0}},
@@ -51,7 +51,7 @@ func TestNFEPayloadFormatoFocus(t *testing.T) {
 	}
 	it := m["items"].([]any)[0].(map[string]any)
 	for k, want := range map[string]any{"icms_situacao_tributaria": "00", "icms_aliquota": 18.0, "icms_origem": 0.0, "unidade_tributavel": "UN",
-		"quantidade_tributavel": 2.0, "valor_frete": 3.0, "pis_base_calculo": 13.0, "ipi_situacao_tributaria": "53", "ipi_codigo_enquadramento_legal": "999",
+		"quantidade_tributavel": 2.0, "valor_frete": 3.0, "pis_base_calculo": 11.2, "ipi_situacao_tributaria": "53", "ipi_codigo_enquadramento_legal": "999",
 		"ibs_cbs_situacao_tributaria": "000", "ibs_cbs_classificacao_tributaria": "000001", "cbs_aliquota": 0.9, "ibs_uf_valor": 0.01} {
 		if it[k] != want {
 			t.Errorf("item %s = %v, want %v", k, it[k], want)
