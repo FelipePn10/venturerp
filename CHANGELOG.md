@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.4] — 2026-11-17
+
+- feat(transportadora): VSUP0140 completa, cadastros de apoio, travas de uso e cotação corrigida (`cf95d572`)
+
 ## [v1.19.3] — 2026-11-17
 
 - chore(release): min_client 1.19.1, publicado e servido pelo portal (`cb961750`)
