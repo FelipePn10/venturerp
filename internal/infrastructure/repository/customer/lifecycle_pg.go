@@ -48,6 +48,7 @@ func (r *CustomerRepositorySQLC) GetCreditPolicy(ctx context.Context) (entity.Cr
 		MaxLimit:              pgutil.FromPgNumericToDecimal(row.MaxLimit),
 		NewCustomerCapitalPct: pgutil.FromPgNumericToDecimal(row.NewCustomerCapitalPct),
 		NewCustomerCap:        pgutil.FromPgNumericToDecimal(row.NewCustomerCap),
+		NewCustomerRevenuePct: pgutil.FromPgNumericToDecimal(row.NewCustomerRevenuePct),
 		OverrideTolerancePct:  pgutil.FromPgNumericToDecimal(row.OverrideTolerancePct),
 		OverdueBlockDays:      int(row.OverdueBlockDays),
 		HistoryMonths:         int(row.HistoryMonths),
@@ -69,6 +70,7 @@ func (r *CustomerRepositorySQLC) SaveCreditPolicy(ctx context.Context, p entity.
 		MaxLimit:              pgutil.ToPgNumericFromDecimal(p.MaxLimit),
 		NewCustomerCapitalPct: pgutil.ToPgNumericFromDecimal(p.NewCustomerCapitalPct),
 		NewCustomerCap:        pgutil.ToPgNumericFromDecimal(p.NewCustomerCap),
+		NewCustomerRevenuePct: pgutil.ToPgNumericFromDecimal(p.NewCustomerRevenuePct),
 		OverrideTolerancePct:  pgutil.ToPgNumericFromDecimal(p.OverrideTolerancePct),
 		OverdueBlockDays:      int32(p.OverdueBlockDays),
 		HistoryMonths:         int32(p.HistoryMonths),
@@ -87,6 +89,29 @@ func (r *CustomerRepositorySQLC) SaveCreditPolicy(ctx context.Context, p entity.
 }
 
 var naoDigito = regexp.MustCompile(`\D`)
+
+// SellerVolume: o que a empresa vendeu nos 12 meses até today — notas de saída
+// autorizadas, de finalidade normal (devolução é 4) e de tipo que gera receita
+// (bonificação e remessa não contam).
+func (r *CustomerRepositorySQLC) SellerVolume(ctx context.Context, today time.Time) (entity.SellerVolume, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return entity.SellerVolume{}, err
+	}
+	var v entity.SellerVolume
+	err = r.pool.QueryRow(ctx, `
+		SELECT COALESCE(sum(fx.valor_total), 0), count(DISTINCT date_trunc('month', fx.data_emissao))
+		  FROM fiscal_exits fx
+		  LEFT JOIN invoice_types it ON it.id = fx.invoice_type_id AND it.enterprise_id = fx.enterprise_id
+		 WHERE fx.enterprise_id = $1 AND fx.status = 'AUTHORIZED' AND COALESCE(fx.tipo_documento, 1) = 1
+		   AND COALESCE(fx.finalidade, 1) = 1 AND COALESCE(it.generates_revenue, true)
+		   AND fx.data_emissao >  ($2::date - interval '12 months') AND fx.data_emissao <= $2::date`,
+		empresa, today).Scan(&v.Billed12m, &v.Months)
+	if err != nil {
+		return entity.SellerVolume{}, fmt.Errorf("lendo o faturamento da empresa: %w", err)
+	}
+	return v, nil
+}
 
 func (r *CustomerRepositorySQLC) GroupCustomerCodes(ctx context.Context, docType entity.DocumentType, document string) ([]int64, error) {
 	empresa, err := tenant.ID(ctx)

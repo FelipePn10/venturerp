@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"strings"
 	"time"
 
@@ -41,6 +42,9 @@ type CreateFiscalExitUseCase struct {
 	// Cadastro lê a finalidade da compra (pedido, cliente) e os indicadores do
 	// tipo de nota. Opcional: sem ele vale só o informado na nota.
 	Cadastro CadastroTributario
+	// IBPT soma o valor aproximado dos tributos da venda a consumidor final
+	// (Lei 12.741/2012). Opcional: sem ele a nota sai sem o texto.
+	IBPT LeitorIBPT
 	// Transportadoras monta o grupo transporta da NF-e com os dados da
 	// transportadora escolhida (ou a preferencial do cliente). Opcional.
 	Transportadoras ResolvedorTransportador
@@ -82,6 +86,11 @@ func conferirLinhasDaNota(itens []request.CreateFiscalExitItemDTO) error {
 // código num CST sem benefício (00, 10…) também é rejeitado pela SEFAZ.
 var cstComBeneficio = map[string]bool{"20": true, "30": true, "40": true, "41": true, "50": true, "51": true, "53": true, "70": true, "90": true}
 
+// CBenefZonaFrancaPR: "Isenção prevista no item 175 do Anexo V do RICMS/2017"
+// — saídas de industrializados nacionais para a Zona Franca de Manaus e áreas
+// de livre comércio (Convênio ICM 65/88). Tabela cBenef da SEFA-PR, V27.
+const CBenefZonaFrancaPR = "PR810175"
+
 func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitDTO) (*response.FiscalExitResponse, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
 		return nil, errorsuc.ErrUnauthorized
@@ -93,6 +102,23 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 
 	if err := resolverDestinatario(ctx, &dto, uc.Customers, uc.SalesOrders); err != nil {
 		return nil, err
+	}
+	// A SUFRAMA desonera o ICMS: a digitada na nota (a do cadastro já chega
+	// conferida) também passa pelo dígito, ou a SEFAZ rejeita (235).
+	if dto.SuframaDestinatario != nil {
+		isuf := strings.Map(func(r rune) rune {
+			if r >= '0' && r <= '9' {
+				return r
+			}
+			return -1
+		}, *dto.SuframaDestinatario)
+		if isuf == "" {
+			dto.SuframaDestinatario = nil
+		} else if !validation.SuframaValida(isuf) {
+			return nil, errorsuc.NewValidationError("inscrição SUFRAMA do destinatário inválida (o dígito verificador não confere)")
+		} else {
+			dto.SuframaDestinatario = &isuf
+		}
 	}
 	if dto.TipoFrete != nil {
 		t, ok := entity.TipoFreteDaNota(*dto.TipoFrete)
@@ -128,6 +154,7 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		UFDestino: destUF, IE: dto.IEDestinatario, TipoPessoa: dto.TipoPessoa,
 		Cliente: dto.CustomerCode, Pedido: dto.SalesOrderCode, TipoNotaID: dto.InvoiceTypeID, Cfop: dto.Cfop,
 		ValorFrete: dto.ValorFrete, ValorDesconto: dto.ValorDesconto,
+		Suframa: dto.SuframaDestinatario != nil && strings.TrimSpace(*dto.SuframaDestinatario) != "",
 	}
 	if dto.FinalidadeCompra != nil {
 		op.Finalidade = *dto.FinalidadeCompra
@@ -154,6 +181,19 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			}
 			if exige {
 				return nil, errorsuc.NewValidationError("este tipo de nota só pode ser usado com pedido de venda: fature pelo pedido ou escolha outro tipo")
+			}
+		}
+	}
+	if dto.InvoiceTypeID != nil && (dto.SuframaDestinatario == nil || strings.TrimSpace(*dto.SuframaDestinatario) == "") {
+		if leitor, ok := uc.Cadastro.(interface {
+			ExigeSuframaNoTipoNota(context.Context, int64) (bool, error)
+		}); ok {
+			exige, err := leitor.ExigeSuframaNoTipoNota(ctx, *dto.InvoiceTypeID)
+			if err != nil {
+				return nil, err
+			}
+			if exige {
+				return nil, errorsuc.NewValidationError("este tipo de nota exige a inscrição SUFRAMA do destinatário, válida na data da nota: confira a inscrição e a validade na VCLI0500 → Fiscal")
 			}
 		}
 	}
@@ -211,6 +251,7 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		CnpjDestinatario:        documentoSoDigitos(dto.CnpjDestinatario),
 		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
 		IEDestinatario:          inscricaoEstadual(dto.IEDestinatario),
+		SuframaDestinatario:     dto.SuframaDestinatario,
 		UFDestinatario:          dto.UFDestinatario,
 		DestLogradouro:          dto.DestLogradouro,
 		DestNumero:              dto.DestNumero,
@@ -240,9 +281,10 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		ValorCOFINS: taxResult.Totais.ValorCOFINS,
 		BaseICMSST:  taxResult.Totais.BaseICMSST,
 		ValorICMSST: taxResult.Totais.ValorICMSST,
-		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto
-		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário)
-		ValorTotal:            dto.ValorProdutos.Add(taxResult.Totais.ValorIPI).Add(taxResult.Totais.ValorICMSST).Add(dto.ValorFrete).Add(dto.ValorSeguro).Sub(dto.ValorDesconto),
+		// ValorTotal = produtos + IPI + ICMS-ST + frete + seguro - desconto - ICMS desonerado
+		// (ICMS próprio não soma no total da NF-e; o ICMS-ST soma, pois é cobrado do destinatário;
+		// o desonerado da Zona Franca sai do preço — indDeduzDeson 1)
+		ValorTotal:            dto.ValorProdutos.Add(taxResult.Totais.ValorIPI).Add(taxResult.Totais.ValorICMSST).Add(dto.ValorFrete).Add(dto.ValorSeguro).Sub(dto.ValorDesconto).Sub(taxResult.Totais.ValorICMSDesonerado),
 		SalesOrderCode:        dto.SalesOrderCode,
 		SourceType:            dto.SourceType,
 		ShipmentLoadCode:      dto.ShipmentLoadCode,
@@ -265,9 +307,27 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		legais = append(legais, regras[i].DispositivosAplicados(destTipo, r)...)
 		credito = credito.Add(r.ValorCreditoSimples)
 	}
+	if trib.ConsumidorFinal {
+		linhas := make([]linhaTransparencia, 0, len(dto.Itens))
+		for _, it := range dto.Itens {
+			linhas = append(linhas, linhaTransparencia{ncm: derefStr(it.Ncm), origem: it.OrigemMercadoria, valor: it.TotalPrice})
+		}
+		texto, err := textoTransparencia(ctx, uc.IBPT, trib.Config.UFEmpresa, linhas, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		if texto != "" {
+			legais = append(legais, texto)
+		}
+	}
 	exit.InformacoesComplementares = informacoesComplementares(dto.InformacoesComplementares, trib.Regime == engine.RegimeSimples,
 		credito, trib.Config.AliquotaCreditoSimples, semRepetir(legais))
 
+	if taxResult.Totais.ValorICMSDesonerado.IsPositive() {
+		if c := engine.CFOPZonaFranca(exit.Cfop); c != "" {
+			exit.Cfop = c
+		}
+	}
 	created, err := uc.Repo.CreateExit(ctx, exit)
 	if err != nil {
 		return nil, err
@@ -277,6 +337,12 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 		var itemTax engine.TaxItemResult
 		if i < len(taxResult.Itens) {
 			itemTax = taxResult.Itens[i]
+		}
+		// Venda isenta para a Zona Franca: CFOP 6109/6110 (rejeição 626).
+		if itemTax.MotivoDesoneracao == "7" {
+			if c := engine.CFOPZonaFranca(it.Cfop); c != "" {
+				it.Cfop = c
+			}
 		}
 
 		item := &entity.FiscalExitItem{
@@ -328,6 +394,9 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			FCPUFDestPct:          itemTax.FCPUFDestPct,
 			FCPUFDestValor:        itemTax.ValorFCP,
 			ICMSSTReducaoBasePct:  itemTax.ReducaoBaseSTPct,
+			ICMSValorDesonerado:   itemTax.ValorICMSDesonerado,
+			ICMSMotivoDesoneracao: itemTax.MotivoDesoneracao,
+			IPIEnquadramento:      itemTax.EnquadramentoIPI,
 		}
 		if regras[i] != nil {
 			item.RegraICMSIPIID = &regras[i].ID
@@ -348,6 +417,13 @@ func (uc *CreateFiscalExitUseCase) Execute(ctx context.Context, dto request.Crea
 			if (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") && itemTax.CSTICMS == "51" &&
 				trib.Config.CBenefDiferimento != nil && strings.TrimSpace(*trib.Config.CBenefDiferimento) != "" {
 				cb := strings.TrimSpace(*trib.Config.CBenefDiferimento)
+				item.CodigoBeneficioFiscal = &cb
+			}
+			// Zona Franca saindo do PR: o código oficial da isenção (item 175 do
+			// Anexo V do RICMS/PR 2017, tabela cBenef V27), se a regra não deu outro.
+			if (item.CodigoBeneficioFiscal == nil || strings.TrimSpace(*item.CodigoBeneficioFiscal) == "") &&
+				itemTax.MotivoDesoneracao == "7" && strings.EqualFold(strings.TrimSpace(trib.Config.UFEmpresa), "PR") {
+				cb := CBenefZonaFrancaPR
 				item.CodigoBeneficioFiscal = &cb
 			}
 		}

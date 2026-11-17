@@ -261,7 +261,7 @@ INSERT INTO icms_ipi_tax_params (
     icms_difal_red_pct, icms_difal_type,
     difal_purchase_red_pct, difal_purchase_red_target,
     enterprise_id,
-    finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code
+    finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, ipi_codigo_enquadramento
 ) SELECT
     $1,  $2,  $3,  $4,  $5,
     $6,  $7,  $8,  $9,  $10, $11,
@@ -279,11 +279,11 @@ INSERT INTO icms_ipi_tax_params (
     $75, $76, $77, $78,
     $79,
     $80::varchar, $81::numeric, $82::boolean,
-    $83::bigint
+    $83::bigint, $84::varchar
  WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $79))
    AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $79))
    AND ($83::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = $83::bigint AND f.enterprise_id = $79))
-RETURNING id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id
+RETURNING id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento
 `
 
 type CreateTaxParamParams struct {
@@ -370,6 +370,7 @@ type CreateTaxParamParams struct {
 	MvaPct                           pgtype.Numeric
 	MvaAjustarInterestadual          bool
 	SupplierCode                     *int64
+	IpiCodigoEnquadramento           pgtype.Text
 }
 
 // ─── ICMS/IPI Tax Params ──────────────────────────────────────────────────────
@@ -459,6 +460,7 @@ func (q *Queries) CreateTaxParam(ctx context.Context, arg CreateTaxParamParams) 
 		arg.MvaPct,
 		arg.MvaAjustarInterestadual,
 		arg.SupplierCode,
+		arg.IpiCodigoEnquadramento,
 	)
 	var i IcmsIpiTaxParam
 	err := row.Scan(
@@ -550,6 +552,7 @@ func (q *Queries) CreateTaxParam(ctx context.Context, arg CreateTaxParamParams) 
 		&i.MvaAjustarInterestadual,
 		&i.SupplierCode,
 		&i.OrigemReducaoID,
+		&i.IpiCodigoEnquadramento,
 	)
 	return i, err
 }
@@ -717,7 +720,7 @@ func (q *Queries) GetLegalDeviceByCode(ctx context.Context, code int64) (LegalDe
 }
 
 const getTaxParamByID = `-- name: GetTaxParamByID :one
-SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id FROM icms_ipi_tax_params WHERE id = $1 AND enterprise_id = $2
+SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento FROM icms_ipi_tax_params WHERE id = $1 AND enterprise_id = $2
 `
 
 type GetTaxParamByIDParams struct {
@@ -817,6 +820,7 @@ func (q *Queries) GetTaxParamByID(ctx context.Context, arg GetTaxParamByIDParams
 		&i.MvaAjustarInterestadual,
 		&i.SupplierCode,
 		&i.OrigemReducaoID,
+		&i.IpiCodigoEnquadramento,
 	)
 	return i, err
 }
@@ -1199,7 +1203,7 @@ func (q *Queries) ListLegalDevicesByType(ctx context.Context, arg ListLegalDevic
 }
 
 const listTaxParams = `-- name: ListTaxParams :many
-SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id FROM icms_ipi_tax_params
+SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento FROM icms_ipi_tax_params
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY id
 `
@@ -1307,6 +1311,7 @@ func (q *Queries) ListTaxParams(ctx context.Context, arg ListTaxParamsParams) ([
 			&i.MvaAjustarInterestadual,
 			&i.SupplierCode,
 			&i.OrigemReducaoID,
+			&i.IpiCodigoEnquadramento,
 		); err != nil {
 			return nil, err
 		}
@@ -1319,7 +1324,7 @@ func (q *Queries) ListTaxParams(ctx context.Context, arg ListTaxParamsParams) ([
 }
 
 const listTaxParamsByItem = `-- name: ListTaxParamsByItem :many
-SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id FROM icms_ipi_tax_params
+SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento FROM icms_ipi_tax_params
 WHERE item_code = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
   AND enterprise_id = $3
@@ -1430,6 +1435,7 @@ func (q *Queries) ListTaxParamsByItem(ctx context.Context, arg ListTaxParamsByIt
 			&i.MvaAjustarInterestadual,
 			&i.SupplierCode,
 			&i.OrigemReducaoID,
+			&i.IpiCodigoEnquadramento,
 		); err != nil {
 			return nil, err
 		}
@@ -1442,7 +1448,7 @@ func (q *Queries) ListTaxParamsByItem(ctx context.Context, arg ListTaxParamsByIt
 }
 
 const listTaxParamsByNCM = `-- name: ListTaxParamsByNCM :many
-SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id FROM icms_ipi_tax_params
+SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento FROM icms_ipi_tax_params
 WHERE ncm_code = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
   AND enterprise_id = $3
@@ -1553,6 +1559,7 @@ func (q *Queries) ListTaxParamsByNCM(ctx context.Context, arg ListTaxParamsByNCM
 			&i.MvaAjustarInterestadual,
 			&i.SupplierCode,
 			&i.OrigemReducaoID,
+			&i.IpiCodigoEnquadramento,
 		); err != nil {
 			return nil, err
 		}
@@ -1565,7 +1572,7 @@ func (q *Queries) ListTaxParamsByNCM(ctx context.Context, arg ListTaxParamsByNCM
 }
 
 const listTaxParamsByUF = `-- name: ListTaxParamsByUF :many
-SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id FROM icms_ipi_tax_params
+SELECT id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento FROM icms_ipi_tax_params
 WHERE uf = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
   AND enterprise_id = $3
@@ -1676,6 +1683,7 @@ func (q *Queries) ListTaxParamsByUF(ctx context.Context, arg ListTaxParamsByUFPa
 			&i.MvaAjustarInterestadual,
 			&i.SupplierCode,
 			&i.OrigemReducaoID,
+			&i.IpiCodigoEnquadramento,
 		); err != nil {
 			return nil, err
 		}
@@ -2031,10 +2039,11 @@ SET ncm_code = $2, item_code = $3, item_config_mask = $4, uf = $5, operation_typ
     is_active = $80, updated_at = NOW(),
     finalidade_compra = $82::varchar, mva_pct = $83::numeric,
     mva_ajustar_interestadual = $84::boolean,
-    supplier_code = $85::bigint
+    supplier_code = $85::bigint,
+    ipi_codigo_enquadramento = $86::varchar
 WHERE icms_ipi_tax_params.id = $1 AND icms_ipi_tax_params.enterprise_id = $81
   AND ($85::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = $85::bigint AND f.enterprise_id = $81))
-RETURNING id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id
+RETURNING id, ncm_code, item_code, item_config_mask, uf, operation_type, customer_code, customer_establishment_code, market_segment_id, invoice_type_exit_id, invoice_type_entry_id, tax_type_id, is_preferred, is_simples_optante, icms_pct_contrib, legal_device_icms_contrib_id, icms_pct_non_contrib, legal_device_icms_non_contrib_id, icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id, icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id, icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_pct_contrib, legal_device_icms_subst_contrib_id, icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id, icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id, icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib, cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev, ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id, ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id, cst_ipi_exit, cst_ipi_entry, icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238, cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc, cod_benef_contrib, cod_benef_non_contrib, icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib, icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib, icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib, icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib, fcp_st_partilha_pct, icms_difal_red_pct, icms_difal_type, difal_purchase_red_pct, difal_purchase_red_target, is_active, created_at, updated_at, enterprise_id, finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, origem_reducao_id, ipi_codigo_enquadramento
 `
 
 type UpdateTaxParamParams struct {
@@ -2123,6 +2132,7 @@ type UpdateTaxParamParams struct {
 	MvaPct                           pgtype.Numeric
 	MvaAjustarInterestadual          bool
 	SupplierCode                     *int64
+	IpiCodigoEnquadramento           pgtype.Text
 }
 
 func (q *Queries) UpdateTaxParam(ctx context.Context, arg UpdateTaxParamParams) (IcmsIpiTaxParam, error) {
@@ -2212,6 +2222,7 @@ func (q *Queries) UpdateTaxParam(ctx context.Context, arg UpdateTaxParamParams) 
 		arg.MvaPct,
 		arg.MvaAjustarInterestadual,
 		arg.SupplierCode,
+		arg.IpiCodigoEnquadramento,
 	)
 	var i IcmsIpiTaxParam
 	err := row.Scan(
@@ -2303,6 +2314,7 @@ func (q *Queries) UpdateTaxParam(ctx context.Context, arg UpdateTaxParamParams) 
 		&i.MvaAjustarInterestadual,
 		&i.SupplierCode,
 		&i.OrigemReducaoID,
+		&i.IpiCodigoEnquadramento,
 	)
 	return i, err
 }

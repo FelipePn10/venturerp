@@ -3503,6 +3503,11 @@ para ISO-8859-1 ao baixar.
   o campo do E110 pelo 4º caractere (0 outros débitos, 1 estorno de créditos, 2
   outros créditos, 3 estorno de débitos, 4 deduções, 5 débitos especiais — este
   vira E116 090). Código de ST/DIFAL fica fora, com aviso.
+  A nota nasce `RASCUNHO`; `POST /api/fiscal/notas-especiais/{id}/emitir` passa a
+  `EMITIDA` (exige finalidade AJUSTE, código de ajuste ou linha, e ICMS > 0) e
+  `.../{id}/cancelar` a `CANCELADA`. Só o rascunho se altera (`PUT` mantém a
+  situação gravada e grava período, data, código e linha — a linha confere a
+  empresa).
 - **Bloco H** a pedido (`inventario_data`, `inventario_motivo`): estoque próprio
   na data, por item — quantidade e valor somados dos movimentos até o fim do dia
   (custo médio do momento de cada saída; AJUSTE_CUSTO só valor); item de terceiro
@@ -3640,6 +3645,41 @@ Seletivo continuam sem cálculo.
   transportadora (a da NF-e; sem nota, a preferencial do cliente): antes ela
   procurava o `carrier_code` — que é o portador de cobrança — entre os
   fornecedores e imprimia um fornecedor qualquer.
+- **NF-e recebidas com token recusado:** `ListarNFesRecebidas` devolvia erro em
+  texto, e o 401 da Focus virava "tente de novo em instantes" (com a busca
+  automática repetindo a cada hora). Agora devolve `HTTPError`, e a tela diz para
+  conferir o token na VFIS0100.
+- **Lei da Transparência (Lei 12.741/2012)** (`transparencia.go`):
+  - **Quando:** na venda a consumidor final (não contribuinte, ou compra para uso e consumo), a nota leva nas informações complementares o valor aproximado dos tributos: federais, estaduais e municipais. O Decreto 8.264/2014 aceita esse texto ali.
+  - **De onde vem:** da tabela IBPT da VFIS0110, pela UF da empresa. O federal usa a alíquota nacional ou a de importado, conforme a origem (1, 2, 3 e 8). IBPT vencida ou NCM sem IBPT ficam fora; sem nenhuma, não há texto.
+  - **Antes:** a IBPT era importada e consultada, mas não chegava a nota nenhuma.
+- **Telas VFIS aposentadas em 16/11/2026:** nada as lia, e produção (Tecnofer e Usimac) não tinha dado nelas. As rotas da API continuam.
+  - **VFIS0220 (CT-e):** gravava um CT-e (`fiscal_cte`) que nada lia (nem rateio, nem SPED, nem título) e oferecia emitir CT-e, que é documento de transportadora. O frete recebido é a aba *Fretes (CT-e)* da VFIS0210 (`fiscal_freight_documents`), que gera o título e entra no D100.
+  - **VFIS0340 (Apuração do Simples):** era só um formulário de números digitados. A apuração é feita no PGDAS-D, e o crédito de ICMS do Simples na nota (pCredSN) vem da VFIS0100.
+  - **VFIS0550 (Restituição/Ressarcimento ST):** registro sem saída nenhuma (nem SPED nem e-Ressarcimento).
+  - **Abas e recursos sem uso que saíram:**
+    - na VFIS0510, as abas *Ajuste de ICMS (5.2 a 5.7)* (o SPED não gera C197/E220) e *Motivos de transferência DAPI* (declaração de MG);
+    - na VFIS0350, *Idiomas* e *Atributos de exportação*.
+- **SUFRAMA e Zona Franca (000495, 000497)**:
+  - **SUFRAMA na nota:** a inscrição do cliente, válida na data, fica gravada (`fiscal_exits.suframa_destinatario`) e vai como `inscricao_suframa_destinatario` (ISUF). Vencida, não vai e a prévia avisa.
+  - **Dígito da inscrição:** módulo 11, pesos 9 a 2 (`validation.SuframaValida`), conferido ao gravar o cliente. Em homologação a SEFAZ aceitou 200100122 e recusou 200100123 (235).
+  - **Tipo de NF** com `exige_suframa` não gera a nota sem a inscrição válida.
+  - **Benefício:** a regra da VFIS0320 com `uses_icms_zona_franca` aplica `engine.zonaFranca` quando a operação é interestadual, a empresa é do regime normal, o destinatário tem SUFRAMA válida e não é consumidor final (o Convênio ICM 65/88 só isenta comercialização e industrialização). Com isso:
+    - ICMS em CST 40, com o valor que seria devido em `icms_valor_desonerado`, motivo 7 e `icms_deducao_desoneracao = 1`, que vira o indDeduzDeson. O motivo 7 exige essa dedução (rejeição 652), e o total da nota desconta o desonerado.
+    - PIS/COFINS em CST 06, alíquota zero.
+    - CFOP 6101/6107 → 6109 e 6102/6108 → 6110 (rejeição 626 com outro CFOP).
+    - No PR, cBenef PR810175 (item 175 do Anexo V do RICMS/2017, tabela V27), salvo outro informado na regra.
+    - IPI pelo CST e pelo `ipi_codigo_enquadramento` (cEnq) da regra; vazio = 999.
+  - **Fora dessas condições:** tributação normal, e a nota explica o motivo na linha.
+  - **Validação em homologação Tecnofer, 16/11/2026:** a NF-e 69 foi autorizada com esse grupo (cStat 100) e depois cancelada. O nome `icms_deducao_desoneracao` não está na documentação pública da Focus; foi confirmado nesse teste.
+- **Tipo de NF do pedido no faturamento** (`FaturarPedidoUseCase.tipoNotaDoPedido`):
+  `sales_orders.default_nf_type` e `sales_order_items.nf_type` eram gravados e
+  ignorados — a nota faturada saía sem tipo. Agora, sem tipo escolhido no
+  faturamento, vale o das linhas faturadas (linha sem tipo segue o do pedido).
+  Linhas de tipos diferentes não vão na mesma nota: o faturamento recusa e a
+  prévia só avisa (`avisos`), para não travar o faturamento por linha. Tipo
+  inexistente ou inativo: aviso na prévia, recusa no faturamento. Os tipos são
+  códigos gravados como texto, convertidos no id da empresa.
 - **Transportadora × portador (000494)**: romaneio, carga, pedido de compra
   (inclusive o redespacho) e aviso de recebimento tinham só `carrier_code`, que
   a tela preenchia com um PORTADOR embora chamasse de "Transportadora". Agora

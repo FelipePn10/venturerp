@@ -2,7 +2,9 @@ package fiscal_uc
 
 import (
 	"context"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"strings"
+	"time"
 
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -92,6 +94,9 @@ func resolverDestinatario(
 	preencher(&dto.CnpjDestinatario, cliente.DocumentNumber)
 	if cliente.StateRegistration != nil {
 		preencher(&dto.IEDestinatario, *cliente.StateRegistration)
+	}
+	if isuf := SuframaValida(cliente.SuframaCode, cliente.SuframaExpiry, time.Now()); isuf != "" {
+		preencher(&dto.SuframaDestinatario, isuf)
 	}
 	if dto.TipoPessoa == nil && cliente.DocumentType == customerentity.DocumentCPF {
 		f := "F"
@@ -362,4 +367,21 @@ func valorOuVazio(v *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*v)
+}
+
+// SuframaValida: a inscrição SUFRAMA que vai para a NF-e (só dígitos), ou ""
+// quando o cliente não tem, o dígito não confere (cadastro antigo) ou ela já venceu na data — vencida, a SEFAZ recusa
+// (rejeição 235) e o benefício da Zona Franca não vale.
+func SuframaValida(codigo *string, validade *time.Time, hoje time.Time) string {
+	if codigo == nil {
+		return ""
+	}
+	d := soDigitos(*codigo)
+	if d == "" || !validation.SuframaValida(d) {
+		return ""
+	}
+	if validade != nil && validade.Before(time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, validade.Location())) {
+		return ""
+	}
+	return d
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	fiscalrepo "github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesentity "github.com/FelipePn10/panossoerp/internal/domain/sales_order/entity"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
@@ -92,6 +93,16 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		// Quem leva a carga é a transportadora da NF-e; sem ela, a do cliente.
 		ShippingCarrierID: load.ShippingCarrierID,
 		Itens:             items,
+	}
+
+	// Carga de um pedido só: a nota segue o tipo de NF do pedido e das linhas,
+	// como no faturamento pelo pedido. Carga de vários pedidos sai sem tipo.
+	if salesOrderCode != nil && uc.SalesOrderRepo != nil {
+		tipo, err := uc.tipoNotaDaCarga(ctx, *salesOrderCode, items)
+		if err != nil {
+			return nil, err
+		}
+		createDTO.InvoiceTypeID = tipo
 	}
 
 	created, err := uc.CreateUC.Execute(ctx, createDTO)
@@ -349,4 +360,44 @@ func sumFiscalExitItems(items []request.CreateFiscalExitItemDTO) decimal.Decimal
 		total = total.Add(it.TotalPrice)
 	}
 	return total
+}
+
+func (uc *CreateFiscalExitFromLoadUseCase) tipoNotaDaCarga(ctx context.Context, salesOrderCode int64, items []request.CreateFiscalExitItemDTO) (*int64, error) {
+	pedido, err := uc.SalesOrderRepo.GetByCode(ctx, salesOrderCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o pedido %d da carga: %w", salesOrderCode, err)
+	}
+	doPedido, err := uc.SalesOrderRepo.ListItems(ctx, salesOrderCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os itens do pedido %d da carga: %w", salesOrderCode, err)
+	}
+	porCodigo := map[int64]*salesentity.SalesOrderItem{}
+	for _, it := range doPedido {
+		porCodigo[it.Code] = it
+	}
+	linhas := make([]linhaTipoNota, 0, len(items))
+	for _, it := range items {
+		l := linhaTipoNota{}
+		if it.ItemCode != nil {
+			l.rotulo = fmt.Sprint(*it.ItemCode)
+		}
+		if it.SalesOrderItemCode != nil {
+			if o := porCodigo[*it.SalesOrderItemCode]; o != nil {
+				l.tipo = o.NFType
+			}
+		}
+		linhas = append(linhas, l)
+	}
+	var clientes customerrepo.CustomerRepository
+	if uc.CreateUC != nil {
+		clientes = uc.CreateUC.Customers
+	}
+	tipo, motivo, err := resolverTipoNota(ctx, clientes, pedido.DefaultNFType, linhas)
+	if err != nil {
+		return nil, err
+	}
+	if motivo != "" {
+		return nil, errorsuc.NewValidationError(motivo)
+	}
+	return tipo, nil
 }

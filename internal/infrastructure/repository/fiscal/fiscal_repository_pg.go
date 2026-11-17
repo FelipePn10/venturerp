@@ -300,9 +300,9 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 			 dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
 			 customer_material_remittance_id, finalidade, nfe_referenciada, fiscal_entry_id, supplier_code,
 			 finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id,
-			 tipo_frete, shipping_carrier_id, transportador, local_entrega)
+			 tipo_frete, shipping_carrier_id, transportador, local_entrega, suframa_destinatario)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,
-		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56)
+		         $33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55,$56,$57)
 		 RETURNING id, is_active, created_at, updated_at`,
 		e.ChaveAcesso, e.NumeroNF, e.Serie, e.DataEmissao, e.DataSaida,
 		e.CnpjDestinatario, e.RazaoSocialDestinatario, e.IEDestinatario, e.UFDestinatario,
@@ -315,7 +315,7 @@ func (r *FiscalRepositoryPG) CreateExit(ctx context.Context, e *entity.FiscalExi
 		e.DestCodigoMunicipio, e.DestCEP, e.DestEmail, e.DestTelefone, e.CustomerCode,
 		e.CustomerMaterialRemittanceID, finalidadeOuVenda(e.Finalidade), e.NFeReferenciada, e.FiscalEntryID, e.SupplierCode,
 		e.FinalidadeCompra, e.InvoiceTypeID, e.InformacoesComplementares, tipoOuSaida(e.TipoDocumento), e.DevolucaoVendaID,
-		e.TipoFrete, e.ShippingCarrierID, jsonOuNulo(e.Transportador), jsonOuNulo(e.LocalEntrega),
+		e.TipoFrete, e.ShippingCarrierID, jsonOuNulo(e.Transportador), jsonOuNulo(e.LocalEntrega), e.SuframaDestinatario,
 	).Scan(&e.ID, &e.IsActive, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit: %w", err)
@@ -334,9 +334,10 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 			 unidade_comercial, codigo_produto, sales_order_item_code, fiscal_entry_item_id, codigo_beneficio_fiscal, regra_icms_ipi_id,
 			 icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
 			 icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor, fcp_uf_dest_pct, fcp_uf_dest_valor,
-			 icms_st_reducao_base_pct, fiscal_exit_item_origem_id, mask, lot, address)
+			 icms_st_reducao_base_pct, fiscal_exit_item_origem_id, mask, lot, address,
+			 icms_valor_desonerado, icms_motivo_desoneracao, ipi_codigo_enquadramento)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,
-		         $36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50)
+		         $36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,NULLIF($52,''),NULLIF($53,''))
 		 RETURNING id, created_at`,
 		item.FiscalExitID, item.Sequence, item.ItemCode, item.Ncm, item.Cfop, item.Quantity, item.UnitPrice, item.TotalPrice,
 		item.BaseICMS, item.AliqICMS, item.ValorICMS, item.ValorICMSDiferido,
@@ -347,6 +348,7 @@ func (r *FiscalRepositoryPG) CreateExitItem(ctx context.Context, item *entity.Fi
 		item.ICMSReducaoBasePct, item.ICMSDiferimentoPct, item.AliqCreditoSimples, item.ValorCreditoSimples,
 		item.ICMSUFDestBase, item.ICMSUFDestAliqInterna, item.ICMSAliqInterestadual, item.ICMSUFDestValor, item.FCPUFDestPct, item.FCPUFDestValor,
 		item.ICMSSTReducaoBasePct, item.FiscalExitItemOrigemID, item.Mask, item.Lot, item.Address,
+		item.ICMSValorDesonerado, item.ICMSMotivoDesoneracao, item.IPIEnquadramento,
 	).Scan(&item.ID, &item.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating fiscal exit item: %w", err)
@@ -373,7 +375,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		        dest_logradouro, dest_numero, dest_complemento, dest_bairro, dest_municipio,
 		        dest_codigo_municipio, dest_cep, dest_email, dest_telefone, customer_code,
 		        finalidade, nfe_referenciada, fiscal_entry_id, supplier_code, finalidade_compra, invoice_type_id, informacoes_complementares, tipo_documento, devolucao_venda_id,
-		        tipo_frete, shipping_carrier_id, transportador, local_entrega
+		        tipo_frete, shipping_carrier_id, transportador, local_entrega, suframa_destinatario
 		 FROM public.fiscal_exits WHERE id = $1 AND enterprise_id=$2`, id, enterpriseID,
 	).Scan(&e.ID, &e.ChaveAcesso, &e.NumeroNF, &e.Serie, &e.DataEmissao, &e.DataSaida,
 		&e.CnpjDestinatario, &e.RazaoSocialDestinatario, &e.IEDestinatario, &e.UFDestinatario,
@@ -386,7 +388,7 @@ func (r *FiscalRepositoryPG) GetExitByID(ctx context.Context, id int64) (*entity
 		&e.DestLogradouro, &e.DestNumero, &e.DestComplemento, &e.DestBairro, &e.DestMunicipio,
 		&e.DestCodigoMunicipio, &e.DestCEP, &e.DestEmail, &e.DestTelefone, &e.CustomerCode,
 		&e.Finalidade, &e.NFeReferenciada, &e.FiscalEntryID, &e.SupplierCode, &e.FinalidadeCompra, &e.InvoiceTypeID, &e.InformacoesComplementares, &e.TipoDocumento, &e.DevolucaoVendaID,
-		&e.TipoFrete, &e.ShippingCarrierID, &transportador, &localEntrega)
+		&e.TipoFrete, &e.ShippingCarrierID, &transportador, &localEntrega, &e.SuframaDestinatario)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errorsuc.NewNotFoundError(fmt.Sprintf("nota fiscal de saída %d não encontrada", id))
@@ -420,7 +422,8 @@ func (r *FiscalRepositoryPG) GetExitItems(ctx context.Context, fiscalExitID int6
 		        icms_reducao_base_pct, icms_diferimento_pct, aliq_credito_simples, valor_credito_simples,
 		        icms_uf_dest_base, icms_uf_dest_aliq_interna, icms_aliq_interestadual, icms_uf_dest_valor,
 		        fcp_uf_dest_pct, fcp_uf_dest_valor, icms_st_reducao_base_pct,
-		        fiscal_exit_item_origem_id, mask, lot, address
+		        fiscal_exit_item_origem_id, mask, lot, address,
+		        icms_valor_desonerado, COALESCE(icms_motivo_desoneracao, ''), COALESCE(ipi_codigo_enquadramento, '')
 		 FROM public.fiscal_exit_items i WHERE fiscal_exit_id = $1 AND EXISTS(SELECT 1 FROM fiscal_exits x WHERE x.id=i.fiscal_exit_id AND x.enterprise_id=$2) ORDER BY sequence`, fiscalExitID, enterpriseID)
 	if err != nil {
 		return nil, fmt.Errorf("listing fiscal exit items: %w", err)
@@ -625,6 +628,7 @@ func scanExitItems(rows pgx.Rows) ([]*entity.FiscalExitItem, error) {
 			&it.ICMSUFDestBase, &it.ICMSUFDestAliqInterna, &it.ICMSAliqInterestadual, &it.ICMSUFDestValor,
 			&it.FCPUFDestPct, &it.FCPUFDestValor, &it.ICMSSTReducaoBasePct,
 			&it.FiscalExitItemOrigemID, &it.Mask, &it.Lot, &it.Address,
+			&it.ICMSValorDesonerado, &it.ICMSMotivoDesoneracao, &it.IPIEnquadramento,
 		); err != nil {
 			return nil, fmt.Errorf("scanning fiscal exit item: %w", err)
 		}

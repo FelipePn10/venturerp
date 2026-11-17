@@ -22,7 +22,7 @@ func bomPagador() CreditHistory {
 }
 
 func TestBomPagadorClasseAComLimiteDoCiclo(t *testing.T) {
-	s := SuggestCreditLimit(bomPagador(), CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(10)}, DefaultCreditPolicy(), hoje)
+	s := SuggestCreditLimit(bomPagador(), CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(10)}, DefaultCreditPolicy(), SellerVolume{}, hoje)
 	if s.Score != 1000 || s.RiskClass != RiskA || s.HardStop {
 		t.Fatalf("score %d classe %s hardstop %v", s.Score, s.RiskClass, s.HardStop)
 	}
@@ -37,18 +37,51 @@ func TestBomPagadorClasseAComLimiteDoCiclo(t *testing.T) {
 
 func TestClienteNovoNuncaPassaDaClasseC(t *testing.T) {
 	capital := dc("5000000")
-	s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(20), ShareCapital: &capital}, DefaultCreditPolicy(), hoje)
+	s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(20), ShareCapital: &capital}, DefaultCreditPolicy(), SellerVolume{}, hoje)
 	if s.HasHistory || s.RiskClass != RiskC || s.Score != 650 {
 		t.Fatalf("score %d classe %s", s.Score, s.RiskClass)
 	}
-	// min(10% de 5 mi, 30.000) × 0,6
+	// min(10% de 5 mi, piso 30.000 sem faturamento da empresa) × 0,6
 	if !s.SuggestedLimit.Equal(dc("18000")) {
 		t.Fatalf("limite = %s, quer 18000", s.SuggestedLimit)
 	}
 }
 
+// Cliente novo: o menor entre a capacidade do cliente (% do capital) e o
+// apetite da empresa (% do faturamento médio mensal dela, com piso). A Gerdau
+// (capital R$ 24,3 bi) saía com R$ 18 mil, o mesmo de uma microempresa: quem
+// limita é o porte de quem vende, não uma faixa fixa.
+func TestClienteNovoCapacidadeContraApetite(t *testing.T) {
+	gerdau, pequena := dc("24347290800"), dc("200000")
+	demo := SellerVolume{Billed12m: dc("8678046.72"), Months: 12} // R$ 723.170,56/mês
+	casos := []struct {
+		nome    string
+		capital decimal.Decimal
+		seller  SellerVolume
+		quer    string
+	}{
+		{"Gerdau, empresa sem faturamento no sistema: piso", gerdau, SellerVolume{}, "18000"},                                 // 30.000 × 0,6
+		{"Gerdau, empresa da demo: 20% do mensal", gerdau, demo, "86700"},                                                     // 144.634,11 × 0,6 = 86.780 → 86.700
+		{"cliente pequeno: a capacidade dele manda", pequena, demo, "12000"},                                                  // 10% de 200.000 × 0,6
+		{"empresa com 3 meses: média dos meses faturados", gerdau, SellerVolume{Billed12m: dc("900000"), Months: 3}, "36000"}, // 300.000 × 20% = 60.000 × 0,6
+		{"apetite abaixo do piso: vale o piso", gerdau, SellerVolume{Billed12m: dc("120000"), Months: 12}, "18000"},           // 10.000 × 20% = 2.000 < 30.000
+	}
+	for _, c := range casos {
+		capital := c.capital
+		s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(55), ShareCapital: &capital}, DefaultCreditPolicy(), c.seller, hoje)
+		if s.RiskClass != RiskC || !s.SuggestedLimit.Equal(dc(c.quer)) {
+			t.Errorf("%s: classe %s limite %s, quer %s", c.nome, s.RiskClass, s.SuggestedLimit, c.quer)
+		}
+	}
+	pol := DefaultCreditPolicy()
+	pol.MaxLimit = dc("50000")
+	if s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(55), ShareCapital: &gerdau}, pol, demo, hoje); !s.SuggestedLimit.Equal(dc("50000")) {
+		t.Fatalf("teto da empresa: %s", s.SuggestedLimit)
+	}
+}
+
 func TestClienteNovoSemDadosDaReceitaFicaNaClasseD(t *testing.T) {
-	s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{}, DefaultCreditPolicy(), hoje)
+	s := SuggestCreditLimit(CreditHistory{}, CompanyProfile{}, DefaultCreditPolicy(), SellerVolume{}, hoje)
 	if s.RiskClass != RiskD {
 		t.Fatalf("classe %s", s.RiskClass)
 	}
@@ -74,7 +107,7 @@ func TestBloqueiosZeramOLimite(t *testing.T) {
 	for nome, muda := range casos {
 		h, c := bomPagador(), CompanyProfile{Known: true, RegistrationStatus: "ATIVA", OpeningDate: anosAtras(10)}
 		muda(&h, &c)
-		s := SuggestCreditLimit(h, c, DefaultCreditPolicy(), hoje)
+		s := SuggestCreditLimit(h, c, DefaultCreditPolicy(), SellerVolume{}, hoje)
 		if !s.HardStop || s.RiskClass != RiskE || !s.SuggestedLimit.IsZero() || s.Score > 199 {
 			t.Errorf("%s: hardstop %v classe %s limite %s score %d", nome, s.HardStop, s.RiskClass, s.SuggestedLimit, s.Score)
 		}
@@ -84,7 +117,7 @@ func TestBloqueiosZeramOLimite(t *testing.T) {
 func TestPioraRecenteTiraCemPontos(t *testing.T) {
 	h := bomPagador()
 	h.WeightedDelayDays, h.RecentPaidTitles, h.RecentWeightedDelayDays = dc("1"), 4, dc("15")
-	s := SuggestCreditLimit(h, CompanyProfile{OpeningDate: anosAtras(10)}, DefaultCreditPolicy(), hoje)
+	s := SuggestCreditLimit(h, CompanyProfile{OpeningDate: anosAtras(10)}, DefaultCreditPolicy(), SellerVolume{}, hoje)
 	// 300 + 193 (1 dia de atraso médio) + 100 + 100 + 100 + 50 + 150 − 100
 	if !s.Deteriorating || s.Score != 893 {
 		t.Fatalf("deterioração %v score %d", s.Deteriorating, s.Score)
@@ -94,11 +127,11 @@ func TestPioraRecenteTiraCemPontos(t *testing.T) {
 func TestTetoDaEmpresaEMEI(t *testing.T) {
 	pol := DefaultCreditPolicy()
 	pol.MaxLimit = dc("5000")
-	s := SuggestCreditLimit(bomPagador(), CompanyProfile{OpeningDate: anosAtras(10)}, pol, hoje)
+	s := SuggestCreditLimit(bomPagador(), CompanyProfile{OpeningDate: anosAtras(10)}, pol, SellerVolume{}, hoje)
 	if !s.SuggestedLimit.Equal(dc("5000")) {
 		t.Fatalf("teto: %s", s.SuggestedLimit)
 	}
-	s = SuggestCreditLimit(bomPagador(), CompanyProfile{OpeningDate: anosAtras(10), MEI: true}, DefaultCreditPolicy(), hoje)
+	s = SuggestCreditLimit(bomPagador(), CompanyProfile{OpeningDate: anosAtras(10), MEI: true}, DefaultCreditPolicy(), SellerVolume{}, hoje)
 	if s.RiskClass != RiskC || !s.SuggestedLimit.Equal(dc("4500")) { // 7.500 × 0,6
 		t.Fatalf("MEI: classe %s limite %s", s.RiskClass, s.SuggestedLimit)
 	}

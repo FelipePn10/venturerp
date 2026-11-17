@@ -293,6 +293,7 @@ func montarPayloadNFe(
 			Email:           derefStr(exit.DestEmail),
 			IndicadorIE:     indicadorIE,
 			IE:              exit.IEDestinatario,
+			Suframa:         derefStr(exit.SuframaDestinatario),
 		},
 		Transportador:         transportadorNFe(exit, modFrete),
 		Entrega:               entregaNFe(exit.LocalEntrega),

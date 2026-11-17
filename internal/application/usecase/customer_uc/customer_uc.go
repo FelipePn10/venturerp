@@ -17,6 +17,7 @@ import (
 	cnpjservice "github.com/FelipePn10/panossoerp/internal/domain/cnpj/service"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
+	"github.com/FelipePn10/panossoerp/internal/pkg/validation"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
 
 	"github.com/shopspring/decimal"
@@ -2336,6 +2337,16 @@ func toTaxTypeResponse(tt *entity.TaxType) *response.TaxTypeResponse {
 // ─── Customers ────────────────────────────────────────────────────────────────
 
 func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.CreateCustomerDTO) (*response.CustomerResponse, error) {
+	// Sem código, o cliente recebe o próximo da sequência (a VCLI0500 não pede
+	// mais o código). Importação e testes ainda podem informar um.
+	automatico := dto.Code == 0
+	if automatico {
+		next, err := uc.repo.NextCustomerCode(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("calculando o próximo código de cliente: %w", err)
+		}
+		dto.Code = next
+	}
 	c, err := entity.NewCustomer(dto.Code, dto.Name, entity.DocumentType(dto.DocumentType), dto.DocumentNumber, dto.CreatedBy)
 	if err != nil {
 		return nil, err
@@ -2370,6 +2381,19 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 	}
 
 	created, err := uc.repo.CreateCustomer(ctx, c)
+	// Dois cadastros ao mesmo tempo leem o mesmo próximo código: quem perde a
+	// corrida pega o seguinte.
+	for tentativa := 0; automatico && tentativa < 5 && err != nil; tentativa++ {
+		if _, conflito := errorsuc.AsConflict(err); !conflito {
+			break
+		}
+		next, errNext := uc.repo.NextCustomerCode(ctx)
+		if errNext != nil {
+			return nil, fmt.Errorf("calculando o próximo código de cliente: %w", errNext)
+		}
+		c.Code = next
+		created, err = uc.repo.CreateCustomer(ctx, c)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2449,6 +2473,9 @@ func (uc *CustomerUseCase) applyCustomerDTO(ctx context.Context, c *entity.Custo
 	}
 	if c.SuframaCode != nil && c.SuframaExpiry == nil {
 		return errorsuc.NewValidationError("informe a validade da inscrição SUFRAMA")
+	}
+	if c.SuframaCode != nil && !validation.SuframaValida(*c.SuframaCode) {
+		return errorsuc.NewValidationError("inscrição SUFRAMA inválida: são 9 dígitos e o último é o dígito verificador (a SEFAZ recusaria a nota)")
 	}
 
 	var err error

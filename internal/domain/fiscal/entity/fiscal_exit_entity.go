@@ -97,7 +97,9 @@ type FiscalExit struct {
 	CnpjDestinatario        *string
 	RazaoSocialDestinatario *string
 	IEDestinatario          *string
-	UFDestinatario          *string
+	// SuframaDestinatario: inscrição SUFRAMA (ISUF) do cliente, só quando válida na data da nota.
+	SuframaDestinatario *string
+	UFDestinatario      *string
 	// Endereco do destinatario. O layout da NF-e exige logradouro, numero,
 	// bairro, municipio, codigo IBGE do municipio e CEP: sem eles a SEFAZ
 	// rejeita a autorizacao por campo obrigatorio ausente.
@@ -244,6 +246,11 @@ type FiscalExitItem struct {
 	ICMSDiferimentoPct decimal.Decimal
 	// ICMSSTReducaoBasePct: pRedBCST (%) da linha.
 	ICMSSTReducaoBasePct decimal.Decimal
+	// Zona Franca: ICMS desonerado (vICMSDeson), o motivo (motDesICMS, 7 =
+	// SUFRAMA) e o código de enquadramento do IPI (cEnq; vazio = 999).
+	ICMSValorDesonerado   decimal.Decimal
+	ICMSMotivoDesoneracao string
+	IPIEnquadramento      string
 	// Simples Nacional: pCredSN (%) e vCredICMSSN.
 	AliqCreditoSimples  decimal.Decimal
 	ValorCreditoSimples decimal.Decimal

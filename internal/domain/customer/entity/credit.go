@@ -33,7 +33,12 @@ const (
 type CreditPolicy struct {
 	MaxLimit              decimal.Decimal
 	NewCustomerCapitalPct decimal.Decimal
-	NewCustomerCap        decimal.Decimal
+	// NewCustomerCap é o piso do apetite: o mínimo que a empresa aceita expor
+	// num cliente novo mesmo com pouco faturamento no sistema.
+	NewCustomerCap decimal.Decimal
+	// NewCustomerRevenuePct: o apetite por cliente novo, em % do faturamento
+	// médio mensal da empresa (regra de concentração).
+	NewCustomerRevenuePct decimal.Decimal
 	OverrideTolerancePct  decimal.Decimal
 	OverdueBlockDays      int
 	HistoryMonths         int
@@ -45,6 +50,7 @@ func DefaultCreditPolicy() CreditPolicy {
 	return CreditPolicy{
 		NewCustomerCapitalPct: decimal.NewFromInt(10),
 		NewCustomerCap:        decimal.NewFromInt(30000),
+		NewCustomerRevenuePct: decimal.NewFromInt(20),
 		OverrideTolerancePct:  decimal.NewFromInt(10),
 		OverdueBlockDays:      30,
 		HistoryMonths:         24,
@@ -58,6 +64,7 @@ func (p CreditPolicy) Validate() error {
 	case p.MaxLimit.IsNegative(), p.NewCustomerCap.IsNegative():
 		return domainerr.NewValidation("os valores da política de crédito não podem ser negativos")
 	case p.NewCustomerCapitalPct.IsNegative() || p.NewCustomerCapitalPct.GreaterThan(decimal.NewFromInt(100)),
+		p.NewCustomerRevenuePct.IsNegative() || p.NewCustomerRevenuePct.GreaterThan(decimal.NewFromInt(100)),
 		p.OverrideTolerancePct.IsNegative() || p.OverrideTolerancePct.GreaterThan(decimal.NewFromInt(100)):
 		return domainerr.NewValidation("os percentuais da política de crédito vão de 0 a 100")
 	case p.OverdueBlockDays <= 0, p.RegistrationCheckDays <= 0:
@@ -127,7 +134,23 @@ type CreditSuggestion struct {
 const minPaidTitlesForHistory = 3
 
 // SuggestCreditLimit calcula score, classe, limite e validade.
-func SuggestCreditLimit(h CreditHistory, c CompanyProfile, pol CreditPolicy, today time.Time) CreditSuggestion {
+// SellerVolume é o faturamento da própria empresa (notas de venda autorizadas
+// nos últimos 12 meses) e em quantos meses ela faturou: mede quanto ela pode
+// arriscar num cliente novo.
+type SellerVolume struct {
+	Billed12m decimal.Decimal
+	Months    int
+}
+
+// MonthlyAverage: a média dos meses em que a empresa faturou (no máximo 12).
+func (v SellerVolume) MonthlyAverage() decimal.Decimal {
+	if v.Months <= 0 || !v.Billed12m.IsPositive() {
+		return decimal.Zero
+	}
+	return v.Billed12m.Div(decimal.NewFromInt(int64(min(v.Months, 12))))
+}
+
+func SuggestCreditLimit(h CreditHistory, c CompanyProfile, pol CreditPolicy, seller SellerVolume, today time.Time) CreditSuggestion {
 	s := CreditSuggestion{HasHistory: h.PaidTitles >= minPaidTitlesForHistory}
 	add := func(f CreditFactor) { s.Factors = append(s.Factors, f); s.Score += f.Points }
 
@@ -261,7 +284,7 @@ func SuggestCreditLimit(h CreditHistory, c CompanyProfile, pol CreditPolicy, tod
 		s.Score = min(s.Score, 199)
 	}
 
-	s.SuggestedLimit = s.limit(h, c, pol)
+	s.SuggestedLimit = s.limit(h, c, pol, seller)
 	s.ExpiresAt = today.AddDate(0, pol.ValidityMonths[s.RiskClass], 0)
 	return s
 }
@@ -296,7 +319,7 @@ var classFactor = map[RiskClass]decimal.Decimal{
 // prazo que ele usa mais o mês corrente (o que fica "na rua" num ciclo); sem
 // histórico, um percentual do capital social com teto. Depois o fator da
 // classe, o teto da política e o arredondamento para baixo em R$ 100.
-func (s *CreditSuggestion) limit(h CreditHistory, c CompanyProfile, pol CreditPolicy) decimal.Decimal {
+func (s *CreditSuggestion) limit(h CreditHistory, c CompanyProfile, pol CreditPolicy, seller SellerVolume) decimal.Decimal {
 	var base decimal.Decimal
 	detail := ""
 	if s.HasHistory && h.Billed12m.IsPositive() {
@@ -305,16 +328,23 @@ func (s *CreditSuggestion) limit(h CreditHistory, c CompanyProfile, pol CreditPo
 		ciclos := h.AvgTermDays.Div(decimal.NewFromInt(30)).Add(decimal.NewFromInt(1))
 		base = mensal.Mul(ciclos)
 		detail = fmt.Sprintf("média mensal %s × (%s dias de prazo ÷ 30 + 1)", Reais(mensal), Numero(h.AvgTermDays, 0))
-	} else if c.ShareCapital != nil && c.ShareCapital.IsPositive() {
-		base = decimal.Min(c.ShareCapital.Mul(pol.NewCustomerCapitalPct).Div(decimal.NewFromInt(100)), pol.NewCustomerCap)
-		detail = fmt.Sprintf("%s%% do capital social, limitado a %s", Numero(pol.NewCustomerCapitalPct, 1), Reais(pol.NewCustomerCap))
 	} else {
-		base = pol.NewCustomerCap.Mul(decimal.RequireFromString("0.25"))
-		detail = fmt.Sprintf("capital social desconhecido: 25%% do teto de cliente novo (%s)", Reais(pol.NewCustomerCap))
+		// Sem histórico: o menor entre o que o cliente aguenta (capital social)
+		// e o que a empresa aceita arriscar num cliente ainda não testado.
+		apetite, comoApetite := apetiteDaEmpresa(pol, seller)
+		if c.ShareCapital != nil && c.ShareCapital.IsPositive() {
+			capacidade := c.ShareCapital.Mul(pol.NewCustomerCapitalPct).Div(decimal.NewFromInt(100))
+			base = decimal.Min(capacidade, apetite)
+			detail = fmt.Sprintf("menor entre a capacidade do cliente (%s%% do capital social = %s) e o apetite da empresa (%s)",
+				Numero(pol.NewCustomerCapitalPct, 1), Reais(capacidade), comoApetite)
+		} else {
+			base = pol.NewCustomerCap.Mul(decimal.RequireFromString("0.25"))
+			detail = fmt.Sprintf("capital social desconhecido: 25%% do piso de cliente novo (%s)", Reais(pol.NewCustomerCap))
+		}
 	}
 	if c.MEI {
 		base = decimal.Min(base, pol.NewCustomerCap.Mul(decimal.RequireFromString("0.25")))
-		detail += "; MEI limitado a 25% do teto de cliente novo"
+		detail += "; MEI limitado a 25% do piso de cliente novo"
 	}
 	limit := base.Mul(classFactor[s.RiskClass])
 	detail += fmt.Sprintf("; fator da classe %s = %s", s.RiskClass, Numero(classFactor[s.RiskClass], 1))
@@ -329,6 +359,23 @@ func (s *CreditSuggestion) limit(h CreditHistory, c CompanyProfile, pol CreditPo
 	limit = arredondado
 	s.Factors = append(s.Factors, CreditFactor{Code: "BASE_DO_LIMITE", Label: "Como o valor foi calculado", Detail: detail})
 	return limit
+}
+
+// apetiteDaEmpresa: quanto a empresa aceita expor num cliente novo — o % da
+// política sobre o faturamento médio mensal dela, nunca abaixo do piso. Assim o
+// limite acompanha o porte de quem vende, e não uma faixa fixa.
+func apetiteDaEmpresa(pol CreditPolicy, seller SellerVolume) (decimal.Decimal, string) {
+	mensal := seller.MonthlyAverage()
+	apetite := mensal.Mul(pol.NewCustomerRevenuePct).Div(decimal.NewFromInt(100))
+	if mensal.IsPositive() && apetite.GreaterThanOrEqual(pol.NewCustomerCap) {
+		return apetite, fmt.Sprintf("%s%% do faturamento médio mensal de %s em %d mês(es) = %s",
+			Numero(pol.NewCustomerRevenuePct, 1), Reais(mensal), min(seller.Months, 12), Reais(apetite))
+	}
+	if mensal.IsPositive() {
+		return pol.NewCustomerCap, fmt.Sprintf("piso de cliente novo %s; %s%% do faturamento médio mensal de %s daria %s",
+			Reais(pol.NewCustomerCap), Numero(pol.NewCustomerRevenuePct, 1), Reais(mensal), Reais(apetite))
+	}
+	return pol.NewCustomerCap, fmt.Sprintf("piso de cliente novo %s: a empresa ainda não tem faturamento no sistema", Reais(pol.NewCustomerCap))
 }
 
 func yearsBetween(from, to time.Time) int {

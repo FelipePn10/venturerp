@@ -99,7 +99,7 @@ INSERT INTO icms_ipi_tax_params (
     icms_difal_red_pct, icms_difal_type,
     difal_purchase_red_pct, difal_purchase_red_target,
     enterprise_id,
-    finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code
+    finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, ipi_codigo_enquadramento
 ) SELECT
     $1,  $2,  $3,  $4,  $5,
     $6,  $7,  $8,  $9,  $10, $11,
@@ -117,7 +117,7 @@ INSERT INTO icms_ipi_tax_params (
     $75, $76, $77, $78,
     $79,
     sqlc.narg(finalidade_compra)::varchar, sqlc.arg(mva_pct)::numeric, sqlc.arg(mva_ajustar_interestadual)::boolean,
-    sqlc.narg(supplier_code)::bigint
+    sqlc.narg(supplier_code)::bigint, sqlc.narg(ipi_codigo_enquadramento)::varchar
 -- Item, cliente e fornecedor citados na regra têm de ser da empresa.
  WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $79))
    AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $79))
@@ -157,7 +157,8 @@ SET ncm_code = $2, item_code = $3, item_config_mask = $4, uf = $5, operation_typ
     is_active = $80, updated_at = NOW(),
     finalidade_compra = sqlc.narg(finalidade_compra)::varchar, mva_pct = sqlc.arg(mva_pct)::numeric,
     mva_ajustar_interestadual = sqlc.arg(mva_ajustar_interestadual)::boolean,
-    supplier_code = sqlc.narg(supplier_code)::bigint
+    supplier_code = sqlc.narg(supplier_code)::bigint,
+    ipi_codigo_enquadramento = sqlc.narg(ipi_codigo_enquadramento)::varchar
 WHERE icms_ipi_tax_params.id = $1 AND icms_ipi_tax_params.enterprise_id = $81
   AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $81))
 RETURNING *;

@@ -85,7 +85,8 @@ func (r *ParametroICMSIPIPG) ParametroICMSIPI(ctx context.Context, q engine.Cons
 		       p.icms_difal_type::text, p.icms_difal_red_pct,
 		       CASE WHEN p.icms_acres_type_non_contrib::text = 'FUNDO_COMBATE_POBREZA' THEN p.icms_acres_pct_non_contrib ELSE 0 END,
 		       COALESCE(d1.description,''), COALESCE(d2.description,''), COALESCE(d3.description,''), COALESCE(d4.description,''),
-		       COALESCE(d5.description,''), COALESCE(d6.description,''), COALESCE(d7.description,'')
+		       COALESCE(d5.description,''), COALESCE(d6.description,''), COALESCE(d7.description,''),
+		       p.uses_icms_zona_franca, COALESCE(btrim(p.ipi_codigo_enquadramento), '')
 		  FROM icms_ipi_tax_params p
 		  LEFT JOIN legal_devices d1 ON d1.id = p.legal_device_icms_contrib_id AND d1.is_active
 		  LEFT JOIN legal_devices d2 ON d2.id = p.legal_device_icms_non_contrib_id AND d2.is_active
@@ -125,7 +126,8 @@ func (r *ParametroICMSIPIPG) ParametroICMSIPI(ctx context.Context, q engine.Cons
 		&dif, &imp, &cstIPI, &benG,
 		&csosn, &mva, &p.MvaAjustar, &redST, &difTipo, &difRed, &fcpProd,
 		&p.Dispositivos.ICMSContrib, &p.Dispositivos.ICMSNaoContrib, &p.Dispositivos.ReducaoContrib, &p.Dispositivos.ReducaoNaoContrib,
-		&p.Dispositivos.Diferimento, &p.Dispositivos.IPIContrib, &p.Dispositivos.IPINaoContrib)
+		&p.Dispositivos.Diferimento, &p.Dispositivos.IPIContrib, &p.Dispositivos.IPINaoContrib,
+		&p.ZonaFranca, &p.EnquadramentoIPI)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

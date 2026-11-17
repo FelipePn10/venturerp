@@ -146,6 +146,8 @@ type NFEDestinatario struct {
 	Email           string  `json:"email,omitempty"`
 	IndicadorIE     int     `json:"indicador_ie"`
 	IE              *string `json:"ie,omitempty"`
+	// Suframa: inscrição SUFRAMA (ISUF), só nas vendas para a Zona Franca e ALC.
+	Suframa string `json:"suframa,omitempty"`
 }
 
 // NFETransportador é o grupo transporta (campos *_transportador da Focus).
@@ -191,24 +193,29 @@ type NFEItem struct {
 	// InformacoesAdicionaisItem é o infAdProd: aqui vão os números de série.
 	InformacoesAdicionaisItem string `json:"informacoes_adicionais_item,omitempty"`
 	// PedidoCompra: det/prod/xPed (até 15 caracteres; "pedido_compra" na Focus).
-	PedidoCompra                   string   `json:"-"`
-	ValorICMSDiferido              *float64 `json:"valor_icms_diferido,omitempty"`
-	ModalidadeBaseCalculoICMSST    *int     `json:"modalidade_determinacao_bc_icms_st,omitempty"`
-	BaseCalculoICMSST              *float64 `json:"valor_base_calculo_icms_st,omitempty"`
-	AliquotaICMSST                 *float64 `json:"aliquota_icms_st,omitempty"`
-	ValorICMSST                    *float64 `json:"valor_icms_st,omitempty"`
-	PercentualMVAICMSST            *float64 `json:"percentual_margem_valor_adicionado_icms_st,omitempty"`
-	CodigoSituacaoTributariaIPI    string   `json:"codigo_situacao_tributaria_ipi"`
-	AliquotaIPI                    float64  `json:"aliquota_ipi"`
-	ValorIPI                       float64  `json:"valor_ipi"`
-	CodigoSituacaoTributariaPIS    string   `json:"codigo_situacao_tributaria_pis"`
-	AliquotaPIS                    float64  `json:"aliquota_pis"`
-	ValorPIS                       float64  `json:"valor_pis"`
-	CodigoSituacaoTributariaCOFINS string   `json:"codigo_situacao_tributaria_cofins"`
-	AliquotaCOFINS                 float64  `json:"aliquota_cofins"`
-	ValorCOFINS                    float64  `json:"valor_cofins"`
-	OrigemMercadoria               int      `json:"origem_mercadoria"`
-	CEST                           string   `json:"cest,omitempty"`
+	PedidoCompra                string   `json:"-"`
+	ValorICMSDiferido           *float64 `json:"valor_icms_diferido,omitempty"`
+	ModalidadeBaseCalculoICMSST *int     `json:"modalidade_determinacao_bc_icms_st,omitempty"`
+	BaseCalculoICMSST           *float64 `json:"valor_base_calculo_icms_st,omitempty"`
+	AliquotaICMSST              *float64 `json:"aliquota_icms_st,omitempty"`
+	ValorICMSST                 *float64 `json:"valor_icms_st,omitempty"`
+	PercentualMVAICMSST         *float64 `json:"percentual_margem_valor_adicionado_icms_st,omitempty"`
+	CodigoSituacaoTributariaIPI string   `json:"codigo_situacao_tributaria_ipi"`
+	// Zona Franca: ICMS desonerado (vICMSDeson), motivo (motDesICMS; 7 = SUFRAMA)
+	// e o código de enquadramento do IPI (cEnq; vazio = 999).
+	ValorICMSDesonerado            float64 `json:"-"`
+	MotivoDesoneracao              string  `json:"-"`
+	EnquadramentoIPI               string  `json:"-"`
+	AliquotaIPI                    float64 `json:"aliquota_ipi"`
+	ValorIPI                       float64 `json:"valor_ipi"`
+	CodigoSituacaoTributariaPIS    string  `json:"codigo_situacao_tributaria_pis"`
+	AliquotaPIS                    float64 `json:"aliquota_pis"`
+	ValorPIS                       float64 `json:"valor_pis"`
+	CodigoSituacaoTributariaCOFINS string  `json:"codigo_situacao_tributaria_cofins"`
+	AliquotaCOFINS                 float64 `json:"aliquota_cofins"`
+	ValorCOFINS                    float64 `json:"valor_cofins"`
+	OrigemMercadoria               int     `json:"origem_mercadoria"`
+	CEST                           string  `json:"cest,omitempty"`
 	// GTIN comercial e tributável (cEAN, cEANTrib). Vazio não vai no payload e a
 	// nota sai como sempre saiu.
 	CodigoBarrasComercial  string `json:"-"`
@@ -330,6 +337,9 @@ func (p NFEPayload) MarshalJSON() ([]byte, error) {
 	if d.IndicadorIE == 1 && d.IE != nil {
 		m["inscricao_estadual_destinatario"] = soDigitos(*d.IE)
 	}
+	if isuf := soDigitos(d.Suframa); isuf != "" {
+		m["inscricao_suframa_destinatario"] = isuf
+	}
 	for k, v := range map[string]string{"logradouro_destinatario": d.Logradouro, "numero_destinatario": d.Numero,
 		"bairro_destinatario": d.Bairro, "municipio_destinatario": d.Municipio, "uf_destinatario": d.UF,
 		"cep_destinatario": soDigitos(d.CEP), "email_destinatario": d.Email,
@@ -426,6 +436,11 @@ var cstComReducaoBC = map[string]bool{"20": true, "51": true, "70": true, "90": 
 
 // csosnComCredito: CSOSN que levam pCredSN e vCredICMSSN.
 var csosnComCredito = map[string]bool{"101": true, "201": true, "900": true}
+
+// campoDeduzDesoneracao: o campo da Focus para indDeduzDeson (NT 2023.004).
+// A documentação pública não o lista; confirmado em homologação (Tecnofer,
+// 16/11/2026): sem ele a SEFAZ recusa com 652, com ele a NF-e 69 saiu cStat 100.
+const campoDeduzDesoneracao = "icms_deducao_desoneracao"
 
 // cstComICMS: CSTs (e CSOSN) que destacam base, alíquota e valor do ICMS.
 var cstComICMS = map[string]bool{"00": true, "10": true, "20": true, "51": true, "70": true, "90": true, "900": true}
@@ -532,9 +547,21 @@ func (it NFEItem) campos() map[string]any {
 			m["icms_reducao_base_calculo_st"] = *it.PercentualReducaoBCST
 		}
 	}
+	if it.MotivoDesoneracao != "" && it.ValorICMSDesonerado > 0 {
+		// Grupo inteiro ou nada: a Focus recusa grupo opcional pela metade. Com o
+		// motivo 7 (SUFRAMA) a SEFAZ exige indDeduzDeson = 1 (rejeição 652): o
+		// desonerado sai do valor da nota.
+		m["icms_valor_desonerado"] = it.ValorICMSDesonerado
+		m["icms_motivo_desoneracao"] = it.MotivoDesoneracao
+		m[campoDeduzDesoneracao] = 1
+	}
 	if it.CodigoSituacaoTributariaIPI != "" {
 		m["ipi_situacao_tributaria"] = it.CodigoSituacaoTributariaIPI
-		m["ipi_codigo_enquadramento_legal"] = "999"
+		enq := soDigitos(it.EnquadramentoIPI)
+		if enq == "" {
+			enq = "999"
+		}
+		m["ipi_codigo_enquadramento_legal"] = enq
 		if it.ValorIPI > 0 {
 			base := it.BaseIPI
 			if base == 0 {
@@ -975,13 +1002,14 @@ func (c *Client) ListarNFesRecebidas(ctx context.Context, cnpj string, versao in
 		c.onRequest(path, http.MethodGet, "", string(body), resp.StatusCode, int(time.Since(start).Milliseconds()))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Erro tipado, como nas outras chamadas: o 401 (token recusado) chega à
+		// tela como "confira o token" e não como "tente de novo em instantes".
 		var apiErr struct {
+			Codigo   string `json:"codigo"`
 			Mensagem string `json:"mensagem"`
 		}
-		if json.Unmarshal(body, &apiErr) == nil && apiErr.Mensagem != "" {
-			return nil, 0, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, apiErr.Mensagem)
-		}
-		return nil, 0, fmt.Errorf("Focus NF-e HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		_ = json.Unmarshal(body, &apiErr)
+		return nil, 0, &HTTPError{StatusCode: resp.StatusCode, Codigo: apiErr.Codigo, Mensagem: apiErr.Mensagem, Corpo: strings.TrimSpace(string(body))}
 	}
 	var lista []NFeRecebida
 	if err := json.Unmarshal(body, &lista); err != nil {

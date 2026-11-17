@@ -29,6 +29,13 @@ type ParametroICMSIPI struct {
 	AliqImportadoPct decimal.Decimal
 	// CSTIPI substitui o CST de IPI da tabela de NCM na saída.
 	CSTIPI string
+	// EnquadramentoIPI: o código de enquadramento legal do IPI (cEnq) da regra;
+	// vazio = 999 (tributação normal).
+	EnquadramentoIPI string
+	// ZonaFranca: venda com o benefício da Zona Franca de Manaus / ALC. Com o
+	// destinatário de inscrição SUFRAMA válida, o ICMS é desonerado (CST 40,
+	// motivo 7) e PIS/COFINS vão a alíquota zero (CST 06).
+	ZonaFranca bool
 	// CodBeneficio é o cBenef geral da regra; o de cada lado vence este.
 	CodBeneficio string
 	// CSOSN do Simples Nacional; vazio = deduzido do CST calculado.

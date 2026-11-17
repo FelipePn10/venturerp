@@ -107,6 +107,7 @@ type TaxParamResponse struct {
 	ICMSSubstPctOrigins1238          float64   `json:"icms_subst_pct_origins_1238"`
 	CSTICMSFci                       *string   `json:"cst_icms_fci,omitempty"`
 	UsesICMSZonaFranca               bool      `json:"uses_icms_zona_franca"`
+	IPICodigoEnquadramento           *string   `json:"ipi_codigo_enquadramento,omitempty"`
 	DifAliqSTContribUC               float64   `json:"dif_aliq_st_contrib_uc"`
 	CodBenefContrib                  *string   `json:"cod_benef_contrib,omitempty"`
 	CodBenefNonContrib               *string   `json:"cod_benef_non_contrib,omitempty"`

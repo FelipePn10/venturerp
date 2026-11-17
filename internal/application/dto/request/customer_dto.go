@@ -689,15 +689,17 @@ type CreditPolicyDTO struct {
 	MaxLimit              decimal.Decimal `json:"max_limit"`
 	NewCustomerCapitalPct decimal.Decimal `json:"new_customer_capital_pct"`
 	NewCustomerCap        decimal.Decimal `json:"new_customer_cap"`
-	OverrideTolerancePct  decimal.Decimal `json:"override_tolerance_pct"`
-	OverdueBlockDays      int             `json:"overdue_block_days"`
-	HistoryMonths         int             `json:"history_months"`
-	ValidityMonthsA       int             `json:"validity_months_a"`
-	ValidityMonthsB       int             `json:"validity_months_b"`
-	ValidityMonthsC       int             `json:"validity_months_c"`
-	ValidityMonthsD       int             `json:"validity_months_d"`
-	ValidityMonthsE       int             `json:"validity_months_e"`
-	RegistrationCheckDays int             `json:"registration_check_days"`
+	// NewCustomerRevenuePct: ausente (desktop antigo) mantém o valor gravado.
+	NewCustomerRevenuePct *decimal.Decimal `json:"new_customer_revenue_pct,omitempty"`
+	OverrideTolerancePct  decimal.Decimal  `json:"override_tolerance_pct"`
+	OverdueBlockDays      int              `json:"overdue_block_days"`
+	HistoryMonths         int              `json:"history_months"`
+	ValidityMonthsA       int              `json:"validity_months_a"`
+	ValidityMonthsB       int              `json:"validity_months_b"`
+	ValidityMonthsC       int              `json:"validity_months_c"`
+	ValidityMonthsD       int              `json:"validity_months_d"`
+	ValidityMonthsE       int              `json:"validity_months_e"`
+	RegistrationCheckDays int              `json:"registration_check_days"`
 }
 
 // UpdateAddressDTO / UpdateContactDTO: edição na VCLI0500.

@@ -167,6 +167,7 @@ type CreateFiscalExitDTO struct {
 	CnpjDestinatario        *string `json:"cnpj_destinatario,omitempty"`
 	RazaoSocialDestinatario *string `json:"razao_social_destinatario,omitempty"`
 	IEDestinatario          *string `json:"ie_destinatario,omitempty"`
+	SuframaDestinatario     *string `json:"suframa_destinatario,omitempty"`
 	UFDestinatario          *string `json:"uf_destinatario,omitempty"`
 	TipoPessoa              *string `json:"tipo_pessoa,omitempty"`
 	// TipoFrete: CIF, FOB, TERCEIROS ou SEM_FRETE. Vazio = o do pedido, senão o

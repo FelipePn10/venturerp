@@ -217,9 +217,11 @@ type ICMSIPITaxParam struct {
 	ICMSSubstPctOrigins1238 decimal.Decimal
 	CSTICMSFci              *string
 	UsesICMSZonaFranca      bool
-	DifAliqSTContribUC      decimal.Decimal
-	CodBenefContrib         *string
-	CodBenefNonContrib      *string
+	// IPICodigoEnquadramento: cEnq do IPI na saída (ex.: o da isenção da Zona Franca); vazio = 999.
+	IPICodigoEnquadramento *string
+	DifAliqSTContribUC     decimal.Decimal
+	CodBenefContrib        *string
+	CodBenefNonContrib     *string
 
 	// ── ICMS additions ───────────────────────────────────────────────────────
 	ICMSAcresPctContrib       decimal.Decimal

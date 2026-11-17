@@ -59,6 +59,8 @@ type OperacaoTributavel struct {
 	Finalidade string
 	TipoNotaID *int64
 	Cfop       string
+	// Suframa: o destinatário tem inscrição SUFRAMA válida (benefício da Zona Franca).
+	Suframa bool
 	// Frete e desconto da nota inteira; o motor rateia pelo valor das linhas.
 	ValorFrete, ValorDesconto decimal.Decimal
 	Itens                     []LinhaTributavel
@@ -248,7 +250,7 @@ func (t *Tributador) Calcular(ctx context.Context, op OperacaoTributavel) (*Trib
 	}
 	params := engine.TaxCalculationParams{
 		Itens: taxItems, EmitenteUF: config.UFEmpresa, DestinoUF: op.UFDestino, DestinoTipo: out.DestinoTipo,
-		Cfop: op.Cfop, Finalidade: out.Finalidade, Flags: flagsDoTipoNota(out.TipoNota),
+		Cfop: op.Cfop, Finalidade: out.Finalidade, Flags: flagsDoTipoNota(out.TipoNota), SuframaDestino: op.Suframa,
 	}
 	out.ConsumidorFinal = params.ConsumidorFinal()
 	fiscalCfg := engine.FiscalConfig{

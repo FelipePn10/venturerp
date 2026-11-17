@@ -56,7 +56,7 @@ type FaturarPedidoDTO struct {
 	ValorSeguro      *decimal.Decimal `json:"valor_seguro,omitempty"`
 	ValorDesconto    *decimal.Decimal `json:"valor_desconto,omitempty"`
 	// FinalidadeCompra e InvoiceTypeID: vazios = a finalidade do pedido (ou do
-	// cliente) e nenhum tipo de nota.
+	// cliente) e o tipo de NF padrão do pedido (nenhum, se o pedido não tem).
 	FinalidadeCompra *string `json:"finalidade_compra,omitempty"`
 	InvoiceTypeID    *int64  `json:"invoice_type_id,omitempty"`
 	// TipoFrete e ShippingCarrierID: vazios = o frete do pedido e a
@@ -203,6 +203,16 @@ func (uc *FaturarPedidoUseCase) Previa(ctx context.Context, salesOrderCode int64
 		return nil, err
 	}
 	out.Impedimentos = append(out.Impedimentos, exig...)
+	tipo, motivo, err := uc.tipoNotaDoPedido(ctx, pedido, inteiro)
+	if err != nil {
+		return nil, err
+	}
+	out.InvoiceTypeID = tipo
+	if motivo != "" {
+		// Aviso, não impedimento: faturando só parte das linhas (ou escolhendo o
+		// tipo no faturamento) a nota sai; o faturamento confere as linhas escolhidas.
+		out.Avisos = append(out.Avisos, motivo)
+	}
 	out.PodeFaturar = len(out.Impedimentos) == 0
 
 	notas, err := uc.Faturamento.NotasDoPedido(ctx, pedido.Code)
@@ -308,6 +318,16 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 	} else if len(exig) > 0 {
 		return nil, errorsuc.NewValidationError("o pedido não pode ser faturado: " + strings.Join(exig, "; "))
 	}
+	if dto.InvoiceTypeID == nil {
+		tipo, motivo, err := uc.tipoNotaDoPedido(ctx, pedido, faturadas)
+		if err != nil {
+			return nil, err
+		}
+		if motivo != "" {
+			return nil, errorsuc.NewValidationError(motivo)
+		}
+		dto.InvoiceTypeID = tipo
+	}
 
 	itens := make([]request.CreateFiscalExitItemDTO, 0, len(escolhidas))
 	produtos := decimal.Zero
@@ -388,6 +408,16 @@ func (uc *FaturarPedidoUseCase) Execute(ctx context.Context, dto FaturarPedidoDT
 		Itens:             itens,
 	}
 	return uc.Create.Execute(ctx, create)
+}
+
+// tipoNotaDoPedido: o tipo de NF da nota quando o faturamento não escolhe um
+// (regra em tipo_nota_pedido.go).
+func (uc *FaturarPedidoUseCase) tipoNotaDoPedido(ctx context.Context, pedido *salesentity.SalesOrder, faturadas []linhaParaNota) (*int64, string, error) {
+	linhas := make([]linhaTipoNota, 0, len(faturadas))
+	for _, f := range faturadas {
+		linhas = append(linhas, linhaTipoNota{rotulo: codigoDaLinha(f.linha), tipo: f.linha.item.NFType})
+	}
+	return resolverTipoNota(ctx, uc.Clientes, pedido.DefaultNFType, linhas)
 }
 
 func (uc *FaturarPedidoUseCase) carregar(ctx context.Context, code int64) (*salesentity.SalesOrder, []linhaPedido, error) {

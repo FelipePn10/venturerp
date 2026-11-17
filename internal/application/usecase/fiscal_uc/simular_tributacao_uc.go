@@ -79,51 +79,55 @@ type SimulacaoTributacao struct {
 }
 
 type SimulacaoLinha struct {
-	Sequencia     int      `json:"sequencia"`
-	ItemCode      *int64   `json:"item_code,omitempty"`
-	Ncm           string   `json:"ncm"`
-	Origem        string   `json:"origem_mercadoria"`
-	ValorProdutos float64  `json:"valor_produtos"`
-	RegraICMSIPI  *int64   `json:"regra_icms_ipi_id,omitempty"`
-	CSTICMS       string   `json:"cst_icms"`
-	BaseICMS      float64  `json:"base_icms"`
-	AliqICMSPct   float64  `json:"aliq_icms_pct"`
-	ValorICMS     float64  `json:"valor_icms"`
-	ReducaoBase   float64  `json:"icms_reducao_base_pct"`
-	DiferidoPct   float64  `json:"icms_diferimento_pct"`
-	ValorDiferido float64  `json:"valor_icms_diferido"`
-	MVAPct        float64  `json:"mva_pct"`
-	BaseICMSST    float64  `json:"base_icms_st"`
-	AliqICMSSTPct float64  `json:"aliq_icms_st_pct"`
-	ValorICMSST   float64  `json:"valor_icms_st"`
-	CSTIPI        string   `json:"cst_ipi"`
-	AliqIPIPct    float64  `json:"aliq_ipi_pct"`
-	ValorIPI      float64  `json:"valor_ipi"`
-	CSTPIS        string   `json:"cst_pis"`
-	AliqPISPct    float64  `json:"aliq_pis_pct"`
-	ValorPIS      float64  `json:"valor_pis"`
-	CSTCOFINS     string   `json:"cst_cofins"`
-	AliqCOFINSPct float64  `json:"aliq_cofins_pct"`
-	ValorCOFINS   float64  `json:"valor_cofins"`
-	ValorDIFAL    float64  `json:"valor_difal"`
-	ValorFCP      float64  `json:"valor_fcp_uf_dest"`
-	CreditoSNPct  float64  `json:"aliq_credito_simples_pct"`
-	CreditoSN     float64  `json:"valor_credito_simples"`
-	Notas         []string `json:"notas"`
+	Sequencia     int     `json:"sequencia"`
+	ItemCode      *int64  `json:"item_code,omitempty"`
+	Ncm           string  `json:"ncm"`
+	Origem        string  `json:"origem_mercadoria"`
+	ValorProdutos float64 `json:"valor_produtos"`
+	RegraICMSIPI  *int64  `json:"regra_icms_ipi_id,omitempty"`
+	CSTICMS       string  `json:"cst_icms"`
+	BaseICMS      float64 `json:"base_icms"`
+	AliqICMSPct   float64 `json:"aliq_icms_pct"`
+	ValorICMS     float64 `json:"valor_icms"`
+	ReducaoBase   float64 `json:"icms_reducao_base_pct"`
+	DiferidoPct   float64 `json:"icms_diferimento_pct"`
+	ValorDiferido float64 `json:"valor_icms_diferido"`
+	// Zona Franca: ICMS desonerado (abatido do total) e o motivo (7 = SUFRAMA).
+	ValorDesonerado   float64  `json:"icms_valor_desonerado,omitempty"`
+	MotivoDesoneracao string   `json:"icms_motivo_desoneracao,omitempty"`
+	MVAPct            float64  `json:"mva_pct"`
+	BaseICMSST        float64  `json:"base_icms_st"`
+	AliqICMSSTPct     float64  `json:"aliq_icms_st_pct"`
+	ValorICMSST       float64  `json:"valor_icms_st"`
+	CSTIPI            string   `json:"cst_ipi"`
+	AliqIPIPct        float64  `json:"aliq_ipi_pct"`
+	ValorIPI          float64  `json:"valor_ipi"`
+	CSTPIS            string   `json:"cst_pis"`
+	AliqPISPct        float64  `json:"aliq_pis_pct"`
+	ValorPIS          float64  `json:"valor_pis"`
+	CSTCOFINS         string   `json:"cst_cofins"`
+	AliqCOFINSPct     float64  `json:"aliq_cofins_pct"`
+	ValorCOFINS       float64  `json:"valor_cofins"`
+	ValorDIFAL        float64  `json:"valor_difal"`
+	ValorFCP          float64  `json:"valor_fcp_uf_dest"`
+	CreditoSNPct      float64  `json:"aliq_credito_simples_pct"`
+	CreditoSN         float64  `json:"valor_credito_simples"`
+	Notas             []string `json:"notas"`
 }
 
 // SimulacaoTotais: os totais da operação simulada.
 type SimulacaoTotais struct {
-	BaseICMS      float64 `json:"base_icms"`
-	ValorICMS     float64 `json:"valor_icms"`
-	ValorDiferido float64 `json:"valor_icms_diferido"`
-	BaseICMSST    float64 `json:"base_icms_st"`
-	ValorICMSST   float64 `json:"valor_icms_st"`
-	ValorIPI      float64 `json:"valor_ipi"`
-	ValorPIS      float64 `json:"valor_pis"`
-	ValorCOFINS   float64 `json:"valor_cofins"`
-	ValorDIFAL    float64 `json:"valor_difal"`
-	ValorFCP      float64 `json:"valor_fcp_uf_dest"`
+	BaseICMS        float64 `json:"base_icms"`
+	ValorICMS       float64 `json:"valor_icms"`
+	ValorDiferido   float64 `json:"valor_icms_diferido"`
+	ValorDesonerado float64 `json:"icms_valor_desonerado,omitempty"`
+	BaseICMSST      float64 `json:"base_icms_st"`
+	ValorICMSST     float64 `json:"valor_icms_st"`
+	ValorIPI        float64 `json:"valor_ipi"`
+	ValorPIS        float64 `json:"valor_pis"`
+	ValorCOFINS     float64 `json:"valor_cofins"`
+	ValorDIFAL      float64 `json:"valor_difal"`
+	ValorFCP        float64 `json:"valor_fcp_uf_dest"`
 }
 
 type SimulacaoPendencia struct {
@@ -183,6 +187,8 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 		UFDestino: uf, IE: dest.IEDestinatario, TipoPessoa: dest.TipoPessoa, Cliente: dest.CustomerCode,
 		Pedido: dto.SalesOrderCode, TipoNotaID: dto.InvoiceTypeID, Cfop: dto.Cfop,
 		ValorFrete: dto.ValorFrete, ValorDesconto: dto.ValorDesconto,
+		// Como na nota: a SUFRAMA válida do cliente liga o benefício da Zona Franca.
+		Suframa: strings.TrimSpace(derefStr(dest.SuframaDestinatario)) != "",
 	}
 	if dto.FinalidadeCompra != nil {
 		op.Finalidade = *dto.FinalidadeCompra
@@ -251,6 +257,7 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 		l.CSTPIS, l.AliqPISPct, l.ValorPIS = r.CSTPIS, pct(r.AliquotaPIS), r.ValorPIS.InexactFloat64()
 		l.CSTCOFINS, l.AliqCOFINSPct, l.ValorCOFINS = r.CSTCOFINS, pct(r.AliquotaCOFINS), r.ValorCOFINS.InexactFloat64()
 		l.ValorDIFAL, l.ValorFCP, l.CreditoSNPct, l.CreditoSN = r.ValorDIFAL.InexactFloat64(), r.ValorFCP.InexactFloat64(), r.AliqCreditoSimplesPct.InexactFloat64(), r.ValorCreditoSimples.InexactFloat64()
+		l.ValorDesonerado, l.MotivoDesoneracao = r.ValorICMSDesonerado.InexactFloat64(), r.MotivoDesoneracao
 		l.Notas = r.Notas
 		produtos = produtos.Add(decimal.NewFromFloat(l.ValorProdutos))
 	}
@@ -281,9 +288,10 @@ func (uc *SimularTributacaoUseCase) Execute(ctx context.Context, dto SimularTrib
 	tot := t.Resultado.Totais
 	out.Totais = SimulacaoTotais{BaseICMS: tot.BaseICMS.InexactFloat64(), ValorICMS: tot.ValorICMS.InexactFloat64(), ValorDiferido: tot.ValorDiferido.InexactFloat64(),
 		BaseICMSST: tot.BaseICMSST.InexactFloat64(), ValorICMSST: tot.ValorICMSST.InexactFloat64(), ValorIPI: tot.ValorIPI.InexactFloat64(), ValorPIS: tot.ValorPIS.InexactFloat64(),
-		ValorCOFINS: tot.ValorCOFINS.InexactFloat64(), ValorDIFAL: tot.ValorDIFAL.InexactFloat64(), ValorFCP: tot.ValorFCP.InexactFloat64()}
+		ValorCOFINS: tot.ValorCOFINS.InexactFloat64(), ValorDIFAL: tot.ValorDIFAL.InexactFloat64(), ValorFCP: tot.ValorFCP.InexactFloat64(),
+		ValorDesonerado: tot.ValorICMSDesonerado.InexactFloat64()}
 	out.ValorTotalNota = produtos.Add(tot.ValorIPI).Add(tot.ValorICMSST).
-		Add(dto.ValorFrete).Sub(dto.ValorDesconto).Round(2).InexactFloat64()
+		Add(dto.ValorFrete).Sub(dto.ValorDesconto).Sub(tot.ValorICMSDesonerado).Round(2).InexactFloat64()
 	return out, nil
 }
 

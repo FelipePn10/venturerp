@@ -453,6 +453,9 @@ Cada conjunto de flags controla a **composição da base de cálculo** de cada i
 > com o seu cadastro, e nenhuma lê, altera, bloqueia ou apaga o da outra (o registro de outra
 > empresa responde 404). Endereços e contatos seguem o cliente. O próximo código continua
 > crescendo no banco inteiro, para um cliente novo não coincidir com o de outra empresa.
+> **O código é automático:** `POST /api/customers` sem `code` grava o próximo
+> (`NextCustomerCode`) e, se outro cadastro simultâneo pegar o mesmo número, tenta o
+> seguinte (até 5 vezes). Informar o código continua aceito (importação).
 > Toda consulta que junta `customers` por código precisa da empresa
 > (`c.code = x.customer_code AND c.enterprise_id = …`) — sem ela a junção multiplica linhas.
 >
@@ -677,6 +680,14 @@ Score de 0 a 1000 e classe A–E, calculados a cada análise:
   tolerância. Limite base = média mensal faturada × (prazo médio ÷ 30 + 1).
 - **Sem histórico:** 350 + capital social (até 150) + idade (até 150), classe
   máxima C. Base = % do capital social, com teto; sem capital, 25% do teto.
+  Com capital: base = **menor entre a capacidade do cliente** (capital ×
+  `new_customer_capital_pct`) **e o apetite da empresa** (faturamento médio
+  mensal dela × `new_customer_revenue_pct`, 000496, padrão 20%; nunca abaixo de
+  `new_customer_cap`, que virou o piso). O faturamento é o de `SellerVolume`:
+  notas de venda autorizadas dos 12 meses, média dos meses com nota. Antes o
+  teto era fixo e a Gerdau (capital R$ 24,3 bi) saía com R$ 18 mil, como uma
+  microempresa; agora quem limita é o porte de quem vende. Desktop antigo que
+  grava a política sem o campo novo mantém o valor gravado.
 - **Bloqueios (classe E, limite 0):** Receita não ATIVA, título vencido além
   da tolerância, protesto, baixa como perda.
 - Limite = base × fator da classe (A 1; B 0,8; C 0,6; D 0,3; E 0), teto da
