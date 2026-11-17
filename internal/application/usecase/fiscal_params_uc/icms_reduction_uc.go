@@ -251,22 +251,3 @@ func (uc *SpecialAdjustmentNoteUseCase) List(ctx context.Context, empresaID int,
 	}
 	return toSpecialAdjustmentNoteResponses(list), nil
 }
-
-func (uc *SpecialAdjustmentNoteUseCase) AddItem(ctx context.Context, item *entity.SpecialAdjustmentNoteItem) (*response.SpecialAdjustmentNoteItemResponse, error) {
-	if item.NoteID == 0 {
-		return nil, errorsuc.NewValidationError("informe a nota")
-	}
-	created, err := uc.Repo.AddSpecialAdjustmentNoteItem(ctx, item)
-	if err != nil {
-		return nil, err
-	}
-	return toSpecialAdjustmentNoteItemResponse(created), nil
-}
-
-func (uc *SpecialAdjustmentNoteUseCase) ListItems(ctx context.Context, noteID int64) ([]*response.SpecialAdjustmentNoteItemResponse, error) {
-	list, err := uc.Repo.ListSpecialAdjustmentNoteItems(ctx, noteID)
-	if err != nil {
-		return nil, err
-	}
-	return toSpecialAdjustmentNoteItemResponses(list), nil
-}

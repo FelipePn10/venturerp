@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -56,7 +57,11 @@ func (r *CustomerRepositorySQLC) GetCreditPolicy(ctx context.Context) (entity.Cr
 			entity.RiskA: int(row.ValidityMonthsA), entity.RiskB: int(row.ValidityMonthsB), entity.RiskC: int(row.ValidityMonthsC),
 			entity.RiskD: int(row.ValidityMonthsD), entity.RiskE: int(row.ValidityMonthsE),
 		},
-		RegistrationCheckDays: int(row.RegistrationCheckDays),
+		RegistrationCheckDays:  int(row.RegistrationCheckDays),
+		CustomerRevenuePct:     pgutil.FromPgNumericToDecimal(row.CustomerRevenuePct),
+		DeclaredMonthlyRevenue: pgutil.FromPgNumericToDecimal(row.DeclaredMonthlyRevenue),
+		AutoReviewMonths:       int(row.AutoReviewMonths),
+		AutoIncreaseMaxPct:     pgutil.FromPgNumericToDecimal(row.AutoIncreaseMaxPct),
 	}, nil
 }
 
@@ -66,21 +71,25 @@ func (r *CustomerRepositorySQLC) SaveCreditPolicy(ctx context.Context, p entity.
 		return err
 	}
 	_, err = r.q.UpsertCreditPolicy(ctx, sqlc.UpsertCreditPolicyParams{
-		EnterpriseID:          empresa,
-		MaxLimit:              pgutil.ToPgNumericFromDecimal(p.MaxLimit),
-		NewCustomerCapitalPct: pgutil.ToPgNumericFromDecimal(p.NewCustomerCapitalPct),
-		NewCustomerCap:        pgutil.ToPgNumericFromDecimal(p.NewCustomerCap),
-		NewCustomerRevenuePct: pgutil.ToPgNumericFromDecimal(p.NewCustomerRevenuePct),
-		OverrideTolerancePct:  pgutil.ToPgNumericFromDecimal(p.OverrideTolerancePct),
-		OverdueBlockDays:      int32(p.OverdueBlockDays),
-		HistoryMonths:         int32(p.HistoryMonths),
-		ValidityMonthsA:       int32(p.ValidityMonths[entity.RiskA]),
-		ValidityMonthsB:       int32(p.ValidityMonths[entity.RiskB]),
-		ValidityMonthsC:       int32(p.ValidityMonths[entity.RiskC]),
-		ValidityMonthsD:       int32(p.ValidityMonths[entity.RiskD]),
-		ValidityMonthsE:       int32(p.ValidityMonths[entity.RiskE]),
-		RegistrationCheckDays: int32(p.RegistrationCheckDays),
-		UpdatedBy:             pgutil.ToPgUUID(by),
+		EnterpriseID:           empresa,
+		MaxLimit:               pgutil.ToPgNumericFromDecimal(p.MaxLimit),
+		NewCustomerCapitalPct:  pgutil.ToPgNumericFromDecimal(p.NewCustomerCapitalPct),
+		NewCustomerCap:         pgutil.ToPgNumericFromDecimal(p.NewCustomerCap),
+		NewCustomerRevenuePct:  pgutil.ToPgNumericFromDecimal(p.NewCustomerRevenuePct),
+		OverrideTolerancePct:   pgutil.ToPgNumericFromDecimal(p.OverrideTolerancePct),
+		OverdueBlockDays:       int32(p.OverdueBlockDays),
+		HistoryMonths:          int32(p.HistoryMonths),
+		ValidityMonthsA:        int32(p.ValidityMonths[entity.RiskA]),
+		ValidityMonthsB:        int32(p.ValidityMonths[entity.RiskB]),
+		ValidityMonthsC:        int32(p.ValidityMonths[entity.RiskC]),
+		ValidityMonthsD:        int32(p.ValidityMonths[entity.RiskD]),
+		ValidityMonthsE:        int32(p.ValidityMonths[entity.RiskE]),
+		RegistrationCheckDays:  int32(p.RegistrationCheckDays),
+		UpdatedBy:              pgutil.ToPgUUID(by),
+		CustomerRevenuePct:     pgutil.ToPgNumericFromDecimal(p.CustomerRevenuePct),
+		DeclaredMonthlyRevenue: pgutil.ToPgNumericFromDecimal(p.DeclaredMonthlyRevenue),
+		AutoReviewMonths:       int32(p.AutoReviewMonths),
+		AutoIncreaseMaxPct:     pgutil.ToPgNumericFromDecimal(p.AutoIncreaseMaxPct),
 	})
 	if err != nil {
 		return fmt.Errorf("gravando a política de crédito: %w", err)
@@ -682,4 +691,187 @@ func (r *CustomerRepositorySQLC) DeleteSupport(ctx context.Context, resource str
 		return errorsuc.NewNotFoundError(fmt.Sprintf("%s %d não encontrado(a)", spec.label, code))
 	}
 	return nil
+}
+
+// ── Faturamento declarado do cliente ─────────────────────────────────────────
+
+// AddFinancialStatement grava a declaração do cliente desta empresa. O INSERT
+// confere o cliente na empresa da sessão (a FK composta faz o resto).
+func (r *CustomerRepositorySQLC) AddFinancialStatement(ctx context.Context, f *entity.FinancialStatement, by uuid.UUID) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	err = r.pool.QueryRow(ctx, `
+		INSERT INTO customer_financial_statements (enterprise_id, customer_code, annual_revenue, reference_date, source, notes, created_by)
+		SELECT $1, c.code, $3, $4, $5, $6, $7 FROM customers c WHERE c.enterprise_id = $1 AND c.code = $2
+		RETURNING id, created_at`,
+		empresa, f.CustomerCode, f.AnnualRevenue, f.ReferenceDate, f.Source, f.Notes, by).Scan(&f.ID, &f.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado", f.CustomerCode))
+	}
+	if err != nil {
+		return fmt.Errorf("gravando o faturamento declarado: %w", err)
+	}
+	return nil
+}
+
+// ListFinancialStatements: as declarações do cliente, da mais recente para a
+// mais antiga (a primeira é a que vale na análise).
+func (r *CustomerRepositorySQLC) ListFinancialStatements(ctx context.Context, code int64) ([]*entity.FinancialStatement, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT f.id, f.customer_code, f.annual_revenue, f.reference_date, f.source, f.notes, COALESCE(u.name, ''), f.created_at
+		  FROM customer_financial_statements f
+		  LEFT JOIN users u ON u.id = f.created_by
+		 WHERE f.enterprise_id = $1 AND f.customer_code = $2
+		 ORDER BY f.reference_date DESC, f.id DESC`, empresa, code)
+	if err != nil {
+		return nil, fmt.Errorf("listando o faturamento declarado: %w", err)
+	}
+	defer rows.Close()
+	var out []*entity.FinancialStatement
+	for rows.Next() {
+		f := &entity.FinancialStatement{}
+		if err := rows.Scan(&f.ID, &f.CustomerCode, &f.AnnualRevenue, &f.ReferenceDate, &f.Source, &f.Notes, &f.CreatedByName, &f.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// DeleteFinancialStatement apaga uma declaração lançada errado (a análise
+// passa a usar a anterior).
+func (r *CustomerRepositorySQLC) DeleteFinancialStatement(ctx context.Context, code, id int64) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `DELETE FROM customer_financial_statements WHERE enterprise_id = $1 AND customer_code = $2 AND id = $3`, empresa, code, id)
+	if err != nil {
+		return fmt.Errorf("excluindo o faturamento declarado: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError("declaração não encontrada neste cliente")
+	}
+	return nil
+}
+
+// ── Revisão automática do crédito ────────────────────────────────────────────
+
+// ListCustomersForAutoCreditReview vê todas as empresas (só o agendador usa):
+// clientes ativos com limite (ou já analisados) cuja última análise passou do
+// intervalo da política, ou cujo limite (> 0) vence nos próximos 7 dias — a revisão
+// chega antes de o pedido travar. Política com intervalo 0 fica de fora, e
+// cliente bloqueado também (não compra; desbloquear passa por uma pessoa).
+func (r *CustomerRepositorySQLC) ListCustomersForAutoCreditReview(ctx context.Context, max int) ([]entity.RegistrationCheckTarget, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.enterprise_id, e.code, c.code, c.document_number, c.blocked, c.created_by
+		  FROM customers c
+		  JOIN enterprise e ON e.id = c.enterprise_id
+		  LEFT JOIN customer_credit_policies p ON p.enterprise_id = c.enterprise_id
+		 WHERE c.is_active AND NOT c.blocked AND COALESCE(p.auto_review_months, 3) > 0
+		   AND (c.credit_limit > 0 OR c.credit_reviewed_at IS NOT NULL)
+		   AND (c.credit_reviewed_at IS NULL
+		        OR c.credit_reviewed_at < NOW() - make_interval(months => COALESCE(p.auto_review_months, 3))
+		        OR (c.credit_limit > 0 AND c.credit_limit_expires_at <= CURRENT_DATE + 7))
+		   AND (c.credit_review_attempt_at IS NULL OR c.credit_review_attempt_at < NOW() - interval '1 day')
+		 ORDER BY c.credit_review_attempt_at NULLS FIRST, c.credit_reviewed_at NULLS FIRST
+		 LIMIT $1`, max)
+	if err != nil {
+		return nil, fmt.Errorf("listando clientes para a revisão de crédito: %w", err)
+	}
+	defer rows.Close()
+	var out []entity.RegistrationCheckTarget
+	for rows.Next() {
+		var t entity.RegistrationCheckTarget
+		var by pgtype.UUID
+		if err := rows.Scan(&t.EnterpriseID, &t.EnterpriseCode, &t.Code, &t.DocumentNumber, &t.Blocked, &by); err != nil {
+			return nil, err
+		}
+		t.Actor = pgutil.FromPgUUID(by)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// MarkCreditReviewAttempt: a fila anda mesmo quando a revisão falha.
+func (r *CustomerRepositorySQLC) MarkCreditReviewAttempt(ctx context.Context, code int64) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx, `UPDATE customers SET credit_review_attempt_at = NOW() WHERE enterprise_id = $1 AND code = $2`, empresa, code)
+	return err
+}
+
+// LastCreditReview: a análise mais recente do cadastro atual (nil sem nenhuma).
+func (r *CustomerRepositorySQLC) LastCreditReview(ctx context.Context, code int64) (*entity.LastCreditReview, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var classe string
+	var excecao bool
+	err = r.pool.QueryRow(ctx, `
+		SELECT r.risk_class, r.approved_limit > r.suggested_limit
+		  FROM customer_credit_reviews r
+		  JOIN customers c ON c.code = r.customer_code AND c.enterprise_id = r.enterprise_id
+		 WHERE r.enterprise_id = $1 AND r.customer_code = $2 AND r.created_at >= c.created_at
+		 ORDER BY r.created_at DESC, r.id DESC LIMIT 1`, empresa, code).Scan(&classe, &excecao)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo a última análise de crédito: %w", err)
+	}
+	return &entity.LastCreditReview{RiskClass: entity.RiskClass(classe), Exception: excecao}, nil
+}
+
+// ListSaneamento: os clientes ativos da empresa com o que o saneamento confere
+// (endereço principal — o padrão, senão o primeiro — e a origem da última
+// análise de crédito do cadastro atual).
+func (r *CustomerRepositorySQLC) ListSaneamento(ctx context.Context) ([]entity.SaneamentoCliente, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.code, c.name, c.document_type::text, c.document_number, c.state_registration, c.suframa_code, c.suframa_expiry,
+		       COALESCE((SELECT a.uf FROM customer_addresses a WHERE a.customer_id = c.id
+		                  ORDER BY a.is_default DESC, a.id LIMIT 1), ''),
+		       c.nfe_email, c.registration_status, c.registration_checked_at, c.blocked, c.credit_limit, c.credit_limit_expires_at,
+		       COALESCE((SELECT r.origin FROM customer_credit_reviews r
+		                  WHERE r.enterprise_id = c.enterprise_id AND r.customer_code = c.code AND r.created_at >= c.created_at
+		                  ORDER BY r.created_at DESC, r.id DESC LIMIT 1), '')
+		  FROM customers c
+		 WHERE c.enterprise_id = $1 AND c.is_active
+		 ORDER BY c.name`, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os clientes para o saneamento: %w", err)
+	}
+	defer rows.Close()
+	var out []entity.SaneamentoCliente
+	for rows.Next() {
+		var c entity.SaneamentoCliente
+		var tipo string
+		var suframaExp, limiteExp pgtype.Date
+		var conferido pgtype.Timestamptz
+		if err := rows.Scan(&c.Code, &c.Name, &tipo, &c.DocumentNumber, &c.StateRegistration, &c.SuframaCode, &suframaExp,
+			&c.UF, &c.NFeEmail, &c.RegistrationStatus, &conferido, &c.Blocked, &c.CreditLimit, &limiteExp, &c.LastReviewOrigin); err != nil {
+			return nil, err
+		}
+		c.DocumentType = entity.DocumentType(tipo)
+		c.SuframaExpiry, c.CreditLimitExpiresAt = pgutil.FromPgDateToPtr(suframaExp), pgutil.FromPgDateToPtr(limiteExp)
+		if conferido.Valid {
+			t := conferido.Time
+			c.RegistrationCheckedAt = &t
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }

@@ -311,30 +311,20 @@ type CarrierGroup struct {
 // ─── Carrier ─────────────────────────────────────────────────────────────────
 
 type Carrier struct {
-	ID                int64
-	Code              int64
-	Description       string
-	BillingType       CarrierBillingType
-	UsesCreditLimit   bool
-	ConsiderAvailable bool
-	PostponeDueDate   bool
-	ReceiptDays       int16
-	PaymentDays       int16
-	IsActive          bool
-	CreatedAt         time.Time
+	ID          int64
+	Code        int64
+	Description string
+	IsActive    bool
+	CreatedAt   time.Time
 }
 
-func NewCarrier(code int64, description string, billingType CarrierBillingType) (*Carrier, error) {
+func NewCarrier(code int64, description string) (*Carrier, error) {
 	if description == "" {
 		return nil, domainerr.NewValidation("informe a descrição")
-	}
-	if billingType == "" {
-		billingType = BillingCarteira
 	}
 	return &Carrier{
 		Code:        code,
 		Description: description,
-		BillingType: billingType,
 		IsActive:    true,
 		CreatedAt:   time.Now(),
 	}, nil
@@ -1009,80 +999,24 @@ type InvoiceType struct {
 	Type                    InvoiceTypeKind
 	StockMovement           InvoiceStock
 	ICMSType                InvoiceICMSType
-	ICMSPct                 decimal.Decimal
 	ICMSReductionPct        decimal.Decimal
-	IPIPct                  decimal.Decimal
-	PISPct                  decimal.Decimal
-	COFINSPct               decimal.Decimal
-	ISSQNPct                decimal.Decimal
-	IRPct                   decimal.Decimal
-	CSLLPct                 decimal.Decimal
-	INSSPct                 decimal.Decimal
 	GeneratesRevenue        bool
 	UpdatesInventory        bool
 	GeneratesFinancialTitle bool
-	ConsidersGoals          bool
 	CalcSubstitutionTax     bool
 	CalcICMSDeferral        bool
 	CalcPISCOFINS           bool
 	CalcDIFAL               bool
 	RequiresSalesOrder      bool
-	ListsFiscalBooks        bool
 	IsActive                bool
 	// NF-e / FocusNFE fields
-	ModelNF            *string // "55" = NF-e, "65" = NFC-e
-	DescriptionNF      *string
-	ImpostosNFe        *ImpostosNFe
-	CSTICMS            *string
-	CSOSNTICMS         *string
-	CSTIPI             *string
-	CSTPIS             *string
-	CSTCOFINS          *string
-	BaixaPedido        bool
-	GeraTituloDev      bool
-	ExigeSuframa       bool
-	IRPctPresumption   decimal.Decimal
-	CSLLPctPresumption decimal.Decimal
+	BaixaPedido  bool
+	ExigeSuframa bool
 	// FKs
-	CFOPId                   *int64
-	DispositivoLegalIPIId    *int64
-	DispositivoLegalICMSId   *int64
-	DispositivoLegalICMSSTId *int64
-	DispositivoLegalPISId    *int64
-	DispositivoLegalCOFINSId *int64
-	HierarchyIPI             *string
-	HierarchyICMS            *string
-	HierarchyICMSST          *string
-	HierarchyPIS             *string
-	HierarchyCOFINS          *string
-	IPITransferSalesTableId  *int64
 	// SPED/SINTEGRA flags
-	ListaValorContabil bool
-	ListaRegistroSaida bool
-	ListaICMSIPI       bool
-	SintegraSpedFiscal bool
 	// Calculation/behavior flags
-	CalcFomentar         bool
-	ExcecaoFomentar      bool
-	CompRessRetST        bool
-	CalcReducao          bool
-	ComplementoItens     bool
-	BuscaTipoNF          bool
-	ICMSSTUltEntrada     bool
-	SomenteConsultaLotes bool
-	CalcImpIBPT          bool
-	CredPresumidoICMS    bool
-	CIAP                 bool
-	VlrAgregadoBaseSubst bool
-	ContratoFacon        bool
-	DescICMSLicitacoes   bool
-	Sisdeclara           bool
 	// Classification codes
-	CodClasTrib             *string
-	CodClasTribTribReg      *string
-	CodMotivoRestCompICMSST *string
-	CodBeneficioFiscal      *string
-	CreatedAt               time.Time
+	CreatedAt time.Time
 }
 
 func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*InvoiceType, error) {
@@ -1102,7 +1036,6 @@ func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*Invo
 		UpdatesInventory:        true,
 		GeneratesFinancialTitle: true,
 		CalcDIFAL:               true,
-		ListsFiscalBooks:        true,
 		BaixaPedido:             true,
 		IsActive:                true,
 		CreatedAt:               time.Now(),
@@ -1112,32 +1045,12 @@ func NewInvoiceType(code int64, description string, kind InvoiceTypeKind) (*Invo
 // ─── Tax Type ─────────────────────────────────────────────────────────────────
 
 type TaxType struct {
-	ID                            int64
-	Code                          int64
-	Description                   string
-	IPIBaseTotalItems             bool
-	IPIBaseSubtractDiscount       bool
-	IPIBaseAddFreight             bool
-	IPIBaseAddExpenses            bool
-	ICMSBaseTotalItems            bool
-	ICMSBaseSubtractDiscount      bool
-	ICMSBaseAddFreight            bool
-	ICMSBaseAddIPI                bool
-	ICMSBaseAddExpenses           bool
-	PISCOFINSBaseTotalItems       bool
-	PISCOFINSBaseSubtractDiscount bool
-	PISCOFINSBaseAddFreight       bool
-	PISCOFINSBaseAddInsurance     bool
-	PISCOFINSBaseAddExpenses      bool
-	CSLLBaseTotalItems            bool
-	CSLLBaseSubtractDiscount      bool
-	CSLLBaseAddFreight            bool
-	IRBaseTotalItems              bool
-	IRBaseSubtractDiscount        bool
-	IRBaseAddFreight              bool
-	IsConsumer                    bool
-	IsActive                      bool
-	CreatedAt                     time.Time
+	ID          int64
+	Code        int64
+	Description string
+	IsConsumer  bool
+	IsActive    bool
+	CreatedAt   time.Time
 }
 
 func NewTaxType(code int64, description string) (*TaxType, error) {
@@ -1145,20 +1058,10 @@ func NewTaxType(code int64, description string) (*TaxType, error) {
 		return nil, domainerr.NewValidation("informe a descrição")
 	}
 	return &TaxType{
-		Code:                          code,
-		Description:                   description,
-		IPIBaseTotalItems:             true,
-		ICMSBaseTotalItems:            true,
-		ICMSBaseSubtractDiscount:      true,
-		ICMSBaseAddFreight:            true,
-		PISCOFINSBaseTotalItems:       true,
-		PISCOFINSBaseSubtractDiscount: true,
-		CSLLBaseTotalItems:            true,
-		CSLLBaseSubtractDiscount:      true,
-		IRBaseTotalItems:              true,
-		IRBaseSubtractDiscount:        true,
-		IsActive:                      true,
-		CreatedAt:                     time.Now(),
+		Code:        code,
+		Description: description,
+		IsActive:    true,
+		CreatedAt:   time.Now(),
 	}, nil
 }
 

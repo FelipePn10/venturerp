@@ -136,6 +136,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/clientereceita"
 	cnpjinfra "github.com/FelipePn10/panossoerp/internal/infrastructure/cnpj"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/config"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/creditorevisao"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
 	dfesched "github.com/FelipePn10/panossoerp/internal/infrastructure/dfe"
@@ -264,6 +265,8 @@ type application struct {
 	revisoesScheduler   *itemrevisoes.Scheduler
 	// clienteReceitaScheduler reconsulta a situação cadastral dos clientes.
 	clienteReceitaScheduler *clientereceita.Scheduler
+	// creditoRevisaoScheduler revê o limite de crédito no intervalo da política.
+	creditoRevisaoScheduler *creditorevisao.Scheduler
 }
 
 func (app *application) mount() chi.Router {
@@ -1639,6 +1642,7 @@ func (app *application) mount() chi.Router {
 	custLifecycle := customerRepo.NewLifecycle(custRepo)
 	customerUC := customer_uc.NewCustomerUseCase(custRepo).WithLifecycle(custLifecycle, cnpjProvider, representativeRepository)
 	app.clienteReceitaScheduler = clientereceita.NewScheduler(custLifecycle, customerUC, app.logger)
+	app.creditoRevisaoScheduler = creditorevisao.NewScheduler(custLifecycle, customerUC, app.logger)
 	createSalesOrderItemUC.Prices = custRepo
 	updateSalesOrderItemUC.Prices = custRepo
 	// Políticas comerciais e alçada de desconto no pedido (Fase 5.3): a mesma
@@ -2990,8 +2994,6 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}", icmsReductionHandler.GetSpecialNote)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/emitir", icmsReductionHandler.EmitirSpecialNote)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/cancelar", icmsReductionHandler.CancelarSpecialNote)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/itens", icmsReductionHandler.AddSpecialNoteItem)
-			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/itens", icmsReductionHandler.ListSpecialNoteItems)
 		})
 		// SPED EFD
 		r.Route("/api/fiscal/sped", func(r chi.Router) {
@@ -3801,6 +3803,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", customerHandler.CreateCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/", customerHandler.ListCustomers)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/credit-suggestion", customerHandler.CreditSuggestion)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/saneamento", customerHandler.Saneamento)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}", customerHandler.GetCustomer)
 			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}", customerHandler.DeleteCustomer)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/usage", customerHandler.CustomerUsage)
@@ -3811,6 +3814,9 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/credit-suggestion", customerHandler.CreditSuggestion)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/credit-limit", customerHandler.SetCreditLimit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/credit-reviews", customerHandler.ListCreditReviews)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/financial-statements", customerHandler.ListFinancialStatements)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/financial-statements", customerHandler.AddFinancialStatement)
+			r.With(httpmw.RequireRole("ADMIN")).Delete("/{code}/financial-statements/{id}", customerHandler.DeleteFinancialStatement)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/addresses/{id}", customerHandler.UpdateAddress)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/addresses/{id}", customerHandler.DeleteAddress)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{code}/contacts/{id}", customerHandler.UpdateContact)
@@ -4091,6 +4097,9 @@ func (app *application) run(r chi.Router) error {
 	serverErr := make(chan error, 1)
 	if app.dfeScheduler != nil {
 		go app.dfeScheduler.Run(ctx)
+	}
+	if app.creditoRevisaoScheduler != nil {
+		go app.creditoRevisaoScheduler.Run(ctx)
 	}
 	if app.clienteReceitaScheduler != nil {
 		go app.clienteReceitaScheduler.Run(ctx)

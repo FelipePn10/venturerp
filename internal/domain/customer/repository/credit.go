@@ -48,4 +48,18 @@ type CustomerLifecycleRepository interface {
 	// SetSupportActive inativa ou reativa um cadastro de apoio que tem situação.
 	SetSupportActive(ctx context.Context, resource string, code int64, active bool) error
 	CustomerOverview(ctx context.Context, code int64, groupCodes []int64, today time.Time) (*entity.CustomerOverview, error)
+
+	// Faturamento declarado pelo cliente (DRE, balanço, IRPF): capacidade de
+	// quem não tem dado público. A lista vem da mais recente para a mais antiga.
+	AddFinancialStatement(ctx context.Context, f *entity.FinancialStatement, by uuid.UUID) error
+	ListFinancialStatements(ctx context.Context, code int64) ([]*entity.FinancialStatement, error)
+	DeleteFinancialStatement(ctx context.Context, code, id int64) error
+
+	// Revisão automática: a fila vê todas as empresas (só o agendador usa).
+	ListCustomersForAutoCreditReview(ctx context.Context, max int) ([]entity.RegistrationCheckTarget, error)
+	MarkCreditReviewAttempt(ctx context.Context, code int64) error
+	LastCreditReview(ctx context.Context, code int64) (*entity.LastCreditReview, error)
+
+	// ListSaneamento: os clientes ativos da empresa para o relatório de saneamento.
+	ListSaneamento(ctx context.Context) ([]entity.SaneamentoCliente, error)
 }

@@ -35,30 +35,26 @@ func (q *Queries) AddStateGroupUF(ctx context.Context, arg AddStateGroupUFParams
 const createEntryOperationType = `-- name: CreateEntryOperationType :one
 
 INSERT INTO entry_operation_types (
-    enterprise_id, code, description, invoice_type_code, nature_operation,
-    classification_type, classification_code, state_group_code, supplier_type_code, created_by,
+    enterprise_id, code, description, invoice_type_code, nature_operation, state_group_code, created_by,
     movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins
 )
-VALUES ($15, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
+VALUES ($12, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, code, description, invoice_type_code, nature_operation, state_group_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
 `
 
 type CreateEntryOperationTypeParams struct {
-	Code               int64
-	Description        string
-	InvoiceTypeCode    *int64
-	NatureOperation    string
-	ClassificationType pgtype.Text
-	ClassificationCode pgtype.Text
-	StateGroupCode     *int64
-	SupplierTypeCode   *int64
-	CreatedBy          pgtype.UUID
-	MovimentaEstoque   bool
-	GeraFinanceiro     bool
-	CreditaIcms        bool
-	CreditaIpi         bool
-	CreditaPisCofins   bool
-	EnterpriseID       int64
+	Code             int64
+	Description      string
+	InvoiceTypeCode  *int64
+	NatureOperation  string
+	StateGroupCode   *int64
+	CreatedBy        pgtype.UUID
+	MovimentaEstoque bool
+	GeraFinanceiro   bool
+	CreditaIcms      bool
+	CreditaIpi       bool
+	CreditaPisCofins bool
+	EnterpriseID     int64
 }
 
 // ─── Entry Operation Types ────────────────────────────────────────────────────
@@ -68,10 +64,7 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		arg.Description,
 		arg.InvoiceTypeCode,
 		arg.NatureOperation,
-		arg.ClassificationType,
-		arg.ClassificationCode,
 		arg.StateGroupCode,
-		arg.SupplierTypeCode,
 		arg.CreatedBy,
 		arg.MovimentaEstoque,
 		arg.GeraFinanceiro,
@@ -87,10 +80,7 @@ func (q *Queries) CreateEntryOperationType(ctx context.Context, arg CreateEntryO
 		&i.Description,
 		&i.InvoiceTypeCode,
 		&i.NatureOperation,
-		&i.ClassificationType,
-		&i.ClassificationCode,
 		&i.StateGroupCode,
-		&i.SupplierTypeCode,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
@@ -143,7 +133,7 @@ func (q *Queries) CreateStateGroup(ctx context.Context, arg CreateStateGroupPara
 }
 
 const getEntryOperationTypeByCode = `-- name: GetEntryOperationTypeByCode :one
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, description, invoice_type_code, nature_operation, state_group_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetEntryOperationTypeByCodeParams struct {
@@ -160,10 +150,7 @@ func (q *Queries) GetEntryOperationTypeByCode(ctx context.Context, arg GetEntryO
 		&i.Description,
 		&i.InvoiceTypeCode,
 		&i.NatureOperation,
-		&i.ClassificationType,
-		&i.ClassificationCode,
 		&i.StateGroupCode,
-		&i.SupplierTypeCode,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,
@@ -202,7 +189,7 @@ func (q *Queries) GetStateGroupByCode(ctx context.Context, arg GetStateGroupByCo
 }
 
 const listEntryOperationTypes = `-- name: ListEntryOperationTypes :many
-SELECT id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types
+SELECT id, code, description, invoice_type_code, nature_operation, state_group_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id FROM entry_operation_types
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
@@ -227,10 +214,7 @@ func (q *Queries) ListEntryOperationTypes(ctx context.Context, arg ListEntryOper
 			&i.Description,
 			&i.InvoiceTypeCode,
 			&i.NatureOperation,
-			&i.ClassificationType,
-			&i.ClassificationCode,
 			&i.StateGroupCode,
-			&i.SupplierTypeCode,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.CreatedBy,
@@ -355,31 +339,26 @@ func (q *Queries) UFInStateGroup(ctx context.Context, arg UFInStateGroupParams) 
 
 const updateEntryOperationType = `-- name: UpdateEntryOperationType :one
 UPDATE entry_operation_types SET
-    description = $2, invoice_type_code = $3, nature_operation = $4,
-    classification_type = $5, classification_code = $6, state_group_code = $7,
-    supplier_type_code = $8, is_active = $9,
-    movimenta_estoque = $10, gera_financeiro = $11, credita_icms = $12,
-    credita_ipi = $13, credita_pis_cofins = $14
-WHERE code = $1 AND enterprise_id = $15
-RETURNING id, code, description, invoice_type_code, nature_operation, classification_type, classification_code, state_group_code, supplier_type_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
+    description = $2, invoice_type_code = $3, nature_operation = $4, state_group_code = $5, is_active = $6,
+    movimenta_estoque = $7, gera_financeiro = $8, credita_icms = $9,
+    credita_ipi = $10, credita_pis_cofins = $11
+WHERE code = $1 AND enterprise_id = $12
+RETURNING id, code, description, invoice_type_code, nature_operation, state_group_code, is_active, created_at, created_by, movimenta_estoque, gera_financeiro, credita_icms, credita_ipi, credita_pis_cofins, enterprise_id
 `
 
 type UpdateEntryOperationTypeParams struct {
-	Code               int64
-	Description        string
-	InvoiceTypeCode    *int64
-	NatureOperation    string
-	ClassificationType pgtype.Text
-	ClassificationCode pgtype.Text
-	StateGroupCode     *int64
-	SupplierTypeCode   *int64
-	IsActive           bool
-	MovimentaEstoque   bool
-	GeraFinanceiro     bool
-	CreditaIcms        bool
-	CreditaIpi         bool
-	CreditaPisCofins   bool
-	EnterpriseID       int64
+	Code             int64
+	Description      string
+	InvoiceTypeCode  *int64
+	NatureOperation  string
+	StateGroupCode   *int64
+	IsActive         bool
+	MovimentaEstoque bool
+	GeraFinanceiro   bool
+	CreditaIcms      bool
+	CreditaIpi       bool
+	CreditaPisCofins bool
+	EnterpriseID     int64
 }
 
 func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryOperationTypeParams) (EntryOperationType, error) {
@@ -388,10 +367,7 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		arg.Description,
 		arg.InvoiceTypeCode,
 		arg.NatureOperation,
-		arg.ClassificationType,
-		arg.ClassificationCode,
 		arg.StateGroupCode,
-		arg.SupplierTypeCode,
 		arg.IsActive,
 		arg.MovimentaEstoque,
 		arg.GeraFinanceiro,
@@ -407,10 +383,7 @@ func (q *Queries) UpdateEntryOperationType(ctx context.Context, arg UpdateEntryO
 		&i.Description,
 		&i.InvoiceTypeCode,
 		&i.NatureOperation,
-		&i.ClassificationType,
-		&i.ClassificationCode,
 		&i.StateGroupCode,
-		&i.SupplierTypeCode,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.CreatedBy,

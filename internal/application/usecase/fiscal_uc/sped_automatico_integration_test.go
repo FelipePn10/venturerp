@@ -156,9 +156,9 @@ func TestIntegration_SpedAutomatico(t *testing.T) {
 			t.Errorf("limpeza do código de ajuste: %v", err)
 		}
 	})
-	testutil.Exec(t, pool, `INSERT INTO special_adjustment_notes(empresa_id,purpose,status,issue_date,period,adjustment_code_id,history,auto_generate_summary,total_value,total_icms,total_ipi)
-		VALUES($1,'AJUSTE','EMITIDA','2026-08-20','2026-08',$2,'credito presumido',FALSE,0,13,0),
-		      ($1,'AJUSTE','RASCUNHO','2026-08-21','2026-08',$2,'rascunho',FALSE,0,500,0)`, empresa, codAjuste)
+	testutil.Exec(t, pool, `INSERT INTO special_adjustment_notes(empresa_id,purpose,status,issue_date,period,adjustment_code_id,history,total_icms,total_ipi)
+		VALUES($1,'AJUSTE','EMITIDA','2026-08-20','2026-08',$2,'credito presumido',13,0),
+		      ($1,'AJUSTE','RASCUNHO','2026-08-21','2026-08',$2,'rascunho',500,0)`, empresa, codAjuste)
 
 	fiscalRepo := fiscalpg.NewFiscalRepositoryPG(pool)
 	uc := &SpedAutomaticoUseCase{Periodo: fiscalpg.NewSpedRepositoryPG(fiscalRepo), Config: fiscalRepo}

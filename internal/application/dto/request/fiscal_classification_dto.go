@@ -13,7 +13,6 @@ type FiscalClassificationFields struct {
 	CEST                    *string         `json:"cest,omitempty"`
 	IPIRate                 decimal.Decimal `json:"ipi_rate"`
 	IPIIndicator            string          `json:"ipi_indicator,omitempty"`
-	Apuracao                *string         `json:"apuracao,omitempty"`
 	CSTIPIEntrada           *string         `json:"cst_ipi_entrada,omitempty"`
 	CSTIPISaida             *string         `json:"cst_ipi_saida,omitempty"`
 	PISRate                 decimal.Decimal `json:"pis_rate"`

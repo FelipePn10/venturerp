@@ -3631,18 +3631,12 @@ type CapacityRequirement struct {
 }
 
 type Carrier struct {
-	ID                int64
-	Code              int64
-	Description       string
-	BillingType       sqltypes.CarrierBillingTypeEnum
-	UsesCreditLimit   bool
-	ConsiderAvailable bool
-	PostponeDueDate   bool
-	ReceiptDays       int16
-	PaymentDays       int16
-	IsActive          bool
-	CreatedAt         pgtype.Timestamptz
-	EnterpriseID      int64
+	ID           int64
+	Code         int64
+	Description  string
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
 }
 
 type CarrierGroup struct {
@@ -3656,6 +3650,16 @@ type CarrierGroup struct {
 type CarrierGroupCarrier struct {
 	CarrierGroupID int64
 	CarrierID      int64
+}
+
+type CarriersCamposRetirado struct {
+	ID                int64
+	BillingType       sqltypes.CarrierBillingTypeEnum
+	UsesCreditLimit   bool
+	ConsiderAvailable bool
+	PostponeDueDate   bool
+	ReceiptDays       int16
+	PaymentDays       int16
 }
 
 type CartaCorrecao struct {
@@ -3888,13 +3892,8 @@ type Cfop struct {
 	Code            int32
 	Description     string
 	DescriptionFull pgtype.Text
-	Utilization     sqltypes.CfopUtilizationEnum
 	OrigemClasIpi   pgtype.Text
-	IndOperacao     sqltypes.CfopIndOperacaoEnum
-	TipoUtilizacao  sqltypes.CfopTipoUtilizacaoEnum
 	CodigoAnexoSn   pgtype.Text
-	Difal           bool
-	Doacao          bool
 	IsActive        bool
 	CreatedAt       pgtype.Timestamptz
 	Oficial         bool
@@ -3909,6 +3908,15 @@ type Cfop struct {
 	IndRemes        bool
 	IndComb         bool
 	IndExcIbscbs    bool
+}
+
+type CfopsCamposRetirado struct {
+	ID             int64
+	Difal          bool
+	Doacao         bool
+	IndOperacao    sqltypes.CfopIndOperacaoEnum
+	TipoUtilizacao sqltypes.CfopTipoUtilizacaoEnum
+	Utilization    sqltypes.CfopUtilizationEnum
 }
 
 type CiapApuracaoParcela struct {
@@ -4660,6 +4668,7 @@ type Customer struct {
 	CreditLimitSuggested  pgtype.Numeric
 	CreditLimitExpiresAt  pgtype.Date
 	CreditReviewedAt      pgtype.Timestamptz
+	CreditReviewAttemptAt pgtype.Timestamptz
 }
 
 type CustomerAddress struct {
@@ -4702,22 +4711,26 @@ type CustomerContactType struct {
 }
 
 type CustomerCreditPolicy struct {
-	EnterpriseID          int64
-	MaxLimit              pgtype.Numeric
-	NewCustomerCapitalPct pgtype.Numeric
-	NewCustomerCap        pgtype.Numeric
-	OverrideTolerancePct  pgtype.Numeric
-	OverdueBlockDays      int32
-	HistoryMonths         int32
-	ValidityMonthsA       int32
-	ValidityMonthsB       int32
-	ValidityMonthsC       int32
-	ValidityMonthsD       int32
-	ValidityMonthsE       int32
-	RegistrationCheckDays int32
-	UpdatedAt             pgtype.Timestamptz
-	UpdatedBy             pgtype.UUID
-	NewCustomerRevenuePct pgtype.Numeric
+	EnterpriseID           int64
+	MaxLimit               pgtype.Numeric
+	NewCustomerCapitalPct  pgtype.Numeric
+	NewCustomerCap         pgtype.Numeric
+	OverrideTolerancePct   pgtype.Numeric
+	OverdueBlockDays       int32
+	HistoryMonths          int32
+	ValidityMonthsA        int32
+	ValidityMonthsB        int32
+	ValidityMonthsC        int32
+	ValidityMonthsD        int32
+	ValidityMonthsE        int32
+	RegistrationCheckDays  int32
+	UpdatedAt              pgtype.Timestamptz
+	UpdatedBy              pgtype.UUID
+	NewCustomerRevenuePct  pgtype.Numeric
+	CustomerRevenuePct     pgtype.Numeric
+	DeclaredMonthlyRevenue pgtype.Numeric
+	AutoReviewMonths       int32
+	AutoIncreaseMaxPct     pgtype.Numeric
 }
 
 type CustomerCreditReview struct {
@@ -4736,6 +4749,18 @@ type CustomerCreditReview struct {
 	Factors        []byte
 	CreatedBy      pgtype.UUID
 	CreatedAt      pgtype.Timestamptz
+}
+
+type CustomerFinancialStatement struct {
+	ID            int64
+	EnterpriseID  int64
+	CustomerCode  int64
+	AnnualRevenue pgtype.Numeric
+	ReferenceDate pgtype.Date
+	Source        string
+	Notes         pgtype.Text
+	CreatedBy     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
 }
 
 type CustomerMaterialAudit struct {
@@ -5321,24 +5346,28 @@ type EnterpriseNotificationSubscription struct {
 }
 
 type EntryOperationType struct {
+	ID               int64
+	Code             int64
+	Description      string
+	InvoiceTypeCode  *int64
+	NatureOperation  string
+	StateGroupCode   *int64
+	IsActive         bool
+	CreatedAt        pgtype.Timestamptz
+	CreatedBy        pgtype.UUID
+	MovimentaEstoque bool
+	GeraFinanceiro   bool
+	CreditaIcms      bool
+	CreditaIpi       bool
+	CreditaPisCofins bool
+	EnterpriseID     int64
+}
+
+type EntryOperationTypesCamposRetirado struct {
 	ID                 int64
-	Code               int64
-	Description        string
-	InvoiceTypeCode    *int64
-	NatureOperation    string
-	ClassificationType pgtype.Text
 	ClassificationCode pgtype.Text
-	StateGroupCode     *int64
+	ClassificationType pgtype.Text
 	SupplierTypeCode   *int64
-	IsActive           bool
-	CreatedAt          pgtype.Timestamptz
-	CreatedBy          pgtype.UUID
-	MovimentaEstoque   bool
-	GeraFinanceiro     bool
-	CreditaIcms        bool
-	CreditaIpi         bool
-	CreditaPisCofins   bool
-	EnterpriseID       int64
 }
 
 type ExtratoBancario struct {
@@ -5363,7 +5392,6 @@ type FiscalClassification struct {
 	Cest                      pgtype.Text
 	IpiRate                   pgtype.Numeric
 	IpiIndicator              string
-	Apuracao                  pgtype.Text
 	CstIpiEntrada             pgtype.Text
 	CstIpiSaida               pgtype.Text
 	PisRate                   pgtype.Numeric
@@ -5429,6 +5457,11 @@ type FiscalClassificationLanguage struct {
 	ClassificationID int64
 	Language         string
 	Description      string
+}
+
+type FiscalClassificationsCamposRetirado struct {
+	ID       int64
+	Apuracao pgtype.Text
 }
 
 type FiscalConfig struct {
@@ -6154,97 +6187,101 @@ type IcmsInterstate struct {
 }
 
 type IcmsIpiTaxParam struct {
-	ID                               int64
-	NcmCode                          pgtype.Text
-	ItemCode                         *int64
-	ItemConfigMask                   pgtype.Text
-	Uf                               string
-	OperationType                    sqltypes.TaxParamOperationEnum
-	CustomerCode                     *int64
-	CustomerEstablishmentCode        *int64
-	MarketSegmentID                  *int64
-	InvoiceTypeExitID                *int64
-	InvoiceTypeEntryID               *int64
-	TaxTypeID                        *int64
-	IsPreferred                      bool
-	IsSimplesOptante                 bool
-	IcmsPctContrib                   pgtype.Numeric
-	LegalDeviceIcmsContribID         *int64
-	IcmsPctNonContrib                pgtype.Numeric
-	LegalDeviceIcmsNonContribID      *int64
-	IcmsRedPctContrib                pgtype.Numeric
-	IcmsRedTargetContrib             NullIcmsReductionTargetEnum
-	LegalDeviceIcmsRedContribID      *int64
-	IcmsRedPctNonContrib             pgtype.Numeric
-	IcmsRedTargetNonContrib          NullIcmsReductionTargetEnum
-	LegalDeviceIcmsRedNonContribID   *int64
-	IcmsDeferralPct                  pgtype.Numeric
-	IcmsDeferralTarget               NullIcmsReductionTargetEnum
-	LegalDeviceIcmsDeferralID        *int64
-	CodBenefRbc                      pgtype.Text
-	IcmsSubstPctContrib              pgtype.Numeric
-	LegalDeviceIcmsSubstContribID    *int64
-	IcmsSubstPctNonContrib           pgtype.Numeric
-	LegalDeviceIcmsSubstNonContribID *int64
-	IcmsSubstPctContribUc            pgtype.Numeric
-	IcmsSubstRedPct                  pgtype.Numeric
-	LegalDeviceIcmsSubstRedID        *int64
-	IcmsInternalPct                  pgtype.Numeric
-	BcIcmsStModality                 pgtype.Text
-	IcmsPctForStContrib              pgtype.Numeric
-	IcmsPctForStNonContrib           pgtype.Numeric
-	CstSituationB                    pgtype.Text
-	CsosnIcms                        pgtype.Text
-	CstIcmsContrib                   pgtype.Text
-	CstIcmsNonContrib                pgtype.Text
-	CodBeneficioFiscal               pgtype.Text
-	CstIcmsContribDev                pgtype.Text
-	CstIcmsNonContribDev             pgtype.Text
-	IpiRedPctContrib                 pgtype.Numeric
-	IpiRedTargetContrib              NullIcmsReductionTargetEnum
-	LegalDeviceIpiContribID          *int64
-	IpiRedPctNonContrib              pgtype.Numeric
-	IpiRedTargetNonContrib           NullIcmsReductionTargetEnum
-	LegalDeviceIpiNonContribID       *int64
-	CstIpiExit                       pgtype.Text
-	CstIpiEntry                      pgtype.Text
-	IcmsPctOrigins1238               pgtype.Numeric
-	CalcBaseRedFci                   bool
-	IcmsSubstPctOrigins1238          pgtype.Numeric
-	CstIcmsFci                       pgtype.Text
-	UsesIcmsZonaFranca               bool
-	DifAliqStContribUc               pgtype.Numeric
-	CodBenefContrib                  pgtype.Text
-	CodBenefNonContrib               pgtype.Text
-	IcmsAcresPctContrib              pgtype.Numeric
-	IcmsAcresTypeContrib             NullIcmsAcresTypeEnum
-	IcmsAcresSumContrib              bool
-	IcmsAcresPctNonContrib           pgtype.Numeric
-	IcmsAcresTypeNonContrib          NullIcmsAcresTypeEnum
-	IcmsAcresSumNonContrib           bool
-	IcmsStAcresPctContrib            pgtype.Numeric
-	IcmsStAcresTypeContrib           NullIcmsAcresTypeEnum
-	IcmsStAcresSumContrib            bool
-	IcmsStAcresPctNonContrib         pgtype.Numeric
-	IcmsStAcresTypeNonContrib        NullIcmsAcresTypeEnum
-	IcmsStAcresSumNonContrib         bool
-	FcpStPartilhaPct                 pgtype.Numeric
-	IcmsDifalRedPct                  pgtype.Numeric
-	IcmsDifalType                    NullIcmsDifalTypeEnum
-	DifalPurchaseRedPct              pgtype.Numeric
-	DifalPurchaseRedTarget           NullIcmsReductionTargetEnum
-	IsActive                         bool
-	CreatedAt                        pgtype.Timestamptz
-	UpdatedAt                        pgtype.Timestamptz
-	EnterpriseID                     int64
-	FinalidadeCompra                 pgtype.Text
-	MvaPct                           pgtype.Numeric
-	MvaAjustarInterestadual          bool
+	ID                             int64
+	NcmCode                        pgtype.Text
+	ItemCode                       *int64
+	ItemConfigMask                 pgtype.Text
+	Uf                             string
+	OperationType                  sqltypes.TaxParamOperationEnum
+	CustomerCode                   *int64
+	CustomerEstablishmentCode      *int64
+	MarketSegmentID                *int64
+	InvoiceTypeExitID              *int64
+	InvoiceTypeEntryID             *int64
+	TaxTypeID                      *int64
+	IsPreferred                    bool
+	IsSimplesOptante               bool
+	IcmsPctContrib                 pgtype.Numeric
+	LegalDeviceIcmsContribID       *int64
+	IcmsPctNonContrib              pgtype.Numeric
+	LegalDeviceIcmsNonContribID    *int64
+	IcmsRedPctContrib              pgtype.Numeric
+	IcmsRedTargetContrib           NullIcmsReductionTargetEnum
+	LegalDeviceIcmsRedContribID    *int64
+	IcmsRedPctNonContrib           pgtype.Numeric
+	IcmsRedTargetNonContrib        NullIcmsReductionTargetEnum
+	LegalDeviceIcmsRedNonContribID *int64
+	IcmsDeferralPct                pgtype.Numeric
+	LegalDeviceIcmsDeferralID      *int64
+	CodBenefRbc                    pgtype.Text
+	IcmsSubstRedPct                pgtype.Numeric
+	IcmsPctForStContrib            pgtype.Numeric
+	IcmsPctForStNonContrib         pgtype.Numeric
+	CsosnIcms                      pgtype.Text
+	CstIcmsContrib                 pgtype.Text
+	CstIcmsNonContrib              pgtype.Text
+	CodBeneficioFiscal             pgtype.Text
+	IpiRedPctContrib               pgtype.Numeric
+	IpiRedTargetContrib            NullIcmsReductionTargetEnum
+	LegalDeviceIpiContribID        *int64
+	IpiRedPctNonContrib            pgtype.Numeric
+	IpiRedTargetNonContrib         NullIcmsReductionTargetEnum
+	LegalDeviceIpiNonContribID     *int64
+	CstIpiExit                     pgtype.Text
+	IcmsPctOrigins1238             pgtype.Numeric
+	UsesIcmsZonaFranca             bool
+	CodBenefContrib                pgtype.Text
+	CodBenefNonContrib             pgtype.Text
+	IcmsAcresPctNonContrib         pgtype.Numeric
+	IcmsAcresTypeNonContrib        NullIcmsAcresTypeEnum
+	IcmsDifalRedPct                pgtype.Numeric
+	IcmsDifalType                  NullIcmsDifalTypeEnum
+	IsActive                       bool
+	CreatedAt                      pgtype.Timestamptz
+	UpdatedAt                      pgtype.Timestamptz
+	EnterpriseID                   int64
+	FinalidadeCompra               pgtype.Text
+	MvaPct                         pgtype.Numeric
+	MvaAjustarInterestadual        bool
 	// fornecedor (suppliers.code) — restringe regra de entrada; não vale na saída
 	SupplierCode *int64
 	// icms_reduction_substitutions.id de onde a regra foi copiada (migração 000433)
 	OrigemReducaoID        *int64
 	IpiCodigoEnquadramento pgtype.Text
+}
+
+type IcmsIpiTaxParamsCamposRetirado struct {
+	ID                               int64
+	BcIcmsStModality                 pgtype.Text
+	CalcBaseRedFci                   bool
+	CstIcmsContribDev                pgtype.Text
+	CstIcmsFci                       pgtype.Text
+	CstIcmsNonContribDev             pgtype.Text
+	CstIpiEntry                      pgtype.Text
+	CstSituationB                    pgtype.Text
+	DifAliqStContribUc               pgtype.Numeric
+	DifalPurchaseRedPct              pgtype.Numeric
+	DifalPurchaseRedTarget           NullIcmsReductionTargetEnum
+	FcpStPartilhaPct                 pgtype.Numeric
+	IcmsAcresPctContrib              pgtype.Numeric
+	IcmsAcresSumContrib              bool
+	IcmsAcresSumNonContrib           bool
+	IcmsAcresTypeContrib             NullIcmsAcresTypeEnum
+	IcmsDeferralTarget               NullIcmsReductionTargetEnum
+	IcmsInternalPct                  pgtype.Numeric
+	IcmsStAcresPctContrib            pgtype.Numeric
+	IcmsStAcresPctNonContrib         pgtype.Numeric
+	IcmsStAcresSumContrib            bool
+	IcmsStAcresSumNonContrib         bool
+	IcmsStAcresTypeContrib           NullIcmsAcresTypeEnum
+	IcmsStAcresTypeNonContrib        NullIcmsAcresTypeEnum
+	IcmsSubstPctContrib              pgtype.Numeric
+	IcmsSubstPctContribUc            pgtype.Numeric
+	IcmsSubstPctNonContrib           pgtype.Numeric
+	IcmsSubstPctOrigins1238          pgtype.Numeric
+	LegalDeviceIcmsSubstContribID    *int64
+	LegalDeviceIcmsSubstNonContribID *int64
+	LegalDeviceIcmsSubstRedID        *int64
 }
 
 type IcmsReductionSubstitution struct {
@@ -6529,14 +6566,31 @@ type InspectionPlanCharacteristic struct {
 }
 
 type InvoiceType struct {
+	ID                      int64
+	Code                    int64
+	Description             string
+	Type                    sqltypes.InvoiceTypeEnum
+	StockMovement           sqltypes.InvoiceStockEnum
+	IcmsType                sqltypes.InvoiceICMSTypeEnum
+	IcmsReductionPct        pgtype.Numeric
+	GeneratesRevenue        bool
+	UpdatesInventory        bool
+	GeneratesFinancialTitle bool
+	CalcSubstitutionTax     bool
+	CalcIcmsDeferral        bool
+	CalcPisCofins           bool
+	CalcDifal               bool
+	RequiresSalesOrder      bool
+	IsActive                bool
+	CreatedAt               pgtype.Timestamptz
+	BaixaPedido             bool
+	ExigeSuframa            bool
+	EnterpriseID            int64
+}
+
+type InvoiceTypesCamposRetirado struct {
 	ID                       int64
-	Code                     int64
-	Description              string
-	Type                     sqltypes.InvoiceTypeEnum
-	StockMovement            sqltypes.InvoiceStockEnum
-	IcmsType                 sqltypes.InvoiceICMSTypeEnum
 	IcmsPct                  pgtype.Numeric
-	IcmsReductionPct         pgtype.Numeric
 	IpiPct                   pgtype.Numeric
 	PisPct                   pgtype.Numeric
 	CofinsPct                pgtype.Numeric
@@ -6544,67 +6598,54 @@ type InvoiceType struct {
 	IrPct                    pgtype.Numeric
 	CsllPct                  pgtype.Numeric
 	InssPct                  pgtype.Numeric
-	GeneratesRevenue         bool
-	UpdatesInventory         bool
-	GeneratesFinancialTitle  bool
 	ConsidersGoals           bool
-	CalcSubstitutionTax      bool
-	CalcIcmsDeferral         bool
-	CalcPisCofins            bool
-	CalcDifal                bool
-	RequiresSalesOrder       bool
 	ListsFiscalBooks         bool
-	IsActive                 bool
-	CreatedAt                pgtype.Timestamptz
+	GeraTituloDev            bool
 	ModelNf                  pgtype.Text
 	CstIcms                  pgtype.Text
 	CsosnIcms                pgtype.Text
 	CstIpi                   pgtype.Text
 	CstPis                   pgtype.Text
 	CstCofins                pgtype.Text
-	BaixaPedido              bool
-	GeraTituloDev            bool
-	ExigeSuframa             bool
 	IrPctPresumption         pgtype.Numeric
 	CsllPctPresumption       pgtype.Numeric
 	DescriptionNf            pgtype.Text
 	ImpostosNfe              NullImpostosNfeEnum
-	CfopID                   *int64
-	DispositivoLegalIpiID    *int64
-	DispositivoLegalIcmsID   *int64
-	DispositivoLegalIcmsStID *int64
-	DispositivoLegalPisID    *int64
-	DispositivoLegalCofinsID *int64
-	HierarchyIpi             pgtype.Text
-	HierarchyIcms            pgtype.Text
-	HierarchyIcmsSt          pgtype.Text
-	HierarchyPis             pgtype.Text
-	HierarchyCofins          pgtype.Text
-	IpiTransferSalesTableID  *int64
 	ListaValorContabil       bool
 	ListaRegistroSaida       bool
 	ListaIcmsIpi             bool
 	SintegraSpedFiscal       bool
-	CalcFomentar             bool
-	ExcecaoFomentar          bool
-	CompRessRetSt            bool
+	Sisdeclara               bool
 	CalcReducao              bool
-	ComplementoItens         bool
-	BuscaTipoNf              bool
-	IcmsStUltEntrada         bool
-	SomenteConsultaLotes     bool
 	CalcImpIbpt              bool
 	CredPresumidoIcms        bool
-	Ciap                     bool
-	VlrAgregadoBaseSubst     bool
-	ContratoFacon            bool
 	DescIcmsLicitacoes       bool
-	Sisdeclara               bool
+	VlrAgregadoBaseSubst     bool
+	IcmsStUltEntrada         bool
+	CompRessRetSt            bool
+	Ciap                     bool
+	CalcFomentar             bool
+	ExcecaoFomentar          bool
+	BuscaTipoNf              bool
+	ComplementoItens         bool
+	SomenteConsultaLotes     bool
+	ContratoFacon            bool
+	IpiTransferSalesTableID  *int64
+	DispositivoLegalIcmsID   *int64
+	HierarchyIcms            pgtype.Text
+	DispositivoLegalIcmsStID *int64
+	HierarchyIcmsSt          pgtype.Text
+	DispositivoLegalIpiID    *int64
+	HierarchyIpi             pgtype.Text
+	DispositivoLegalPisID    *int64
+	HierarchyPis             pgtype.Text
+	DispositivoLegalCofinsID *int64
+	HierarchyCofins          pgtype.Text
+	CodBeneficioFiscal       pgtype.Text
+	CodMotivoRestCompIcmsSt  pgtype.Text
+	CfopID                   *int64
 	CodClasTrib              pgtype.Text
 	CodClasTribTribReg       pgtype.Text
-	CodMotivoRestCompIcmsSt  pgtype.Text
-	CodBeneficioFiscal       pgtype.Text
-	EnterpriseID             int64
 }
 
 type Item struct {
@@ -11257,21 +11298,18 @@ type SpecialAdjustmentNote struct {
 	IssueDate               pgtype.Date
 	Period                  string
 	InvoiceTypeID           *int64
-	CfopID                  *int64
 	IcmsApuracaoLineID      *int64
 	AdjustmentCodeID        *int64
 	AdjustmentDocCodeID     *int64
 	History                 pgtype.Text
-	AutoGenerateSummary     bool
 	GeneratedSummaryEntryID *int64
-	TotalValue              pgtype.Numeric
 	TotalIcms               pgtype.Numeric
 	TotalIpi                pgtype.Numeric
 	Observation             pgtype.Text
 	CreatedAt               pgtype.Timestamptz
 }
 
-type SpecialAdjustmentNoteItem struct {
+type SpecialAdjustmentNoteItemsRetirado struct {
 	ID                int64
 	NoteID            int64
 	Sequence          int32
@@ -11294,6 +11332,13 @@ type SpecialAdjustmentNoteItem struct {
 	CstIpi            pgtype.Text
 	CfopID            *int64
 	CreatedAt         pgtype.Timestamptz
+}
+
+type SpecialAdjustmentNotesCamposRetirado struct {
+	ID                  int64
+	AutoGenerateSummary bool
+	CfopID              *int64
+	TotalValue          pgtype.Numeric
 }
 
 type StateGroup struct {
@@ -12091,9 +12136,17 @@ type TaxScenario struct {
 }
 
 type TaxType struct {
+	ID           int64
+	Code         int64
+	Description  string
+	IsConsumer   bool
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	EnterpriseID int64
+}
+
+type TaxTypesCamposRetirado struct {
 	ID                            int64
-	Code                          int64
-	Description                   string
 	IpiBaseTotalItems             bool
 	IpiBaseSubtractDiscount       bool
 	IpiBaseAddFreight             bool
@@ -12114,10 +12167,6 @@ type TaxType struct {
 	IrBaseTotalItems              bool
 	IrBaseSubtractDiscount        bool
 	IrBaseAddFreight              bool
-	IsConsumer                    bool
-	IsActive                      bool
-	CreatedAt                     pgtype.Timestamptz
-	EnterpriseID                  int64
 }
 
 type TechnicalAssistanceCall struct {

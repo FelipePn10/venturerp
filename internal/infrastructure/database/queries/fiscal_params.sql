@@ -32,17 +32,16 @@ SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM legal_devices;
 
 -- name: CreateCFOP :one
 INSERT INTO cfops (
-    code, description, description_full, utilization,
-    origem_clas_ipi, ind_operacao, tipo_utilizacao,
-    codigo_anexo_sn, difal, doacao
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    code, description, description_full,
+    origem_clas_ipi,
+    codigo_anexo_sn) VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: UpdateCFOP :one
 UPDATE cfops
-SET description = $2, description_full = $3, utilization = $4,
-    origem_clas_ipi = $5, ind_operacao = $6, tipo_utilizacao = $7,
-    codigo_anexo_sn = $8, difal = $9, doacao = $10, is_active = $11
+SET description = $2, description_full = $3,
+    origem_clas_ipi = $4,
+    codigo_anexo_sn = $5, is_active = $6
 WHERE id = $1
 RETURNING *;
 
@@ -78,26 +77,15 @@ INSERT INTO icms_ipi_tax_params (
     icms_pct_non_contrib, legal_device_icms_non_contrib_id,
     icms_red_pct_contrib, icms_red_target_contrib, legal_device_icms_red_contrib_id,
     icms_red_pct_non_contrib, icms_red_target_non_contrib, legal_device_icms_red_non_contrib_id,
-    icms_deferral_pct, icms_deferral_target, legal_device_icms_deferral_id, cod_benef_rbc,
-    icms_subst_pct_contrib, legal_device_icms_subst_contrib_id,
-    icms_subst_pct_non_contrib, legal_device_icms_subst_non_contrib_id,
-    icms_subst_pct_contrib_uc, icms_subst_red_pct, legal_device_icms_subst_red_id,
-    icms_internal_pct, bc_icms_st_modality, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib,
-    cst_situation_b, csosn_icms, cst_icms_contrib, cst_icms_non_contrib,
-    cod_beneficio_fiscal, cst_icms_contrib_dev, cst_icms_non_contrib_dev,
+    icms_deferral_pct, legal_device_icms_deferral_id, cod_benef_rbc, icms_subst_red_pct, icms_pct_for_st_contrib, icms_pct_for_st_non_contrib, csosn_icms, cst_icms_contrib, cst_icms_non_contrib,
+    cod_beneficio_fiscal,
     ipi_red_pct_contrib, ipi_red_target_contrib, legal_device_ipi_contrib_id,
     ipi_red_pct_non_contrib, ipi_red_target_non_contrib, legal_device_ipi_non_contrib_id,
-    cst_ipi_exit, cst_ipi_entry,
-    icms_pct_origins_1238, calc_base_red_fci, icms_subst_pct_origins_1238,
-    cst_icms_fci, uses_icms_zona_franca, dif_aliq_st_contrib_uc,
+    cst_ipi_exit,
+    icms_pct_origins_1238, uses_icms_zona_franca,
     cod_benef_contrib, cod_benef_non_contrib,
-    icms_acres_pct_contrib, icms_acres_type_contrib, icms_acres_sum_contrib,
-    icms_acres_pct_non_contrib, icms_acres_type_non_contrib, icms_acres_sum_non_contrib,
-    icms_st_acres_pct_contrib, icms_st_acres_type_contrib, icms_st_acres_sum_contrib,
-    icms_st_acres_pct_non_contrib, icms_st_acres_type_non_contrib, icms_st_acres_sum_non_contrib,
-    fcp_st_partilha_pct,
+    icms_acres_pct_non_contrib, icms_acres_type_non_contrib,
     icms_difal_red_pct, icms_difal_type,
-    difal_purchase_red_pct, difal_purchase_red_target,
     enterprise_id,
     finalidade_compra, mva_pct, mva_ajustar_interestadual, supplier_code, ipi_codigo_enquadramento
 ) SELECT
@@ -106,22 +94,17 @@ INSERT INTO icms_ipi_tax_params (
     $12, $13,
     $14, $15, $16, $17,
     $18, $19, $20, $21, $22, $23,
-    $24, $25, $26, $27,
-    $28, $29, $30, $31, $32, $33, $34,
-    $35, $36, $37, $38,
-    $39, $40, $41, $42, $43, $44, $45,
-    $46, $47, $48, $49, $50, $51, $52, $53,
-    $54, $55, $56, $57, $58, $59, $60, $61,
-    $62, $63, $64, $65, $66, $67,
-    $68, $69, $70, $71, $72, $73, $74,
-    $75, $76, $77, $78,
-    $79,
+    $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+    $34, $35, $36, $37, $38, $39, $40,
+    $41, $42, $43, $44, $45, $46,
+    $47, $48,
+    $49,
     sqlc.narg(finalidade_compra)::varchar, sqlc.arg(mva_pct)::numeric, sqlc.arg(mva_ajustar_interestadual)::boolean,
     sqlc.narg(supplier_code)::bigint, sqlc.narg(ipi_codigo_enquadramento)::varchar
 -- Item, cliente e fornecedor citados na regra têm de ser da empresa.
- WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $79))
-   AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $79))
-   AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $79))
+ WHERE ($2::bigint IS NULL OR EXISTS (SELECT 1 FROM items i WHERE i.code = $2 AND i.enterprise_id = $49))
+   AND ($6::bigint IS NULL OR EXISTS (SELECT 1 FROM customers c WHERE c.code = $6 AND c.enterprise_id = $49))
+   AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $49))
 RETURNING *;
 
 -- name: UpdateTaxParam :one
@@ -134,33 +117,22 @@ SET ncm_code = $2, item_code = $3, item_config_mask = $4, uf = $5, operation_typ
     icms_pct_non_contrib = $17, legal_device_icms_non_contrib_id = $18,
     icms_red_pct_contrib = $19, icms_red_target_contrib = $20, legal_device_icms_red_contrib_id = $21,
     icms_red_pct_non_contrib = $22, icms_red_target_non_contrib = $23, legal_device_icms_red_non_contrib_id = $24,
-    icms_deferral_pct = $25, icms_deferral_target = $26, legal_device_icms_deferral_id = $27, cod_benef_rbc = $28,
-    icms_subst_pct_contrib = $29, legal_device_icms_subst_contrib_id = $30,
-    icms_subst_pct_non_contrib = $31, legal_device_icms_subst_non_contrib_id = $32,
-    icms_subst_pct_contrib_uc = $33, icms_subst_red_pct = $34, legal_device_icms_subst_red_id = $35,
-    icms_internal_pct = $36, bc_icms_st_modality = $37, icms_pct_for_st_contrib = $38, icms_pct_for_st_non_contrib = $39,
-    cst_situation_b = $40, csosn_icms = $41, cst_icms_contrib = $42, cst_icms_non_contrib = $43,
-    cod_beneficio_fiscal = $44, cst_icms_contrib_dev = $45, cst_icms_non_contrib_dev = $46,
-    ipi_red_pct_contrib = $47, ipi_red_target_contrib = $48, legal_device_ipi_contrib_id = $49,
-    ipi_red_pct_non_contrib = $50, ipi_red_target_non_contrib = $51, legal_device_ipi_non_contrib_id = $52,
-    cst_ipi_exit = $53, cst_ipi_entry = $54,
-    icms_pct_origins_1238 = $55, calc_base_red_fci = $56, icms_subst_pct_origins_1238 = $57,
-    cst_icms_fci = $58, uses_icms_zona_franca = $59, dif_aliq_st_contrib_uc = $60,
-    cod_benef_contrib = $61, cod_benef_non_contrib = $62,
-    icms_acres_pct_contrib = $63, icms_acres_type_contrib = $64, icms_acres_sum_contrib = $65,
-    icms_acres_pct_non_contrib = $66, icms_acres_type_non_contrib = $67, icms_acres_sum_non_contrib = $68,
-    icms_st_acres_pct_contrib = $69, icms_st_acres_type_contrib = $70, icms_st_acres_sum_contrib = $71,
-    icms_st_acres_pct_non_contrib = $72, icms_st_acres_type_non_contrib = $73, icms_st_acres_sum_non_contrib = $74,
-    fcp_st_partilha_pct = $75,
-    icms_difal_red_pct = $76, icms_difal_type = $77,
-    difal_purchase_red_pct = $78, difal_purchase_red_target = $79,
-    is_active = $80, updated_at = NOW(),
+    icms_deferral_pct = $25, legal_device_icms_deferral_id = $26, cod_benef_rbc = $27, icms_subst_red_pct = $28, icms_pct_for_st_contrib = $29, icms_pct_for_st_non_contrib = $30, csosn_icms = $31, cst_icms_contrib = $32, cst_icms_non_contrib = $33,
+    cod_beneficio_fiscal = $34,
+    ipi_red_pct_contrib = $35, ipi_red_target_contrib = $36, legal_device_ipi_contrib_id = $37,
+    ipi_red_pct_non_contrib = $38, ipi_red_target_non_contrib = $39, legal_device_ipi_non_contrib_id = $40,
+    cst_ipi_exit = $41,
+    icms_pct_origins_1238 = $42, uses_icms_zona_franca = $43,
+    cod_benef_contrib = $44, cod_benef_non_contrib = $45,
+    icms_acres_pct_non_contrib = $46, icms_acres_type_non_contrib = $47,
+    icms_difal_red_pct = $48, icms_difal_type = $49,
+    is_active = $50, updated_at = NOW(),
     finalidade_compra = sqlc.narg(finalidade_compra)::varchar, mva_pct = sqlc.arg(mva_pct)::numeric,
     mva_ajustar_interestadual = sqlc.arg(mva_ajustar_interestadual)::boolean,
     supplier_code = sqlc.narg(supplier_code)::bigint,
     ipi_codigo_enquadramento = sqlc.narg(ipi_codigo_enquadramento)::varchar
-WHERE icms_ipi_tax_params.id = $1 AND icms_ipi_tax_params.enterprise_id = $81
-  AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $81))
+WHERE icms_ipi_tax_params.id = $1 AND icms_ipi_tax_params.enterprise_id = $51
+  AND (sqlc.narg(supplier_code)::bigint IS NULL OR EXISTS (SELECT 1 FROM suppliers f WHERE f.code = sqlc.narg(supplier_code)::bigint AND f.enterprise_id = $51))
 RETURNING *;
 
 -- name: GetTaxParamByID :one

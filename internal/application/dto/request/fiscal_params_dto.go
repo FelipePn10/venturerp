@@ -22,13 +22,8 @@ type CreateCFOPDTO struct {
 	Code            int32   `json:"code"`
 	Description     string  `json:"description"`
 	DescriptionFull *string `json:"description_full,omitempty"`
-	Utilization     string  `json:"utilization"`               // INDUSTRIALIZACAO_COMERCIO | IMOBILIZADO | USO_CONSUMO
 	OrigemClasIPI   *string `json:"origem_clas_ipi,omitempty"` // COMPRA | VENDA
-	IndOperacao     string  `json:"ind_operacao"`              // NORMAL | ENERGIA_ELETRICA | TELECOMUNICACAO
-	TipoUtilizacao  string  `json:"tipo_utilizacao"`           // NORMAL | VENDA_COMERCIAL_EXPORTADORA | COMPRA_FIM_ESPECIFICO_EXPORTACAO | EXPORTACAO
 	CodigoAnexoSN   *string `json:"codigo_anexo_sn,omitempty"`
-	DIFAL           bool    `json:"difal"`
-	Doacao          bool    `json:"doacao"`
 }
 
 type UpdateCFOPDTO struct {
@@ -36,13 +31,8 @@ type UpdateCFOPDTO struct {
 	Code            int32   `json:"code"`
 	Description     string  `json:"description"`
 	DescriptionFull *string `json:"description_full,omitempty"`
-	Utilization     string  `json:"utilization"`
 	OrigemClasIPI   *string `json:"origem_clas_ipi,omitempty"`
-	IndOperacao     string  `json:"ind_operacao"`
-	TipoUtilizacao  string  `json:"tipo_utilizacao"`
 	CodigoAnexoSN   *string `json:"codigo_anexo_sn,omitempty"`
-	DIFAL           bool    `json:"difal"`
-	Doacao          bool    `json:"doacao"`
 	IsActive        *bool   `json:"is_active,omitempty"`
 }
 
@@ -84,33 +74,21 @@ type CreateTaxParamDTO struct {
 
 	// ICMS deferral
 	ICMSDeferralPct           decimal.Decimal `json:"icms_deferral_pct"`
-	ICMSDeferralTarget        *string         `json:"icms_deferral_target,omitempty"`
 	LegalDeviceICMSDeferralID *int64          `json:"legal_device_icms_deferral_id,omitempty"`
 	CodBenefRBC               *string         `json:"cod_benef_rbc,omitempty"`
 
 	// ICMS substitution
-	ICMSSubstPctContrib              decimal.Decimal `json:"icms_subst_pct_contrib"`
-	LegalDeviceICMSSubstContribID    *int64          `json:"legal_device_icms_subst_contrib_id,omitempty"`
-	ICMSSubstPctNonContrib           decimal.Decimal `json:"icms_subst_pct_non_contrib"`
-	LegalDeviceICMSSubstNonContribID *int64          `json:"legal_device_icms_subst_non_contrib_id,omitempty"`
-	ICMSSubstPctContribUC            decimal.Decimal `json:"icms_subst_pct_contrib_uc"`
-	ICMSSubstRedPct                  decimal.Decimal `json:"icms_subst_red_pct"`
-	LegalDeviceICMSSubstRedID        *int64          `json:"legal_device_icms_subst_red_id,omitempty"`
+	ICMSSubstRedPct decimal.Decimal `json:"icms_subst_red_pct"`
 
 	// ICMS ST calculation
-	ICMSInternalPct        decimal.Decimal `json:"icms_internal_pct"`
-	BCICMSSTModality       *string         `json:"bc_icms_st_modality,omitempty"`
 	ICMSPctForSTContrib    decimal.Decimal `json:"icms_pct_for_st_contrib"`
 	ICMSPctForSTNonContrib decimal.Decimal `json:"icms_pct_for_st_non_contrib"`
 
 	// CST / CSOSN
-	CSTSituationB        *string `json:"cst_situation_b,omitempty"`
-	CSOSNIGMS            *string `json:"csosn_icms,omitempty"`
-	CSTICMSContrib       *string `json:"cst_icms_contrib,omitempty"`
-	CSTICMSNonContrib    *string `json:"cst_icms_non_contrib,omitempty"`
-	CodBeneficioFiscal   *string `json:"cod_beneficio_fiscal,omitempty"`
-	CSTICMSContribDev    *string `json:"cst_icms_contrib_dev,omitempty"`
-	CSTICMSNonContribDev *string `json:"cst_icms_non_contrib_dev,omitempty"`
+	CSOSNIGMS          *string `json:"csosn_icms,omitempty"`
+	CSTICMSContrib     *string `json:"cst_icms_contrib,omitempty"`
+	CSTICMSNonContrib  *string `json:"cst_icms_non_contrib,omitempty"`
+	CodBeneficioFiscal *string `json:"cod_beneficio_fiscal,omitempty"`
 
 	// IPI reduction
 	IPIRedPctContrib           decimal.Decimal `json:"ipi_red_pct_contrib"`
@@ -120,41 +98,23 @@ type CreateTaxParamDTO struct {
 	IPIRedTargetNonContrib     *string         `json:"ipi_red_target_non_contrib,omitempty"`
 	LegalDeviceIPINonContribID *int64          `json:"legal_device_ipi_non_contrib_id,omitempty"`
 	CSTIPIExit                 *string         `json:"cst_ipi_exit,omitempty"`
-	CSTIPIEntry                *string         `json:"cst_ipi_entry,omitempty"`
 
 	// FCI
-	ICMSPctOrigins1238      decimal.Decimal `json:"icms_pct_origins_1238"`
-	CalcBaseRedFCI          bool            `json:"calc_base_red_fci"`
-	ICMSSubstPctOrigins1238 decimal.Decimal `json:"icms_subst_pct_origins_1238"`
-	CSTICMSFci              *string         `json:"cst_icms_fci,omitempty"`
-	UsesICMSZonaFranca      bool            `json:"uses_icms_zona_franca"`
-	IPICodigoEnquadramento  *string         `json:"ipi_codigo_enquadramento,omitempty"`
-	DifAliqSTContribUC      decimal.Decimal `json:"dif_aliq_st_contrib_uc"`
-	CodBenefContrib         *string         `json:"cod_benef_contrib,omitempty"`
-	CodBenefNonContrib      *string         `json:"cod_benef_non_contrib,omitempty"`
+	ICMSPctOrigins1238     decimal.Decimal `json:"icms_pct_origins_1238"`
+	UsesICMSZonaFranca     bool            `json:"uses_icms_zona_franca"`
+	IPICodigoEnquadramento *string         `json:"ipi_codigo_enquadramento,omitempty"`
+	CodBenefContrib        *string         `json:"cod_benef_contrib,omitempty"`
+	CodBenefNonContrib     *string         `json:"cod_benef_non_contrib,omitempty"`
 
 	// ICMS additions
-	ICMSAcresPctContrib       decimal.Decimal `json:"icms_acres_pct_contrib"`
-	ICMSAcresTypeContrib      *string         `json:"icms_acres_type_contrib,omitempty"` // FUNDO_COMBATE_POBREZA | OUTROS
-	ICMSAcresSumContrib       bool            `json:"icms_acres_sum_contrib"`
-	ICMSAcresPctNonContrib    decimal.Decimal `json:"icms_acres_pct_non_contrib"`
-	ICMSAcresTypeNonContrib   *string         `json:"icms_acres_type_non_contrib,omitempty"`
-	ICMSAcresSumNonContrib    bool            `json:"icms_acres_sum_non_contrib"`
-	ICMSSTAcresPctContrib     decimal.Decimal `json:"icms_st_acres_pct_contrib"`
-	ICMSSTAcresTypeContrib    *string         `json:"icms_st_acres_type_contrib,omitempty"`
-	ICMSSTAcresSumContrib     bool            `json:"icms_st_acres_sum_contrib"`
-	ICMSSTAcresPctNonContrib  decimal.Decimal `json:"icms_st_acres_pct_non_contrib"`
-	ICMSSTAcresTypeNonContrib *string         `json:"icms_st_acres_type_non_contrib,omitempty"`
-	ICMSSTAcresSumNonContrib  bool            `json:"icms_st_acres_sum_non_contrib"`
-	FCPSTPartilhaPct          decimal.Decimal `json:"fcp_st_partilha_pct"`
+	ICMSAcresPctNonContrib  decimal.Decimal `json:"icms_acres_pct_non_contrib"`
+	ICMSAcresTypeNonContrib *string         `json:"icms_acres_type_non_contrib,omitempty"`
 
 	// DIFAL
 	ICMSDifalRedPct decimal.Decimal `json:"icms_difal_red_pct"`
 	ICMSDifalType   *string         `json:"icms_difal_type,omitempty"` // TRIBUTADO | ISENTO_OUTRAS | NAO_CONSIDERA
 
 	// DIFAL purchases
-	DifalPurchaseRedPct    decimal.Decimal `json:"difal_purchase_red_pct"`
-	DifalPurchaseRedTarget *string         `json:"difal_purchase_red_target,omitempty"`
 
 	// Cenário: finalidade da compra (REVENDA, INDUSTRIALIZACAO, USO_CONSUMO;
 	// vazia = qualquer), MVA original da ST (%) e ajuste da MVA na venda

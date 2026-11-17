@@ -229,3 +229,42 @@ func (h *CustomerHandler) UpdateInvoiceTypeByCode(w http.ResponseWriter, r *http
 	result, err := h.uc.UpdateInvoiceType(r.Context(), dto)
 	customerRespond(w, result, err)
 }
+
+// Faturamento declarado do cliente (DRE, balanço, IRPF).
+func (h *CustomerHandler) ListFinancialStatements(w http.ResponseWriter, r *http.Request) {
+	code, ok := customerPathCode(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.uc.ListFinancialStatements(r.Context(), code)
+	customerRespond(w, result, err)
+}
+
+func (h *CustomerHandler) AddFinancialStatement(w http.ResponseWriter, r *http.Request) {
+	code, ok := customerPathCode(w, r)
+	if !ok {
+		return
+	}
+	var dto request.FinancialStatementDTO
+	if !customerDecode(w, r, &dto) {
+		return
+	}
+	result, err := h.uc.AddFinancialStatement(r.Context(), code, dto)
+	customerRespond(w, result, err)
+}
+
+func (h *CustomerHandler) DeleteFinancialStatement(w http.ResponseWriter, r *http.Request) {
+	code, ok := customerPathCode(w, r)
+	if !ok {
+		return
+	}
+	if id, ok := pathID(w, r, "id"); ok {
+		noContent(w, h.uc.DeleteFinancialStatement(r.Context(), code, id))
+	}
+}
+
+// Saneamento: GET /api/customers/saneamento — o relatório da VCLI0510.
+func (h *CustomerHandler) Saneamento(w http.ResponseWriter, r *http.Request) {
+	result, err := h.uc.Saneamento(r.Context())
+	customerRespond(w, result, err)
+}

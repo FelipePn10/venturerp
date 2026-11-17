@@ -95,16 +95,14 @@ ORDER BY code;
 -- ─── Carriers ─────────────────────────────────────────────────────────────────
 
 -- name: CreateCarrier :one
-INSERT INTO carriers (enterprise_id, code, description, billing_type, uses_credit_limit, consider_available,
-                      postpone_due_date, receipt_days, payment_days)
-VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO carriers (enterprise_id, code, description)
+VALUES ($3, $1, $2)
 RETURNING *;
 
 -- name: UpdateCarrier :one
 UPDATE carriers
-SET description = $2, billing_type = $3, uses_credit_limit = $4, consider_available = $5,
-    postpone_due_date = $6, receipt_days = $7, payment_days = $8, is_active = $9
-WHERE id = $1 AND enterprise_id = $10
+SET description = $2, is_active = $3
+WHERE id = $1 AND enterprise_id = $4
 RETURNING *;
 
 -- name: GetCarrierByCode :one
@@ -257,80 +255,22 @@ SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM sales_tables;
 
 -- name: CreateInvoiceType :one
 INSERT INTO invoice_types (enterprise_id, 
-    code, description, type, stock_movement, icms_type,
-    icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct,
-    issqn_pct, ir_pct, csll_pct, inss_pct,
-    generates_revenue, updates_inventory, generates_financial_title,
-    considers_goals, calc_substitution_tax, calc_icms_deferral,
-    calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books,
-    model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins,
-    baixa_pedido, gera_titulo_dev, exige_suframa,
-    ir_pct_presumption, csll_pct_presumption,
-    description_nf, impostos_nfe, cfop_id,
-    dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id,
-    dispositivo_legal_pis_id, dispositivo_legal_cofins_id,
-    hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins,
-    ipi_transfer_sales_table_id,
-    lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal,
-    calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens,
-    busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt,
-    cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon,
-    desc_icms_licitacoes, sisdeclara,
-    cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
-) VALUES (
-    $73, $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10,
-    $11, $12, $13, $14,
-    $15, $16, $17,
-    $18, $19, $20,
-    $21, $22, $23, $24,
-    $25, $26, $27, $28, $29, $30,
-    $31, $32, $33,
-    $34, $35,
-    $36, $37, $38,
-    $39, $40, $41,
-    $42, $43,
-    $44, $45, $46, $47, $48,
-    $49,
-    $50, $51, $52, $53,
-    $54, $55, $56, $57, $58,
-    $59, $60, $61, $62,
-    $63, $64, $65, $66,
-    $67, $68,
-    $69, $70, $71, $72
-) RETURNING *;
+    code, description, type, stock_movement, icms_type, icms_reduction_pct,
+    generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral,
+    calc_pis_cofins, calc_difal, requires_sales_order,
+    baixa_pedido, exige_suframa) VALUES (
+    $17, $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11,
+    $12, $13, $14,
+    $15, $16) RETURNING *;
 
 -- name: UpdateInvoiceType :one
 UPDATE invoice_types
-SET description = $2, type = $3, stock_movement = $4, icms_type = $5,
-    icms_pct = $6, icms_reduction_pct = $7, ipi_pct = $8, pis_pct = $9,
-    cofins_pct = $10, issqn_pct = $11, ir_pct = $12, csll_pct = $13, inss_pct = $14,
-    generates_revenue = $15, updates_inventory = $16, generates_financial_title = $17,
-    considers_goals = $18, calc_substitution_tax = $19, calc_icms_deferral = $20,
-    calc_pis_cofins = $21, calc_difal = $22, requires_sales_order = $23,
-    lists_fiscal_books = $24, is_active = $25,
-    model_nf = $26, cst_icms = $27, csosn_icms = $28, cst_ipi = $29,
-    cst_pis = $30, cst_cofins = $31,
-    baixa_pedido = $32, gera_titulo_dev = $33, exige_suframa = $34,
-    ir_pct_presumption = $35, csll_pct_presumption = $36,
-    description_nf = $37, impostos_nfe = $38, cfop_id = $39,
-    dispositivo_legal_ipi_id = $40, dispositivo_legal_icms_id = $41,
-    dispositivo_legal_icms_st_id = $42, dispositivo_legal_pis_id = $43,
-    dispositivo_legal_cofins_id = $44,
-    hierarchy_ipi = $45, hierarchy_icms = $46, hierarchy_icms_st = $47,
-    hierarchy_pis = $48, hierarchy_cofins = $49,
-    ipi_transfer_sales_table_id = $50,
-    lista_valor_contabil = $51, lista_registro_saida = $52, lista_icms_ipi = $53,
-    sintegra_sped_fiscal = $54,
-    calc_fomentar = $55, excecao_fomentar = $56, comp_ress_ret_st = $57,
-    calc_reducao = $58, complemento_itens = $59,
-    busca_tipo_nf = $60, icms_st_ult_entrada = $61, somente_consulta_lotes = $62,
-    calc_imp_ibpt = $63, cred_presumido_icms = $64, ciap = $65,
-    vlr_agregado_base_subst = $66, contrato_facon = $67,
-    desc_icms_licitacoes = $68, sisdeclara = $69,
-    cod_clas_trib = $70, cod_clas_trib_trib_reg = $71,
-    cod_motivo_rest_comp_icms_st = $72, cod_beneficio_fiscal = $73
-WHERE id = $1 AND enterprise_id = $74
+SET description = $2, type = $3, stock_movement = $4, icms_type = $5, icms_reduction_pct = $6,
+    generates_revenue = $7, updates_inventory = $8, generates_financial_title = $9, calc_substitution_tax = $10, calc_icms_deferral = $11,
+    calc_pis_cofins = $12, calc_difal = $13, requires_sales_order = $14, is_active = $15,
+    baixa_pedido = $16, exige_suframa = $17
+WHERE id = $1 AND enterprise_id = $18
 RETURNING *;
 
 -- name: GetInvoiceTypeByCode :one
@@ -349,35 +289,17 @@ SELECT (COALESCE(MAX(code), 0) + 1)::bigint AS next_code FROM invoice_types WHER
 -- name: CreateTaxType :one
 INSERT INTO tax_types (enterprise_id, 
     code, description,
-    ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses,
-    icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses,
-    pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight,
-    pis_cofins_base_add_insurance, pis_cofins_base_add_expenses,
-    csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight,
-    ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight,
     is_consumer
 ) VALUES (
-    $24, $1, $2,
-    $3, $4, $5, $6,
-    $7, $8, $9, $10, $11,
-    $12, $13, $14,
-    $15, $16,
-    $17, $18, $19,
-    $20, $21, $22,
-    $23
+    $4, $1, $2,
+    $3
 ) RETURNING *;
 
 -- name: UpdateTaxType :one
 UPDATE tax_types
 SET description = $2,
-    ipi_base_total_items = $3, ipi_base_subtract_discount = $4, ipi_base_add_freight = $5, ipi_base_add_expenses = $6,
-    icms_base_total_items = $7, icms_base_subtract_discount = $8, icms_base_add_freight = $9, icms_base_add_ipi = $10, icms_base_add_expenses = $11,
-    pis_cofins_base_total_items = $12, pis_cofins_base_subtract_discount = $13, pis_cofins_base_add_freight = $14,
-    pis_cofins_base_add_insurance = $15, pis_cofins_base_add_expenses = $16,
-    csll_base_total_items = $17, csll_base_subtract_discount = $18, csll_base_add_freight = $19,
-    ir_base_total_items = $20, ir_base_subtract_discount = $21, ir_base_add_freight = $22,
-    is_consumer = $23, is_active = $24
-WHERE id = $1 AND enterprise_id = $25
+    is_consumer = $3, is_active = $4
+WHERE id = $1 AND enterprise_id = $5
 RETURNING *;
 
 -- name: GetTaxTypeByCode :one
@@ -494,11 +416,13 @@ SELECT * FROM customer_credit_policies WHERE enterprise_id = $1;
 INSERT INTO customer_credit_policies (
     enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
     overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
-    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct,
+    customer_revenue_pct, declared_monthly_revenue, auto_review_months, auto_increase_max_pct
 ) VALUES (
     sqlc.arg(enterprise_id), sqlc.arg(max_limit), sqlc.arg(new_customer_capital_pct), sqlc.arg(new_customer_cap), sqlc.arg(override_tolerance_pct),
     sqlc.arg(overdue_block_days), sqlc.arg(history_months), sqlc.arg(validity_months_a), sqlc.arg(validity_months_b), sqlc.arg(validity_months_c),
-    sqlc.arg(validity_months_d), sqlc.arg(validity_months_e), sqlc.arg(registration_check_days), sqlc.arg(updated_by), NOW(), sqlc.arg(new_customer_revenue_pct)
+    sqlc.arg(validity_months_d), sqlc.arg(validity_months_e), sqlc.arg(registration_check_days), sqlc.arg(updated_by), NOW(), sqlc.arg(new_customer_revenue_pct),
+    sqlc.arg(customer_revenue_pct), sqlc.arg(declared_monthly_revenue), sqlc.arg(auto_review_months), sqlc.arg(auto_increase_max_pct)
 )
 ON CONFLICT (enterprise_id) DO UPDATE SET
     max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
@@ -507,7 +431,9 @@ ON CONFLICT (enterprise_id) DO UPDATE SET
     validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
     validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
     validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
-    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct
+    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct,
+    customer_revenue_pct = EXCLUDED.customer_revenue_pct, declared_monthly_revenue = EXCLUDED.declared_monthly_revenue,
+    auto_review_months = EXCLUDED.auto_review_months, auto_increase_max_pct = EXCLUDED.auto_increase_max_pct
 RETURNING *;
 
 -- name: CreateCreditReview :one

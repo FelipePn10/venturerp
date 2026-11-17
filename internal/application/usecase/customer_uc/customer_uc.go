@@ -294,15 +294,10 @@ func (uc *CustomerUseCase) CreateCarrier(ctx context.Context, dto request.Create
 	if err != nil {
 		return nil, fmt.Errorf("generating carrier code: %w", err)
 	}
-	c, err := entity.NewCarrier(code, dto.Description, entity.CarrierBillingType(dto.BillingType))
+	c, err := entity.NewCarrier(code, dto.Description)
 	if err != nil {
 		return nil, err
 	}
-	c.UsesCreditLimit = dto.UsesCreditLimit
-	c.ConsiderAvailable = dto.ConsiderAvailable
-	c.PostponeDueDate = dto.PostponeDueDate
-	c.ReceiptDays = dto.ReceiptDays
-	c.PaymentDays = dto.PaymentDays
 	created, err := uc.repo.CreateCarrier(ctx, c)
 	if err != nil {
 		return nil, err
@@ -327,12 +322,11 @@ func (uc *CustomerUseCase) UpdateCarrier(ctx context.Context, code int64, dto re
 	if err != nil {
 		return nil, err
 	}
-	validated, err := entity.NewCarrier(code, dto.Description, entity.CarrierBillingType(dto.BillingType))
+	validated, err := entity.NewCarrier(code, dto.Description)
 	if err != nil {
 		return nil, err
 	}
 	validated.ID, validated.IsActive = current.ID, ptrutil.BoolOr(dto.IsActive, current.IsActive)
-	validated.UsesCreditLimit, validated.ConsiderAvailable, validated.PostponeDueDate, validated.ReceiptDays, validated.PaymentDays = dto.UsesCreditLimit, dto.ConsiderAvailable, dto.PostponeDueDate, dto.ReceiptDays, dto.PaymentDays
 	updated, err := uc.repo.UpdateCarrier(ctx, validated)
 	if err != nil {
 		return nil, err
@@ -342,16 +336,10 @@ func (uc *CustomerUseCase) UpdateCarrier(ctx context.Context, code int64, dto re
 
 func toCarrierResponse(c *entity.Carrier) *response.CarrierResponse {
 	return &response.CarrierResponse{
-		ID:                c.ID,
-		Code:              c.Code,
-		Description:       c.Description,
-		BillingType:       string(c.BillingType),
-		UsesCreditLimit:   c.UsesCreditLimit,
-		ConsiderAvailable: c.ConsiderAvailable,
-		PostponeDueDate:   c.PostponeDueDate,
-		ReceiptDays:       c.ReceiptDays,
-		PaymentDays:       c.PaymentDays,
-		IsActive:          c.IsActive,
+		ID:          c.ID,
+		Code:        c.Code,
+		Description: c.Description,
+		IsActive:    c.IsActive,
 	}
 }
 
@@ -1435,77 +1423,21 @@ func (uc *CustomerUseCase) UpdateInvoiceType(ctx context.Context, dto request.Up
 	}
 	// reuse the same shared helper — field sets are identical between Create and Update DTOs
 	createLike := request.CreateInvoiceTypeDTO{
-		Description:              dto.Description,
-		Type:                     dto.Type,
-		StockMovement:            dto.StockMovement,
-		ICMSType:                 dto.ICMSType,
-		ICMSPct:                  dto.ICMSPct,
-		ICMSReductionPct:         dto.ICMSReductionPct,
-		IPIPct:                   dto.IPIPct,
-		PISPct:                   dto.PISPct,
-		COFINSPct:                dto.COFINSPct,
-		ISSQNPct:                 dto.ISSQNPct,
-		IRPct:                    dto.IRPct,
-		CSLLPct:                  dto.CSLLPct,
-		INSSPct:                  dto.INSSPct,
-		GeneratesRevenue:         dto.GeneratesRevenue,
-		UpdatesInventory:         dto.UpdatesInventory,
-		GeneratesFinancialTitle:  dto.GeneratesFinancialTitle,
-		ConsidersGoals:           dto.ConsidersGoals,
-		CalcSubstitutionTax:      dto.CalcSubstitutionTax,
-		CalcICMSDeferral:         dto.CalcICMSDeferral,
-		CalcPISCOFINS:            dto.CalcPISCOFINS,
-		CalcDIFAL:                dto.CalcDIFAL,
-		RequiresSalesOrder:       dto.RequiresSalesOrder,
-		ListsFiscalBooks:         dto.ListsFiscalBooks,
-		ModelNF:                  dto.ModelNF,
-		CSTICMS:                  dto.CSTICMS,
-		CSOSNTICMS:               dto.CSOSNTICMS,
-		CSTIPI:                   dto.CSTIPI,
-		CSTPIS:                   dto.CSTPIS,
-		CSTCOFINS:                dto.CSTCOFINS,
-		BaixaPedido:              dto.BaixaPedido,
-		GeraTituloDev:            dto.GeraTituloDev,
-		ExigeSuframa:             dto.ExigeSuframa,
-		IRPctPresumption:         dto.IRPctPresumption,
-		CSLLPctPresumption:       dto.CSLLPctPresumption,
-		DescriptionNF:            dto.DescriptionNF,
-		ImpostosNFe:              dto.ImpostosNFe,
-		CFOPId:                   dto.CFOPId,
-		DispositivoLegalIPIId:    dto.DispositivoLegalIPIId,
-		DispositivoLegalICMSId:   dto.DispositivoLegalICMSId,
-		DispositivoLegalICMSSTId: dto.DispositivoLegalICMSSTId,
-		DispositivoLegalPISId:    dto.DispositivoLegalPISId,
-		DispositivoLegalCOFINSId: dto.DispositivoLegalCOFINSId,
-		HierarchyIPI:             dto.HierarchyIPI,
-		HierarchyICMS:            dto.HierarchyICMS,
-		HierarchyICMSST:          dto.HierarchyICMSST,
-		HierarchyPIS:             dto.HierarchyPIS,
-		HierarchyCOFINS:          dto.HierarchyCOFINS,
-		IPITransferSalesTableId:  dto.IPITransferSalesTableId,
-		ListaValorContabil:       dto.ListaValorContabil,
-		ListaRegistroSaida:       dto.ListaRegistroSaida,
-		ListaICMSIPI:             dto.ListaICMSIPI,
-		SintegraSpedFiscal:       dto.SintegraSpedFiscal,
-		CalcFomentar:             dto.CalcFomentar,
-		ExcecaoFomentar:          dto.ExcecaoFomentar,
-		CompRessRetST:            dto.CompRessRetST,
-		CalcReducao:              dto.CalcReducao,
-		ComplementoItens:         dto.ComplementoItens,
-		BuscaTipoNF:              dto.BuscaTipoNF,
-		ICMSSTUltEntrada:         dto.ICMSSTUltEntrada,
-		SomenteConsultaLotes:     dto.SomenteConsultaLotes,
-		CalcImpIBPT:              dto.CalcImpIBPT,
-		CredPresumidoICMS:        dto.CredPresumidoICMS,
-		CIAP:                     dto.CIAP,
-		VlrAgregadoBaseSubst:     dto.VlrAgregadoBaseSubst,
-		ContratoFacon:            dto.ContratoFacon,
-		DescICMSLicitacoes:       dto.DescICMSLicitacoes,
-		Sisdeclara:               dto.Sisdeclara,
-		CodClasTrib:              dto.CodClasTrib,
-		CodClasTribTribReg:       dto.CodClasTribTribReg,
-		CodMotivoRestCompICMSST:  dto.CodMotivoRestCompICMSST,
-		CodBeneficioFiscal:       dto.CodBeneficioFiscal,
+		Description:             dto.Description,
+		Type:                    dto.Type,
+		StockMovement:           dto.StockMovement,
+		ICMSType:                dto.ICMSType,
+		ICMSReductionPct:        dto.ICMSReductionPct,
+		GeneratesRevenue:        dto.GeneratesRevenue,
+		UpdatesInventory:        dto.UpdatesInventory,
+		GeneratesFinancialTitle: dto.GeneratesFinancialTitle,
+		CalcSubstitutionTax:     dto.CalcSubstitutionTax,
+		CalcICMSDeferral:        dto.CalcICMSDeferral,
+		CalcPISCOFINS:           dto.CalcPISCOFINS,
+		CalcDIFAL:               dto.CalcDIFAL,
+		RequiresSalesOrder:      dto.RequiresSalesOrder,
+		BaixaPedido:             dto.BaixaPedido,
+		ExigeSuframa:            dto.ExigeSuframa,
 	}
 	applyInvoiceTypeDTOToEntity(createLike, it)
 	updated, err := uc.repo.UpdateInvoiceType(ctx, it)
@@ -1516,163 +1448,43 @@ func (uc *CustomerUseCase) UpdateInvoiceType(ctx context.Context, dto request.Up
 }
 
 func toInvoiceTypeResponse(it *entity.InvoiceType) *response.InvoiceTypeResponse {
-	var impostosNFe *string
-	if it.ImpostosNFe != nil {
-		s := string(*it.ImpostosNFe)
-		impostosNFe = &s
-	}
 	return &response.InvoiceTypeResponse{
-		ID:                       it.ID,
-		Code:                     it.Code,
-		Description:              it.Description,
-		Type:                     string(it.Type),
-		StockMovement:            string(it.StockMovement),
-		ICMSType:                 string(it.ICMSType),
-		ICMSPct:                  it.ICMSPct.InexactFloat64(),
-		ICMSReductionPct:         it.ICMSReductionPct.InexactFloat64(),
-		IPIPct:                   it.IPIPct.InexactFloat64(),
-		PISPct:                   it.PISPct.InexactFloat64(),
-		COFINSPct:                it.COFINSPct.InexactFloat64(),
-		ISSQNPct:                 it.ISSQNPct.InexactFloat64(),
-		IRPct:                    it.IRPct.InexactFloat64(),
-		CSLLPct:                  it.CSLLPct.InexactFloat64(),
-		INSSPct:                  it.INSSPct.InexactFloat64(),
-		GeneratesRevenue:         it.GeneratesRevenue,
-		UpdatesInventory:         it.UpdatesInventory,
-		GeneratesFinancialTitle:  it.GeneratesFinancialTitle,
-		ConsidersGoals:           it.ConsidersGoals,
-		CalcSubstitutionTax:      it.CalcSubstitutionTax,
-		CalcICMSDeferral:         it.CalcICMSDeferral,
-		CalcPISCOFINS:            it.CalcPISCOFINS,
-		CalcDIFAL:                it.CalcDIFAL,
-		RequiresSalesOrder:       it.RequiresSalesOrder,
-		ListsFiscalBooks:         it.ListsFiscalBooks,
-		IsActive:                 it.IsActive,
-		ModelNF:                  it.ModelNF,
-		CSTICMS:                  it.CSTICMS,
-		CSOSNTICMS:               it.CSOSNTICMS,
-		CSTIPI:                   it.CSTIPI,
-		CSTPIS:                   it.CSTPIS,
-		CSTCOFINS:                it.CSTCOFINS,
-		BaixaPedido:              it.BaixaPedido,
-		GeraTituloDev:            it.GeraTituloDev,
-		ExigeSuframa:             it.ExigeSuframa,
-		IRPctPresumption:         it.IRPctPresumption.InexactFloat64(),
-		CSLLPctPresumption:       it.CSLLPctPresumption.InexactFloat64(),
-		DescriptionNF:            it.DescriptionNF,
-		ImpostosNFe:              impostosNFe,
-		CFOPId:                   it.CFOPId,
-		DispositivoLegalIPIId:    it.DispositivoLegalIPIId,
-		DispositivoLegalICMSId:   it.DispositivoLegalICMSId,
-		DispositivoLegalICMSSTId: it.DispositivoLegalICMSSTId,
-		DispositivoLegalPISId:    it.DispositivoLegalPISId,
-		DispositivoLegalCOFINSId: it.DispositivoLegalCOFINSId,
-		HierarchyIPI:             it.HierarchyIPI,
-		HierarchyICMS:            it.HierarchyICMS,
-		HierarchyICMSST:          it.HierarchyICMSST,
-		HierarchyPIS:             it.HierarchyPIS,
-		HierarchyCOFINS:          it.HierarchyCOFINS,
-		IPITransferSalesTableId:  it.IPITransferSalesTableId,
-		ListaValorContabil:       it.ListaValorContabil,
-		ListaRegistroSaida:       it.ListaRegistroSaida,
-		ListaICMSIPI:             it.ListaICMSIPI,
-		SintegraSpedFiscal:       it.SintegraSpedFiscal,
-		CalcFomentar:             it.CalcFomentar,
-		ExcecaoFomentar:          it.ExcecaoFomentar,
-		CompRessRetST:            it.CompRessRetST,
-		CalcReducao:              it.CalcReducao,
-		ComplementoItens:         it.ComplementoItens,
-		BuscaTipoNF:              it.BuscaTipoNF,
-		ICMSSTUltEntrada:         it.ICMSSTUltEntrada,
-		SomenteConsultaLotes:     it.SomenteConsultaLotes,
-		CalcImpIBPT:              it.CalcImpIBPT,
-		CredPresumidoICMS:        it.CredPresumidoICMS,
-		CIAP:                     it.CIAP,
-		VlrAgregadoBaseSubst:     it.VlrAgregadoBaseSubst,
-		ContratoFacon:            it.ContratoFacon,
-		DescICMSLicitacoes:       it.DescICMSLicitacoes,
-		Sisdeclara:               it.Sisdeclara,
-		CodClasTrib:              it.CodClasTrib,
-		CodClasTribTribReg:       it.CodClasTribTribReg,
-		CodMotivoRestCompICMSST:  it.CodMotivoRestCompICMSST,
-		CodBeneficioFiscal:       it.CodBeneficioFiscal,
-		CreatedAt:                it.CreatedAt,
+		ID:                      it.ID,
+		Code:                    it.Code,
+		Description:             it.Description,
+		Type:                    string(it.Type),
+		StockMovement:           string(it.StockMovement),
+		ICMSType:                string(it.ICMSType),
+		ICMSReductionPct:        it.ICMSReductionPct.InexactFloat64(),
+		GeneratesRevenue:        it.GeneratesRevenue,
+		UpdatesInventory:        it.UpdatesInventory,
+		GeneratesFinancialTitle: it.GeneratesFinancialTitle,
+		CalcSubstitutionTax:     it.CalcSubstitutionTax,
+		CalcICMSDeferral:        it.CalcICMSDeferral,
+		CalcPISCOFINS:           it.CalcPISCOFINS,
+		CalcDIFAL:               it.CalcDIFAL,
+		RequiresSalesOrder:      it.RequiresSalesOrder,
+		IsActive:                it.IsActive,
+		BaixaPedido:             it.BaixaPedido,
+		ExigeSuframa:            it.ExigeSuframa,
+		CreatedAt:               it.CreatedAt,
 	}
 }
 
 func applyInvoiceTypeDTOToEntity(dto request.CreateInvoiceTypeDTO, it *entity.InvoiceType) {
 	it.StockMovement = entity.InvoiceStock(dto.StockMovement)
 	it.ICMSType = entity.InvoiceICMSType(dto.ICMSType)
-	it.ICMSPct = dto.ICMSPct
 	it.ICMSReductionPct = dto.ICMSReductionPct
-	it.IPIPct = dto.IPIPct
-	it.PISPct = dto.PISPct
-	it.COFINSPct = dto.COFINSPct
-	it.ISSQNPct = dto.ISSQNPct
-	it.IRPct = dto.IRPct
-	it.CSLLPct = dto.CSLLPct
-	it.INSSPct = dto.INSSPct
 	it.GeneratesRevenue = dto.GeneratesRevenue
 	it.UpdatesInventory = dto.UpdatesInventory
 	it.GeneratesFinancialTitle = dto.GeneratesFinancialTitle
-	it.ConsidersGoals = dto.ConsidersGoals
 	it.CalcSubstitutionTax = dto.CalcSubstitutionTax
 	it.CalcICMSDeferral = dto.CalcICMSDeferral
 	it.CalcPISCOFINS = dto.CalcPISCOFINS
 	it.CalcDIFAL = dto.CalcDIFAL
 	it.RequiresSalesOrder = dto.RequiresSalesOrder
-	it.ListsFiscalBooks = dto.ListsFiscalBooks
-	it.ModelNF = dto.ModelNF
-	it.CSTICMS = dto.CSTICMS
-	it.CSOSNTICMS = dto.CSOSNTICMS
-	it.CSTIPI = dto.CSTIPI
-	it.CSTPIS = dto.CSTPIS
-	it.CSTCOFINS = dto.CSTCOFINS
 	it.BaixaPedido = dto.BaixaPedido
-	it.GeraTituloDev = dto.GeraTituloDev
 	it.ExigeSuframa = dto.ExigeSuframa
-	it.IRPctPresumption = dto.IRPctPresumption
-	it.CSLLPctPresumption = dto.CSLLPctPresumption
-	it.DescriptionNF = dto.DescriptionNF
-	if dto.ImpostosNFe != nil {
-		v := entity.ImpostosNFe(*dto.ImpostosNFe)
-		it.ImpostosNFe = &v
-	}
-	it.CFOPId = dto.CFOPId
-	it.DispositivoLegalIPIId = dto.DispositivoLegalIPIId
-	it.DispositivoLegalICMSId = dto.DispositivoLegalICMSId
-	it.DispositivoLegalICMSSTId = dto.DispositivoLegalICMSSTId
-	it.DispositivoLegalPISId = dto.DispositivoLegalPISId
-	it.DispositivoLegalCOFINSId = dto.DispositivoLegalCOFINSId
-	it.HierarchyIPI = dto.HierarchyIPI
-	it.HierarchyICMS = dto.HierarchyICMS
-	it.HierarchyICMSST = dto.HierarchyICMSST
-	it.HierarchyPIS = dto.HierarchyPIS
-	it.HierarchyCOFINS = dto.HierarchyCOFINS
-	it.IPITransferSalesTableId = dto.IPITransferSalesTableId
-	it.ListaValorContabil = dto.ListaValorContabil
-	it.ListaRegistroSaida = dto.ListaRegistroSaida
-	it.ListaICMSIPI = dto.ListaICMSIPI
-	it.SintegraSpedFiscal = dto.SintegraSpedFiscal
-	it.CalcFomentar = dto.CalcFomentar
-	it.ExcecaoFomentar = dto.ExcecaoFomentar
-	it.CompRessRetST = dto.CompRessRetST
-	it.CalcReducao = dto.CalcReducao
-	it.ComplementoItens = dto.ComplementoItens
-	it.BuscaTipoNF = dto.BuscaTipoNF
-	it.ICMSSTUltEntrada = dto.ICMSSTUltEntrada
-	it.SomenteConsultaLotes = dto.SomenteConsultaLotes
-	it.CalcImpIBPT = dto.CalcImpIBPT
-	it.CredPresumidoICMS = dto.CredPresumidoICMS
-	it.CIAP = dto.CIAP
-	it.VlrAgregadoBaseSubst = dto.VlrAgregadoBaseSubst
-	it.ContratoFacon = dto.ContratoFacon
-	it.DescICMSLicitacoes = dto.DescICMSLicitacoes
-	it.Sisdeclara = dto.Sisdeclara
-	it.CodClasTrib = dto.CodClasTrib
-	it.CodClasTribTribReg = dto.CodClasTribTribReg
-	it.CodMotivoRestCompICMSST = dto.CodMotivoRestCompICMSST
-	it.CodBeneficioFiscal = dto.CodBeneficioFiscal
 }
 
 // ─── Sales Table Prices ───────────────────────────────────────────────────────
@@ -2250,26 +2062,6 @@ func (uc *CustomerUseCase) CreateTaxType(ctx context.Context, dto request.Create
 }
 
 func fillTaxType(tt *entity.TaxType, dto request.CreateTaxTypeDTO) {
-	tt.IPIBaseTotalItems = dto.IPIBaseTotalItems
-	tt.IPIBaseSubtractDiscount = dto.IPIBaseSubtractDiscount
-	tt.IPIBaseAddFreight = dto.IPIBaseAddFreight
-	tt.IPIBaseAddExpenses = dto.IPIBaseAddExpenses
-	tt.ICMSBaseTotalItems = dto.ICMSBaseTotalItems
-	tt.ICMSBaseSubtractDiscount = dto.ICMSBaseSubtractDiscount
-	tt.ICMSBaseAddFreight = dto.ICMSBaseAddFreight
-	tt.ICMSBaseAddIPI = dto.ICMSBaseAddIPI
-	tt.ICMSBaseAddExpenses = dto.ICMSBaseAddExpenses
-	tt.PISCOFINSBaseTotalItems = dto.PISCOFINSBaseTotalItems
-	tt.PISCOFINSBaseSubtractDiscount = dto.PISCOFINSBaseSubtractDiscount
-	tt.PISCOFINSBaseAddFreight = dto.PISCOFINSBaseAddFreight
-	tt.PISCOFINSBaseAddInsurance = dto.PISCOFINSBaseAddInsurance
-	tt.PISCOFINSBaseAddExpenses = dto.PISCOFINSBaseAddExpenses
-	tt.CSLLBaseTotalItems = dto.CSLLBaseTotalItems
-	tt.CSLLBaseSubtractDiscount = dto.CSLLBaseSubtractDiscount
-	tt.CSLLBaseAddFreight = dto.CSLLBaseAddFreight
-	tt.IRBaseTotalItems = dto.IRBaseTotalItems
-	tt.IRBaseSubtractDiscount = dto.IRBaseSubtractDiscount
-	tt.IRBaseAddFreight = dto.IRBaseAddFreight
 	tt.IsConsumer = dto.IsConsumer
 }
 
@@ -2306,31 +2098,11 @@ func (uc *CustomerUseCase) ListTaxTypes(ctx context.Context, onlyActive bool) ([
 
 func toTaxTypeResponse(tt *entity.TaxType) *response.TaxTypeResponse {
 	return &response.TaxTypeResponse{
-		ID:                            tt.ID,
-		Code:                          tt.Code,
-		Description:                   tt.Description,
-		IPIBaseTotalItems:             tt.IPIBaseTotalItems,
-		IPIBaseSubtractDiscount:       tt.IPIBaseSubtractDiscount,
-		IPIBaseAddFreight:             tt.IPIBaseAddFreight,
-		IPIBaseAddExpenses:            tt.IPIBaseAddExpenses,
-		ICMSBaseTotalItems:            tt.ICMSBaseTotalItems,
-		ICMSBaseSubtractDiscount:      tt.ICMSBaseSubtractDiscount,
-		ICMSBaseAddFreight:            tt.ICMSBaseAddFreight,
-		ICMSBaseAddIPI:                tt.ICMSBaseAddIPI,
-		ICMSBaseAddExpenses:           tt.ICMSBaseAddExpenses,
-		PISCOFINSBaseTotalItems:       tt.PISCOFINSBaseTotalItems,
-		PISCOFINSBaseSubtractDiscount: tt.PISCOFINSBaseSubtractDiscount,
-		PISCOFINSBaseAddFreight:       tt.PISCOFINSBaseAddFreight,
-		PISCOFINSBaseAddInsurance:     tt.PISCOFINSBaseAddInsurance,
-		PISCOFINSBaseAddExpenses:      tt.PISCOFINSBaseAddExpenses,
-		CSLLBaseTotalItems:            tt.CSLLBaseTotalItems,
-		CSLLBaseSubtractDiscount:      tt.CSLLBaseSubtractDiscount,
-		CSLLBaseAddFreight:            tt.CSLLBaseAddFreight,
-		IRBaseTotalItems:              tt.IRBaseTotalItems,
-		IRBaseSubtractDiscount:        tt.IRBaseSubtractDiscount,
-		IRBaseAddFreight:              tt.IRBaseAddFreight,
-		IsConsumer:                    tt.IsConsumer,
-		IsActive:                      tt.IsActive,
+		ID:          tt.ID,
+		Code:        tt.Code,
+		Description: tt.Description,
+		IsConsumer:  tt.IsConsumer,
+		IsActive:    tt.IsActive,
 	}
 }
 
@@ -2363,7 +2135,7 @@ func (uc *CustomerUseCase) CreateCustomer(ctx context.Context, dto request.Creat
 	// crédito ligado (testes), grava o que veio.
 	var analise *creditAnalysis
 	if uc.life != nil {
-		analise, err = uc.analyzeCredit(ctx, nil, c.DocumentType, c.DocumentNumber, nil)
+		analise, err = uc.analyzeCredit(ctx, nil, c.DocumentType, c.DocumentNumber, false)
 		if err != nil {
 			return nil, err
 		}

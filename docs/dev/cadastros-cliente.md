@@ -688,6 +688,32 @@ Score de 0 a 1000 e classe A–E, calculados a cada análise:
   teto era fixo e a Gerdau (capital R$ 24,3 bi) saía com R$ 18 mil, como uma
   microempresa; agora quem limita é o porte de quem vende. Desktop antigo que
   grava a política sem o campo novo mantém o valor gravado.
+- **Faturamento declarado (000498):** `customer_financial_statements` (trilha:
+  faturamento anual, data de referência, fonte DRE/BALANCO/DECLARACAO/IRPF/
+  OUTRO, quem registrou). Vale a mais recente com até 18 meses. A capacidade
+  do cliente sem histórico passa a ser o **maior** entre capital ×
+  `new_customer_capital_pct` e faturamento mensal declarado ×
+  `customer_revenue_pct` (padrão 10%); o fator `PORTE` substituiu
+  `CAPITAL_SOCIAL` (pontua pelo maior dos dois). Sem nenhum: 25% do piso, e a
+  análise diz o que registrar. Implantação: com menos de 3 meses de notas,
+  `SellerVolume` cede ao `declared_monthly_revenue` da política (se maior).
+- **Revisão automática (000498):** `creditorevisao.Scheduler` (de hora em hora,
+  200 por ciclo, todas as empresas, sessão da empresa do cliente) chama
+  `RevisarCreditoAutomatico` para clientes ativos e não bloqueados com limite (ou já analisados)
+  cuja análise passou de `auto_review_months` (padrão 3; 0 desliga) ou cujo
+  limite (acima de zero) vence em 7 dias; no bloqueio, o motivo cita só o que
+  bloqueou. Não consulta a Receita (usa o gravado). A decisão é
+  `entity.DecideAutoReview`: bloqueio zera; sugerido menor reduz (salvo exceção
+  de administrador sem piora de classe nem deterioração) — mas, sem histórico de
+  pagamento, `Skip`: nada é gravado, o limite vence na data dele e uma pessoa
+  revisa (a análise sem histórico mede falta de dado, não comportamento); sugerido maior sobe só
+  com histórico, até `auto_increase_max_pct` (padrão 50%) por revisão, e limite
+  zero não sobe sozinho. Grava na trilha com origem `AUTOMATICA` (renova a
+  validade). `credit_review_attempt_at` faz a fila andar quando um cliente falha.
+- **Saneamento (VCLI0510):** `GET /api/customers/saneamento` —
+  `entity.PendenciasDoCliente` aponta documento/IE/SUFRAMA inválidos, sem
+  endereço, Receita irregular sem bloqueio ou sem conferência, limites
+  vencidos/legados e sem e-mail de NF-e, com gravidade e como resolver.
 - **Bloqueios (classe E, limite 0):** Receita não ATIVA, título vencido além
   da tolerância, protesto, baixa como perda.
 - Limite = base × fator da classe (A 1; B 0,8; C 0,6; D 0,3; E 0), teto da

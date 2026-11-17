@@ -256,12 +256,6 @@ func (s *stubFiscalRepo) GetSpecialAdjustmentNote(ctx context.Context, id int64)
 func (s *stubFiscalRepo) ListSpecialAdjustmentNotes(ctx context.Context, empresaID int, period string) ([]*fiscalEntity.SpecialAdjustmentNote, error) {
 	return nil, nil
 }
-func (s *stubFiscalRepo) AddSpecialAdjustmentNoteItem(ctx context.Context, item *fiscalEntity.SpecialAdjustmentNoteItem) (*fiscalEntity.SpecialAdjustmentNoteItem, error) {
-	return item, nil
-}
-func (s *stubFiscalRepo) ListSpecialAdjustmentNoteItems(ctx context.Context, noteID int64) ([]*fiscalEntity.SpecialAdjustmentNoteItem, error) {
-	return nil, nil
-}
 
 var stub = &stubFiscalRepo{}
 

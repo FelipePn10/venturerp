@@ -91,6 +91,4 @@ type FiscalParamsRepository interface {
 	UpdateSpecialAdjustmentNote(ctx context.Context, n *entity.SpecialAdjustmentNote) (*entity.SpecialAdjustmentNote, error)
 	GetSpecialAdjustmentNote(ctx context.Context, id int64) (*entity.SpecialAdjustmentNote, error)
 	ListSpecialAdjustmentNotes(ctx context.Context, empresaID int, period string) ([]*entity.SpecialAdjustmentNote, error)
-	AddSpecialAdjustmentNoteItem(ctx context.Context, item *entity.SpecialAdjustmentNoteItem) (*entity.SpecialAdjustmentNoteItem, error)
-	ListSpecialAdjustmentNoteItems(ctx context.Context, noteID int64) ([]*entity.SpecialAdjustmentNoteItem, error)
 }

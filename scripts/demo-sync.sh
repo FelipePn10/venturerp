@@ -82,5 +82,10 @@ aguardar_saude "$API_CONTAINER" 60
 bash scripts/seed-demo-beneficiamento.sh
 # Só completa o que falta: novos cadastros de apoio chegam sem recriar o demo.
 psql_demo -q < scripts/seed-demo-cadastros-fiscais.sql
+# Os 50 clientes do demo têm 2 raízes de CNPJ (um só grupo econômico) e títulos
+# vencidos há mais de um ano: a revisão automática de crédito zeraria todos em
+# até 1 hora. Desligada aqui; para demonstrá-la, ligue na política de crédito.
+psql_demo -q -c "INSERT INTO customer_credit_policies (enterprise_id, auto_review_months)
+  SELECT id, 0 FROM enterprise ON CONFLICT (enterprise_id) DO UPDATE SET auto_review_months = 0"
 
 echo "▸ Demo atualizado: migração $(psql_demo -Atc 'SELECT version FROM schema_migrations'), API em http://localhost:5072"

@@ -125,10 +125,7 @@ func (uc *EntryOperationUseCase) CreateEntryOperation(ctx context.Context, dto r
 		return nil, err
 	}
 	o.InvoiceTypeCode = dto.InvoiceTypeCode
-	o.ClassificationType = dto.ClassificationType
-	o.ClassificationCode = dto.ClassificationCode
 	o.StateGroupCode = dto.StateGroupCode
-	o.SupplierTypeCode = dto.SupplierTypeCode
 	o.MovimentaEstoque = ptrutil.BoolOr(dto.MovimentaEstoque, true)
 	o.GeraFinanceiro = ptrutil.BoolOr(dto.GeraFinanceiro, true)
 	o.CreditaICMS = ptrutil.BoolOr(dto.CreditaICMS, true)
@@ -158,10 +155,7 @@ func (uc *EntryOperationUseCase) UpdateEntryOperation(ctx context.Context, dto r
 		o.NatureOperation = n
 	}
 	o.InvoiceTypeCode = dto.InvoiceTypeCode
-	o.ClassificationType = dto.ClassificationType
-	o.ClassificationCode = dto.ClassificationCode
 	o.StateGroupCode = dto.StateGroupCode
-	o.SupplierTypeCode = dto.SupplierTypeCode
 	o.IsActive = ptrutil.BoolOr(dto.IsActive, o.IsActive)
 	o.MovimentaEstoque = ptrutil.BoolOr(dto.MovimentaEstoque, o.MovimentaEstoque)
 	o.GeraFinanceiro = ptrutil.BoolOr(dto.GeraFinanceiro, o.GeraFinanceiro)

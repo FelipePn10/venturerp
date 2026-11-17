@@ -59,13 +59,8 @@ type CFOP struct {
 	Code            int32
 	Description     string
 	DescriptionFull *string
-	Utilization     CfopUtilization
 	OrigemClasIPI   *string
-	IndOperacao     CfopIndOperacao
-	TipoUtilizacao  CfopTipoUtilizacao
 	CodigoAnexoSN   *string
-	DIFAL           bool
-	Doacao          bool
 	IsActive        bool
 	CreatedAt       time.Time
 	Oficial         CFOPOficial
@@ -173,33 +168,21 @@ type ICMSIPITaxParam struct {
 
 	// ── ICMS deferral ────────────────────────────────────────────────────────
 	ICMSDeferralPct           decimal.Decimal
-	ICMSDeferralTarget        *IcmsReductionTarget
 	LegalDeviceICMSDeferralID *int64
 	CodBenefRBC               *string
 
 	// ── ICMS substitution ────────────────────────────────────────────────────
-	ICMSSubstPctContrib              decimal.Decimal
-	LegalDeviceICMSSubstContribID    *int64
-	ICMSSubstPctNonContrib           decimal.Decimal
-	LegalDeviceICMSSubstNonContribID *int64
-	ICMSSubstPctContribUC            decimal.Decimal
-	ICMSSubstRedPct                  decimal.Decimal
-	LegalDeviceICMSSubstRedID        *int64
+	ICMSSubstRedPct decimal.Decimal
 
 	// ── ICMS ST calculation ──────────────────────────────────────────────────
-	ICMSInternalPct        decimal.Decimal
-	BCICMSSTModality       *string
 	ICMSPctForSTContrib    decimal.Decimal
 	ICMSPctForSTNonContrib decimal.Decimal
 
 	// ── CST / CSOSN ──────────────────────────────────────────────────────────
-	CSTSituationB        *string
-	CSOSNIGMS            *string
-	CSTICMSContrib       *string
-	CSTICMSNonContrib    *string
-	CodBeneficioFiscal   *string
-	CSTICMSContribDev    *string
-	CSTICMSNonContribDev *string
+	CSOSNIGMS          *string
+	CSTICMSContrib     *string
+	CSTICMSNonContrib  *string
+	CodBeneficioFiscal *string
 
 	// ── IPI reduction ────────────────────────────────────────────────────────
 	IPIRedPctContrib           decimal.Decimal
@@ -209,42 +192,24 @@ type ICMSIPITaxParam struct {
 	IPIRedTargetNonContrib     *IcmsReductionTarget
 	LegalDeviceIPINonContribID *int64
 	CSTIPIExit                 *string
-	CSTIPIEntry                *string
 
 	// ── FCI ──────────────────────────────────────────────────────────────────
-	ICMSPctOrigins1238      decimal.Decimal
-	CalcBaseRedFCI          bool
-	ICMSSubstPctOrigins1238 decimal.Decimal
-	CSTICMSFci              *string
-	UsesICMSZonaFranca      bool
+	ICMSPctOrigins1238 decimal.Decimal
+	UsesICMSZonaFranca bool
 	// IPICodigoEnquadramento: cEnq do IPI na saída (ex.: o da isenção da Zona Franca); vazio = 999.
 	IPICodigoEnquadramento *string
-	DifAliqSTContribUC     decimal.Decimal
 	CodBenefContrib        *string
 	CodBenefNonContrib     *string
 
 	// ── ICMS additions ───────────────────────────────────────────────────────
-	ICMSAcresPctContrib       decimal.Decimal
-	ICMSAcresTypeContrib      *IcmsAcresType
-	ICMSAcresSumContrib       bool
-	ICMSAcresPctNonContrib    decimal.Decimal
-	ICMSAcresTypeNonContrib   *IcmsAcresType
-	ICMSAcresSumNonContrib    bool
-	ICMSSTAcresPctContrib     decimal.Decimal
-	ICMSSTAcresTypeContrib    *IcmsAcresType
-	ICMSSTAcresSumContrib     bool
-	ICMSSTAcresPctNonContrib  decimal.Decimal
-	ICMSSTAcresTypeNonContrib *IcmsAcresType
-	ICMSSTAcresSumNonContrib  bool
-	FCPSTPartilhaPct          decimal.Decimal
+	ICMSAcresPctNonContrib  decimal.Decimal
+	ICMSAcresTypeNonContrib *IcmsAcresType
 
 	// ── DIFAL (EC/87) ────────────────────────────────────────────────────────
 	ICMSDifalRedPct decimal.Decimal
 	ICMSDifalType   *IcmsDifalType
 
 	// ── DIFAL purchases ──────────────────────────────────────────────────────
-	DifalPurchaseRedPct    decimal.Decimal
-	DifalPurchaseRedTarget *IcmsReductionTarget
 
 	// ── Cenário ─────────────────────────────────────────────────────────────────
 	// FinalidadeCompra restringe a regra a REVENDA, INDUSTRIALIZACAO ou
@@ -602,51 +567,22 @@ const (
 )
 
 type SpecialAdjustmentNote struct {
-	ID                      int64                       `json:"id"`
-	EmpresaID               int                         `json:"empresa_id"`
-	Purpose                 SpecialNotePurpose          `json:"purpose"`
-	Status                  SpecialNoteStatus           `json:"status"`
-	Number                  *string                     `json:"number"`
-	Series                  *string                     `json:"series"`
-	IssueDate               time.Time                   `json:"issue_date"`
-	Period                  string                      `json:"period"`
-	InvoiceTypeID           *int64                      `json:"invoice_type_id"`
-	CFOPID                  *int64                      `json:"cfop_id"`
-	ICMSApuracaoLineID      *int64                      `json:"icms_apuracao_line_id"`
-	AdjustmentCodeID        *int64                      `json:"adjustment_code_id"`
-	AdjustmentDocCodeID     *int64                      `json:"adjustment_doc_code_id"`
-	History                 *string                     `json:"history"`
-	AutoGenerateSummary     bool                        `json:"auto_generate_summary"`
-	GeneratedSummaryEntryID *int64                      `json:"generated_summary_entry_id"`
-	TotalValue              decimal.Decimal             `json:"total_value"`
-	TotalICMS               decimal.Decimal             `json:"total_icms"`
-	TotalIPI                decimal.Decimal             `json:"total_ipi"`
-	Observation             *string                     `json:"observation"`
-	Items                   []SpecialAdjustmentNoteItem `json:"items"`
-	CreatedAt               time.Time                   `json:"created_at"`
-}
-
-type SpecialAdjustmentNoteItem struct {
-	ID                int64           `json:"id"`
-	NoteID            int64           `json:"note_id"`
-	Sequence          int             `json:"sequence"`
-	ItemID            *int64          `json:"item_id"`
-	ItemCode          *string         `json:"item_code"`
-	Description       *string         `json:"description"`
-	Quantity          decimal.Decimal `json:"quantity"`
-	Unit              *string         `json:"unit"`
-	UnitValue         decimal.Decimal `json:"unit_value"`
-	TotalValue        decimal.Decimal `json:"total_value"`
-	ICMSBase          decimal.Decimal `json:"icms_base"`
-	ICMSPct           decimal.Decimal `json:"icms_pct"`
-	ICMSDeferralPct   decimal.Decimal `json:"icms_deferral_pct"`
-	ICMSValue         decimal.Decimal `json:"icms_value"`
-	ICMSDeferredValue decimal.Decimal `json:"icms_deferred_value"`
-	IPIBase           decimal.Decimal `json:"ipi_base"`
-	IPIPct            decimal.Decimal `json:"ipi_pct"`
-	IPIValue          decimal.Decimal `json:"ipi_value"`
-	CSTICMS           *string         `json:"cst_icms"`
-	CSTIPI            *string         `json:"cst_ipi"`
-	CFOPID            *int64          `json:"cfop_id"`
-	CreatedAt         time.Time       `json:"created_at"`
+	ID                      int64              `json:"id"`
+	EmpresaID               int                `json:"empresa_id"`
+	Purpose                 SpecialNotePurpose `json:"purpose"`
+	Status                  SpecialNoteStatus  `json:"status"`
+	Number                  *string            `json:"number"`
+	Series                  *string            `json:"series"`
+	IssueDate               time.Time          `json:"issue_date"`
+	Period                  string             `json:"period"`
+	InvoiceTypeID           *int64             `json:"invoice_type_id"`
+	ICMSApuracaoLineID      *int64             `json:"icms_apuracao_line_id"`
+	AdjustmentCodeID        *int64             `json:"adjustment_code_id"`
+	AdjustmentDocCodeID     *int64             `json:"adjustment_doc_code_id"`
+	History                 *string            `json:"history"`
+	GeneratedSummaryEntryID *int64             `json:"generated_summary_entry_id"`
+	TotalICMS               decimal.Decimal    `json:"total_icms"`
+	TotalIPI                decimal.Decimal    `json:"total_ipi"`
+	Observation             *string            `json:"observation"`
+	CreatedAt               time.Time          `json:"created_at"`
 }

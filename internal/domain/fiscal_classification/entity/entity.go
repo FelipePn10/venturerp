@@ -30,7 +30,6 @@ type FiscalClassification struct {
 	// IPI
 	IPIRate       decimal.Decimal
 	IPIIndicator  RateIndicator
-	Apuracao      *string
 	CSTIPIEntrada *string
 	CSTIPISaida   *string
 	// PIS

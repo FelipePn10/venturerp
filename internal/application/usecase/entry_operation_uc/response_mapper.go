@@ -33,23 +33,20 @@ func toEntryOperationTypeResponse(o *entity.EntryOperationType) *response.EntryO
 		return nil
 	}
 	return &response.EntryOperationTypeResponse{
-		ID:                 o.ID,
-		Code:               o.Code,
-		Description:        o.Description,
-		InvoiceTypeCode:    o.InvoiceTypeCode,
-		NatureOperation:    o.NatureOperation,
-		ClassificationType: o.ClassificationType,
-		ClassificationCode: o.ClassificationCode,
-		StateGroupCode:     o.StateGroupCode,
-		SupplierTypeCode:   o.SupplierTypeCode,
-		MovimentaEstoque:   o.MovimentaEstoque,
-		GeraFinanceiro:     o.GeraFinanceiro,
-		CreditaICMS:        o.CreditaICMS,
-		CreditaIPI:         o.CreditaIPI,
-		CreditaPISCOFINS:   o.CreditaPISCOFINS,
-		IsActive:           o.IsActive,
-		CreatedAt:          o.CreatedAt,
-		CreatedBy:          o.CreatedBy,
+		ID:               o.ID,
+		Code:             o.Code,
+		Description:      o.Description,
+		InvoiceTypeCode:  o.InvoiceTypeCode,
+		NatureOperation:  o.NatureOperation,
+		StateGroupCode:   o.StateGroupCode,
+		MovimentaEstoque: o.MovimentaEstoque,
+		GeraFinanceiro:   o.GeraFinanceiro,
+		CreditaICMS:      o.CreditaICMS,
+		CreditaIPI:       o.CreditaIPI,
+		CreditaPISCOFINS: o.CreditaPISCOFINS,
+		IsActive:         o.IsActive,
+		CreatedAt:        o.CreatedAt,
+		CreatedBy:        o.CreatedBy,
 	}
 }
 

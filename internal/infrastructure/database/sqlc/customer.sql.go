@@ -235,48 +235,25 @@ func (q *Queries) BlockCustomer(ctx context.Context, arg BlockCustomerParams) (i
 
 const createCarrier = `-- name: CreateCarrier :one
 
-INSERT INTO carriers (enterprise_id, code, description, billing_type, uses_credit_limit, consider_available,
-                      postpone_due_date, receipt_days, payment_days)
-VALUES ($9, $1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id
+INSERT INTO carriers (enterprise_id, code, description)
+VALUES ($3, $1, $2)
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type CreateCarrierParams struct {
-	Code              int64
-	Description       string
-	BillingType       sqltypes.CarrierBillingTypeEnum
-	UsesCreditLimit   bool
-	ConsiderAvailable bool
-	PostponeDueDate   bool
-	ReceiptDays       int16
-	PaymentDays       int16
-	EnterpriseID      int64
+	Code         int64
+	Description  string
+	EnterpriseID int64
 }
 
 // ─── Carriers ─────────────────────────────────────────────────────────────────
 func (q *Queries) CreateCarrier(ctx context.Context, arg CreateCarrierParams) (Carrier, error) {
-	row := q.db.QueryRow(ctx, createCarrier,
-		arg.Code,
-		arg.Description,
-		arg.BillingType,
-		arg.UsesCreditLimit,
-		arg.ConsiderAvailable,
-		arg.PostponeDueDate,
-		arg.ReceiptDays,
-		arg.PaymentDays,
-		arg.EnterpriseID,
-	)
+	row := q.db.QueryRow(ctx, createCarrier, arg.Code, arg.Description, arg.EnterpriseID)
 	var i Carrier
 	err := row.Scan(
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.BillingType,
-		&i.UsesCreditLimit,
-		&i.ConsiderAvailable,
-		&i.PostponeDueDate,
-		&i.ReceiptDays,
-		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.EnterpriseID,
@@ -424,7 +401,7 @@ INSERT INTO customers (
     $27::bigint, $28::bigint, $29::varchar,
     $30, $31, $32,
     $33::text, $34::text, $35::text
-) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at
+) RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at
 `
 
 type CreateCustomerParams struct {
@@ -560,6 +537,7 @@ func (q *Queries) CreateCustomer(ctx context.Context, arg CreateCustomerParams) 
 		&i.CreditLimitSuggested,
 		&i.CreditLimitExpiresAt,
 		&i.CreditReviewedAt,
+		&i.CreditReviewAttemptAt,
 	)
 	return i, err
 }
@@ -605,124 +583,34 @@ func (q *Queries) CreateCustomerType(ctx context.Context, arg CreateCustomerType
 const createInvoiceType = `-- name: CreateInvoiceType :one
 
 INSERT INTO invoice_types (enterprise_id, 
-    code, description, type, stock_movement, icms_type,
-    icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct,
-    issqn_pct, ir_pct, csll_pct, inss_pct,
-    generates_revenue, updates_inventory, generates_financial_title,
-    considers_goals, calc_substitution_tax, calc_icms_deferral,
-    calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books,
-    model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins,
-    baixa_pedido, gera_titulo_dev, exige_suframa,
-    ir_pct_presumption, csll_pct_presumption,
-    description_nf, impostos_nfe, cfop_id,
-    dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id,
-    dispositivo_legal_pis_id, dispositivo_legal_cofins_id,
-    hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins,
-    ipi_transfer_sales_table_id,
-    lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal,
-    calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens,
-    busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt,
-    cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon,
-    desc_icms_licitacoes, sisdeclara,
-    cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal
-) VALUES (
-    $73, $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10,
-    $11, $12, $13, $14,
-    $15, $16, $17,
-    $18, $19, $20,
-    $21, $22, $23, $24,
-    $25, $26, $27, $28, $29, $30,
-    $31, $32, $33,
-    $34, $35,
-    $36, $37, $38,
-    $39, $40, $41,
-    $42, $43,
-    $44, $45, $46, $47, $48,
-    $49,
-    $50, $51, $52, $53,
-    $54, $55, $56, $57, $58,
-    $59, $60, $61, $62,
-    $63, $64, $65, $66,
-    $67, $68,
-    $69, $70, $71, $72
-) RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id
+    code, description, type, stock_movement, icms_type, icms_reduction_pct,
+    generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral,
+    calc_pis_cofins, calc_difal, requires_sales_order,
+    baixa_pedido, exige_suframa) VALUES (
+    $17, $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11,
+    $12, $13, $14,
+    $15, $16) RETURNING id, code, description, type, stock_movement, icms_type, icms_reduction_pct, generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, is_active, created_at, baixa_pedido, exige_suframa, enterprise_id
 `
 
 type CreateInvoiceTypeParams struct {
-	Code                     int64
-	Description              string
-	Type                     sqltypes.InvoiceTypeEnum
-	StockMovement            sqltypes.InvoiceStockEnum
-	IcmsType                 sqltypes.InvoiceICMSTypeEnum
-	IcmsPct                  pgtype.Numeric
-	IcmsReductionPct         pgtype.Numeric
-	IpiPct                   pgtype.Numeric
-	PisPct                   pgtype.Numeric
-	CofinsPct                pgtype.Numeric
-	IssqnPct                 pgtype.Numeric
-	IrPct                    pgtype.Numeric
-	CsllPct                  pgtype.Numeric
-	InssPct                  pgtype.Numeric
-	GeneratesRevenue         bool
-	UpdatesInventory         bool
-	GeneratesFinancialTitle  bool
-	ConsidersGoals           bool
-	CalcSubstitutionTax      bool
-	CalcIcmsDeferral         bool
-	CalcPisCofins            bool
-	CalcDifal                bool
-	RequiresSalesOrder       bool
-	ListsFiscalBooks         bool
-	ModelNf                  pgtype.Text
-	CstIcms                  pgtype.Text
-	CsosnIcms                pgtype.Text
-	CstIpi                   pgtype.Text
-	CstPis                   pgtype.Text
-	CstCofins                pgtype.Text
-	BaixaPedido              bool
-	GeraTituloDev            bool
-	ExigeSuframa             bool
-	IrPctPresumption         pgtype.Numeric
-	CsllPctPresumption       pgtype.Numeric
-	DescriptionNf            pgtype.Text
-	ImpostosNfe              NullImpostosNfeEnum
-	CfopID                   *int64
-	DispositivoLegalIpiID    *int64
-	DispositivoLegalIcmsID   *int64
-	DispositivoLegalIcmsStID *int64
-	DispositivoLegalPisID    *int64
-	DispositivoLegalCofinsID *int64
-	HierarchyIpi             pgtype.Text
-	HierarchyIcms            pgtype.Text
-	HierarchyIcmsSt          pgtype.Text
-	HierarchyPis             pgtype.Text
-	HierarchyCofins          pgtype.Text
-	IpiTransferSalesTableID  *int64
-	ListaValorContabil       bool
-	ListaRegistroSaida       bool
-	ListaIcmsIpi             bool
-	SintegraSpedFiscal       bool
-	CalcFomentar             bool
-	ExcecaoFomentar          bool
-	CompRessRetSt            bool
-	CalcReducao              bool
-	ComplementoItens         bool
-	BuscaTipoNf              bool
-	IcmsStUltEntrada         bool
-	SomenteConsultaLotes     bool
-	CalcImpIbpt              bool
-	CredPresumidoIcms        bool
-	Ciap                     bool
-	VlrAgregadoBaseSubst     bool
-	ContratoFacon            bool
-	DescIcmsLicitacoes       bool
-	Sisdeclara               bool
-	CodClasTrib              pgtype.Text
-	CodClasTribTribReg       pgtype.Text
-	CodMotivoRestCompIcmsSt  pgtype.Text
-	CodBeneficioFiscal       pgtype.Text
-	EnterpriseID             int64
+	Code                    int64
+	Description             string
+	Type                    sqltypes.InvoiceTypeEnum
+	StockMovement           sqltypes.InvoiceStockEnum
+	IcmsType                sqltypes.InvoiceICMSTypeEnum
+	IcmsReductionPct        pgtype.Numeric
+	GeneratesRevenue        bool
+	UpdatesInventory        bool
+	GeneratesFinancialTitle bool
+	CalcSubstitutionTax     bool
+	CalcIcmsDeferral        bool
+	CalcPisCofins           bool
+	CalcDifal               bool
+	RequiresSalesOrder      bool
+	BaixaPedido             bool
+	ExigeSuframa            bool
+	EnterpriseID            int64
 }
 
 // ─── Invoice Types ────────────────────────────────────────────────────────────
@@ -733,73 +621,17 @@ func (q *Queries) CreateInvoiceType(ctx context.Context, arg CreateInvoiceTypePa
 		arg.Type,
 		arg.StockMovement,
 		arg.IcmsType,
-		arg.IcmsPct,
 		arg.IcmsReductionPct,
-		arg.IpiPct,
-		arg.PisPct,
-		arg.CofinsPct,
-		arg.IssqnPct,
-		arg.IrPct,
-		arg.CsllPct,
-		arg.InssPct,
 		arg.GeneratesRevenue,
 		arg.UpdatesInventory,
 		arg.GeneratesFinancialTitle,
-		arg.ConsidersGoals,
 		arg.CalcSubstitutionTax,
 		arg.CalcIcmsDeferral,
 		arg.CalcPisCofins,
 		arg.CalcDifal,
 		arg.RequiresSalesOrder,
-		arg.ListsFiscalBooks,
-		arg.ModelNf,
-		arg.CstIcms,
-		arg.CsosnIcms,
-		arg.CstIpi,
-		arg.CstPis,
-		arg.CstCofins,
 		arg.BaixaPedido,
-		arg.GeraTituloDev,
 		arg.ExigeSuframa,
-		arg.IrPctPresumption,
-		arg.CsllPctPresumption,
-		arg.DescriptionNf,
-		arg.ImpostosNfe,
-		arg.CfopID,
-		arg.DispositivoLegalIpiID,
-		arg.DispositivoLegalIcmsID,
-		arg.DispositivoLegalIcmsStID,
-		arg.DispositivoLegalPisID,
-		arg.DispositivoLegalCofinsID,
-		arg.HierarchyIpi,
-		arg.HierarchyIcms,
-		arg.HierarchyIcmsSt,
-		arg.HierarchyPis,
-		arg.HierarchyCofins,
-		arg.IpiTransferSalesTableID,
-		arg.ListaValorContabil,
-		arg.ListaRegistroSaida,
-		arg.ListaIcmsIpi,
-		arg.SintegraSpedFiscal,
-		arg.CalcFomentar,
-		arg.ExcecaoFomentar,
-		arg.CompRessRetSt,
-		arg.CalcReducao,
-		arg.ComplementoItens,
-		arg.BuscaTipoNf,
-		arg.IcmsStUltEntrada,
-		arg.SomenteConsultaLotes,
-		arg.CalcImpIbpt,
-		arg.CredPresumidoIcms,
-		arg.Ciap,
-		arg.VlrAgregadoBaseSubst,
-		arg.ContratoFacon,
-		arg.DescIcmsLicitacoes,
-		arg.Sisdeclara,
-		arg.CodClasTrib,
-		arg.CodClasTribTribReg,
-		arg.CodMotivoRestCompIcmsSt,
-		arg.CodBeneficioFiscal,
 		arg.EnterpriseID,
 	)
 	var i InvoiceType
@@ -810,75 +642,19 @@ func (q *Queries) CreateInvoiceType(ctx context.Context, arg CreateInvoiceTypePa
 		&i.Type,
 		&i.StockMovement,
 		&i.IcmsType,
-		&i.IcmsPct,
 		&i.IcmsReductionPct,
-		&i.IpiPct,
-		&i.PisPct,
-		&i.CofinsPct,
-		&i.IssqnPct,
-		&i.IrPct,
-		&i.CsllPct,
-		&i.InssPct,
 		&i.GeneratesRevenue,
 		&i.UpdatesInventory,
 		&i.GeneratesFinancialTitle,
-		&i.ConsidersGoals,
 		&i.CalcSubstitutionTax,
 		&i.CalcIcmsDeferral,
 		&i.CalcPisCofins,
 		&i.CalcDifal,
 		&i.RequiresSalesOrder,
-		&i.ListsFiscalBooks,
 		&i.IsActive,
 		&i.CreatedAt,
-		&i.ModelNf,
-		&i.CstIcms,
-		&i.CsosnIcms,
-		&i.CstIpi,
-		&i.CstPis,
-		&i.CstCofins,
 		&i.BaixaPedido,
-		&i.GeraTituloDev,
 		&i.ExigeSuframa,
-		&i.IrPctPresumption,
-		&i.CsllPctPresumption,
-		&i.DescriptionNf,
-		&i.ImpostosNfe,
-		&i.CfopID,
-		&i.DispositivoLegalIpiID,
-		&i.DispositivoLegalIcmsID,
-		&i.DispositivoLegalIcmsStID,
-		&i.DispositivoLegalPisID,
-		&i.DispositivoLegalCofinsID,
-		&i.HierarchyIpi,
-		&i.HierarchyIcms,
-		&i.HierarchyIcmsSt,
-		&i.HierarchyPis,
-		&i.HierarchyCofins,
-		&i.IpiTransferSalesTableID,
-		&i.ListaValorContabil,
-		&i.ListaRegistroSaida,
-		&i.ListaIcmsIpi,
-		&i.SintegraSpedFiscal,
-		&i.CalcFomentar,
-		&i.ExcecaoFomentar,
-		&i.CompRessRetSt,
-		&i.CalcReducao,
-		&i.ComplementoItens,
-		&i.BuscaTipoNf,
-		&i.IcmsStUltEntrada,
-		&i.SomenteConsultaLotes,
-		&i.CalcImpIbpt,
-		&i.CredPresumidoIcms,
-		&i.Ciap,
-		&i.VlrAgregadoBaseSubst,
-		&i.ContratoFacon,
-		&i.DescIcmsLicitacoes,
-		&i.Sisdeclara,
-		&i.CodClasTrib,
-		&i.CodClasTribTribReg,
-		&i.CodMotivoRestCompIcmsSt,
-		&i.CodBeneficioFiscal,
 		&i.EnterpriseID,
 	)
 	return i, err
@@ -1106,50 +882,18 @@ const createTaxType = `-- name: CreateTaxType :one
 
 INSERT INTO tax_types (enterprise_id, 
     code, description,
-    ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses,
-    icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses,
-    pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight,
-    pis_cofins_base_add_insurance, pis_cofins_base_add_expenses,
-    csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight,
-    ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight,
     is_consumer
 ) VALUES (
-    $24, $1, $2,
-    $3, $4, $5, $6,
-    $7, $8, $9, $10, $11,
-    $12, $13, $14,
-    $15, $16,
-    $17, $18, $19,
-    $20, $21, $22,
-    $23
-) RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id
+    $4, $1, $2,
+    $3
+) RETURNING id, code, description, is_consumer, is_active, created_at, enterprise_id
 `
 
 type CreateTaxTypeParams struct {
-	Code                          int64
-	Description                   string
-	IpiBaseTotalItems             bool
-	IpiBaseSubtractDiscount       bool
-	IpiBaseAddFreight             bool
-	IpiBaseAddExpenses            bool
-	IcmsBaseTotalItems            bool
-	IcmsBaseSubtractDiscount      bool
-	IcmsBaseAddFreight            bool
-	IcmsBaseAddIpi                bool
-	IcmsBaseAddExpenses           bool
-	PisCofinsBaseTotalItems       bool
-	PisCofinsBaseSubtractDiscount bool
-	PisCofinsBaseAddFreight       bool
-	PisCofinsBaseAddInsurance     bool
-	PisCofinsBaseAddExpenses      bool
-	CsllBaseTotalItems            bool
-	CsllBaseSubtractDiscount      bool
-	CsllBaseAddFreight            bool
-	IrBaseTotalItems              bool
-	IrBaseSubtractDiscount        bool
-	IrBaseAddFreight              bool
-	IsConsumer                    bool
-	EnterpriseID                  int64
+	Code         int64
+	Description  string
+	IsConsumer   bool
+	EnterpriseID int64
 }
 
 // ─── Tax Types ────────────────────────────────────────────────────────────────
@@ -1157,26 +901,6 @@ func (q *Queries) CreateTaxType(ctx context.Context, arg CreateTaxTypeParams) (T
 	row := q.db.QueryRow(ctx, createTaxType,
 		arg.Code,
 		arg.Description,
-		arg.IpiBaseTotalItems,
-		arg.IpiBaseSubtractDiscount,
-		arg.IpiBaseAddFreight,
-		arg.IpiBaseAddExpenses,
-		arg.IcmsBaseTotalItems,
-		arg.IcmsBaseSubtractDiscount,
-		arg.IcmsBaseAddFreight,
-		arg.IcmsBaseAddIpi,
-		arg.IcmsBaseAddExpenses,
-		arg.PisCofinsBaseTotalItems,
-		arg.PisCofinsBaseSubtractDiscount,
-		arg.PisCofinsBaseAddFreight,
-		arg.PisCofinsBaseAddInsurance,
-		arg.PisCofinsBaseAddExpenses,
-		arg.CsllBaseTotalItems,
-		arg.CsllBaseSubtractDiscount,
-		arg.CsllBaseAddFreight,
-		arg.IrBaseTotalItems,
-		arg.IrBaseSubtractDiscount,
-		arg.IrBaseAddFreight,
 		arg.IsConsumer,
 		arg.EnterpriseID,
 	)
@@ -1185,26 +909,6 @@ func (q *Queries) CreateTaxType(ctx context.Context, arg CreateTaxTypeParams) (T
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.IpiBaseTotalItems,
-		&i.IpiBaseSubtractDiscount,
-		&i.IpiBaseAddFreight,
-		&i.IpiBaseAddExpenses,
-		&i.IcmsBaseTotalItems,
-		&i.IcmsBaseSubtractDiscount,
-		&i.IcmsBaseAddFreight,
-		&i.IcmsBaseAddIpi,
-		&i.IcmsBaseAddExpenses,
-		&i.PisCofinsBaseTotalItems,
-		&i.PisCofinsBaseSubtractDiscount,
-		&i.PisCofinsBaseAddFreight,
-		&i.PisCofinsBaseAddInsurance,
-		&i.PisCofinsBaseAddExpenses,
-		&i.CsllBaseTotalItems,
-		&i.CsllBaseSubtractDiscount,
-		&i.CsllBaseAddFreight,
-		&i.IrBaseTotalItems,
-		&i.IrBaseSubtractDiscount,
-		&i.IrBaseAddFreight,
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -1278,7 +982,7 @@ func (q *Queries) DeleteInstallment(ctx context.Context, id int64) error {
 }
 
 const getCarrierByCode = `-- name: GetCarrierByCode :one
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, description, is_active, created_at, enterprise_id FROM carriers WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetCarrierByCodeParams struct {
@@ -1293,12 +997,6 @@ func (q *Queries) GetCarrierByCode(ctx context.Context, arg GetCarrierByCodePara
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.BillingType,
-		&i.UsesCreditLimit,
-		&i.ConsiderAvailable,
-		&i.PostponeDueDate,
-		&i.ReceiptDays,
-		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.EnterpriseID,
@@ -1307,7 +1005,7 @@ func (q *Queries) GetCarrierByCode(ctx context.Context, arg GetCarrierByCodePara
 }
 
 const getCarrierByID = `-- name: GetCarrierByID :one
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers WHERE id = $1 AND enterprise_id = $2
+SELECT id, code, description, is_active, created_at, enterprise_id FROM carriers WHERE id = $1 AND enterprise_id = $2
 `
 
 type GetCarrierByIDParams struct {
@@ -1322,12 +1020,6 @@ func (q *Queries) GetCarrierByID(ctx context.Context, arg GetCarrierByIDParams) 
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.BillingType,
-		&i.UsesCreditLimit,
-		&i.ConsiderAvailable,
-		&i.PostponeDueDate,
-		&i.ReceiptDays,
-		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.EnterpriseID,
@@ -1381,7 +1073,7 @@ func (q *Queries) GetContactTypeByCode(ctx context.Context, arg GetContactTypeBy
 }
 
 const getCreditPolicy = `-- name: GetCreditPolicy :one
-SELECT enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct FROM customer_credit_policies WHERE enterprise_id = $1
+SELECT enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct, customer_revenue_pct, declared_monthly_revenue, auto_review_months, auto_increase_max_pct FROM customer_credit_policies WHERE enterprise_id = $1
 `
 
 func (q *Queries) GetCreditPolicy(ctx context.Context, enterpriseID int64) (CustomerCreditPolicy, error) {
@@ -1404,12 +1096,16 @@ func (q *Queries) GetCreditPolicy(ctx context.Context, enterpriseID int64) (Cust
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.NewCustomerRevenuePct,
+		&i.CustomerRevenuePct,
+		&i.DeclaredMonthlyRevenue,
+		&i.AutoReviewMonths,
+		&i.AutoIncreaseMaxPct,
 	)
 	return i, err
 }
 
 const getCustomerByCode = `-- name: GetCustomerByCode :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at FROM customers WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetCustomerByCodeParams struct {
@@ -1474,12 +1170,13 @@ func (q *Queries) GetCustomerByCode(ctx context.Context, arg GetCustomerByCodePa
 		&i.CreditLimitSuggested,
 		&i.CreditLimitExpiresAt,
 		&i.CreditReviewedAt,
+		&i.CreditReviewAttemptAt,
 	)
 	return i, err
 }
 
 const getCustomerByDocument = `-- name: GetCustomerByDocument :one
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at FROM customers
 WHERE regexp_replace(document_number, '\D', '', 'g') = regexp_replace($1::TEXT, '\D', '', 'g')
   AND enterprise_id = $2
 ORDER BY code LIMIT 1
@@ -1548,6 +1245,7 @@ func (q *Queries) GetCustomerByDocument(ctx context.Context, arg GetCustomerByDo
 		&i.CreditLimitSuggested,
 		&i.CreditLimitExpiresAt,
 		&i.CreditReviewedAt,
+		&i.CreditReviewAttemptAt,
 	)
 	return i, err
 }
@@ -1578,7 +1276,7 @@ func (q *Queries) GetCustomerTypeByCode(ctx context.Context, arg GetCustomerType
 }
 
 const getInvoiceTypeByCode = `-- name: GetInvoiceTypeByCode :one
-SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id FROM invoice_types WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, description, type, stock_movement, icms_type, icms_reduction_pct, generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, is_active, created_at, baixa_pedido, exige_suframa, enterprise_id FROM invoice_types WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetInvoiceTypeByCodeParams struct {
@@ -1596,75 +1294,19 @@ func (q *Queries) GetInvoiceTypeByCode(ctx context.Context, arg GetInvoiceTypeBy
 		&i.Type,
 		&i.StockMovement,
 		&i.IcmsType,
-		&i.IcmsPct,
 		&i.IcmsReductionPct,
-		&i.IpiPct,
-		&i.PisPct,
-		&i.CofinsPct,
-		&i.IssqnPct,
-		&i.IrPct,
-		&i.CsllPct,
-		&i.InssPct,
 		&i.GeneratesRevenue,
 		&i.UpdatesInventory,
 		&i.GeneratesFinancialTitle,
-		&i.ConsidersGoals,
 		&i.CalcSubstitutionTax,
 		&i.CalcIcmsDeferral,
 		&i.CalcPisCofins,
 		&i.CalcDifal,
 		&i.RequiresSalesOrder,
-		&i.ListsFiscalBooks,
 		&i.IsActive,
 		&i.CreatedAt,
-		&i.ModelNf,
-		&i.CstIcms,
-		&i.CsosnIcms,
-		&i.CstIpi,
-		&i.CstPis,
-		&i.CstCofins,
 		&i.BaixaPedido,
-		&i.GeraTituloDev,
 		&i.ExigeSuframa,
-		&i.IrPctPresumption,
-		&i.CsllPctPresumption,
-		&i.DescriptionNf,
-		&i.ImpostosNfe,
-		&i.CfopID,
-		&i.DispositivoLegalIpiID,
-		&i.DispositivoLegalIcmsID,
-		&i.DispositivoLegalIcmsStID,
-		&i.DispositivoLegalPisID,
-		&i.DispositivoLegalCofinsID,
-		&i.HierarchyIpi,
-		&i.HierarchyIcms,
-		&i.HierarchyIcmsSt,
-		&i.HierarchyPis,
-		&i.HierarchyCofins,
-		&i.IpiTransferSalesTableID,
-		&i.ListaValorContabil,
-		&i.ListaRegistroSaida,
-		&i.ListaIcmsIpi,
-		&i.SintegraSpedFiscal,
-		&i.CalcFomentar,
-		&i.ExcecaoFomentar,
-		&i.CompRessRetSt,
-		&i.CalcReducao,
-		&i.ComplementoItens,
-		&i.BuscaTipoNf,
-		&i.IcmsStUltEntrada,
-		&i.SomenteConsultaLotes,
-		&i.CalcImpIbpt,
-		&i.CredPresumidoIcms,
-		&i.Ciap,
-		&i.VlrAgregadoBaseSubst,
-		&i.ContratoFacon,
-		&i.DescIcmsLicitacoes,
-		&i.Sisdeclara,
-		&i.CodClasTrib,
-		&i.CodClasTribTribReg,
-		&i.CodMotivoRestCompIcmsSt,
-		&i.CodBeneficioFiscal,
 		&i.EnterpriseID,
 	)
 	return i, err
@@ -1820,7 +1462,7 @@ func (q *Queries) GetSalesTableByCode(ctx context.Context, arg GetSalesTableByCo
 }
 
 const getTaxTypeByCode = `-- name: GetTaxTypeByCode :one
-SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id FROM tax_types WHERE code = $1 AND enterprise_id = $2
+SELECT id, code, description, is_consumer, is_active, created_at, enterprise_id FROM tax_types WHERE code = $1 AND enterprise_id = $2
 `
 
 type GetTaxTypeByCodeParams struct {
@@ -1835,26 +1477,6 @@ func (q *Queries) GetTaxTypeByCode(ctx context.Context, arg GetTaxTypeByCodePara
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.IpiBaseTotalItems,
-		&i.IpiBaseSubtractDiscount,
-		&i.IpiBaseAddFreight,
-		&i.IpiBaseAddExpenses,
-		&i.IcmsBaseTotalItems,
-		&i.IcmsBaseSubtractDiscount,
-		&i.IcmsBaseAddFreight,
-		&i.IcmsBaseAddIpi,
-		&i.IcmsBaseAddExpenses,
-		&i.PisCofinsBaseTotalItems,
-		&i.PisCofinsBaseSubtractDiscount,
-		&i.PisCofinsBaseAddFreight,
-		&i.PisCofinsBaseAddInsurance,
-		&i.PisCofinsBaseAddExpenses,
-		&i.CsllBaseTotalItems,
-		&i.CsllBaseSubtractDiscount,
-		&i.CsllBaseAddFreight,
-		&i.IrBaseTotalItems,
-		&i.IrBaseSubtractDiscount,
-		&i.IrBaseAddFreight,
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -1940,7 +1562,7 @@ func (q *Queries) ListCarrierGroups(ctx context.Context, enterpriseID int64) ([]
 }
 
 const listCarriers = `-- name: ListCarriers :many
-SELECT id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id FROM carriers
+SELECT id, code, description, is_active, created_at, enterprise_id FROM carriers
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
@@ -1963,12 +1585,6 @@ func (q *Queries) ListCarriers(ctx context.Context, arg ListCarriersParams) ([]C
 			&i.ID,
 			&i.Code,
 			&i.Description,
-			&i.BillingType,
-			&i.UsesCreditLimit,
-			&i.ConsiderAvailable,
-			&i.PostponeDueDate,
-			&i.ReceiptDays,
-			&i.PaymentDays,
 			&i.IsActive,
 			&i.CreatedAt,
 			&i.EnterpriseID,
@@ -2178,7 +1794,7 @@ func (q *Queries) ListCustomerTypes(ctx context.Context, arg ListCustomerTypesPa
 }
 
 const listCustomers = `-- name: ListCustomers :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at FROM customers
 WHERE enterprise_id = $1
   AND ($2::BOOLEAN = FALSE OR is_active = TRUE)
 ORDER BY code
@@ -2252,6 +1868,7 @@ func (q *Queries) ListCustomers(ctx context.Context, arg ListCustomersParams) ([
 			&i.CreditLimitSuggested,
 			&i.CreditLimitExpiresAt,
 			&i.CreditReviewedAt,
+			&i.CreditReviewAttemptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2316,7 +1933,7 @@ func (q *Queries) ListCustomersForRegistrationCheck(ctx context.Context, maxRows
 }
 
 const listEstablishments = `-- name: ListEstablishments :many
-SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at FROM customers
+SELECT id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at FROM customers
 WHERE corporate_code = $1 AND enterprise_id = $2 AND is_active = TRUE
 ORDER BY code
 `
@@ -2389,6 +2006,7 @@ func (q *Queries) ListEstablishments(ctx context.Context, arg ListEstablishments
 			&i.CreditLimitSuggested,
 			&i.CreditLimitExpiresAt,
 			&i.CreditReviewedAt,
+			&i.CreditReviewAttemptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -2439,7 +2057,7 @@ func (q *Queries) ListInstallments(ctx context.Context, paymentConditionID int64
 }
 
 const listInvoiceTypes = `-- name: ListInvoiceTypes :many
-SELECT id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id FROM invoice_types
+SELECT id, code, description, type, stock_movement, icms_type, icms_reduction_pct, generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, is_active, created_at, baixa_pedido, exige_suframa, enterprise_id FROM invoice_types
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
@@ -2465,75 +2083,19 @@ func (q *Queries) ListInvoiceTypes(ctx context.Context, arg ListInvoiceTypesPara
 			&i.Type,
 			&i.StockMovement,
 			&i.IcmsType,
-			&i.IcmsPct,
 			&i.IcmsReductionPct,
-			&i.IpiPct,
-			&i.PisPct,
-			&i.CofinsPct,
-			&i.IssqnPct,
-			&i.IrPct,
-			&i.CsllPct,
-			&i.InssPct,
 			&i.GeneratesRevenue,
 			&i.UpdatesInventory,
 			&i.GeneratesFinancialTitle,
-			&i.ConsidersGoals,
 			&i.CalcSubstitutionTax,
 			&i.CalcIcmsDeferral,
 			&i.CalcPisCofins,
 			&i.CalcDifal,
 			&i.RequiresSalesOrder,
-			&i.ListsFiscalBooks,
 			&i.IsActive,
 			&i.CreatedAt,
-			&i.ModelNf,
-			&i.CstIcms,
-			&i.CsosnIcms,
-			&i.CstIpi,
-			&i.CstPis,
-			&i.CstCofins,
 			&i.BaixaPedido,
-			&i.GeraTituloDev,
 			&i.ExigeSuframa,
-			&i.IrPctPresumption,
-			&i.CsllPctPresumption,
-			&i.DescriptionNf,
-			&i.ImpostosNfe,
-			&i.CfopID,
-			&i.DispositivoLegalIpiID,
-			&i.DispositivoLegalIcmsID,
-			&i.DispositivoLegalIcmsStID,
-			&i.DispositivoLegalPisID,
-			&i.DispositivoLegalCofinsID,
-			&i.HierarchyIpi,
-			&i.HierarchyIcms,
-			&i.HierarchyIcmsSt,
-			&i.HierarchyPis,
-			&i.HierarchyCofins,
-			&i.IpiTransferSalesTableID,
-			&i.ListaValorContabil,
-			&i.ListaRegistroSaida,
-			&i.ListaIcmsIpi,
-			&i.SintegraSpedFiscal,
-			&i.CalcFomentar,
-			&i.ExcecaoFomentar,
-			&i.CompRessRetSt,
-			&i.CalcReducao,
-			&i.ComplementoItens,
-			&i.BuscaTipoNf,
-			&i.IcmsStUltEntrada,
-			&i.SomenteConsultaLotes,
-			&i.CalcImpIbpt,
-			&i.CredPresumidoIcms,
-			&i.Ciap,
-			&i.VlrAgregadoBaseSubst,
-			&i.ContratoFacon,
-			&i.DescIcmsLicitacoes,
-			&i.Sisdeclara,
-			&i.CodClasTrib,
-			&i.CodClasTribTribReg,
-			&i.CodMotivoRestCompIcmsSt,
-			&i.CodBeneficioFiscal,
 			&i.EnterpriseID,
 		); err != nil {
 			return nil, err
@@ -2726,7 +2288,7 @@ func (q *Queries) ListSalesTables(ctx context.Context, arg ListSalesTablesParams
 }
 
 const listTaxTypes = `-- name: ListTaxTypes :many
-SELECT id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id FROM tax_types
+SELECT id, code, description, is_consumer, is_active, created_at, enterprise_id FROM tax_types
 WHERE ($1::BOOLEAN = FALSE OR is_active = TRUE) AND enterprise_id = $2
 ORDER BY code
 `
@@ -2749,26 +2311,6 @@ func (q *Queries) ListTaxTypes(ctx context.Context, arg ListTaxTypesParams) ([]T
 			&i.ID,
 			&i.Code,
 			&i.Description,
-			&i.IpiBaseTotalItems,
-			&i.IpiBaseSubtractDiscount,
-			&i.IpiBaseAddFreight,
-			&i.IpiBaseAddExpenses,
-			&i.IcmsBaseTotalItems,
-			&i.IcmsBaseSubtractDiscount,
-			&i.IcmsBaseAddFreight,
-			&i.IcmsBaseAddIpi,
-			&i.IcmsBaseAddExpenses,
-			&i.PisCofinsBaseTotalItems,
-			&i.PisCofinsBaseSubtractDiscount,
-			&i.PisCofinsBaseAddFreight,
-			&i.PisCofinsBaseAddInsurance,
-			&i.PisCofinsBaseAddExpenses,
-			&i.CsllBaseTotalItems,
-			&i.CsllBaseSubtractDiscount,
-			&i.CsllBaseAddFreight,
-			&i.IrBaseTotalItems,
-			&i.IrBaseSubtractDiscount,
-			&i.IrBaseAddFreight,
 			&i.IsConsumer,
 			&i.IsActive,
 			&i.CreatedAt,
@@ -3109,35 +2651,22 @@ func (q *Queries) UpdateAddress(ctx context.Context, arg UpdateAddressParams) (C
 
 const updateCarrier = `-- name: UpdateCarrier :one
 UPDATE carriers
-SET description = $2, billing_type = $3, uses_credit_limit = $4, consider_available = $5,
-    postpone_due_date = $6, receipt_days = $7, payment_days = $8, is_active = $9
-WHERE id = $1 AND enterprise_id = $10
-RETURNING id, code, description, billing_type, uses_credit_limit, consider_available, postpone_due_date, receipt_days, payment_days, is_active, created_at, enterprise_id
+SET description = $2, is_active = $3
+WHERE id = $1 AND enterprise_id = $4
+RETURNING id, code, description, is_active, created_at, enterprise_id
 `
 
 type UpdateCarrierParams struct {
-	ID                int64
-	Description       string
-	BillingType       sqltypes.CarrierBillingTypeEnum
-	UsesCreditLimit   bool
-	ConsiderAvailable bool
-	PostponeDueDate   bool
-	ReceiptDays       int16
-	PaymentDays       int16
-	IsActive          bool
-	EnterpriseID      int64
+	ID           int64
+	Description  string
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (Carrier, error) {
 	row := q.db.QueryRow(ctx, updateCarrier,
 		arg.ID,
 		arg.Description,
-		arg.BillingType,
-		arg.UsesCreditLimit,
-		arg.ConsiderAvailable,
-		arg.PostponeDueDate,
-		arg.ReceiptDays,
-		arg.PaymentDays,
 		arg.IsActive,
 		arg.EnterpriseID,
 	)
@@ -3146,12 +2675,6 @@ func (q *Queries) UpdateCarrier(ctx context.Context, arg UpdateCarrierParams) (C
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.BillingType,
-		&i.UsesCreditLimit,
-		&i.ConsiderAvailable,
-		&i.PostponeDueDate,
-		&i.ReceiptDays,
-		&i.PaymentDays,
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.EnterpriseID,
@@ -3287,7 +2810,7 @@ SET name = $1, trade_name = $2,
     financial_notes = $29::text,
     updated_at = NOW()
 WHERE id = $30 AND enterprise_id = $31
-RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at
+RETURNING id, code, corporate_code, is_corporate, name, trade_name, document_type, document_number, state_registration, municipal_registration, suframa_code, suframa_expiry, region_id, market_segment_id, customer_type_id, carrier_id, tax_type_id, credit_limit, website, is_active, blocked, block_reason, created_at, created_by, updated_at, enterprise_id, finalidade_compra, ie_indicator, tax_regime, main_cnae, nfe_email, billing_email, representative_code, shipping_carrier_id, freight_type, requires_customer_po, requires_quality_cert, allows_partial_billing, receiving_notes, commercial_notes, financial_notes, registration_status, registration_checked_at, registration_attempt_at, opening_date, share_capital, company_size, legal_nature, credit_score, credit_risk_class, credit_limit_suggested, credit_limit_expires_at, credit_reviewed_at, credit_review_attempt_at
 `
 
 type UpdateCustomerParams struct {
@@ -3415,6 +2938,7 @@ func (q *Queries) UpdateCustomer(ctx context.Context, arg UpdateCustomerParams) 
 		&i.CreditLimitSuggested,
 		&i.CreditLimitExpiresAt,
 		&i.CreditReviewedAt,
+		&i.CreditReviewAttemptAt,
 	)
 	return i, err
 }
@@ -3460,113 +2984,33 @@ func (q *Queries) UpdateCustomerType(ctx context.Context, arg UpdateCustomerType
 
 const updateInvoiceType = `-- name: UpdateInvoiceType :one
 UPDATE invoice_types
-SET description = $2, type = $3, stock_movement = $4, icms_type = $5,
-    icms_pct = $6, icms_reduction_pct = $7, ipi_pct = $8, pis_pct = $9,
-    cofins_pct = $10, issqn_pct = $11, ir_pct = $12, csll_pct = $13, inss_pct = $14,
-    generates_revenue = $15, updates_inventory = $16, generates_financial_title = $17,
-    considers_goals = $18, calc_substitution_tax = $19, calc_icms_deferral = $20,
-    calc_pis_cofins = $21, calc_difal = $22, requires_sales_order = $23,
-    lists_fiscal_books = $24, is_active = $25,
-    model_nf = $26, cst_icms = $27, csosn_icms = $28, cst_ipi = $29,
-    cst_pis = $30, cst_cofins = $31,
-    baixa_pedido = $32, gera_titulo_dev = $33, exige_suframa = $34,
-    ir_pct_presumption = $35, csll_pct_presumption = $36,
-    description_nf = $37, impostos_nfe = $38, cfop_id = $39,
-    dispositivo_legal_ipi_id = $40, dispositivo_legal_icms_id = $41,
-    dispositivo_legal_icms_st_id = $42, dispositivo_legal_pis_id = $43,
-    dispositivo_legal_cofins_id = $44,
-    hierarchy_ipi = $45, hierarchy_icms = $46, hierarchy_icms_st = $47,
-    hierarchy_pis = $48, hierarchy_cofins = $49,
-    ipi_transfer_sales_table_id = $50,
-    lista_valor_contabil = $51, lista_registro_saida = $52, lista_icms_ipi = $53,
-    sintegra_sped_fiscal = $54,
-    calc_fomentar = $55, excecao_fomentar = $56, comp_ress_ret_st = $57,
-    calc_reducao = $58, complemento_itens = $59,
-    busca_tipo_nf = $60, icms_st_ult_entrada = $61, somente_consulta_lotes = $62,
-    calc_imp_ibpt = $63, cred_presumido_icms = $64, ciap = $65,
-    vlr_agregado_base_subst = $66, contrato_facon = $67,
-    desc_icms_licitacoes = $68, sisdeclara = $69,
-    cod_clas_trib = $70, cod_clas_trib_trib_reg = $71,
-    cod_motivo_rest_comp_icms_st = $72, cod_beneficio_fiscal = $73
-WHERE id = $1 AND enterprise_id = $74
-RETURNING id, code, description, type, stock_movement, icms_type, icms_pct, icms_reduction_pct, ipi_pct, pis_pct, cofins_pct, issqn_pct, ir_pct, csll_pct, inss_pct, generates_revenue, updates_inventory, generates_financial_title, considers_goals, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, lists_fiscal_books, is_active, created_at, model_nf, cst_icms, csosn_icms, cst_ipi, cst_pis, cst_cofins, baixa_pedido, gera_titulo_dev, exige_suframa, ir_pct_presumption, csll_pct_presumption, description_nf, impostos_nfe, cfop_id, dispositivo_legal_ipi_id, dispositivo_legal_icms_id, dispositivo_legal_icms_st_id, dispositivo_legal_pis_id, dispositivo_legal_cofins_id, hierarchy_ipi, hierarchy_icms, hierarchy_icms_st, hierarchy_pis, hierarchy_cofins, ipi_transfer_sales_table_id, lista_valor_contabil, lista_registro_saida, lista_icms_ipi, sintegra_sped_fiscal, calc_fomentar, excecao_fomentar, comp_ress_ret_st, calc_reducao, complemento_itens, busca_tipo_nf, icms_st_ult_entrada, somente_consulta_lotes, calc_imp_ibpt, cred_presumido_icms, ciap, vlr_agregado_base_subst, contrato_facon, desc_icms_licitacoes, sisdeclara, cod_clas_trib, cod_clas_trib_trib_reg, cod_motivo_rest_comp_icms_st, cod_beneficio_fiscal, enterprise_id
+SET description = $2, type = $3, stock_movement = $4, icms_type = $5, icms_reduction_pct = $6,
+    generates_revenue = $7, updates_inventory = $8, generates_financial_title = $9, calc_substitution_tax = $10, calc_icms_deferral = $11,
+    calc_pis_cofins = $12, calc_difal = $13, requires_sales_order = $14, is_active = $15,
+    baixa_pedido = $16, exige_suframa = $17
+WHERE id = $1 AND enterprise_id = $18
+RETURNING id, code, description, type, stock_movement, icms_type, icms_reduction_pct, generates_revenue, updates_inventory, generates_financial_title, calc_substitution_tax, calc_icms_deferral, calc_pis_cofins, calc_difal, requires_sales_order, is_active, created_at, baixa_pedido, exige_suframa, enterprise_id
 `
 
 type UpdateInvoiceTypeParams struct {
-	ID                       int64
-	Description              string
-	Type                     sqltypes.InvoiceTypeEnum
-	StockMovement            sqltypes.InvoiceStockEnum
-	IcmsType                 sqltypes.InvoiceICMSTypeEnum
-	IcmsPct                  pgtype.Numeric
-	IcmsReductionPct         pgtype.Numeric
-	IpiPct                   pgtype.Numeric
-	PisPct                   pgtype.Numeric
-	CofinsPct                pgtype.Numeric
-	IssqnPct                 pgtype.Numeric
-	IrPct                    pgtype.Numeric
-	CsllPct                  pgtype.Numeric
-	InssPct                  pgtype.Numeric
-	GeneratesRevenue         bool
-	UpdatesInventory         bool
-	GeneratesFinancialTitle  bool
-	ConsidersGoals           bool
-	CalcSubstitutionTax      bool
-	CalcIcmsDeferral         bool
-	CalcPisCofins            bool
-	CalcDifal                bool
-	RequiresSalesOrder       bool
-	ListsFiscalBooks         bool
-	IsActive                 bool
-	ModelNf                  pgtype.Text
-	CstIcms                  pgtype.Text
-	CsosnIcms                pgtype.Text
-	CstIpi                   pgtype.Text
-	CstPis                   pgtype.Text
-	CstCofins                pgtype.Text
-	BaixaPedido              bool
-	GeraTituloDev            bool
-	ExigeSuframa             bool
-	IrPctPresumption         pgtype.Numeric
-	CsllPctPresumption       pgtype.Numeric
-	DescriptionNf            pgtype.Text
-	ImpostosNfe              NullImpostosNfeEnum
-	CfopID                   *int64
-	DispositivoLegalIpiID    *int64
-	DispositivoLegalIcmsID   *int64
-	DispositivoLegalIcmsStID *int64
-	DispositivoLegalPisID    *int64
-	DispositivoLegalCofinsID *int64
-	HierarchyIpi             pgtype.Text
-	HierarchyIcms            pgtype.Text
-	HierarchyIcmsSt          pgtype.Text
-	HierarchyPis             pgtype.Text
-	HierarchyCofins          pgtype.Text
-	IpiTransferSalesTableID  *int64
-	ListaValorContabil       bool
-	ListaRegistroSaida       bool
-	ListaIcmsIpi             bool
-	SintegraSpedFiscal       bool
-	CalcFomentar             bool
-	ExcecaoFomentar          bool
-	CompRessRetSt            bool
-	CalcReducao              bool
-	ComplementoItens         bool
-	BuscaTipoNf              bool
-	IcmsStUltEntrada         bool
-	SomenteConsultaLotes     bool
-	CalcImpIbpt              bool
-	CredPresumidoIcms        bool
-	Ciap                     bool
-	VlrAgregadoBaseSubst     bool
-	ContratoFacon            bool
-	DescIcmsLicitacoes       bool
-	Sisdeclara               bool
-	CodClasTrib              pgtype.Text
-	CodClasTribTribReg       pgtype.Text
-	CodMotivoRestCompIcmsSt  pgtype.Text
-	CodBeneficioFiscal       pgtype.Text
-	EnterpriseID             int64
+	ID                      int64
+	Description             string
+	Type                    sqltypes.InvoiceTypeEnum
+	StockMovement           sqltypes.InvoiceStockEnum
+	IcmsType                sqltypes.InvoiceICMSTypeEnum
+	IcmsReductionPct        pgtype.Numeric
+	GeneratesRevenue        bool
+	UpdatesInventory        bool
+	GeneratesFinancialTitle bool
+	CalcSubstitutionTax     bool
+	CalcIcmsDeferral        bool
+	CalcPisCofins           bool
+	CalcDifal               bool
+	RequiresSalesOrder      bool
+	IsActive                bool
+	BaixaPedido             bool
+	ExigeSuframa            bool
+	EnterpriseID            int64
 }
 
 func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypeParams) (InvoiceType, error) {
@@ -3576,74 +3020,18 @@ func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypePa
 		arg.Type,
 		arg.StockMovement,
 		arg.IcmsType,
-		arg.IcmsPct,
 		arg.IcmsReductionPct,
-		arg.IpiPct,
-		arg.PisPct,
-		arg.CofinsPct,
-		arg.IssqnPct,
-		arg.IrPct,
-		arg.CsllPct,
-		arg.InssPct,
 		arg.GeneratesRevenue,
 		arg.UpdatesInventory,
 		arg.GeneratesFinancialTitle,
-		arg.ConsidersGoals,
 		arg.CalcSubstitutionTax,
 		arg.CalcIcmsDeferral,
 		arg.CalcPisCofins,
 		arg.CalcDifal,
 		arg.RequiresSalesOrder,
-		arg.ListsFiscalBooks,
 		arg.IsActive,
-		arg.ModelNf,
-		arg.CstIcms,
-		arg.CsosnIcms,
-		arg.CstIpi,
-		arg.CstPis,
-		arg.CstCofins,
 		arg.BaixaPedido,
-		arg.GeraTituloDev,
 		arg.ExigeSuframa,
-		arg.IrPctPresumption,
-		arg.CsllPctPresumption,
-		arg.DescriptionNf,
-		arg.ImpostosNfe,
-		arg.CfopID,
-		arg.DispositivoLegalIpiID,
-		arg.DispositivoLegalIcmsID,
-		arg.DispositivoLegalIcmsStID,
-		arg.DispositivoLegalPisID,
-		arg.DispositivoLegalCofinsID,
-		arg.HierarchyIpi,
-		arg.HierarchyIcms,
-		arg.HierarchyIcmsSt,
-		arg.HierarchyPis,
-		arg.HierarchyCofins,
-		arg.IpiTransferSalesTableID,
-		arg.ListaValorContabil,
-		arg.ListaRegistroSaida,
-		arg.ListaIcmsIpi,
-		arg.SintegraSpedFiscal,
-		arg.CalcFomentar,
-		arg.ExcecaoFomentar,
-		arg.CompRessRetSt,
-		arg.CalcReducao,
-		arg.ComplementoItens,
-		arg.BuscaTipoNf,
-		arg.IcmsStUltEntrada,
-		arg.SomenteConsultaLotes,
-		arg.CalcImpIbpt,
-		arg.CredPresumidoIcms,
-		arg.Ciap,
-		arg.VlrAgregadoBaseSubst,
-		arg.ContratoFacon,
-		arg.DescIcmsLicitacoes,
-		arg.Sisdeclara,
-		arg.CodClasTrib,
-		arg.CodClasTribTribReg,
-		arg.CodMotivoRestCompIcmsSt,
-		arg.CodBeneficioFiscal,
 		arg.EnterpriseID,
 	)
 	var i InvoiceType
@@ -3654,75 +3042,19 @@ func (q *Queries) UpdateInvoiceType(ctx context.Context, arg UpdateInvoiceTypePa
 		&i.Type,
 		&i.StockMovement,
 		&i.IcmsType,
-		&i.IcmsPct,
 		&i.IcmsReductionPct,
-		&i.IpiPct,
-		&i.PisPct,
-		&i.CofinsPct,
-		&i.IssqnPct,
-		&i.IrPct,
-		&i.CsllPct,
-		&i.InssPct,
 		&i.GeneratesRevenue,
 		&i.UpdatesInventory,
 		&i.GeneratesFinancialTitle,
-		&i.ConsidersGoals,
 		&i.CalcSubstitutionTax,
 		&i.CalcIcmsDeferral,
 		&i.CalcPisCofins,
 		&i.CalcDifal,
 		&i.RequiresSalesOrder,
-		&i.ListsFiscalBooks,
 		&i.IsActive,
 		&i.CreatedAt,
-		&i.ModelNf,
-		&i.CstIcms,
-		&i.CsosnIcms,
-		&i.CstIpi,
-		&i.CstPis,
-		&i.CstCofins,
 		&i.BaixaPedido,
-		&i.GeraTituloDev,
 		&i.ExigeSuframa,
-		&i.IrPctPresumption,
-		&i.CsllPctPresumption,
-		&i.DescriptionNf,
-		&i.ImpostosNfe,
-		&i.CfopID,
-		&i.DispositivoLegalIpiID,
-		&i.DispositivoLegalIcmsID,
-		&i.DispositivoLegalIcmsStID,
-		&i.DispositivoLegalPisID,
-		&i.DispositivoLegalCofinsID,
-		&i.HierarchyIpi,
-		&i.HierarchyIcms,
-		&i.HierarchyIcmsSt,
-		&i.HierarchyPis,
-		&i.HierarchyCofins,
-		&i.IpiTransferSalesTableID,
-		&i.ListaValorContabil,
-		&i.ListaRegistroSaida,
-		&i.ListaIcmsIpi,
-		&i.SintegraSpedFiscal,
-		&i.CalcFomentar,
-		&i.ExcecaoFomentar,
-		&i.CompRessRetSt,
-		&i.CalcReducao,
-		&i.ComplementoItens,
-		&i.BuscaTipoNf,
-		&i.IcmsStUltEntrada,
-		&i.SomenteConsultaLotes,
-		&i.CalcImpIbpt,
-		&i.CredPresumidoIcms,
-		&i.Ciap,
-		&i.VlrAgregadoBaseSubst,
-		&i.ContratoFacon,
-		&i.DescIcmsLicitacoes,
-		&i.Sisdeclara,
-		&i.CodClasTrib,
-		&i.CodClasTribTribReg,
-		&i.CodMotivoRestCompIcmsSt,
-		&i.CodBeneficioFiscal,
 		&i.EnterpriseID,
 	)
 	return i, err
@@ -3947,69 +3279,23 @@ func (q *Queries) UpdateSalesTable(ctx context.Context, arg UpdateSalesTablePara
 const updateTaxType = `-- name: UpdateTaxType :one
 UPDATE tax_types
 SET description = $2,
-    ipi_base_total_items = $3, ipi_base_subtract_discount = $4, ipi_base_add_freight = $5, ipi_base_add_expenses = $6,
-    icms_base_total_items = $7, icms_base_subtract_discount = $8, icms_base_add_freight = $9, icms_base_add_ipi = $10, icms_base_add_expenses = $11,
-    pis_cofins_base_total_items = $12, pis_cofins_base_subtract_discount = $13, pis_cofins_base_add_freight = $14,
-    pis_cofins_base_add_insurance = $15, pis_cofins_base_add_expenses = $16,
-    csll_base_total_items = $17, csll_base_subtract_discount = $18, csll_base_add_freight = $19,
-    ir_base_total_items = $20, ir_base_subtract_discount = $21, ir_base_add_freight = $22,
-    is_consumer = $23, is_active = $24
-WHERE id = $1 AND enterprise_id = $25
-RETURNING id, code, description, ipi_base_total_items, ipi_base_subtract_discount, ipi_base_add_freight, ipi_base_add_expenses, icms_base_total_items, icms_base_subtract_discount, icms_base_add_freight, icms_base_add_ipi, icms_base_add_expenses, pis_cofins_base_total_items, pis_cofins_base_subtract_discount, pis_cofins_base_add_freight, pis_cofins_base_add_insurance, pis_cofins_base_add_expenses, csll_base_total_items, csll_base_subtract_discount, csll_base_add_freight, ir_base_total_items, ir_base_subtract_discount, ir_base_add_freight, is_consumer, is_active, created_at, enterprise_id
+    is_consumer = $3, is_active = $4
+WHERE id = $1 AND enterprise_id = $5
+RETURNING id, code, description, is_consumer, is_active, created_at, enterprise_id
 `
 
 type UpdateTaxTypeParams struct {
-	ID                            int64
-	Description                   string
-	IpiBaseTotalItems             bool
-	IpiBaseSubtractDiscount       bool
-	IpiBaseAddFreight             bool
-	IpiBaseAddExpenses            bool
-	IcmsBaseTotalItems            bool
-	IcmsBaseSubtractDiscount      bool
-	IcmsBaseAddFreight            bool
-	IcmsBaseAddIpi                bool
-	IcmsBaseAddExpenses           bool
-	PisCofinsBaseTotalItems       bool
-	PisCofinsBaseSubtractDiscount bool
-	PisCofinsBaseAddFreight       bool
-	PisCofinsBaseAddInsurance     bool
-	PisCofinsBaseAddExpenses      bool
-	CsllBaseTotalItems            bool
-	CsllBaseSubtractDiscount      bool
-	CsllBaseAddFreight            bool
-	IrBaseTotalItems              bool
-	IrBaseSubtractDiscount        bool
-	IrBaseAddFreight              bool
-	IsConsumer                    bool
-	IsActive                      bool
-	EnterpriseID                  int64
+	ID           int64
+	Description  string
+	IsConsumer   bool
+	IsActive     bool
+	EnterpriseID int64
 }
 
 func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (TaxType, error) {
 	row := q.db.QueryRow(ctx, updateTaxType,
 		arg.ID,
 		arg.Description,
-		arg.IpiBaseTotalItems,
-		arg.IpiBaseSubtractDiscount,
-		arg.IpiBaseAddFreight,
-		arg.IpiBaseAddExpenses,
-		arg.IcmsBaseTotalItems,
-		arg.IcmsBaseSubtractDiscount,
-		arg.IcmsBaseAddFreight,
-		arg.IcmsBaseAddIpi,
-		arg.IcmsBaseAddExpenses,
-		arg.PisCofinsBaseTotalItems,
-		arg.PisCofinsBaseSubtractDiscount,
-		arg.PisCofinsBaseAddFreight,
-		arg.PisCofinsBaseAddInsurance,
-		arg.PisCofinsBaseAddExpenses,
-		arg.CsllBaseTotalItems,
-		arg.CsllBaseSubtractDiscount,
-		arg.CsllBaseAddFreight,
-		arg.IrBaseTotalItems,
-		arg.IrBaseSubtractDiscount,
-		arg.IrBaseAddFreight,
 		arg.IsConsumer,
 		arg.IsActive,
 		arg.EnterpriseID,
@@ -4019,26 +3305,6 @@ func (q *Queries) UpdateTaxType(ctx context.Context, arg UpdateTaxTypeParams) (T
 		&i.ID,
 		&i.Code,
 		&i.Description,
-		&i.IpiBaseTotalItems,
-		&i.IpiBaseSubtractDiscount,
-		&i.IpiBaseAddFreight,
-		&i.IpiBaseAddExpenses,
-		&i.IcmsBaseTotalItems,
-		&i.IcmsBaseSubtractDiscount,
-		&i.IcmsBaseAddFreight,
-		&i.IcmsBaseAddIpi,
-		&i.IcmsBaseAddExpenses,
-		&i.PisCofinsBaseTotalItems,
-		&i.PisCofinsBaseSubtractDiscount,
-		&i.PisCofinsBaseAddFreight,
-		&i.PisCofinsBaseAddInsurance,
-		&i.PisCofinsBaseAddExpenses,
-		&i.CsllBaseTotalItems,
-		&i.CsllBaseSubtractDiscount,
-		&i.CsllBaseAddFreight,
-		&i.IrBaseTotalItems,
-		&i.IrBaseSubtractDiscount,
-		&i.IrBaseAddFreight,
 		&i.IsConsumer,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -4051,11 +3317,13 @@ const upsertCreditPolicy = `-- name: UpsertCreditPolicy :one
 INSERT INTO customer_credit_policies (
     enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct,
     overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c,
-    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct
+    validity_months_d, validity_months_e, registration_check_days, updated_by, updated_at, new_customer_revenue_pct,
+    customer_revenue_pct, declared_monthly_revenue, auto_review_months, auto_increase_max_pct
 ) VALUES (
     $1, $2, $3, $4, $5,
     $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, NOW(), $15
+    $11, $12, $13, $14, NOW(), $15,
+    $16, $17, $18, $19
 )
 ON CONFLICT (enterprise_id) DO UPDATE SET
     max_limit = EXCLUDED.max_limit, new_customer_capital_pct = EXCLUDED.new_customer_capital_pct,
@@ -4064,26 +3332,32 @@ ON CONFLICT (enterprise_id) DO UPDATE SET
     validity_months_a = EXCLUDED.validity_months_a, validity_months_b = EXCLUDED.validity_months_b,
     validity_months_c = EXCLUDED.validity_months_c, validity_months_d = EXCLUDED.validity_months_d,
     validity_months_e = EXCLUDED.validity_months_e, registration_check_days = EXCLUDED.registration_check_days,
-    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct
-RETURNING enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct
+    updated_by = EXCLUDED.updated_by, updated_at = NOW(), new_customer_revenue_pct = EXCLUDED.new_customer_revenue_pct,
+    customer_revenue_pct = EXCLUDED.customer_revenue_pct, declared_monthly_revenue = EXCLUDED.declared_monthly_revenue,
+    auto_review_months = EXCLUDED.auto_review_months, auto_increase_max_pct = EXCLUDED.auto_increase_max_pct
+RETURNING enterprise_id, max_limit, new_customer_capital_pct, new_customer_cap, override_tolerance_pct, overdue_block_days, history_months, validity_months_a, validity_months_b, validity_months_c, validity_months_d, validity_months_e, registration_check_days, updated_at, updated_by, new_customer_revenue_pct, customer_revenue_pct, declared_monthly_revenue, auto_review_months, auto_increase_max_pct
 `
 
 type UpsertCreditPolicyParams struct {
-	EnterpriseID          int64
-	MaxLimit              pgtype.Numeric
-	NewCustomerCapitalPct pgtype.Numeric
-	NewCustomerCap        pgtype.Numeric
-	OverrideTolerancePct  pgtype.Numeric
-	OverdueBlockDays      int32
-	HistoryMonths         int32
-	ValidityMonthsA       int32
-	ValidityMonthsB       int32
-	ValidityMonthsC       int32
-	ValidityMonthsD       int32
-	ValidityMonthsE       int32
-	RegistrationCheckDays int32
-	UpdatedBy             pgtype.UUID
-	NewCustomerRevenuePct pgtype.Numeric
+	EnterpriseID           int64
+	MaxLimit               pgtype.Numeric
+	NewCustomerCapitalPct  pgtype.Numeric
+	NewCustomerCap         pgtype.Numeric
+	OverrideTolerancePct   pgtype.Numeric
+	OverdueBlockDays       int32
+	HistoryMonths          int32
+	ValidityMonthsA        int32
+	ValidityMonthsB        int32
+	ValidityMonthsC        int32
+	ValidityMonthsD        int32
+	ValidityMonthsE        int32
+	RegistrationCheckDays  int32
+	UpdatedBy              pgtype.UUID
+	NewCustomerRevenuePct  pgtype.Numeric
+	CustomerRevenuePct     pgtype.Numeric
+	DeclaredMonthlyRevenue pgtype.Numeric
+	AutoReviewMonths       int32
+	AutoIncreaseMaxPct     pgtype.Numeric
 }
 
 func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicyParams) (CustomerCreditPolicy, error) {
@@ -4103,6 +3377,10 @@ func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicy
 		arg.RegistrationCheckDays,
 		arg.UpdatedBy,
 		arg.NewCustomerRevenuePct,
+		arg.CustomerRevenuePct,
+		arg.DeclaredMonthlyRevenue,
+		arg.AutoReviewMonths,
+		arg.AutoIncreaseMaxPct,
 	)
 	var i CustomerCreditPolicy
 	err := row.Scan(
@@ -4122,6 +3400,10 @@ func (q *Queries) UpsertCreditPolicy(ctx context.Context, arg UpsertCreditPolicy
 		&i.UpdatedAt,
 		&i.UpdatedBy,
 		&i.NewCustomerRevenuePct,
+		&i.CustomerRevenuePct,
+		&i.DeclaredMonthlyRevenue,
+		&i.AutoReviewMonths,
+		&i.AutoIncreaseMaxPct,
 	)
 	return i, err
 }

@@ -3698,3 +3698,19 @@ Seletivo continuam sem cálculo.
   000493 preenche pelo pedido da nota e, sem pedido, pelo CNPJ/CPF quando ele é
   de um único cliente da empresa. Daqui para a frente, a nota avulsa digitada com
   o documento de um cliente cadastrado também fica ligada a ele.
+
+### Colunas aposentadas (000499)
+
+As colunas que nenhuma regra lia saíram do banco: 30 da `icms_ipi_tax_params`
+(acréscimos e modalidades da ST, FCP-ST, CSTs de entrada/devolução, campos de
+custo/FCI), 5 da `cfops` (utilização, indicador, tipo de utilização, DIFAL,
+doação), `fiscal_classifications.apuracao`, 3 da `entry_operation_types`
+(classificação e tipo de fornecedor), 3 da `special_adjustment_notes` (CFOP,
+valor total, gera resumo) e a tabela `special_adjustment_note_items`, 56 da
+`invoice_types`, 6 da `carriers` e 20 da `tax_types`. Ficaram as que o motor lê:
+`supplier_code`, `item_config_mask`, `customer_establishment_code` e
+`invoice_type_entry_id` (impedem regra de entrada de valer na venda) e
+`invoice_types.exige_suframa`. O conteúdo foi para `<tabela>_campos_retirados`
+(o down devolve, conferido por diff de esquema); nas bases de produção nenhuma
+delas tinha valor preenchido. A API ignora campo desconhecido, então o desktop
+antigo que ainda manda esses campos continua funcionando.

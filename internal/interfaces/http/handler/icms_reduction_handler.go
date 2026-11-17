@@ -294,34 +294,3 @@ func (h *ICMSReductionHandler) ListSpecialNotes(w http.ResponseWriter, r *http.R
 	}
 	jsonResponse(w, http.StatusOK, result)
 }
-
-func (h *ICMSReductionHandler) AddSpecialNoteItem(w http.ResponseWriter, r *http.Request) {
-	var body fiscalEntity.SpecialAdjustmentNoteItem
-	if err := decodeEntityBody(r, &body); err != nil {
-		jsonError(w, http.StatusBadRequest, "conteúdo da requisição inválido: "+err.Error())
-		return
-	}
-	if id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); err == nil {
-		body.NoteID = id
-	}
-	result, err := h.specialNoteUC.AddItem(r.Context(), &body)
-	if err != nil {
-		respondFiscalError(w, err)
-		return
-	}
-	jsonResponse(w, http.StatusCreated, result)
-}
-
-func (h *ICMSReductionHandler) ListSpecialNoteItems(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "código inválido")
-		return
-	}
-	result, err := h.specialNoteUC.ListItems(r.Context(), id)
-	if err != nil {
-		security.RespondUseCaseError(w, err)
-		return
-	}
-	jsonResponse(w, http.StatusOK, result)
-}
