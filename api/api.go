@@ -962,6 +962,8 @@ func (app *application) mount() chi.Router {
 
 	// purchase order
 	poRepo := purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(app.db.Pool)
+	// O fornecedor escolhido pelo MRP sobrevive ao recálculo do plano.
+	mrpFirmarSugestaoUC.Fornecedores = poRepo
 	poApproveUC := &purchase_order_uc.ApprovePurchaseOrderUseCase{Repo: poRepo, Auth: authService, Policy: procurementUC}
 	// Unidade interna: toda linha de pedido guarda quantidade e preço na unidade
 	// de estoque do cadastro (e recusa unidade de compra sem conversão).
@@ -1016,8 +1018,8 @@ func (app *application) mount() chi.Router {
 
 	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
 	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
-		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService},
-		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade},
+		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService, Sugeridos: poRepo},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade, Sugeridos: poRepo},
 		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
 	)
 
@@ -1031,7 +1033,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
 	wireAtomicPlannedRelease(app.db.Pool, queries, plannedFirmUC, orderOpsUC)
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
-		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)),
+		purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)).ComFontes(itemSupplierUC),
 		&purchase_requisition_uc.GeneratePurchaseOrdersUseCase{
 			Aprovacoes:       costCenterGestaoRepo,
 			Geracao:          poGeracao,
@@ -1223,7 +1225,7 @@ func (app *application) mount() chi.Router {
 	}
 	estoqueHandler := &handler.EstoqueHandler{UC: &estoque_uc.UseCase{
 		Ops: stockRepository, Auth: authService,
-		Compras:    purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)),
+		Compras:    purchase_requisition_uc.NewPurchaseRequisitionUseCase(purchaseReqRepository, authService).ComAprovacoesDoCentro(costCenterGestaoRepo).ComCatalogoDeUnidades(unitOfMeasureRepo.NewCatalogo(app.db.Pool)).ComFontes(itemSupplierUC),
 		Planejadas: plannedCreateUC,
 		Aprovacoes: aprovacaoUC,
 	}}
@@ -3986,6 +3988,10 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/quality-reports", itemSupplierHandler.ListQualityReports)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/quality-reports/{reportID}/download", itemSupplierHandler.DownloadQualityReport)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{id}", itemSupplierHandler.Delete)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/block", itemSupplierHandler.Block)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/unblock", itemSupplierHandler.Unblock)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/block-history", itemSupplierHandler.BlockHistory)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/clear-learned", itemSupplierHandler.ClearLearned)
 		})
 
 		r.Route("/api/purchase-order-tolerances", func(r chi.Router) {

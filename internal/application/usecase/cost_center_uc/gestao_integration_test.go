@@ -62,6 +62,7 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 	}
 	item := 9_300_000_000 + sufixo%100_000_000
 	testutil.SeedItem(t, pool, ctx, item, eu)
+	testutil.FonteDeSuprimento(t, pool, item, 1)
 	t.Cleanup(func() {
 		_, _ = pool.Exec(bg, `DELETE FROM contas_pagar_rateios WHERE centro_custo_id = $1`, filhoID)
 		_, _ = pool.Exec(bg, `DELETE FROM contas_pagar WHERE numero_documento LIKE 'CC-TESTE-%'`)

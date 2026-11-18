@@ -85,6 +85,8 @@ func TestFluxoDoPedidoDeCompra(t *testing.T) {
 
 	fornecedor := testutil.UniqueCode()
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORNECEDOR PEDIDO',$2,$3,$4)`, fornecedor, uuid.NewString()[:14], uid, enterpriseID)
+	testutil.FonteDeSuprimento(t, pool, comAlmox, fornecedor)
+	testutil.FonteDeSuprimento(t, pool, semAlmox, fornecedor)
 	t.Cleanup(func() {
 		// Roda antes da limpeza dos pedidos (LIFO): solta-os do fornecedor primeiro.
 		pool.Exec(bg, `DELETE FROM purchase_order_items WHERE purchase_order_code = ANY($1)`, pedidos)

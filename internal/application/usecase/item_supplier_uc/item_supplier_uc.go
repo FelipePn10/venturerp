@@ -44,9 +44,10 @@ func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, d request.UpsertItemP
 	if err != nil {
 		return nil, err
 	}
-	s.SupplierItemCode = d.SupplierItemCode
-	s.SupplierDescription = d.SupplierDescription
-	s.UOM = d.UOM
+	// Vazio = não informado: o repositório mantém o que a NF-e aprendeu.
+	s.SupplierItemCode = textoOuNil(d.SupplierItemCode)
+	s.SupplierDescription = textoOuNil(d.SupplierDescription)
+	s.UOM = textoOuNil(d.UOM)
 	s.XMLUOM = d.XMLUOM
 	s.ConversionFactor = d.ConversionFactor
 	s.PackageQuantity = d.PackageQuantity
@@ -62,6 +63,12 @@ func (uc *ItemSupplierUseCase) Upsert(ctx context.Context, d request.UpsertItemP
 	s.Barcode = d.Barcode
 	s.Notes = d.Notes
 	s.LeadTimeDays = d.LeadTimeDays
+	s.MinOrderQty = d.MinOrderQty
+	s.OrderMultiple = d.OrderMultiple
+	s.QuotaPercent = d.QuotaPercent
+	if s.ValidFrom, err = parseOptionalDate(d.ValidFrom); err != nil {
+		return nil, err
+	}
 	if s.ClassificationDate, err = parseOptionalDate(d.ClassificationDate); err != nil {
 		return nil, err
 	}
@@ -162,10 +169,87 @@ func (uc *ItemSupplierUseCase) GetPreferredSupplier(ctx context.Context, item in
 		return 0, false, err
 	}
 	s, err := uc.repo.GetPreferred(ctx, e, item)
-	if err != nil || s == nil {
+	if err != nil {
+		// Falha de leitura não é "item sem fornecedor".
+		return 0, false, fmt.Errorf("lendo o fornecedor preferencial do item %d: %w", item, err)
+	}
+	if s == nil {
 		return 0, false, nil
 	}
 	return s.SupplierCode, true, nil
+}
+
+// FonteDoItem: ver repository.FonteDoItem. Usado na geração de pedidos a
+// partir de requisições, para não mandar ao banco uma linha que a trava recusa.
+func (uc *ItemSupplierUseCase) FonteDoItem(ctx context.Context, item int64, mask string, informado *int64) (int64, bool, error) {
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	return uc.repo.FonteDoItem(ctx, e, item, mask, informado)
+}
+
+func textoOuNil(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	t := strings.TrimSpace(*s)
+	if t == "" {
+		return nil
+	}
+	return &t
+}
+
+// Block / Unblock: bloquear tira o vínculo das fontes (MRP e documentos de
+// compra) sem apagá-lo; o motivo fica no histórico.
+func (uc *ItemSupplierUseCase) Block(ctx context.Context, id int64, d request.ItemSupplierBlockDTO) (*response.ItemPreferredSupplierResponse, error) {
+	return uc.setBlocked(ctx, id, entity.AcaoBloqueio, d.Reason)
+}
+func (uc *ItemSupplierUseCase) Unblock(ctx context.Context, id int64, d request.ItemSupplierBlockDTO) (*response.ItemPreferredSupplierResponse, error) {
+	return uc.setBlocked(ctx, id, entity.AcaoDesbloqueio, d.Reason)
+}
+func (uc *ItemSupplierUseCase) setBlocked(ctx context.Context, id int64, action, reason string) (*response.ItemPreferredSupplierResponse, error) {
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	by, err := uc.auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ev, err := entity.NewBlockEvent(e, id, action, reason, by)
+	if err != nil {
+		return nil, err
+	}
+	saved, err := uc.repo.SetBlocked(ctx, ev)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponse(saved), nil
+}
+func (uc *ItemSupplierUseCase) BlockHistory(ctx context.Context, id int64) ([]response.ItemSupplierBlockEventResponse, error) {
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	x, err := uc.repo.ListBlockHistory(ctx, e, id)
+	if err != nil {
+		return nil, err
+	}
+	return toBlockEventResponses(x), nil
+}
+
+// ClearLearned desfaz o código/descrição do fornecedor aprendidos na NF-e.
+func (uc *ItemSupplierUseCase) ClearLearned(ctx context.Context, id int64) (*response.ItemPreferredSupplierResponse, error) {
+	e, err := uc.auth.EnterpriseID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	saved, err := uc.repo.ClearLearned(ctx, e, id)
+	if err != nil {
+		return nil, err
+	}
+	return toItemPreferredSupplierResponse(saved), nil
 }
 func (uc *ItemSupplierUseCase) CreateQualityReport(ctx context.Context, link int64, d request.CreateItemSupplierQualityReportDTO) (*response.ItemSupplierQualityReportResponse, error) {
 	e, err := uc.auth.EnterpriseID(ctx)

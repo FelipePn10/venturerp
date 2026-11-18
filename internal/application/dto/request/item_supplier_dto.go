@@ -26,8 +26,12 @@ type UpsertItemPreferredSupplierDTO struct {
 	Ecommerce             bool             `json:"ecommerce"`
 	Barcode               *string          `json:"barcode,omitempty"`
 	Notes                 *string          `json:"notes,omitempty"`
+	ValidFrom             *string          `json:"valid_from,omitempty"`
 	ValidUntil            *string          `json:"valid_until,omitempty"`
 	LeadTimeDays          int32            `json:"lead_time_days,omitempty"`
+	MinOrderQty           decimal.Decimal  `json:"min_order_qty"`
+	OrderMultiple         decimal.Decimal  `json:"order_multiple"`
+	QuotaPercent          *decimal.Decimal `json:"quota_percent,omitempty"`
 	CreatedBy             uuid.UUID        `json:"created_by,omitempty"`
 }
 type CreateItemSupplierQualityReportDTO struct {
@@ -37,4 +41,9 @@ type CreateItemSupplierQualityReportDTO struct {
 	ContentType  *string `json:"content_type,omitempty"`
 	Content      []byte  `json:"content,omitempty"`
 	Notes        *string `json:"notes,omitempty"`
+}
+
+// ItemSupplierBlockDTO bloqueia ou desbloqueia um vínculo; o motivo é obrigatório.
+type ItemSupplierBlockDTO struct {
+	Reason string `json:"reason"`
 }

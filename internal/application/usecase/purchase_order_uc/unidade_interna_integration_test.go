@@ -49,6 +49,7 @@ func TestPedidoDeCompraGuardaUnidadeInternaComPrecisao(t *testing.T) {
 	}
 	fornecedor := testutil.UniqueCode()
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORNECEDOR TUBO',$2,$3,$4)`, fornecedor, uuid.NewString()[:14], uid, enterpriseID)
+	testutil.FonteDeSuprimento(t, pool, item, fornecedor)
 	var pedidos []int64
 	t.Cleanup(func() {
 		pool.Exec(bg, `DELETE FROM purchase_order_items WHERE purchase_order_code = ANY($1)`, pedidos)

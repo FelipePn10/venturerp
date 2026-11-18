@@ -163,6 +163,11 @@ type cachedItemMRP struct {
 	// foraDoMRP: item desligado no MRP, protótipo ou sucata. Não gera ordem nem
 	// necessidade de componente.
 	foraDoMRP bool
+	// Fontes de compra do item (VSUP0130), lidas uma vez por cálculo. O
+	// "alocado" de cada uma cresce a cada sugestão deste cálculo: é o que faz a
+	// cota repartir as necessidades seguintes.
+	fontes      []FonteDeCompra
+	fontesLidas bool
 }
 
 // =============================================================================
@@ -1399,10 +1404,33 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		return output, nil
 	}
 
+	// 5b. Compra: de quem (preferencial/ranking ou índice de cota) e a política
+	// de compra DESTE fornecedor (mínimo e múltiplo) sobre a do item.
+	var fonte *FonteDeCompra
+	if orderType == "COMPRA" {
+		fonte, err = s.fonteDaCompra(ctx, cached, input.ItemCode, input.Mask)
+		if err != nil {
+			return nil, err
+		}
+		if fonte != nil {
+			netReq = aplicaPoliticaDeLote(netReq, fonte.MinOrderQty, fonte.OrderMultiple).RoundCeil(escalaDaOrdem)
+			fonte.Alocado = fonte.Alocado.Add(netReq)
+		}
+	}
+
 	// 6. Prazo do item (cenário > regra da máscara > fornecedor/roteiro).
 	leadTimeDays, err := s.prazoDoItem(ctx, rulesMap, itemCache, input.ItemCode, input.Mask)
 	if err != nil {
 		return nil, err
+	}
+	// O prazo é o do fornecedor ESCOLHIDO (com cota pode não ser o
+	// preferencial), salvo prazo do cenário ou da regra da máscara.
+	if fonte != nil && !s.temPrazoInformado(rulesMap, input.ItemCode, input.Mask) {
+		var prazoCompra *int
+		if cached != nil {
+			prazoCompra = cached.prazoCompra
+		}
+		leadTimeDays = prazoDaFonte(fonte, prazoCompra)
 	}
 	// Fabricado cujo prazo vem do ROTEIRO: o prazo é o do lote desta ordem, no
 	// roteiro que esta quantidade usa (faixa de lote). O prazo do cadastro é
@@ -1446,6 +1474,10 @@ func (s *MRPServiceImpl) calcNetReqFast(
 		InterFactory:         input.InterFactory,
 		SourceEnterpriseCode: input.SourceEnterpriseCode,
 		AutoRelease:          input.AutoRelease,
+	}
+	if fonte != nil {
+		fornecedor := fonte.SupplierCode
+		mainOrder.SupplierCode = &fornecedor
 	}
 	if shouldPlanTechnicalAssistance(input, params) {
 		mainOrder.OrderType = "TECHNICAL_ASSISTANCE"
@@ -1598,6 +1630,28 @@ func findPriorityForQuantity(priorities []*orderpriority.OrderPriority, quantity
 // ConfiguredItemRule.CasaComMascara: sem condição de máscara, vale sempre).
 func (s *MRPServiceImpl) ruleMatchesMask(rule *entity.ConfiguredItemRule, mask string) bool {
 	return rule.CasaComMascara(mask)
+}
+
+// fonteDaCompra escolhe a fonte desta necessidade entre as do item (lidas uma
+// vez por cálculo). nil = item sem fonte válida: a sugestão sai sem
+// fornecedor e o pedido vai exigir o cadastro em VSUP0130.
+func (s *MRPServiceImpl) fonteDaCompra(ctx context.Context, cached *cachedItemMRP, itemCode int64, mask string) (*FonteDeCompra, error) {
+	r, ok := s.MRPRepo.(FontesDeCompraReader)
+	if !ok || cached == nil {
+		return nil, nil
+	}
+	if !cached.fontesLidas {
+		fontes, err := r.FontesDeCompra(ctx, itemCode)
+		if err != nil {
+			return nil, fmt.Errorf("lendo os fornecedores do item %d: %w", itemCode, err)
+		}
+		cached.fontes, cached.fontesLidas = fontes, true
+	}
+	i := escolherFonte(cached.fontes, mask)
+	if i < 0 {
+		return nil, nil
+	}
+	return &cached.fontes[i], nil
 }
 
 // PrazoDeCompraReader lê o prazo de entrega do fornecedor preferencial do

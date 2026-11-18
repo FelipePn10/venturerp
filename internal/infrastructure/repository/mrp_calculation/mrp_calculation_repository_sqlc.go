@@ -953,6 +953,70 @@ func rulesToEntities(
 	return out
 }
 
+// FontesDeCompra: os fornecedores do item válidos hoje (ativos,
+// desbloqueados, vigentes), preferencial e ranking primeiro, com a política de
+// compra de cada um. Para quem tem cota, o "alocado" é o que já foi pedido a ele
+// (pedidos e linhas não cancelados, na unidade de estoque) desde o início da
+// vigência do vínculo — a base do índice de cota.
+func (r *MRPCalculationRepositorySQLC) FontesDeCompra(ctx context.Context, itemCode int64) ([]entity.FonteDeCompra, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	hoje := time.Now()
+	rows, err := r.db.Query(ctx, `
+		SELECT s.supplier_code, s.mask, s.is_preferred, s.ranking, GREATEST(s.lead_time_days, 0),
+		       s.min_order_qty, s.order_multiple, s.quota_percent,
+		       CASE WHEN s.quota_percent IS NULL THEN 0 ELSE COALESCE((
+		           SELECT SUM(GREATEST(CASE WHEN pi.internal_qty > 0 THEN pi.internal_qty ELSE pi.requested_qty - pi.cancelled_qty END, 0))
+		             FROM purchase_order_items pi
+		             JOIN purchase_orders po ON po.code = pi.purchase_order_code
+		             JOIN enterprise e ON e.code = po.enterprise_code AND e.id = s.enterprise_id
+		            WHERE po.supplier_code = s.supplier_code AND pi.item_code = s.item_code
+		              AND po.status <> 'CANCELLED' AND pi.status <> 'CANCELLED'
+		              AND po.emission_date >= b.inicio), 0)
+		         -- Ordem de compra firmada para este fornecedor que ainda não virou
+		         -- pedido: já é dele (a cota não pode mandá-la de novo a outro).
+		         + COALESCE((
+		           SELECT SUM(GREATEST(COALESCE(NULLIF(pl.quantity_corrected, 0), pl.quantity), 0))
+		             FROM planned_orders pl
+		            WHERE pl.enterprise_id = s.enterprise_id AND pl.item_code = s.item_code
+		              AND pl.supplier_code = s.supplier_code AND pl.order_type = 'PURCHASE'
+		              AND pl.is_active AND pl.status <> 'CANCELLED' AND pl.created_at::date >= b.inicio
+		              AND NOT EXISTS (SELECT 1 FROM purchase_order_items x
+		                                JOIN purchase_orders y ON y.code = x.purchase_order_code AND y.status <> 'CANCELLED'
+		                               WHERE x.planned_order_code = pl.code AND x.status <> 'CANCELLED')), 0) END
+		  FROM item_preferred_suppliers s
+		  -- Janela COMUM a todas as cotas do item: começa na mudança de cota (ou
+		  -- início de vigência) mais recente. Com janela por fornecedor, quem
+		  -- entrasse agora (alocado zero contra um ano de histórico dos outros)
+		  -- levaria todas as compras até "alcançar" — o problema que o SAP
+		  -- resolve com a base da cota. Mudar os percentuais recomeça a conta.
+		  CROSS JOIN LATERAL (
+		      SELECT MAX(COALESCE(GREATEST(q.quota_since, q.valid_from), q.created_at::date)) AS inicio
+		        FROM item_preferred_suppliers q
+		       WHERE q.enterprise_id = s.enterprise_id AND q.item_code = s.item_code
+		         AND q.is_active AND NOT q.blocked AND q.quota_percent IS NOT NULL) b
+		 WHERE s.enterprise_id = $1 AND s.item_code = $2 AND s.is_active AND NOT s.blocked
+		   AND (s.valid_from IS NULL OR s.valid_from <= $3::date) AND (s.valid_until IS NULL OR s.valid_until >= $3::date)
+		 ORDER BY s.is_preferred DESC, s.ranking, s.supplier_code, s.mask`,
+		enterpriseID, itemCode, time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		return nil, fmt.Errorf("lendo os fornecedores do item %d: %w", itemCode, err)
+	}
+	defer rows.Close()
+	out := []entity.FonteDeCompra{}
+	for rows.Next() {
+		var f entity.FonteDeCompra
+		if err := rows.Scan(&f.SupplierCode, &f.Mask, &f.Preferred, &f.Ranking, &f.LeadTimeDays,
+			&f.MinOrderQty, &f.OrderMultiple, &f.QuotaPercent, &f.Alocado); err != nil {
+			return nil, fmt.Errorf("lendo os fornecedores do item %d: %w", itemCode, err)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
 // PrazoDeCompra é o prazo de entrega (dias) do fornecedor do item comprado: o
 // marcado como preferencial, depois o de melhor ranking, entre os vínculos
 // ativos e vigentes hoje. Sem fornecedor, zero. A data vai como parâmetro (o
@@ -966,7 +1030,7 @@ func (r *MRPCalculationRepositorySQLC) PrazoDeCompra(ctx context.Context, itemCo
 	var dias int
 	err = r.db.QueryRow(ctx, `
 		SELECT lead_time_days FROM item_preferred_suppliers
-		 WHERE enterprise_id = $1 AND item_code = $2 AND is_active
+		 WHERE enterprise_id = $1 AND item_code = $2 AND is_active AND NOT blocked
 		   AND (valid_from IS NULL OR valid_from <= $3::date) AND (valid_until IS NULL OR valid_until >= $3::date)
 		 ORDER BY is_preferred DESC, ranking, id
 		 LIMIT 1`, enterpriseID, itemCode, time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, time.UTC)).Scan(&dias)

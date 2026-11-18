@@ -189,6 +189,10 @@ func TestGeraVinculosItemFornecedorPeloHistorico(t *testing.T) {
 		testutil.UniqueCode(), a.Code, actor, fornecedor).Scan(&pedido); err != nil {
 		t.Fatal(err)
 	}
+	// Histórico de antes da fonte obrigatória: a empresa com a exigência
+	// desligada (procurement_parameters) é como o legado ficou gravado.
+	testutil.Exec(t, pool, `INSERT INTO procurement_parameters(enterprise_code,domain,param_key,param_value,value_type) VALUES($1,'SUPPLIER','EXIGE_FONTE_DE_SUPRIMENTO','N','BOOL')`, a.Code)
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM procurement_parameters WHERE enterprise_code=$1`, a.Code) })
 	testutil.Exec(t, pool, `INSERT INTO purchase_order_items(purchase_order_code,item_code) VALUES($1,$2)`, pedido, item)
 
 	criados, err := procurement.New(pool).GenerateItemSuppliersFromHistory(a.Ctx, fornecedor, actor)

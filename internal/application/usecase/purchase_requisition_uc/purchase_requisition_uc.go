@@ -14,8 +14,9 @@ import (
 )
 
 type PurchaseRequisitionUseCase struct {
-	repo repository.PurchaseRequisitionRepository
-	auth ports.AuthService
+	repo   repository.PurchaseRequisitionRepository
+	auth   ports.AuthService
+	fontes FontesDoItem
 	// aprovacoes abre a aprovação do aprovador do centro de custo para os
 	// itens de centro que aprova requisições (opcional).
 	aprovacoes AprovacoesDoCentro
@@ -36,6 +37,17 @@ type AprovacoesDoCentro interface {
 }
 
 // ComAprovacoesDoCentro liga a aprovação pelo centro de custo.
+// FontesDoItem: o item tem fornecedor vigente na máscara (VSUP0130)?
+type FontesDoItem interface {
+	FonteDoItem(ctx context.Context, item int64, mask string, informado *int64) (int64, bool, error)
+}
+
+// ComFontes liga o aviso de linha sem fornecedor no detalhe da requisição.
+func (uc *PurchaseRequisitionUseCase) ComFontes(f FontesDoItem) *PurchaseRequisitionUseCase {
+	uc.fontes = f
+	return uc
+}
+
 func (uc *PurchaseRequisitionUseCase) ComAprovacoesDoCentro(a AprovacoesDoCentro) *PurchaseRequisitionUseCase {
 	uc.aprovacoes = a
 	return uc
@@ -144,7 +156,20 @@ func (uc *PurchaseRequisitionUseCase) Get(ctx context.Context, code int64) (*res
 	if req.Items, err = uc.repo.ListItems(ctx, code); err != nil {
 		return nil, err
 	}
-	return toRequisitionResponse(req), nil
+	resp := toRequisitionResponse(req)
+	if uc.fontes != nil && len(resp.Items) == len(req.Items) {
+		for i, it := range req.Items {
+			if !it.Balance().IsPositive() {
+				continue
+			}
+			_, ok, err := uc.fontes.FonteDoItem(ctx, it.ItemCode, it.Mask, nil)
+			if err != nil {
+				return nil, err
+			}
+			resp.Items[i].SemFornecedor = !ok
+		}
+	}
+	return resp, nil
 }
 
 func (uc *PurchaseRequisitionUseCase) List(ctx context.Context, onlyOpen bool) ([]*response.PurchaseRequisitionResponse, error) {

@@ -44,6 +44,14 @@ e [Odoo Subcontracting](https://www.odoo.com/documentation/18.0/applications/inv
   histórico.
 - `VSUP0130` não mantém um segundo código de fornecedor. O identificador canônico
   é o do cadastro único e códigos externos pertencem à relação item-fornecedor.
+- `VSUP0130` é a fonte de suprimento obrigatória (migração 000502): sem fornecedor
+  vigente (ativo, não bloqueado, na vigência) o item não entra em pedido de
+  compra nem em liberação/remessa ao terceiro. A requisição fica livre, como no
+  SAP e no Oracle, e mostra a linha sem fornecedor. Prazo por fornecedor mantido (SAP info record,
+  Oracle ASL); UM saiu da tela (é do item/VSUP0110); código/descrição no
+  fornecedor viram somente leitura, aprendidos pela NF-e. Cota (%), mínimo,
+  múltiplo, vigência e bloqueio com motivo/histórico entram no MRP. Detalhes em
+  `cadastros-fornecedor.md`.
 
 ## Conversões e terceiros
 

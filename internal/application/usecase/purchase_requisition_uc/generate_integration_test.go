@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/shopspring/decimal"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -83,16 +84,32 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 		t.Fatalf("Upsert preferred supplier: %v", err)
 	}
 
+	// Item sem fornecedor: a requisição aceita (é livre) e marca a linha.
+	semFonte := testutil.UniqueCode()
+	testutil.SeedItem(t, pool, ctx, semFonte, testutil.Actor(t, pool))
+	t.Cleanup(func() { testutil.Exec(t, pool, "DELETE FROM items WHERE code=$1", semFonte) })
+
 	// 3) A purchase requisition with one open item.
-	reqUC := purchase_requisition_uc.NewPurchaseRequisitionUseCase(reqRepository)
+	reqUC := purchase_requisition_uc.NewPurchaseRequisitionUseCase(reqRepository).ComFontes(itemSupplierUC)
 	req, err := reqUC.Create(ctx, request.CreatePurchaseRequisitionDTO{
 		EnterpriseCode: 1, CreatedBy: uuid.New(),
-		Items: []request.RequisitionItemInput{{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), SuggestedPrice: decimal.NewFromFloat(5)}},
+		Items: []request.RequisitionItemInput{
+			{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), SuggestedPrice: decimal.NewFromFloat(5)},
+			{ItemCode: itemCode, Quantity: decimal.NewFromFloat(3), SuggestedPrice: decimal.NewFromFloat(5)},
+			{ItemCode: semFonte, Quantity: decimal.NewFromFloat(1)},
+		},
 	})
 	if err != nil {
 		t.Fatalf("create requisition: %v", err)
 	}
 	reqItemID := req.Items[0].ID
+	detalhe, err := reqUC.Get(ctx, req.Code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detalhe.Items) != 3 || detalhe.Items[0].SemFornecedor || !detalhe.Items[2].SemFornecedor {
+		t.Fatalf("marca de linha sem fornecedor errada: %+v", detalhe.Items)
+	}
 	productionRepository := productionrepo.NewProductionOrderRepositoryPGX(pool)
 	var productionOrderID int64
 	if err := pool.QueryRow(ctx, `INSERT INTO production_orders
@@ -168,5 +185,31 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 	}
 	if !item.AttendedQty.Equal(decimal.NewFromFloat(10)) || !item.Balance().IsZero() {
 		t.Errorf("requisition attendance = %v (balance %v), want 10 / 0", item.AttendedQty, item.Balance())
+	}
+
+	// 6) Fornecedor informado que não é fonte do item (VSUP0130): a linha fica
+	// de fora com o motivo — sem erro e sem pedido pela metade.
+	outro := testutil.UniqueCode()
+	so, err := supplierentity.NewSupplier(outro, supplierentity.SupplierInput{
+		Name: "Fornecedor sem vínculo", PersonType: supplierentity.PersonJuridica,
+		DocumentType: supplierentity.DocumentEstrangeiro, DocumentNumber: fmt.Sprintf("EXT%d", outro),
+		StateRegistration: &ie,
+	}, uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := suppRepo.CreateSupplier(ctx, so); err != nil {
+		t.Fatal(err)
+	}
+	defer testutil.Exec(t, pool, "DELETE FROM suppliers WHERE code = $1", outro)
+	res2, err := gen.Execute(ctx, request.GeneratePurchaseOrdersDTO{
+		EnterpriseCode: 1, CreatedBy: uuid.New(),
+		Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[1].ID, QtyToAttend: decimal.NewFromFloat(3), SupplierCode: &outro}},
+	})
+	if err != nil {
+		t.Fatalf("fornecedor que não é fonte derrubou a geração: %v", err)
+	}
+	if len(res2.Orders) != 0 || len(res2.Skipped) != 1 || !strings.Contains(res2.Skipped[0], "VSUP0130") {
+		t.Fatalf("esperava a linha ignorada com motivo VSUP0130: pedidos=%d ignorados=%v", len(res2.Orders), res2.Skipped)
 	}
 }

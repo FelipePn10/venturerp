@@ -43,4 +43,7 @@ type PurchaseRequisitionItemResponse struct {
 	Status            string     `json:"status"`
 	IsActive          bool       `json:"is_active"`
 	CreatedAt         time.Time  `json:"created_at"`
+	// SemFornecedor: linha com saldo cujo item não tem fornecedor vigente em
+	// VSUP0130 — a requisição é livre, mas não vira pedido até cadastrar.
+	SemFornecedor bool `json:"sem_fornecedor,omitempty"`
 }

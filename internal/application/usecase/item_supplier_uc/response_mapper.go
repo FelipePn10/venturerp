@@ -1,6 +1,8 @@
 package item_supplier_uc
 
 import (
+	"time"
+
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/domain/item_supplier/entity"
 )
@@ -9,7 +11,7 @@ func toItemPreferredSupplierResponse(s *entity.ItemPreferredSupplier) *response.
 	if s == nil {
 		return nil
 	}
-	return &response.ItemPreferredSupplierResponse{ID: s.ID, EnterpriseID: s.EnterpriseID, ItemCode: s.ItemCode, SupplierCode: s.SupplierCode, Mask: s.Mask, Ranking: s.Ranking, SupplierItemCode: s.SupplierItemCode, SupplierDescription: s.SupplierDescription, UOM: s.UOM, XMLUOM: s.XMLUOM, ConversionFactor: s.ConversionFactor, PackageQuantity: s.PackageQuantity, IsPreferred: s.IsPreferred, SupplierUF: s.SupplierUF, ClassificationID: s.ClassificationID, ClassificationDate: s.ClassificationDate, ClassificationGrade: s.ClassificationGrade, DirectBilling: s.DirectBilling, ThirdPartyOrder: s.ThirdPartyOrder, IgnoreAvgCostAddition: s.IgnoreAvgCostAddition, Ecommerce: s.Ecommerce, Barcode: s.Barcode, Notes: s.Notes, ValidUntil: s.ValidUntil, LeadTimeDays: s.LeadTimeDays, IsActive: s.IsActive, CreatedAt: s.CreatedAt, CreatedBy: s.CreatedBy, UpdatedAt: s.UpdatedAt}
+	return &response.ItemPreferredSupplierResponse{ID: s.ID, EnterpriseID: s.EnterpriseID, ItemCode: s.ItemCode, SupplierCode: s.SupplierCode, Mask: s.Mask, Ranking: s.Ranking, SupplierItemCode: s.SupplierItemCode, SupplierDescription: s.SupplierDescription, UOM: s.UOM, XMLUOM: s.XMLUOM, ConversionFactor: s.ConversionFactor, PackageQuantity: s.PackageQuantity, IsPreferred: s.IsPreferred, SupplierUF: s.SupplierUF, ClassificationID: s.ClassificationID, ClassificationDate: s.ClassificationDate, ClassificationGrade: s.ClassificationGrade, DirectBilling: s.DirectBilling, ThirdPartyOrder: s.ThirdPartyOrder, IgnoreAvgCostAddition: s.IgnoreAvgCostAddition, Ecommerce: s.Ecommerce, Barcode: s.Barcode, Notes: s.Notes, ValidFrom: s.ValidFrom, ValidUntil: s.ValidUntil, LeadTimeDays: s.LeadTimeDays, MinOrderQty: s.MinOrderQty, OrderMultiple: s.OrderMultiple, QuotaPercent: s.QuotaPercent, Blocked: s.Blocked, BlockedReason: s.BlockedReason, BlockedAt: s.BlockedAt, BlockedBy: s.BlockedBy, Situacao: s.Situacao(time.Now()), IsActive: s.IsActive, CreatedAt: s.CreatedAt, CreatedBy: s.CreatedBy, UpdatedAt: s.UpdatedAt}
 }
 func toItemPreferredSupplierResponses(x []*entity.ItemPreferredSupplier) []*response.ItemPreferredSupplierResponse {
 	out := make([]*response.ItemPreferredSupplierResponse, 0, len(x))
@@ -23,4 +25,12 @@ func toQualityResponse(q *entity.QualityReport) *response.ItemSupplierQualityRep
 		return nil
 	}
 	return &response.ItemSupplierQualityReportResponse{ID: q.ID, ItemSupplierID: q.ItemSupplierID, RegisteredOn: q.RegisteredOn, Status: q.Status, FileName: q.FileName, ContentType: q.ContentType, HasAttachment: len(q.Content) > 0, Notes: q.Notes, CreatedAt: q.CreatedAt, CreatedBy: q.CreatedBy}
+}
+
+func toBlockEventResponses(x []*entity.BlockEvent) []response.ItemSupplierBlockEventResponse {
+	out := make([]response.ItemSupplierBlockEventResponse, 0, len(x))
+	for _, e := range x {
+		out = append(out, response.ItemSupplierBlockEventResponse{ID: e.ID, ItemSupplierID: e.ItemSupplierID, Action: e.Action, Reason: e.Reason, ActorID: e.ActorID, CreatedAt: e.CreatedAt})
+	}
+	return out
 }

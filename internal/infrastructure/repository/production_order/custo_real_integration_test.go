@@ -64,6 +64,7 @@ func TestCustoRealDaOFPorComponente(t *testing.T) {
 	must(pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,is_active,created_by,enterprise_id) VALUES($1,$2,1,TRUE,TRUE,$3,$4) RETURNING id`, testutil.UniqueCode(), item, actor, a.ID).Scan(&roteiro))
 	must(pool.QueryRow(base, `INSERT INTO route_operations(route_id,sequence,operation_id,is_active) VALUES($1,30,$2,TRUE) RETURNING id`, roteiro, operacao).Scan(&etapa))
 	fornecedor := testutil.UniqueCode() % 1_000_000
+	testutil.FonteDeSuprimento(t, pool, item, fornecedor)
 	hoje := time.Now()
 	_, err = pool.Exec(base, `INSERT INTO third_party_service_orders(code,enterprise_id,production_order_id,route_operation_id,operation_id,item_code,supplier_code,uom,quantity,fulfilled_quantity,start_date,due_date,status,created_by)
 		VALUES($1,$2,$3,$4,$5,$6,$7,'UN',10,8,$8::date,$8::date,'RELEASED_WITHOUT_PO',$9)`, testutil.UniqueCode()%1_000_000, a.ID, of, etapa, operacao, item, fornecedor, hoje, actor)

@@ -4,6 +4,7 @@ package third_party_service_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 )
 
@@ -165,6 +167,12 @@ func TestPriceLifecycleResolutionAndTenantIsolation(t *testing.T) {
 		t.Fatal("release with purchase order must require its code")
 	}
 	poCode := int64(991)
+	// Liberar ao terceiro exige o serviço com o terceiro como fonte (VSUP0130).
+	var pgErr *pgconn.PgError
+	if _, e = repo.UpdateOrderStatus(ctx, orders[0].ID, "RELEASED_WITH_PO", nil, &poCode, uid); !errors.As(e, &pgErr) || pgErr.Code != "P0001" {
+		t.Fatalf("liberou ao terceiro sem fonte de suprimento: %v", e)
+	}
+	testutil.FonteDeSuprimento(t, pool, itemCode, supplierCode)
 	if _, e = repo.UpdateOrderStatus(ctx, orders[0].ID, "RELEASED_WITH_PO", nil, &poCode, uid); e != nil {
 		t.Fatal(e)
 	}

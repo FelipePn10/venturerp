@@ -233,5 +233,57 @@ Endpoints (sob `/api/purchase-order`):
   `unit_price`, `notes`, `created_by`. Retorna o pedido de compra gerado.
 - `POST /suggestions/{code}/reject` — rejeita a sugestão.
 
-> Observação: não há cadastro de "fornecedor preferencial por item"; o comprador
-> informa o `supplier_code` na aprovação.
+> Fornecedor: `supplier_code` é opcional na aprovação. Sem ele, vale o
+> fornecedor que o MRP escolheu (`mrp_planned_suggestions.supplier_code`), que
+> `GET /suggestions` devolve em `suggested_supplier_code`. Ver "Fonte de
+> suprimento (VSUP0130)" abaixo.
+
+### Fonte de suprimento (VSUP0130, migração 000502)
+
+`item_preferred_suppliers` é a lista de fontes do item (equivale ao source list
++ info record do SAP / ASL do Oracle), por `enterprise_id` do item.
+
+- **Política por fornecedor:** `lead_time_days` (0 = prazo de compra do item),
+  `min_order_qty`, `order_multiple`, `quota_percent` (0 < q ≤ 100; a soma do
+  item é conferida com `FOR UPDATE` no upsert), `valid_from`/`valid_until`.
+- **Bloqueio:** `blocked`, `blocked_reason` (obrigatório), `blocked_at`,
+  `blocked_by`; histórico em `item_supplier_block_history`. Rotas
+  `POST /api/item-suppliers/{id}/block|unblock` (corpo `{reason}`),
+  `GET /{id}/block-history`. A resposta traz `situacao`
+  (VIGENTE/BLOQUEADO/VENCIDO/FUTURO).
+- **Código/descrição no fornecedor** são aprendidos pela entrada de NF-e: o
+  upsert usa `COALESCE(EXCLUDED, atual)` e não os apaga; `POST /{id}/clear-learned`
+  limpa.
+- **Trava (`trg_fonte_de_suprimento`, P0001 → 422 REGRA_DE_NEGOCIO):** linha de
+  pedido (inclusive troca de item/máscara) e troca de fornecedor do pedido
+  exigem que o fornecedor do pedido seja fonte vigente;
+  OS de terceiro exige fonte ao ser liberada (`RELEASED_*`) e na remessa
+  (`REMITTANCE`) — a criação da OS junto com a OF não é travada. Cotação não é
+  travada (como no SAP, RFQ dispensa source list; a conversão em pedido passa
+  pela trava). **Requisição é livre** (SAP/Oracle): nasce sozinha ao firmar a OF
+  (serviço da operação externa) e travá-la deixava a firmação pela metade. O
+  detalhe da requisição marca `sem_fornecedor` na linha com saldo sem fonte, e a
+  geração de pedidos (`FonteDoItem`, mesma regra da trava, por máscara) deixa a
+  linha em `skipped` com o motivo em vez de falhar no meio. A OS liberada pelo
+  pedido do serviço assume o fornecedor do pedido. Fonte vigente = ativa, não bloqueada, máscara vazia ou igual,
+  dentro da vigência.
+- **Desligar por empresa:** `procurement_parameters` domínio `SUPPLIER`, chave
+  `EXIGE_FONTE_DE_SUPRIMENTO` = `N` (padrão: exige).
+- **MRP:** `FontesDeCompra` lê as fontes vigentes; sem cota usa preferencial →
+  ranking; com cota usa o índice de cota do SAP (alocado ÷ cota). Alocado =
+  linhas de pedido não canceladas + ordens de compra firmadas para o fornecedor
+  que ainda não viraram pedido, numa janela COMUM às cotas do item (desde a
+  mudança de cota ou início de vigência mais recente). A ordem planejada aplica mínimo/múltiplo do
+  fornecedor e o prazo dele (sem prazo próprio, o prazo de compra do item),
+  salvo prazo de cenário/máscara.
+- **Fornecedor da sugestão:** ao firmar a sugestão de compra, o fornecedor vai
+  para `planned_orders.supplier_code` — o recálculo do plano apaga
+  `mrp_planned_suggestions`. A lista e a aprovação leem
+  `COALESCE(planned_orders.supplier_code, sugestão.supplier_code)`.
+- **NF-e:** a entrada de nota cria/reativa o vínculo (aprende código e
+  descrição). Vínculo excluído volta com a próxima nota do fornecedor para o
+  item; bloqueio não é desfeito pela nota.
+- **Soma das cotas:** geral (máscara vazia) + cada máscara ≤ 100%; o bloqueado
+  conta (cota reservada). `quota_since` guarda o dia em que a cota atual foi
+  definida: regravar a mesma cota não mexe; mudar o percentual recomeça a janela
+  da cota do item.

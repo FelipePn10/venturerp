@@ -451,8 +451,14 @@ func (r *ProductionOrderRepositoryPGX) LinkServicePurchaseOrder(ctx context.Cont
 			return pgx.ErrNoRows
 		}
 	}
+	// A OS liberada pelo pedido passa a ser do fornecedor DO PEDIDO — o que a
+	// fonte de suprimento (VSUP0130) já conferiu. Manter o do roteiro deixava a
+	// OS com um fornecedor diferente do pedido e a trava da OS recusava a
+	// liberação depois do pedido gravado.
 	_, err = tx.Exec(ctx, `UPDATE third_party_service_orders service_order
-		SET purchase_order_code=$3,status='RELEASED_WITH_PO',updated_at=NOW()
+		SET purchase_order_code=$3,status='RELEASED_WITH_PO',updated_at=NOW(),
+		    supplier_code=COALESCE((SELECT po.supplier_code FROM purchase_orders po
+		        JOIN enterprise e ON e.code=po.enterprise_code AND e.id=$1 WHERE po.code=$3), service_order.supplier_code)
 		FROM purchase_requisition_items item
 		JOIN production_order_service_requisition_links req_link
 		  ON req_link.purchase_requisition_code=item.requisition_code AND req_link.enterprise_id=$1

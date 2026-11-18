@@ -44,6 +44,8 @@ func TestPurchaseQuotationAndRequisitionAreIsolatedByTenant(t *testing.T) {
 	}
 	fornA, fornB := fornecedor(a), fornecedor(b)
 	itemA, itemB := item(a), item(b)
+	testutil.FonteDeSuprimento(t, pool, itemA, 0)
+	testutil.FonteDeSuprimento(t, pool, itemB, 0)
 
 	cot := purchase_quotation.New(q, pool)
 	cria := func(e testutil.Empresa) *qentity.PurchaseQuotation {

@@ -613,12 +613,14 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 		  LEFT JOIN production_orders po ON po.planned_order_id = pl.id AND po.enterprise_id = s.enterprise_id
 		  LEFT JOIN LATERAL (SELECT x.code, x.purchase_order_code FROM purchase_order_items x WHERE x.planned_order_code = pl.code LIMIT 1) poi ON TRUE
 		  LEFT JOIN LATERAL (SELECT ps.supplier_code FROM item_preferred_suppliers ps
-		                      WHERE ps.item_code = s.item_code AND ps.enterprise_id = s.enterprise_id AND ps.is_active
-		                      ORDER BY ps.is_preferred DESC, ps.ranking LIMIT 1) ips ON TRUE
-		  LEFT JOIN suppliers sup ON sup.code = ips.supplier_code AND sup.enterprise_id = s.enterprise_id
+		                      WHERE ps.item_code = s.item_code AND ps.enterprise_id = s.enterprise_id AND ps.is_active AND NOT ps.blocked
+		                        AND (ps.valid_from IS NULL OR ps.valid_from<=CURRENT_DATE) AND (ps.valid_until IS NULL OR ps.valid_until>=CURRENT_DATE)
+		                      ORDER BY (ps.supplier_code = s.supplier_code) DESC NULLS LAST, ps.is_preferred DESC, ps.ranking LIMIT 1) ips ON TRUE
+		  -- O que o MRP escolheu (gravado na ordem ao firmar, ou na sugestão); sem ele, a fonte vigente.
+		  LEFT JOIN suppliers sup ON sup.code = COALESCE(pl.supplier_code, s.supplier_code, ips.supplier_code) AND sup.enterprise_id = s.enterprise_id
 		  LEFT JOIN LATERAL (SELECT ti.price FROM purchase_price_table_items ti JOIN purchase_price_tables tb ON tb.id = ti.table_id
 		                      WHERE ti.item_code = s.item_code AND ti.is_active AND tb.enterprise_id = s.enterprise_id AND tb.is_active
-		                        AND (tb.supplier_code IS NULL OR tb.supplier_code = ips.supplier_code)
+		                        AND (tb.supplier_code IS NULL OR tb.supplier_code = sup.code)
 		                      ORDER BY tb.validity_start DESC NULLS LAST LIMIT 1) pr ON TRUE
 		  LEFT JOIN LATERAL (SELECT r.id, r.code, r.alternative FROM manufacturing_routes r
 		                      WHERE r.item_code = s.item_code AND r.enterprise_id = s.enterprise_id AND r.is_active
