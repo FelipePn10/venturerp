@@ -40,6 +40,7 @@ func TestCancelarOFFechaPendenciasEExplicaARecusa(t *testing.T) {
 	}
 	item := testutil.UniqueCode()
 	testutil.SeedItem(t, pool, a.Ctx, item, actor)
+	testutil.FonteDeSuprimento(t, pool, item, 0)
 	novaOF := func(status string) int64 {
 		var id int64
 		must(pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,planned_qty,status,origin_type,created_by,enterprise_id)

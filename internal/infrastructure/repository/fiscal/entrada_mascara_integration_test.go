@@ -41,6 +41,7 @@ func TestEntradaLigadaAoPedidoEntraNaMascaraDoPedido(t *testing.T) {
 	testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,$2,$3,$4)`, item, almox, ator, emp)
 	fornecedor := u % 1_000_000
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,person_type,document_type,document_number,created_by,enterprise_id,register_date) VALUES($1,'Forn','JURIDICA','CNPJ','27785001000145',$2,$3,CURRENT_DATE)`, fornecedor, ator, emp)
+	testutil.FonteDeSuprimento(t, pool, item, fornecedor)
 	var pedido, linha, nota, linhaNota int64
 	if err := pool.QueryRow(bg, `INSERT INTO purchase_orders(order_number,enterprise_code,status,supplier_code,created_by) VALUES($1,$2,'APPROVED',$3,$4) RETURNING code`,
 		u%1_000_000, codigoEmpresa, fornecedor, ator).Scan(&pedido); err != nil {

@@ -64,6 +64,7 @@ func TestComprasConsultasIntegracao(t *testing.T) {
 		fornecedor, uuid.NewString()[:14], uid, enterpriseID).Scan(&supplierID); err != nil {
 		t.Fatal(err)
 	}
+	testutil.FonteDeSuprimento(t, pool, item, fornecedor)
 	testutil.Exec(t, pool, `INSERT INTO supplier_emails(supplier_id,email,ranking) VALUES($1,'geral@forn.test',1)`, supplierID)
 	var contato int64
 	if err := pool.QueryRow(bg, `INSERT INTO supplier_contacts(supplier_id,name,purchase_order_tag) VALUES($1,'Vendedor',$2) RETURNING id`, supplierID, "PEDIDO").Scan(&contato); err != nil {

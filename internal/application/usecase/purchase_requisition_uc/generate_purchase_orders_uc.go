@@ -99,7 +99,25 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		}
 
 		var supplierCode int64
-		if sel.SupplierCode != nil {
+		if fs, ok := uc.Preferred.(fonteDoItem); ok {
+			// Fonte de suprimento (VSUP0130), na máscara da linha: o informado
+			// tem de ser fonte; sem informado, o preferencial. Conferir aqui
+			// deixa só a linha de fora — a trava do banco derrubaria a geração
+			// no meio, com pedidos de outros fornecedores já gravados.
+			code, found, errFonte := fs.FonteDoItem(ctx, reqItem.ItemCode, reqItem.Mask, sel.SupplierCode)
+			if errFonte != nil {
+				return nil, fmt.Errorf("lendo a fonte de suprimento do item: %w", errFonte)
+			}
+			if !found {
+				motivo := "sem fornecedor ativo, vigente e desbloqueado em VSUP0130"
+				if sel.SupplierCode != nil {
+					motivo = fmt.Sprintf("o fornecedor %d não é fonte vigente do item em VSUP0130", *sel.SupplierCode)
+				}
+				result.Skipped = append(result.Skipped, fmt.Sprintf("item %d (%d): %s", reqItem.ItemCode, sel.RequisitionItemID, motivo))
+				continue
+			}
+			supplierCode = code
+		} else if sel.SupplierCode != nil {
 			supplierCode = *sel.SupplierCode
 		} else if uc.Preferred != nil {
 			code, found, errPref := uc.Preferred.GetPreferredSupplier(ctx, reqItem.ItemCode)
@@ -260,4 +278,10 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 
 	result.Pedidos = purchase_order_uc.ToPurchaseOrderResponses(result.Orders)
 	return result, nil
+}
+
+// fonteDoItem: o fornecedor de quem comprar o item na máscara (VSUP0130).
+// Opcional em Preferred.
+type fonteDoItem interface {
+	FonteDoItem(ctx context.Context, item int64, mask string, informado *int64) (int64, bool, error)
 }

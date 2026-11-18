@@ -70,7 +70,7 @@ func (r *StockRepositorySQLC) NiveisPeloConsumo(ctx context.Context, item int64,
 	if prazo <= 0 {
 		err := r.pool.QueryRow(ctx,
 			`SELECT COALESCE(lead_time_days, 0) FROM item_preferred_suppliers
-			  WHERE enterprise_id=$1 AND item_code=$2 AND is_active ORDER BY is_preferred DESC, ranking, id LIMIT 1`, empresa, item).Scan(&prazo)
+			  WHERE enterprise_id=$1 AND item_code=$2 AND is_active AND NOT blocked AND (valid_from IS NULL OR valid_from<=CURRENT_DATE) AND (valid_until IS NULL OR valid_until>=CURRENT_DATE) ORDER BY is_preferred DESC, ranking, id LIMIT 1`, empresa, item).Scan(&prazo)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("lendo o prazo do fornecedor: %w", err)
 		}

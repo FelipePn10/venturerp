@@ -46,6 +46,8 @@ func TestLinhaDoPedidoHerdaOIPIDoItem(t *testing.T) {
 	testutil.Exec(t, pool, `UPDATE items SET supplies_warehouse_code=$2 WHERE code = ANY($1)`, []int64{comClassif, semClassif}, almox)
 	fornecedor := testutil.UniqueCode()
 	testutil.Exec(t, pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORNECEDOR IPI',$2,$3,$4)`, fornecedor, uuid.NewString()[:14], uid, enterpriseID)
+	testutil.FonteDeSuprimento(t, pool, comClassif, fornecedor)
+	testutil.FonteDeSuprimento(t, pool, semClassif, fornecedor)
 	var pedidos []int64
 	t.Cleanup(func() {
 		pool.Exec(bg, `DELETE FROM purchase_order_items WHERE purchase_order_code = ANY($1)`, pedidos)

@@ -55,6 +55,7 @@ func TestOFManualEPedidoSemPlanejadaSaoSuprimento(t *testing.T) {
 	fornecedor := testutil.UniqueCode() % 1_000_000_000
 	testutil.Exec(t, a.pool, `INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORNECEDOR',$2,$3::uuid,$4)`,
 		fornecedor, "12345678000195", a.userID, a.enterpriseID)
+	testutil.FonteDeSuprimento(t, a.pool, comprado, fornecedor)
 	t.Cleanup(func() {
 		testutil.Exec(t, a.pool, `DELETE FROM suppliers WHERE code = $1 AND enterprise_id = $2`, fornecedor, a.enterpriseID)
 	})

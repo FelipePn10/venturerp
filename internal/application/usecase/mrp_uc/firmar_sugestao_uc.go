@@ -94,6 +94,9 @@ type FirmarSugestaoMRPUseCase struct {
 	// Demandas grava, pelo pegging, que demanda independente a sugestão
 	// firmada cobre (VPLA0102 mostra a ordem da demanda). Opcional.
 	Demandas DemandasDaSugestao
+	// Fornecedores guarda na ordem de compra o fornecedor escolhido pelo MRP
+	// (VSUP0130). Opcional.
+	Fornecedores GravaFornecedor
 }
 
 type FirmarSugestaoMRPResponse struct {
@@ -236,6 +239,13 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 			return nil, fmt.Errorf("ligando a ordem planejada %d às demandas da sugestão %d: %w", created.Code, suggestionCode, err)
 		}
 	}
+	// Fornecedor escolhido pelo MRP (VSUP0130) vai junto: o recálculo apaga a
+	// sugestão, e a aprovação da compra o lê da ordem.
+	if g := uc.Fornecedores; g != nil && sugg.SupplierCode != nil && created.OrderType == types.OrderPurchase {
+		if err := g.GravarFornecedor(ctx, created.Code, *sugg.SupplierCode); err != nil {
+			return nil, fmt.Errorf("gravando o fornecedor da ordem planejada %d: %w", created.Code, err)
+		}
+	}
 
 	var firmedResponse *response.PlannedOrderResponse
 	// Firm the freshly-created order so its OF / service requisition is generated.
@@ -312,4 +322,9 @@ func mergeNote(existing *string, extra string) *string {
 	}
 	s := *existing + "; " + extra
 	return &s
+}
+
+// GravaFornecedor: guarda o fornecedor do MRP na ordem planejada.
+type GravaFornecedor interface {
+	GravarFornecedor(ctx context.Context, code, supplier int64) error
 }

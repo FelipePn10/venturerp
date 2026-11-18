@@ -49,6 +49,33 @@ func jaPedidas(ctx context.Context, repo plannedrepo.PlannedOrderRepository) (ma
 type ListPurchaseSuggestionsUseCase struct {
 	Planned plannedrepo.PlannedOrderRepository
 	Auth    ports.AuthService
+	// Sugeridos: fornecedor que o MRP escolheu para cada ordem planejada de
+	// compra (VSUP0130). Opcional.
+	Sugeridos FornecedoresDasSugestoes
+}
+
+// FornecedoresDasSugestoes: ordem planejada → fornecedor escolhido pelo MRP.
+type FornecedoresDasSugestoes interface {
+	FornecedoresSugeridos(ctx context.Context) (map[int64]int64, error)
+}
+
+// Fornecedores devolve o fornecedor escolhido pelo MRP para cada sugestão.
+func (uc *ListPurchaseSuggestionsUseCase) Fornecedores(ctx context.Context) (map[int64]int64, error) {
+	if uc.Sugeridos == nil {
+		return nil, nil
+	}
+	return uc.Sugeridos.FornecedoresSugeridos(ctx)
+}
+
+// ComFornecedores preenche o fornecedor sugerido de cada sugestão.
+func ComFornecedores(lista []SugestaoResponse, fornecedores map[int64]int64) []SugestaoResponse {
+	for i := range lista {
+		if f, ok := fornecedores[lista[i].Code]; ok {
+			f := f
+			lista[i].FornecedorSugerido = &f
+		}
+	}
+	return lista
 }
 
 func (uc *ListPurchaseSuggestionsUseCase) Execute(ctx context.Context) ([]*plannedentity.PlannedOrder, error) {
@@ -85,6 +112,14 @@ type ApprovePurchaseSuggestionUseCase struct {
 	Aprovacao *ApprovePurchaseOrderUseCase
 	// Unidade: a quantidade da sugestão está na unidade de estoque.
 	Unidade *UnidadeInterna
+	// Sugeridos: o fornecedor que o MRP escolheu para a sugestão (VSUP0130:
+	// preferencial, ranking ou cota). Vale quando o comprador não informa outro.
+	Sugeridos FornecedorDaSugestao
+}
+
+// FornecedorDaSugestao lê o fornecedor escolhido pelo MRP para a ordem planejada.
+type FornecedorDaSugestao interface {
+	FornecedorSugerido(ctx context.Context, plannedCode int64) (int64, bool, error)
 }
 
 func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto request.ApprovePurchaseSuggestionDTO) (*poentity.PurchaseOrder, error) {
@@ -101,6 +136,15 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		return nil, err
 	}
 
+	if (dto.SupplierCode == nil || *dto.SupplierCode <= 0) && uc.Sugeridos != nil {
+		fornecedor, achou, errSug := uc.Sugeridos.FornecedorSugerido(ctx, dto.PlannedOrderCode)
+		if errSug != nil {
+			return nil, fmt.Errorf("lendo o fornecedor sugerido pelo MRP: %w", errSug)
+		}
+		if achou {
+			dto.SupplierCode = &fornecedor
+		}
+	}
 	if dto.SupplierCode == nil || *dto.SupplierCode <= 0 {
 		return nil, errorsuc.NewValidationError("escolha o fornecedor da compra")
 	}
@@ -278,6 +322,8 @@ type SugestaoResponse struct {
 	AlertaMRP     string     `json:"mrp_alert,omitempty"`
 	AlertaMRPText string     `json:"mrp_alert_text,omitempty"`
 	AlertaMRPData *time.Time `json:"mrp_alert_date,omitempty"`
+	// Fornecedor que o MRP escolheu (preferencial, ranking ou cota em VSUP0130).
+	FornecedorSugerido *int64 `json:"suggested_supplier_code,omitempty"`
 }
 
 // ComAlertas junta à fila o que o MRP recomenda para cada compra.

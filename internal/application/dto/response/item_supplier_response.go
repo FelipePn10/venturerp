@@ -30,12 +30,22 @@ type ItemPreferredSupplierResponse struct {
 	Ecommerce             bool             `json:"ecommerce"`
 	Barcode               *string          `json:"barcode,omitempty"`
 	Notes                 *string          `json:"notes,omitempty"`
+	ValidFrom             *time.Time       `json:"valid_from,omitempty"`
 	ValidUntil            *time.Time       `json:"valid_until,omitempty"`
 	LeadTimeDays          int32            `json:"lead_time_days"`
-	IsActive              bool             `json:"is_active"`
-	CreatedAt             time.Time        `json:"created_at"`
-	CreatedBy             uuid.UUID        `json:"created_by"`
-	UpdatedAt             time.Time        `json:"updated_at"`
+	MinOrderQty           decimal.Decimal  `json:"min_order_qty"`
+	OrderMultiple         decimal.Decimal  `json:"order_multiple"`
+	QuotaPercent          *decimal.Decimal `json:"quota_percent,omitempty"`
+	Blocked               bool             `json:"blocked"`
+	BlockedReason         *string          `json:"blocked_reason,omitempty"`
+	BlockedAt             *time.Time       `json:"blocked_at,omitempty"`
+	BlockedBy             *uuid.UUID       `json:"blocked_by,omitempty"`
+	// Situacao hoje: VIGENTE, BLOQUEADO, VENCIDO ou FUTURO. Só VIGENTE é fonte.
+	Situacao  string    `json:"situacao"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy uuid.UUID `json:"created_by"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 type ItemSupplierQualityReportResponse struct {
 	ID             int64     `json:"id"`
@@ -48,4 +58,13 @@ type ItemSupplierQualityReportResponse struct {
 	Notes          *string   `json:"notes,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	CreatedBy      uuid.UUID `json:"created_by"`
+}
+
+type ItemSupplierBlockEventResponse struct {
+	ID             int64     `json:"id"`
+	ItemSupplierID int64     `json:"item_supplier_id"`
+	Action         string    `json:"action"`
+	Reason         string    `json:"reason"`
+	ActorID        uuid.UUID `json:"actor_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }

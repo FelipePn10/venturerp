@@ -385,6 +385,7 @@ func TestCompraFirmeEhOQueFaltaChegar(t *testing.T) {
 		testutil.Exec(t, a.pool, `DELETE FROM purchase_order_items WHERE purchase_order_code = $1`, pedido)
 		testutil.Exec(t, a.pool, `DELETE FROM purchase_orders WHERE code = $1`, pedido)
 	})
+	testutil.FonteDeSuprimento(t, a.pool, item, fornecedor)
 	if err := a.pool.QueryRow(a.ctx, `INSERT INTO purchase_order_items(purchase_order_code,item_code,purchase_uom,unit_price,planned_order_code,received_qty,cancelled_qty)
 		VALUES($1,$2,'UN',1,$3,4,1) RETURNING code`, pedido, item, codigo).Scan(&linha); err != nil {
 		t.Fatalf("criando a linha: %v", err)

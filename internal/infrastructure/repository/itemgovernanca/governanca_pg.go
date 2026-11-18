@@ -147,7 +147,7 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 			            FROM bom_headers h WHERE h.enterprise_id=i.enterprise_id AND h.item_code=i.code AND h.bom_type='MBOM' AND h.is_active AND h.status='APPROVED'
 			            ORDER BY h.version DESC LIMIT 1), FALSE),
 			EXISTS(SELECT 1 FROM manufacturing_routes m WHERE m.item_code=i.code AND m.enterprise_id=i.enterprise_id AND m.is_active),
-			EXISTS(SELECT 1 FROM item_preferred_suppliers p WHERE p.item_code=i.code AND p.enterprise_id=i.enterprise_id AND p.is_active),
+			EXISTS(SELECT 1 FROM item_preferred_suppliers p WHERE p.item_code=i.code AND p.enterprise_id=i.enterprise_id AND p.is_active AND NOT p.blocked AND (p.valid_from IS NULL OR p.valid_from<=CURRENT_DATE) AND (p.valid_until IS NULL OR p.valid_until>=CURRENT_DATE)),
 			EXISTS(SELECT 1 FROM item_standard_costs c WHERE c.item_code=i.code AND COALESCE(c.total_cost,0) > 0),
 			upper(COALESCE(i.supplies_purchase_uom, '')) || '|' || i.warehouse_unit_of_measurement,
 			COALESCE(i.supplies_purchase_uom, '') <> '' AND i.supplies_purchase_uom <> i.warehouse_unit_of_measurement::text,

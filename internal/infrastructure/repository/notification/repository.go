@@ -625,7 +625,7 @@ func (r *Repository) ScheduleOperationalAlerts(ctx context.Context) error {
 		 LEFT JOIN LATERAL (
 		   SELECT ips.supplier_code,COALESCE(s.trade_name,s.name) supplier_name,ips.supplier_item_code,ips.uom,ips.lead_time_days,ips.package_quantity,ips.valid_until,s.homologated,s.blocked
 		   FROM item_preferred_suppliers ips JOIN suppliers s ON s.code=ips.supplier_code
-		   WHERE ips.enterprise_id=b.enterprise_id AND ips.item_code=b.item_code AND ips.is_active AND s.is_active AND (ips.mask=b.mask OR ips.mask='')
+		   WHERE ips.enterprise_id=b.enterprise_id AND ips.item_code=b.item_code AND ips.is_active AND NOT ips.blocked AND (ips.valid_from IS NULL OR ips.valid_from<=CURRENT_DATE) AND (ips.valid_until IS NULL OR ips.valid_until>=CURRENT_DATE) AND s.is_active AND (ips.mask=b.mask OR ips.mask='')
 		   ORDER BY (ips.mask=b.mask) DESC,ips.is_preferred DESC,ips.ranking,ips.id LIMIT 1
 		 ) pref ON TRUE
 		 LEFT JOIN LATERAL (

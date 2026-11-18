@@ -200,6 +200,7 @@ func TestPontaAPonta(t *testing.T) {
 	exec(`INSERT INTO suppliers(code,name,document_number,created_by,enterprise_id) VALUES($1,'FORN E2E','11444777000161',$2,$3)`, fornecedor, actor, a.ID)
 	compra := func(itemCode int64, qtd int) (int64, int64) {
 		t.Helper()
+		testutil.FonteDeSuprimento(t, pool, itemCode, fornecedor)
 		var pedido, linha int64
 		if err := pool.QueryRow(bg, `INSERT INTO purchase_orders(order_number,enterprise_code,supplier_code,created_by,status) VALUES($1,$2,$3,$4,'APPROVED') RETURNING code`,
 			testutil.UniqueCode()%900_000, a.Code, fornecedor, actor).Scan(&pedido); err != nil {

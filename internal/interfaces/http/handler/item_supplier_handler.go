@@ -145,3 +145,56 @@ func (h *ItemSupplierHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *ItemSupplierHandler) block(w http.ResponseWriter, r *http.Request, bloquear bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var dto request.ItemSupplierBlockDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	fn := h.uc.Unblock
+	if bloquear {
+		fn = h.uc.Block
+	}
+	res, err := fn(r.Context(), id, dto)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemSupplierHandler) Block(w http.ResponseWriter, r *http.Request)   { h.block(w, r, true) }
+func (h *ItemSupplierHandler) Unblock(w http.ResponseWriter, r *http.Request) { h.block(w, r, false) }
+
+func (h *ItemSupplierHandler) BlockHistory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	res, err := h.uc.BlockHistory(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+func (h *ItemSupplierHandler) ClearLearned(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	res, err := h.uc.ClearLearned(r.Context(), id)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
