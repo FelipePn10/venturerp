@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.7] — 2026-11-18
+
+- feat(suprimento): fonte de suprimento obrigatória na VSUP0130 (`f34d2462`)
+
 ## [v1.19.6] — 2026-11-17
 
 - fix(fiscal): PIS/COFINS sem o ICMS destacado na base (STF, Tema 69) (`f1c0ae08`)
