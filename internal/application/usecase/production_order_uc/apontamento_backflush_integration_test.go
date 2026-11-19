@@ -20,23 +20,12 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/production_order_uc"
 	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	stockrepo "github.com/FelipePn10/panossoerp/internal/domain/stock/repository"
-	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
-	structurerepo "github.com/FelipePn10/panossoerp/internal/domain/structure/repository"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/auth"
 	productionpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	stockpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
 	contextkey "github.com/FelipePn10/panossoerp/internal/interfaces/http/context"
 )
-
-type estruturaDeDois struct {
-	structurerepo.ItemStructureRepository
-	filhos []*structentity.ItemStructure
-}
-
-func (e estruturaDeDois) GetAllDirectChildren(context.Context, int64) ([]*structentity.ItemStructure, error) {
-	return e.filhos, nil
-}
 
 // segundaBaixaFalha deixa a primeira baixa entrar (na transação) e recusa a segunda.
 type segundaBaixaFalha struct {
@@ -63,15 +52,20 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.WithValue(bg, contextkey.UserKey, &appsecurity.AuthUser{ID: actor.String(), Role: "ADMIN", EnterpriseID: empresaID, EnterpriseCode: empresaCode})
-	pai, filhoA, filhoB := u, u+1, u+2
+	pai, filhoA, filhoB, manual := u, u+1, u+2, u+3
 	deposito := testutil.NovoAlmoxarifado(t, pool, empresaID)
-	for _, c := range []int64{pai, filhoA, filhoB} {
+	for _, c := range []int64{pai, filhoA, filhoB, manual} {
 		testutil.Exec(t, pool, `INSERT INTO items(code,business_code,warehouse_code,created_by,enterprise_id) VALUES($1,($1::bigint)::text,3,$2,$3)`, c, actor, empresaID)
 	}
 	if err := pool.QueryRow(bg, `INSERT INTO production_orders(order_number,item_code,planned_qty,status,created_by,enterprise_id)
 		VALUES($1,$2,10,'IN_PROGRESS',$3,$4) RETURNING id`, u, pai, actor, empresaID).Scan(&of); err != nil {
 		t.Fatal(err)
 	}
+	// A baixa sai da LISTA DE MATERIAIS DA OF: A (20) e B (10) automáticos,
+	// o terceiro marcado manual (sai só por requisição/consumo).
+	testutil.Exec(t, pool, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,mask,quantity,warehouse_id,automatic_issue,created_by)
+		VALUES ($1,$2,'DEMAND',$3,'',20,$6,TRUE,$7), ($1,$2,'DEMAND',$4,'',10,$6,TRUE,$7), ($1,$2,'DEMAND',$5,'',4,$6,FALSE,$7)`,
+		of, empresaID, filhoA, filhoB, manual, deposito, actor)
 	if err := pool.QueryRow(bg, `INSERT INTO employees(code,name,created_by,enterprise_id) VALUES($1,'Operador',$2,$3) RETURNING id`, u%1_000_000_000, actor, empresaID).Scan(&operador); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +82,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		_, _ = pool.Exec(bg, `DELETE FROM production_appointments WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM stock_movements WHERE enterprise_id=$1`, empresaID)
 		_, _ = pool.Exec(bg, `DELETE FROM stock_balances WHERE enterprise_id=$1`, empresaID)
+		_, _ = pool.Exec(bg, `DELETE FROM production_order_materials WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM production_orders WHERE id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM employees WHERE id=$1`, operador)
 		_, _ = pool.Exec(bg, `DELETE FROM items WHERE enterprise_id=$1`, empresaID)
@@ -97,12 +92,8 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	chamadas := 0
 	falhar := true
 	uc := &production_order_uc.AddAppointmentUseCase{
-		Repo: productionpg.NewProductionOrderRepositoryPGX(pool),
-		Auth: &auth.AuthService{},
-		StructureRepo: estruturaDeDois{filhos: []*structentity.ItemStructure{
-			{ChildCode: filhoA, Quantity: decimal.NewFromFloat(2)},
-			{ChildCode: filhoB, Quantity: decimal.NewFromFloat(1)},
-		}},
+		Repo:      productionpg.NewProductionOrderRepositoryPGX(pool),
+		Auth:      &auth.AuthService{},
 		StockRepo: stockpg.NewStockRepositorySQLC(pool),
 		Transacao: func(ctx context.Context, fn func(production_order_uc.ApontamentoRepos) error) error {
 			tx, err := pool.Begin(ctx)
@@ -131,7 +122,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		}
 		return n
 	}
-	dto := request.AddAppointmentDTO{ProductionOrderID: of, EmployeeID: &operador, ProducedQty: decimal.RequireFromString("5"), BackflushWarehouseID: &deposito}
+	dto := request.AddAppointmentDTO{ProductionOrderID: of, EmployeeID: &operador, ProducedQty: decimal.RequireFromString("5")}
 
 	_, err := uc.Execute(ctx, dto)
 	if err == nil || !strings.Contains(err.Error(), "saldo bloqueado") {
@@ -156,6 +147,25 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		t.Fatal(err)
 	}
 	if baixas != 2 {
-		t.Fatalf("baixas = %d, quer os 2 componentes", baixas)
+		t.Fatalf("baixas = %d, quer os 2 materiais automáticos", baixas)
+	}
+	quanto := func(item int64) string {
+		var q string
+		if err := pool.QueryRow(bg, `SELECT COALESCE(SUM(quantity),0)::numeric(18,4)::text FROM stock_movements WHERE enterprise_id=$1 AND movement_type='OUT' AND item_code=$2 AND warehouse_id=$3`, empresaID, item, deposito).Scan(&q); err != nil {
+			t.Fatal(err)
+		}
+		return q
+	}
+	// 5 de 10 produzidos = metade da lista, do almoxarifado de cada material.
+	if a, b, m := quanto(filhoA), quanto(filhoB), quanto(manual); a != "10.0000" || b != "5.0000" || m != "0.0000" {
+		t.Fatalf("baixas A=%s B=%s manual=%s, quer 10 / 5 / 0", a, b, m)
+	}
+	// Segundo apontamento fecha a quantidade: sai só o que falta, sem repetir.
+	dto.ProducedQty = decimal.RequireFromString("5")
+	if _, err := uc.Execute(ctx, dto); err != nil {
+		t.Fatal(err)
+	}
+	if a, b := quanto(filhoA), quanto(filhoB); a != "20.0000" || b != "10.0000" {
+		t.Fatalf("depois de 10 de 10: A=%s B=%s, quer 20 / 10", a, b)
 	}
 }

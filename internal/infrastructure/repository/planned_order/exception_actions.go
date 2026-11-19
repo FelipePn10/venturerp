@@ -49,7 +49,8 @@ func (r *PlannedOrderRepositorySQLC) Cancel(ctx context.Context, code int64) (*e
 	return rowToEntity(row), nil
 }
 
-// ActiveProductionOrderNumber devolve o número da OF não cancelada gerada pela
+// ActiveProductionOrderNumber devolve o "OF n" (o id, como a VPRO0900, a OP
+// impressa e o código de barras mostram) da OF não cancelada gerada pela
 // ordem planejada, ou nil quando ela ainda não virou OF.
 func (r *PlannedOrderRepositorySQLC) ActiveProductionOrderNumber(ctx context.Context, code int64) (*int64, error) {
 	enterpriseID, err := tenant.IDPtr(ctx)

@@ -590,7 +590,7 @@ virou pedido sai da fila e não é aprovado nem rejeitado de novo.
 **Unidade e preço da sugestão aprovada.** A sugestão está na unidade de estoque;
 o pedido sai na unidade de compra (fonte do fornecedor na VSUP0130 → unidade de
 compra do item → estoque), convertida e arredondada para cima nas casas da
-unidade no catálogo (chapa: 376,7932 kg → 5 UN). Preço em branco usa a tabela
+unidade no catálogo (chapa: 376,7932 kg → 5 UN). Comprada na própria unidade de estoque, a quantidade também vai às casas dela, para cima (0,4067 barra em UN → 1). Preço em branco usa a tabela
 de compra vigente do fornecedor (a do fornecedor vence a geral; faixa de
 quantidade mínima conferida na unidade da linha da TABELA — a quantidade do pedido é convertida para ela; antes comparava com a quantidade de estoque e 5 chapas pegavam o preço de 10), convertida para a unidade da linha; vigência por `CURRENT_DATE`, como a linha manual; preço LÍQUIDO (`entity.PrecoLiquido`: descontos/acréscimos da VSUP0120 em cadeia, pela sequência, 6 casas, nunca negativo) — a mesma regra de `PurchasePriceProvider.GetItemPrice` (agora `decimal`, erro de leitura sobe em vez de virar "sem preço"), usada pela linha manual, requisição e cotação; o vínculo fornecedor×empresa guarda o ID da tabela e `GetPurchasingDefaults` traduz para `PurchasePriceTableCode` (antes o id ia como código: pedido sem preço ou com a tabela errada); sem preço nenhum a
 aprovação é recusada — antes o pedido ia a R$ 0,00 e a alçada o liberava
@@ -827,6 +827,18 @@ O algoritmo percorre as ordens em ordem de prioridade (mais urgente primeiro) e,
 ```
 
 Se a OP-104 também precisar da fresadora e não couber no dia 10/06, ela vai para o dia 11/06 — não fica pendurada no mesmo dia causando conflito.
+
+**Ordem que não cabe em um ano.** A agenda de cada máquina é procurada até um
+ano à frente. A ordem com uma etapa que não cabe nesse horizonte (quase sempre
+tempo de roteiro na unidade errada — 300 segundos lidos como 300 horas — ou uma
+quantidade fora da realidade) **fica fora da programação** e as demais são
+programadas. A resposta de `/api/aps/sequence` traz `without_capacity`, uma
+frase por ordem com a OF (o id que a tela mostra), a etapa e as horas, por
+exemplo "a etapa 10 da OF 606 precisa de 2377,3 h (preparação + operação) e não
+cabe em um ano de capacidade das máquinas do centro". Antes uma única ordem
+assim recusava a programação inteira com "operação 1" (o id interno). A
+reprogramação depois de uma parada de máquina devolve o mesmo aviso. Testes:
+`TestOrdemSemCapacidadeNaoParaAsOutras`, `TestMensagemSemCapacidadeDizOFEtapaEHoras`.
 
 ### Máquinas manuais
 
@@ -1355,6 +1367,14 @@ moeda e vigência; cada item mantém preço com seis casas, UM, quantidade míni
 indicador de atualização do valor de reposição. Esse indicador só é aceito quando
 o fornecedor está preferencial no cadastro do item.
 
+Fornecedor vazio na linha (ou no cabeçalho) = preço **genérico**. Fornecedor
+0 ou negativo é gravado vazio — no caso de uso e, por qualquer caminho, pelo
+gatilho `erp_preco_compra_fornecedor_generico` (migração `000505`, que também
+trocou os 0 já gravados por vazio). Antes o índice único e a tela tratavam 0
+como genérico, mas a busca de preço do pedido (`CondicaoDeCompra`,
+`GetItemPrice`) só aceitava NULL: a tabela da Tecnofer, com as 5 linhas em 0,
+era ignorada e a aprovação recusava por falta de preço.
+
 Os itens podem ser pesquisados pelo código/descrição interna ou do fornecedor,
 ordenados por código ou descrição e filtrados por classificação. A descrição do
 fornecedor tem precedência e cai para a descrição interna. O endpoint de candidatos
@@ -1407,6 +1427,14 @@ Pedido de compra com capa e itens ricos (migration `000140` estende
 `purchase_orders` e `purchase_order_items`). Integra os módulos 1–3: o item resolve
 **preço** (Tabela de Preço de Compra), **UM interna / Qtde. interna / Preço interno**
 (Conversões por Item) e **% IPI** (Classificação Fiscal) automaticamente.
+
+**Número do pedido.** Reservado em `purchase_order_sequences` (por empresa)
+dentro da MESMA transação que grava o pedido (`insertOrder`, quando
+`OrderNumber == 0`), tanto no pedido digitado quanto nos gerados (sugestão do
+MRP, requisição, cotação). Recusa depois disso — fornecedor, unidade sem
+conversão, linha sem fonte de suprimento, falta de preço — desfaz a reserva
+junto: a numeração não tem buraco. Antes o número era reservado no início do
+caso de uso, fora da transação, e cada recusa queimava um (9, 10, 13…).
 
 ### Capa (campos estendidos)
 
@@ -1858,7 +1886,9 @@ chamados separadamente, devolvendo um **parecer de viabilidade consolidado**.
 
 O resultado traz itens/ordens do MRP, entradas e contagem de sobrecarga do CRP,
 operações sequenciadas do APS e o veredito `viable` (falso quando o MRP não
-concluiu ou o CRP achou sobrecarga), com `notes` explicativas.
+concluiu, o CRP achou sobrecarga, alguma ordem termina depois da necessidade ou
+ficou fora da programação por falta de capacidade), com `notes` explicativas.
+As ordens fora da programação vêm em `aps_without_capacity` e numa nota.
 
 ### Endpoint
 - `POST /api/planning/run-pipeline` — body `{ "plan_code": <P>, "generate_llc": true, "start_from": "2026-06-10T00:00:00Z" }`.
@@ -1869,19 +1899,22 @@ concluiu ou o CRP achou sobrecarga), com `notes` explicativas.
 ## 18. Backflush no apontamento
 
 ### O que é
-Baixa automática dos componentes da estrutura (BOM) ao **apontar** produção, em
-proporção à quantidade produzida.
+Baixa automática dos materiais da OF ao **apontar** produção e ao **entregar**, em
+proporção à quantidade (mig 506; antes era opcional e lia a estrutura atual).
 
 ### Como funciona
-No `POST /api/production-order/appointment`, informando `backflush_warehouse_id`,
-o sistema resolve a BOM do item da OF (`GetDirectChildrenForMask` quando há
-máscara, senão `GetAllDirectChildren`) e gera um movimento **`OUT`** por componente:
-`consumo = qtd_produzida × qtd_componente × (1 + perda%/100)` (fórmula 1). Componentes
-`is_fixed_qty` usam base 1 (consumo por OF/lote), `is_coproduct` não é baixado como
-insumo, e grupos de substitutos consomem somente o primário (`substitute_priority`
-menor). Os movimentos atualizam o saldo (ver Estoque). Omitir
-`backflush_warehouse_id` desliga o backflush para aquele apontamento. Implementado em
-`production_order_uc/add_appointment_uc.go`.
+A fonte é a lista da OF (`production_order_materials` com `material_kind = DEMAND`,
+`automatic_issue = true` e quantidade > 0), já na unidade de estoque e com
+substitutos/inclusões. No `POST /api/production-order/appointment` com quantidade
+boa > 0, cada material sai **`OUT`** até a fração `(apontado antes + bom) ÷ planejado`
+da sua quantidade, do almoxarifado do material (`backflush_warehouse_id`, se vier,
+sobrescreve). Na entrega, sai **`REP`** até a fração entregue (1 na final). O que já
+saiu para a OF (inclusive consumo manual) é descontado, arredondado a 6 casas —
+nunca baixa duas vezes. Material de baixa manual fica de fora. Co-produtos seguem
+entrando como `IN` na entrega. Implementado em
+`production_order_uc/baixa_automatica_da_of.go`, `add_appointment_uc.go` e
+`complete_production_order_uc.go`. Depois do movimento o custo real é atualizado
+(`SettleProductionCostUseCase.Atualizar`).
 
 ### Documentos industriais em PDF
 
@@ -2026,7 +2059,7 @@ Pedido de Venda  (confirmar → demanda independente automática)
   (MRP→CRP→APS num disparo: POST /api/planning/run-pipeline — §17)
 
 Ordem de Fabricação
-   start → consumo (OUT) → apontamento (backflush opcional, §18) → conclusão (IN)
+   start → consumo (OUT) → apontamento (baixa automática da lista da OF, §18) → conclusão (IN)
                                    │
                                    ▼
                          Estoque de acabados

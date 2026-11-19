@@ -18,6 +18,10 @@ const (
 )
 
 type ProductionOrder struct {
+	// Cliente e projeto informados na criação (OF manual). A OF do pedido, da
+	// demanda ou filha de outra OF herda os dois no banco (migração 506).
+	CustomerCode *int64
+	ProjectID    *int64
 	// ItemRevision: a revisão do item quando a OF nasceu.
 	ItemRevision   *string
 	ID             int64

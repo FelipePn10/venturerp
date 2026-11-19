@@ -23,7 +23,10 @@ type CreateProductionOrderDTO struct {
 	WarehouseID    *int64          `json:"warehouse_id,omitempty"`
 	Priority       *string         `json:"priority,omitempty"`
 	Notes          *string         `json:"notes,omitempty"`
-	CreatedBy      uuid.UUID       `json:"-"`
+	// Cliente e projeto da OF manual (a OF do pedido/demanda/OF pai herda).
+	CustomerCode *int64    `json:"customer_code,omitempty"`
+	ProjectCode  *string   `json:"project_code,omitempty"`
+	CreatedBy    uuid.UUID `json:"-"`
 	// VinculoDemanda: só a demanda independente preenche (não vem da tela).
 	VinculoDemanda *prodentity.VinculoDemanda `json:"-"`
 }
@@ -110,4 +113,11 @@ type CloseProductionOrderDTO struct {
 
 type CancelProductionOrderDTO struct {
 	ID int64 `json:"id"`
+}
+
+// ProductionOrderOriginDTO: cliente (código) e projeto (código) da OF.
+// Cliente 0 ou ausente e projeto vazio = sem.
+type ProductionOrderOriginDTO struct {
+	CustomerCode *int64  `json:"customer_code,omitempty"`
+	ProjectCode  *string `json:"project_code,omitempty"`
 }

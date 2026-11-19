@@ -30,7 +30,11 @@ func (uc *GetProductionOrderUseCase) Execute(ctx context.Context, id int64) (*re
 			return nil, err
 		}
 	}
-	return toProductionOrderResponse(o), nil
+	out := toProductionOrderResponse(o)
+	if err := identificar(ctx, uc.Repo, []*response.ProductionOrderResponse{out}); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 type GetAppointmentsUseCase struct {

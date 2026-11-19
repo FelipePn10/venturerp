@@ -48,7 +48,7 @@ em [`visao-geral.md`](visao-geral.md) §5.1.
 
 | Método | Rota | Ação |
 |---|---|---|
-| POST | `/operations/explode` | Explode o roteiro do item nas operações da OF |
+| POST | `/operations/explode` | Aplica o roteiro do item na OF sem etapas (legado; o `start` faz sozinho) |
 | GET | `/{id}/operations` | Lista operações da OF e andamento |
 | POST | `/operations/advance` | Avança a operação (conclui etapa, libera a próxima) |
 
@@ -94,10 +94,20 @@ scanner orienta a entrega de produção. Entrega, movimentos e saldos são atôm
 repetir a chave da entrega com outros dados é rejeitado. Ordens concluídas ou
 canceladas não podem ser reabertas por uma entrega posterior.
 
-> ✅ **Backflush:** no apontamento com `backflush_warehouse_id`, os componentes da BOM
-> são baixados automaticamente, proporcional à qtd produzida. Respeita quantidade fixa
-> por OF, ignora co-produtos e usa o componente primário de grupos substitutos. Ver
-> [`manufatura-e-compras.md`](manufatura-e-compras.md) §18.
+> ✅ **Baixa automática (mig 506):** a fonte é a **lista de materiais da OF**
+> (`production_order_materials`, `material_kind = DEMAND`, `automatic_issue = true`),
+> não a estrutura atual — respeita substitutos e materiais incluídos depois. O
+> apontamento baixa `OUT` na fração `(apontado antes + bom) ÷ planejado`; a entrega
+> baixa `REP` na fração entregue (1 na final). Cada baixa desconta o que já saiu
+> para a OF (`BaixasDaOrdem`), então consumo manual do mesmo item nunca sai duas
+> vezes. Material de baixa manual fica de fora. `backflush_warehouse_id` só
+> sobrescreve o almoxarifado do material. Ver `baixa_automatica_da_of.go`.
+> A mig 506 liga `items.warehouse_automatic_low` (padrão TRUE) e os materiais das
+> OFs abertas/em produção.
+
+> ✅ **Etapas sem trabalho manual:** a OF nasce com as etapas do roteiro aprovado;
+> se não tiver (item ganhou roteiro depois), `start` chama `ExplodeRoute` e recusa
+> iniciar só se ainda assim não houver etapa.
 
 > 🔧 **Ficha de Produção da Ferramenta:** define qual **série** de cada ferramenta roda
 > cada operação da OF, com substituição rastreada e débito de vida útil por série no
@@ -106,21 +116,76 @@ canceladas não podem ser reabertas por uma entrega posterior.
 ---
 
 ## Origem da OF
+**Número que o usuário vê:** "OF n" em tela, impresso e código de barras
+(`OF%06d`) é `production_orders.id`. `order_number` é interno e difere do id nas
+OFs firmadas pelo MRP; listas e mensagens (inclusive
+`GetPlannedOrderActiveProductionOrder` e o APS) usam o id.
+
+**OF manual e estrutura:** criar a OF copiando a estrutura recalcula antes os
+fatores de conversão das linhas daquele pai (`RecalcularFatores.RecalcularDoPai`),
+sem esperar o MRP; linha sem conversão entre a unidade da estrutura e a de
+estoque recusa a OF com a lista das linhas (422).
+
 A OF normalmente nasce ao **firmar** uma ordem planejada `PRODUCTION`
 (`GET /api/planned-order/{code}/firm`), que cria a OF automaticamente na primeira
 firmação. Ver `planned_order_uc/firm_planned_order_uc.go` e
 [`mrp-calculo.md`](mrp-calculo.md).
 
+### Cliente, projeto e identificação (mig 506)
+
+- `production_orders.customer_code` e `project_id` (FK composta por empresa).
+  `projects` é cadastro por empresa (`/api/projects`, tela VPLA0120), código único
+  por `(enterprise_id, upper(btrim(code)))`; a mig semeia a partir de
+  `sales_orders.project_code` e `independent_demands.projeto`.
+- Herança no banco, só preenche nulos (`erp_of_herdar_origem`): pedido de venda
+  (`sales_order_code` ou `sales_order_planned_orders`) → demanda independente
+  (`independent_demand_orders`) → OF pai (`production_chain_links`). Gatilhos no
+  INSERT da OF e na criação tardia dos vínculos. Trocar na pai propaga para as
+  filhas que estavam nulas ou com o valor antigo da pai.
+- `PUT /api/production-order/{id}/origin` `{customer_code, project_code}` (0/"" limpa);
+  projeto precisa estar ATIVO e, com cliente, preenche/valida o da OF. Recusa OF
+  CLOSED/CANCELLED.
+- `list` e `get` devolvem `origin`: item de negócio e nome, cliente, projeto,
+  pedidos, demandas, OF pai (id, número, item), raiz da cadeia, nível e nº de filhas
+  (`IdentificacaoDasOFs`, CTE recursiva pela cadeia).
+
 ---
+
+### Cronômetro da etapa
+
+`POST /operations/advance` sem `actual_hours` ao sair de `IN_PROGRESS` (pausa,
+interrupção, conclusão) grava o tempo corrido desde a última entrada em
+andamento, lido da trilha `production_operation_execution_events`
+(`entity.InicioDoTrecho` / `HorasDoTrecho`; sem trilha, `started_at`). Sem
+`produced_qty` na conclusão, a vida útil da ferramenta usa a quantidade da OF.
+Horas digitadas continuam valendo. A resposta traz `recorded_hours`,
+`hours_from_clock`, `recorded_qty`, `qty_proposed`; a listagem traz
+`running_since` da etapa em andamento. A leitura por código de barras
+(`ExecuteScan`, concluir sem horas) aplica a mesma regra em SQL. Trecho acima
+de `entity.HorasEtapaEsquecida` (12 h) não é gravado sozinho: tela e leitura
+devolvem 400 pedindo as horas (etapa esquecida aberta). Testes:
+`TestCronometroDaEtapa` (unidade), `TestCronometroDaEtapaIntegration` e
+`TestLeituraConcluiPeloCronometro`.
 
 ## 3. Custo real da OF
 
 | Método | Rota | Ação |
 |---|---|---|
-| POST | `/{id}/settle-cost` | Apura/recalcula o custo real (material + conversão) |
+| POST | `/{id}/settle-cost` | Recalcula o custo real sob demanda (a tela não usa mais) |
 | GET | `/{id}/cost` | Consulta a apuração + variâncias vs. padrão |
 
-> ✅ **automático:** fechar a OF (`/{id}/close`) apura o custo real. Detalhes da
+> ✅ **automático:** apontamento, consumo, entrega e devolução de sucata chamam
+> `SettleProductionCostUseCase.Atualizar` depois do sucesso; falha vira
+> `custo_pendente` com o motivo (o movimento não é desfeito). Horas gravadas na
+> etapa (`/operations/advance` com `recorded_hours > 0`) e o apontamento pela
+> leitura do código de barras (`ExecuteScan`, ação de apontar, não repetida)
+> também atualizam. Fechar a OF (`/{id}/close`) também apura.
+>
+> **OFs antigas sem custo:** na subida da API, `custoof.Rotina` apura em lotes de
+> 200 as OFs não canceladas que têm apontamento, horas de etapa ou movimento de
+> estoque e nenhuma linha em `production_order_costs`
+> (`OFsSemCusto`), no contexto da empresa de cada OF. Falha de uma OF é
+> registrada no log e não para as outras. Detalhes da
 > fórmula em [`custos.md`](custos.md) §4.
 
 ## 4. Sucata / retalho valorizado
@@ -181,6 +246,26 @@ da estrutura. Co-produtos e substitutos secundários não viram demandas; perdas
 quantidade fixa e baixa automática são preservadas. Se um componente for o
 próprio item fabricado, a OF recebe a observação `ORDEM DE RETRABALHO`.
 
+A montagem da lista é `CreateProductionOrderUseCase.MateriaisDaEstrutura`
+(componentes vigentes, máscara, perda, substituto primário, quantidade fixa,
+sem co-produto nem material do cliente) e cada linha recebe a etapa do roteiro
+(`route_operation_sequence`, da estrutura) — é o que a aba Execução usa para
+mostrar o material de cada etapa e o que a ficha da OF imprime.
+
+**OF sem lista (criada antes da regra ou pela carga do demo).** Na subida da
+API, `materiaisof.Rotina` procura OFs `OPEN`/`IN_PROGRESS` sem nenhuma demanda e
+cujo item tem estrutura ativa (`OFsSemMateriais`, lotes de 200, todas as
+empresas) e completa cada uma pela estrutura vigente, no contexto da empresa da
+OF (`CompletarMateriais`: trava a OF com `FOR UPDATE`, confere empresa,
+situação e ausência de lista na mesma transação — idempotente; OF de outra
+empresa, fechada ou já completada não muda). A observação da linha diz "lista
+completada pela estrutura vigente". Etapa só é gravada onde está nula. OF que
+já produziu (peças apontadas, entregue, refugo ou movimento de estoque por ela)
+recebe a lista com `automatic_issue=false`: a baixa automática sai na proporção
+do TOTAL produzido e lançaria hoje, de uma vez, o consumo do passado. Testes:
+`TestCompletarMateriaisDaOFSemLista` (duas empresas) e
+`TestListaCompletadaEmOFJaProduzidaFicaComBaixaManual`.
+
 A quantidade de cada componente usa a mesma conta do MRP
 (`QuantidadeDoComponente`): perda pela fórmula do parâmetro 20 dos parâmetros de
 planejamento, 6 casas no cálculo e arredondamento para cima em 4 casas — a
@@ -228,6 +313,9 @@ do material (saldo − reservado), o que as **OFs abertas que estão na frente**
 vão consumir do mesmo item (`committed_earlier` — início anterior, ou mesmo dia
 e criada antes), o disponível para esta OF e a falta. Situação por linha e da
 OF: `COMPLETA`, `PARCIAL`, `SEM_SALDO` ou `SEM_LISTA`.
+No detalhe (`/{id}/material-availability`), o material que já saiu todo
+também vem na lista (`remaining` 0, situação `COMPLETA`) para a tela mostrar
+previsto / já saiu / falta sair de tudo; ele não conta no resumo nem nas faltas.
 
 `GET /api/production-order/material-availability?ids=1,2,3` (até 500) devolve
 só o resumo por OF, para o selo da lista.
@@ -292,8 +380,25 @@ término já gravado em `production_sequences` (`CadeiaRepository`). Na
 programação regressiva a pai é programada primeiro e a filha termina até o
 início dela. OF filha concluída, encerrada ou cancelada não segura nada.
 
-`GET /api/production-order/{id}/chain` devolve os pedidos de venda, as ordens
-pai e as ordens filhas da OF (com o reservado de cada filha para ela).
+`GET /api/production-order/{id}/chain` devolve os pedidos de venda, as
+demandas independentes (`independent_demands`), as ordens pai e as ordens
+filhas da OF (com o reservado de cada filha para ela).
+
+**Demanda independente (produção para estoque, sem pedido).** A cadeia em si
+não depende da origem: os elos vêm do pegging (SUGESTAO, ORDEM_PLANEJADA ou
+ORDEM_PRODUCAO, este último para a OF criada pelo "Gerar OF" da demanda). A
+demanda NÃO é copiada para as filhas — `independent_demand_orders` conta como
+cobertura do item da demanda, e gravar a bucha ali atenderia o RN com bucha.
+A leitura sobe pelos ancestrais (CTE recursiva em `CadeiaDaOF`, pela planejada
+pai ou pela OF pai, sempre com `enterprise_id`) e junta as demandas ligadas a
+qualquer um deles. Demanda de estoque (ESTOQUE/REPOSICAO/ANTECIPACAO_VENDA)
+fica ABERTA depois da OF concluída: é consumida pela venda ou vence; demanda de
+finalidade própria (AMOSTRA…) recebe a reserva do produzido na entrega.
+Aceite: `scripts/test-cadeia-demanda-independente.sh` (148 checagens: MRP,
+firmar, elos, reserva OF_COMPONENTE, parâmetro 52, ordem do roteiro, consumo,
+entrada em estoque sem nova sugestão, Gerar OF, demanda + pedido no mesmo
+item, AMOSTRA, CRP e APS progressivo/regressivo; `PARAR_APOS=3` deixa o
+cenário para `scripts/ui-sim/cadeia-demanda.mjs` do front).
 
 Aceite pela API, com MRP real: `scripts/test-cadeia-of.sh` (monta os próprios
 cadastros; precisa de `PGURL`, `ADMIN_EMAIL` e `ADMIN_PASSWORD`; `PARAR_APOS=5`

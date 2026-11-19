@@ -382,5 +382,53 @@ st, rel = call("GET", f"/api/items/{NEG[PECA]}/activation-readiness")
 check(st == 200 and any("próprio produto" in i for i in rel.get("issues") or []),
       "liberação acusa a operação externa que compraria o próprio produto", rel)
 
+# ── 9. Bugs achados na cópia da Tecnofer (v1.19.8) ──────────────────────────
+secao("9A. Linha da tabela com fornecedor 0 é preço genérico")
+CH9 = item("CHG", 1, "KG", compra="KG")
+FORN9 = fornecedor("GENERICO")
+fonte(CH9, FORN9)
+tab9_code = u * 10 + next(seq)
+sql(f"INSERT INTO purchase_price_tables(code,description,created_by,enterprise_id) VALUES({tab9_code},'GERAL {u}','{ator}',{emp})")
+st, r = call("POST", "/api/purchase-price-tables/items", {"table_code": tab9_code, "item_code": NEG[CH9], "price": 14.2, "uom": "KG", "min_qty": 0, "supplier_code": 0})
+exige(st in (200, 201), "linha gravada pela tela com o fornecedor limpo (0)", (st, r))
+check(sql(f"SELECT COUNT(*) FROM purchase_price_table_items i JOIN purchase_price_tables t ON t.id=i.table_id WHERE t.code={tab9_code} AND t.enterprise_id={emp} AND i.supplier_code IS NULL") == "1",
+      "fornecedor 0 vira genérico (vazio) — antes ficava 0 e a busca de preço ignorava a linha")
+sql(f"INSERT INTO purchase_price_table_items(table_id,item_code,uom,price,supplier_code) SELECT id,{CH9},'UN',1,0 FROM purchase_price_tables WHERE code={tab9_code} AND enterprise_id={emp} ON CONFLICT DO NOTHING")
+check(sql(f"SELECT COUNT(*) FROM purchase_price_table_items i JOIN purchase_price_tables t ON t.id=i.table_id WHERE t.code={tab9_code} AND i.supplier_code = 0") == "0",
+      "nem gravando direto no banco o 0 fica (gatilho)")
+pl9 = planejada_compra(CH9, "30")
+st, r = call("POST", f"/api/purchase-order/suggestions/{pl9}/approve", {"supplier_code": FORN9})
+exige(st in (200, 201), "sugestão aprovada pela tabela genérica (antes: recusada por falta de preço)", (st, r))
+check(sql(f"SELECT unit_price::numeric(18,4) FROM purchase_order_items WHERE planned_order_code={pl9}") == "14.2000", "preço 14,20 da linha genérica")
+
+secao("9B e 9C. Chapa com CHAPA no cadastro e UN na fonte de suprimento")
+CH794 = item("CH794", 1, "KG", compra="CHAPA")
+st, r = call("POST", "/api/item-conversions/", {"item_code": NEG[CH794], "from_uom": "CHAPA", "to_uom": "KG", "factor": "62.3",
+                                                "rounding_percent": "0", "tolerance_value": "0", "tolerance_type": "PERCENT"})
+exige(st in (200, 201), "só a conversão CHAPA→kg cadastrada", (st, r))
+FORN794 = fornecedor("ACO 794")
+fonte(CH794, FORN794, "UN")
+st, rel = call("GET", f"/api/items/{NEG[CH794]}/activation-readiness")
+check(st == 200 and not rel.get("ready") and any("UN→KG (fonte de suprimento)" in i for i in rel.get("issues") or []),
+      "liberação acusa a compra em UN (fonte de suprimento) sem conversão para kg — antes dava liberada", rel)
+st, gov = call("GET", f"/api/items/governanca/itens/{NEG[CH794]}/prontidao")
+check(st == 200 and "UN→KG (fonte de suprimento)" in json.dumps(gov, ensure_ascii=False), "a prontidão da governança diz a mesma unidade", (st, gov))
+
+antes = int(sql(f"SELECT COALESCE((SELECT last_number FROM purchase_order_sequences WHERE enterprise_code={EMPRESA}),0)"))
+pl794 = planejada_compra(CH794, "124.6")
+st, r = call("POST", f"/api/purchase-order/suggestions/{pl794}/approve", {"supplier_code": FORN794})
+check(st == 422 and "não tem preço" in txt(r), "aprovação recusada: sem preço", (st, r))
+check(int(sql(f"SELECT COALESCE((SELECT last_number FROM purchase_order_sequences WHERE enterprise_code={EMPRESA}),0)")) == antes,
+      "a recusa não queimou número de pedido (antes: 9, 10, 13…)")
+pl_ok = planejada_compra(CHAPA, "84.78")
+st, r = call("POST", f"/api/purchase-order/suggestions/{pl_ok}/approve", {"supplier_code": FORN})
+exige(st in (200, 201), "o próximo pedido aprovado", (st, r))
+num = int(sql(f"SELECT po.order_number FROM purchase_orders po JOIN purchase_order_items i ON i.purchase_order_code=po.code WHERE i.planned_order_code={pl_ok}"))
+check(num == antes + 1, f"o próximo pedido leva o número seguinte ({antes + 1}), sem buraco", num)
+st, r = call("POST", "/api/item-conversions/", {"item_code": NEG[CH794], "from_uom": "UN", "to_uom": "KG", "factor": "62.3",
+                                                "rounding_percent": "0", "tolerance_value": "0", "tolerance_type": "PERCENT"})
+st, rel = call("GET", f"/api/items/{NEG[CH794]}/activation-readiness")
+check(st == 200 and not any("UN→KG" in i for i in rel.get("issues") or []), "com UN→kg cadastrada a pendência some", rel)
+
 resumo()
 PY

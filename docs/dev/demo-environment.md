@@ -127,6 +127,15 @@ Usuário admin já criado pelo seed:
 | senha  | valor de `DEMO_ADMIN_PASSWORD` |
 | role   | `ADMIN`                  |
 
+Perfil de operador (criado pelo `demo-sync`, `scripts/seed-demo-perfis.sh`) para
+mostrar o que a fábrica vê sem acesso de administrador:
+
+| Campo  | Valor                        |
+|--------|------------------------------|
+| e-mail | `operador@panossoerp.demo`   |
+| senha  | `Operador@12345`             |
+| role   | `OPERATOR` (na empresa 1)    |
+
 Fluxo:
 
 ```bash
@@ -279,9 +288,23 @@ O seed cadastra o que o MRP, o CRP e o APS precisam para mostrar resultado:
   de trabalho de cada operação;
 - produtividade de cada acabado nas máquinas dos centros do roteiro.
 
-O seed não cria plano de produção: cadastre um (VPLA) e rode o cálculo. Um banco
-de demo carregado antes desta correção precisa de `make demo-seed` de novo — o
-`demo-sync` não refaz os dados.
+O seed não cria plano de produção: cadastre um (VPLA) e rode o cálculo.
+
+Um banco de demo carregado antes dessas correções é saneado pelo próprio
+`make demo-sync`, sem recriar nada e sem mudar nada na segunda vez:
+
+- tipo do item: acabado volta a fabricado (estava "de terceiro" e o MRP o
+  pulava), matéria-prima a comprado e serviço ao código 3;
+- tipo de MRP inexistente (2) vira normal (era lido como "projeto");
+- estrutura dos acabados na unidade de estoque do componente (KG/M, não UN);
+- tempos de roteiro sem unidade e absurdos (≥ 100) saem e a etapa herda os da
+  operação; roteiro padrão aprovado de item sem roteiro ativo é reativado;
+- centro padrão das operações 1–5, etapas dos roteiros vazios e produtividade
+  por máquina (com a empresa) dos acabados que ficaram sem;
+- versões de estrutura de teste (obsoletas, nunca aprovadas, sem linha) saem.
+
+`scripts/seed-demo.sql` já cria a estrutura na unidade do componente e a
+produtividade com a empresa; a recarga completa continua sendo `make demo-seed`.
 
 `scripts/test-fluxo-pedido-fabrica.sh` percorre o fluxo inteiro pela API sobre o
 demo (pedido → MRP → firmar → compra → recebimento → OF → consumo → apontamento

@@ -18,6 +18,7 @@ import (
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	structentity "github.com/FelipePn10/panossoerp/internal/domain/structure/entity"
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 )
 
@@ -54,12 +55,25 @@ type CreateProductionOrderUseCase struct {
 	OrderOps productionRouteExploder
 	// Items resolve o código de negócio do item (texto) para a chave legada.
 	Items any
+	// Projetos acha o projeto informado na OF manual. Opcional.
+	Projetos LeitorDeProjetos
 	// Employees traduz o código do funcionário para a chave interna que
 	// `production_orders.employee_id` exige — a tela manda o código.
 	Employees employeeresolution.Finder
 	// BomVersions: item sob controle de versão da estrutura só gera OF com a
 	// versão de fabricação (MBOM) aprovada e vigente. Opcional.
 	BomVersions VersaoDaEstrutura
+	// Fatores põe a estrutura do item na unidade de estoque atual dos
+	// componentes antes de copiá-la (structure_uc.RecalcularFatores).
+	// Opcional: sem ela vale o que está gravado na linha.
+	Fatores EstruturaEmDia
+}
+
+// EstruturaEmDia regrava a quantidade das linhas da estrutura de um item na
+// unidade de estoque atual de cada componente e devolve um aviso por linha que
+// não converte.
+type EstruturaEmDia interface {
+	RecalcularDoPai(ctx context.Context, pai int64, motivo string) (atualizadas int, semConversao []string, err error)
 }
 
 // VersaoDaEstrutura diz se o item (na máscara) está sob controle de versão da
@@ -142,6 +156,15 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if order.StartDate != nil && order.EndDate != nil && order.StartDate.After(*order.EndDate) {
 		return nil, errorsuc.NewValidationError("o início da ordem não pode ser depois do término")
 	}
+	if dto.CustomerCode != nil || dto.ProjectCode != nil {
+		repo, ok := uc.Repo.(origemDaOFRepo)
+		if !ok {
+			return nil, errorsuc.NewValidationError("cliente e projeto da OF não estão disponíveis")
+		}
+		if order.CustomerCode, order.ProjectID, err = resolverOrigem(ctx, repo, uc.Projetos, dto.CustomerCode, dto.ProjectCode); err != nil {
+			return nil, err
+		}
+	}
 	// O almoxarifado que recebe a produção é da empresa da sessão: sem isso a
 	// OF nasceria com um destino que só falharia na entrega.
 	if dto.WarehouseID != nil {
@@ -162,61 +185,15 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		}
 		return uc.Repo.Create(ctx, order)
 	}
-	children, err := uc.componentesDaOrdem(ctx, itemCode, dto.Mask)
-	if err != nil {
-		return nil, err
-	}
 	// A lista de materiais vale para a data em que a ordem começa. Sem data de
 	// início, vale a de hoje.
 	consumo := time.Now()
 	if order.StartDate != nil {
 		consumo = *order.StartDate
 	}
-	vigentes := make([]*structentity.ItemStructure, 0, len(children))
-	for _, child := range children {
-		if child.VigenteEm(consumo) {
-			vigentes = append(vigentes, child)
-		}
-	}
-	var vars map[string]decimal.Decimal
-	if uc.MaskVars != nil && dto.Mask != "" {
-		var errMascara error
-		vars, errMascara = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, dto.Mask)
-		if errMascara != nil {
-			return nil, fmt.Errorf("lendo as respostas da máscara do item: %w", errMascara)
-		}
-	}
-	formula, err := formulaDePerda(ctx, uc.Perdas)
+	materials, rework, err := uc.MateriaisDaEstrutura(ctx, itemCode, dto.Mask, dto.PlannedQty, consumo, dto.CreatedBy)
 	if err != nil {
 		return nil, err
-	}
-	materials := []*entity.ProductionOrderMaterial{}
-	rework := false
-	for _, child := range structentity.SelectPrimarySubstituteComponents(vigentes) {
-		perUnit, _ := child.ResolvedQuantity(vars)
-		if child.IsCoproduct || !perUnit.IsPositive() {
-			continue
-		}
-		// Material do cliente (beneficiamento) não é demanda do estoque próprio:
-		// entra pela NF-e de remessa, no razão de terceiros. Como DEMAND ele
-		// apareceria como falta, entraria no MRP e seria requisitado do estoque.
-		if child.CustomerSupplied {
-			continue
-		}
-		base := dto.PlannedQty
-		if child.IsFixedQty {
-			base = decimal.NewFromInt(1)
-		}
-		// Mesma conta e mesma escala do MRP: a compra que ele sugeriu cobre a OF.
-		quantity := structentity.QuantidadeDoComponente(base, perUnit, child.LossPercentage, formula)
-		automatic, warehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
-		if infoErr != nil {
-			return nil, infoErr
-		}
-		materials = append(materials, &entity.ProductionOrderMaterial{Kind: entity.MaterialDemand,
-			ItemCode: child.ChildCode, Quantity: quantity, WarehouseID: warehouse,
-			AutomaticIssue: automatic, CreatedBy: dto.CreatedBy})
-		rework = rework || child.ChildCode == itemCode
 	}
 	if rework {
 		message := "ORDEM DE RETRABALHO"
@@ -262,6 +239,78 @@ func (uc *CreateProductionOrderUseCase) Execute(
 		}
 	}
 	return created, nil
+}
+
+// MateriaisDaEstrutura monta a lista de materiais da OF pela estrutura do item
+// (genéricos + os da máscara), vigente na data de consumo: primário dos
+// substitutos, fórmula da quantidade, perda e quantidade fixa por ordem — a
+// mesma conta do MRP. Co-produto e material do cliente ficam de fora. rework
+// diz se o próprio item entra (ordem de retrabalho). É usada na criação da OF
+// e para completar a lista da OF que nasceu sem ela.
+func (uc *CreateProductionOrderUseCase) MateriaisDaEstrutura(ctx context.Context, itemCode int64, mask string, quantidade decimal.Decimal, consumo time.Time, ator uuid.UUID) ([]*entity.ProductionOrderMaterial, bool, error) {
+	// A linha guarda a quantidade já convertida; se a unidade de estoque ou a
+	// conversão do componente mudou e o MRP ainda não rodou, o número gravado
+	// é o velho (o tubo de 104 mm virava 104 m). Acerta antes de copiar.
+	if uc.Fatores != nil {
+		_, sem, err := uc.Fatores.RecalcularDoPai(ctx, itemCode, "conferência na criação da OF")
+		if err != nil {
+			return nil, false, fmt.Errorf("conferindo as unidades da estrutura do item: %w", err)
+		}
+		if len(sem) > 0 {
+			return nil, false, errorsuc.NewValidationError("a OF não pode copiar a estrutura com quantidade sem conversão: " + strings.Join(sem, "; "))
+		}
+	}
+	children, err := uc.componentesDaOrdem(ctx, itemCode, mask)
+	if err != nil {
+		return nil, false, err
+	}
+	vigentes := make([]*structentity.ItemStructure, 0, len(children))
+	for _, child := range children {
+		if child.VigenteEm(consumo) {
+			vigentes = append(vigentes, child)
+		}
+	}
+	var vars map[string]decimal.Decimal
+	if uc.MaskVars != nil && mask != "" {
+		var errMascara error
+		vars, errMascara = uc.MaskVars.GetMaskAnswersWithNames(ctx, itemCode, mask)
+		if errMascara != nil {
+			return nil, false, fmt.Errorf("lendo as respostas da máscara do item: %w", errMascara)
+		}
+	}
+	formula, err := formulaDePerda(ctx, uc.Perdas)
+	if err != nil {
+		return nil, false, err
+	}
+	materials := []*entity.ProductionOrderMaterial{}
+	rework := false
+	for _, child := range structentity.SelectPrimarySubstituteComponents(vigentes) {
+		perUnit, _ := child.ResolvedQuantity(vars)
+		if child.IsCoproduct || !perUnit.IsPositive() {
+			continue
+		}
+		// Material do cliente (beneficiamento) não é demanda do estoque próprio:
+		// entra pela NF-e de remessa, no razão de terceiros. Como DEMAND ele
+		// apareceria como falta, entraria no MRP e seria requisitado do estoque.
+		if child.CustomerSupplied {
+			continue
+		}
+		base := quantidade
+		if child.IsFixedQty {
+			base = decimal.NewFromInt(1)
+		}
+		// Mesma conta e mesma escala do MRP: a compra que ele sugeriu cobre a OF.
+		quantity := structentity.QuantidadeDoComponente(base, perUnit, child.LossPercentage, formula)
+		automatic, warehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
+		if infoErr != nil {
+			return nil, false, infoErr
+		}
+		materials = append(materials, &entity.ProductionOrderMaterial{Kind: entity.MaterialDemand,
+			ItemCode: child.ChildCode, Quantity: quantity, WarehouseID: warehouse,
+			AutomaticIssue: automatic, CreatedBy: ator})
+		rework = rework || child.ChildCode == itemCode
+	}
+	return materials, rework, nil
 }
 
 // orderMaskVariableReader resolve as variáveis da configuração de um item.

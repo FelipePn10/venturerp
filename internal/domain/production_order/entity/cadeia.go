@@ -3,6 +3,7 @@ package entity
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -119,8 +120,24 @@ func QuantidadeTexto(q decimal.Decimal) string {
 // ordens filhas dos componentes fabricados para ela.
 type CadeiaDaOF struct {
 	Pedidos []PedidoDaCadeia
-	Pais    []OrdemDaCadeia
-	Filhas  []OrdemDaCadeia
+	// Demandas: as demandas independentes (produção para estoque, amostra…)
+	// que a OF atende, direto ou por uma OF acima dela na cadeia. Sem pedido de
+	// venda, é o que diz para que a peça está sendo feita.
+	Demandas []DemandaDaCadeia
+	Pais     []OrdemDaCadeia
+	Filhas   []OrdemDaCadeia
+}
+
+// DemandaDaCadeia é a demanda independente ligada à OF ou a uma ancestral dela.
+type DemandaDaCadeia struct {
+	Code         int64
+	Motivo       string
+	ItemCode     int64
+	BusinessCode string
+	Description  string
+	Quantity     decimal.Decimal
+	DemandDate   time.Time
+	Situacao     string
 }
 
 // PedidoDaCadeia é a linha do pedido de venda ligada à OF.

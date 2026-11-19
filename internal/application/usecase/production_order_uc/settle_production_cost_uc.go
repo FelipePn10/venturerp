@@ -24,7 +24,30 @@ func (uc *SettleProductionCostUseCase) Execute(ctx context.Context, productionOr
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	return uc.apurar(ctx, productionOrderID)
+}
 
+// Atualizar recalcula o custo real da OF depois de um movimento dela
+// (apontamento, consumo, entrega, devolução de sucata): o custo fica sempre
+// em dia, sem botão. Não confere o perfil — o movimento já foi autorizado, e
+// o apontador do chão não apura custo à mão. Falha NÃO desfaz o movimento
+// (já gravado): fica registrada como pendência do custo da OF, que a tela
+// mostra, e some na próxima apuração que der certo.
+func (uc *SettleProductionCostUseCase) Atualizar(ctx context.Context, productionOrderID int64) error {
+	if uc == nil {
+		return nil
+	}
+	if _, err := uc.apurar(ctx, productionOrderID); err != nil {
+		if m, ok := uc.Repo.(custoPendenteRepo); ok {
+			motivo := "o custo real não pôde ser atualizado: " + err.Error()
+			_ = m.MarcarCustoPendente(ctx, productionOrderID, &motivo)
+		}
+		return err
+	}
+	return nil
+}
+
+func (uc *SettleProductionCostUseCase) apurar(ctx context.Context, productionOrderID int64) (*entity.ProductionOrderCost, error) {
 	order, err := uc.Repo.GetByCode(ctx, productionOrderID)
 	if err != nil {
 		return nil, err

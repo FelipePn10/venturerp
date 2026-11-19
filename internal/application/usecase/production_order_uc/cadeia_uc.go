@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	demandaentity "github.com/FelipePn10/panossoerp/internal/domain/independent_demand/entity"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -36,6 +37,14 @@ func (uc *ProductionMaterialControlUseCase) Chain(ctx context.Context, orderID i
 		SalesOrders:       make([]response.ProductionChainSalesOrder, 0, len(cadeia.Pedidos)),
 		Parents:           elosDaCadeia(cadeia.Pais),
 		Children:          elosDaCadeia(cadeia.Filhas),
+	}
+	out.IndependentDemands = make([]response.ProductionChainDemand, 0, len(cadeia.Demandas))
+	for _, dm := range cadeia.Demandas {
+		out.IndependentDemands = append(out.IndependentDemands, response.ProductionChainDemand{
+			DemandCode: dm.Code, Reason: dm.Motivo, ReasonLabel: demandaentity.DescricaoDoMotivo(dm.Motivo),
+			ItemCode: dm.ItemCode, BusinessCode: dm.BusinessCode, Description: dm.Description,
+			Quantity: dm.Quantity, DemandDate: dm.DemandDate.Format("2006-01-02"), Status: dm.Situacao,
+		})
 	}
 	for _, p := range cadeia.Pedidos {
 		out.SalesOrders = append(out.SalesOrders, response.ProductionChainSalesOrder{

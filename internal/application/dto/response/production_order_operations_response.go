@@ -29,6 +29,16 @@ type ProductionOrderOperationResponse struct {
 	// ServiceOrderCode: a etapa está com o terceiro (OS aberta no VTPS0100) e
 	// anda pela OS — remessa e recebimento —, não pelos botões do posto.
 	ServiceOrderCode *int64 `json:"service_order_code,omitempty"`
+	// RunningSince: a etapa está em andamento desde este instante (o trecho
+	// atual, depois da última retomada) — o cronômetro do posto.
+	RunningSince *time.Time `json:"running_since,omitempty"`
+	// RecordedHours/RecordedQty: o que a transição gravou (pausa, interrupção
+	// ou conclusão). HoursFromClock = as horas vieram do cronômetro da etapa,
+	// não digitadas; QtyProposed = as peças são a quantidade da ordem.
+	RecordedHours  float64 `json:"recorded_hours,omitempty"`
+	HoursFromClock bool    `json:"hours_from_clock,omitempty"`
+	RecordedQty    float64 `json:"recorded_qty,omitempty"`
+	QtyProposed    bool    `json:"qty_proposed,omitempty"`
 }
 
 type ProductionOperationEvent struct {

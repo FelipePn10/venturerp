@@ -7025,6 +7025,18 @@ type ItemPreferredSupplier struct {
 	ValidUntil            pgtype.Date
 	UpdatedAt             pgtype.Timestamptz
 	ValidFrom             pgtype.Date
+	// Quantidade minima de compra deste fornecedor (unidade de estoque). Zero = sem minimo.
+	MinOrderQty pgtype.Numeric
+	// Multiplo de compra deste fornecedor (unidade de estoque). Zero = sem multiplo.
+	OrderMultiple pgtype.Numeric
+	// Cota da compra do item para este fornecedor. Vazio = fora da divisao por cota.
+	QuotaPercent pgtype.Numeric
+	// Dia em que a cota atual foi definida. A conta do ja comprado por cota comeca na mudanca de cota mais recente do item.
+	QuotaSince    pgtype.Date
+	Blocked       bool
+	BlockedReason pgtype.Text
+	BlockedAt     pgtype.Timestamptz
+	BlockedBy     pgtype.UUID
 }
 
 type ItemPurchaseCost struct {
@@ -7145,9 +7157,9 @@ type ItemStructure struct {
 	// Entra na linha crítica analisada pelo plano mestre.
 	IsCriticalMps       bool
 	GeneratesInspection bool
-	// Quantidade na unidade de ESTOQUE do item filho. É o número que MRP, ordem, custo e apontamento leem. Nulo só em linhas anteriores à migração 354.
+	// Quantidade na unidade de ESTOQUE atual do item filho — o número que MRP, ordem, custo e apontamento leem. Recalculada com o fator (migração 504).
 	QuantityStockUom pgtype.Numeric
-	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque), congelado na gravação. Dez casas porque a inversa de um fator grande (1/6000) não cabe em seis.
+	// Fator aplicado (1 unidade_da_estrutura = fator × unidade_de_estoque) pela unidade de estoque e conversões ATUAIS do componente: recalculado quando elas mudam e antes de cada MRP (migração 504). A OF copia o material na criação e não muda.
 	ConversionFactor pgtype.Numeric
 	// Componente fornecido pelo cliente (beneficiamento): fora do MRP, da baixa automática e do custo; a OF do pai não dá entrada no estoque próprio.
 	CustomerSupplied       bool
@@ -7165,6 +7177,16 @@ type ItemStructureHistory struct {
 	ChangedAt   pgtype.Timestamptz
 	BeforeState []byte
 	AfterState  []byte
+}
+
+type ItemSupplierBlockHistory struct {
+	ID             int64
+	EnterpriseID   int64
+	ItemSupplierID int64
+	Action         string
+	Reason         string
+	ActorID        pgtype.UUID
+	CreatedAt      pgtype.Timestamptz
 }
 
 type ItemSupplierQualityReport struct {
@@ -8569,6 +8591,8 @@ type PlannedOrder struct {
 	SourceEnterpriseCode *int64
 	AutoRelease          bool
 	MrpSuggestionCode    *int64
+	// Fornecedor escolhido pelo MRP (VSUP0130) para a ordem de compra; vem da sugestao ao firmar.
+	SupplierCode *int64
 }
 
 // Janela noturna do planejamento por empresa e corte da última execução.
@@ -8788,6 +8812,18 @@ type ProductionAppointment struct {
 	OperationID       *int64
 }
 
+// OF filha (componente fabricado) → ordem pai que ela abastece; gravado ao firmar a sugestão do MRP.
+type ProductionChainLink struct {
+	ID                      int64
+	EnterpriseID            int64
+	ChildPlannedOrderID     int64
+	ParentPlannedOrderID    *int64
+	ParentProductionOrderID *int64
+	Quantity                pgtype.Numeric
+	CreatedAt               pgtype.Timestamptz
+	CreatedBy               pgtype.UUID
+}
+
 type ProductionConsumption struct {
 	ID                int64
 	ProductionOrderID int64
@@ -8871,6 +8907,8 @@ type ProductionOrder struct {
 	CustoPendente              pgtype.Text
 	SalesOrderCode             *int64
 	ItemRevision               pgtype.Text
+	CustomerCode               *int64
+	ProjectID                  *int64
 }
 
 type ProductionOrderCost struct {
@@ -9105,6 +9143,21 @@ type ProductionSequence struct {
 	UpdatedAt         pgtype.Timestamptz
 	EnterpriseID      int64
 	MachineID         *int64
+}
+
+type Project struct {
+	ID           int64
+	EnterpriseID int64
+	Code         string
+	Name         string
+	CustomerCode *int64
+	Status       string
+	StartDate    pgtype.Date
+	EndDate      pgtype.Date
+	Notes        pgtype.Text
+	CreatedBy    pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type PurchaseApprovalLimit struct {
@@ -11179,6 +11232,11 @@ type ShippingCarrier struct {
 	IsActive           bool
 	CreatedAt          pgtype.Timestamptz
 	UpdatedAt          pgtype.Timestamptz
+	// kg por m3 do peso cubado (rodoviario costuma usar 300). Zero = cobra so o peso real.
+	CubageFactor pgtype.Numeric
+	// Taxa fixa por embarque (despacho/emissao do CT-e), somada ao frete.
+	DispatchFee           pgtype.Numeric
+	AcceptsDangerousGoods bool
 }
 
 // Ocorrencias de entrega usadas para avaliar a transportadora.
@@ -11194,6 +11252,7 @@ type ShippingCarrierOccurrence struct {
 	Description    pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	CreatedBy      pgtype.UUID
+	ShipmentID     *int64
 }
 
 // Regioes atendidas com prazo e tabela propria; responde prazo e custo por UF/CEP.
@@ -11216,22 +11275,57 @@ type ShippingCarrierServiceArea struct {
 
 // Frota e motoristas da transportadora (placa, capacidade, ANTT do proprietario).
 type ShippingCarrierVehicle struct {
-	ID             int64
-	EnterpriseID   int64
-	CarrierID      int64
-	Plate          string
-	Description    pgtype.Text
-	VehicleType    pgtype.Text
-	Axles          pgtype.Int2
-	CapacityKg     pgtype.Numeric
-	CapacityM3     pgtype.Numeric
-	AnttOwner      pgtype.Text
-	DriverName     pgtype.Text
-	DriverDocument pgtype.Text
-	DriverLicense  pgtype.Text
-	IsActive       bool
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
+	ID                int64
+	EnterpriseID      int64
+	CarrierID         int64
+	Plate             string
+	Description       pgtype.Text
+	VehicleType       pgtype.Text
+	Axles             pgtype.Int2
+	CapacityKg        pgtype.Numeric
+	CapacityM3        pgtype.Numeric
+	AnttOwner         pgtype.Text
+	DriverName        pgtype.Text
+	DriverDocument    pgtype.Text
+	DriverLicense     pgtype.Text
+	IsActive          bool
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	VehicleTypeID     *int64
+	PlateState        pgtype.Text
+	Renavam           pgtype.Text
+	TareKg            pgtype.Numeric
+	WheelType         pgtype.Text
+	BodyType          pgtype.Text
+	OwnerType         pgtype.Text
+	DriverCnhCategory pgtype.Text
+	DriverCnhExpiry   pgtype.Date
+}
+
+type ShippingOccurrenceType struct {
+	ID              int64
+	EnterpriseID    int64
+	Code            string
+	Description     string
+	CountsAsFailure bool
+	IsActive        bool
+	CreatedAt       pgtype.Timestamptz
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type ShippingVehicleType struct {
+	ID           int64
+	EnterpriseID int64
+	Code         string
+	Description  string
+	WheelType    pgtype.Text
+	BodyType     pgtype.Text
+	Axles        pgtype.Int2
+	CapacityKg   pgtype.Numeric
+	CapacityM3   pgtype.Numeric
+	IsActive     bool
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
 }
 
 type SimplesNacionalApuraco struct {
@@ -12633,6 +12727,22 @@ type Vigente struct {
 	UpdatedAt               pgtype.Timestamptz
 	UpdatedBy               pgtype.UUID
 	EnterpriseID            *int64
+}
+
+// Linhas de estrutura com unidade diferente da de estoque do componente. O sistema recalcula o fator (antes de cada MRP e quando unidade/conversão mudam); use para conferir. Filtre por enterprise_id.
+type VwEstruturaUnidadeAConferir struct {
+	EnterpriseID                   int64
+	StructureID                    int64
+	ParentCode                     int64
+	ParentBusinessCode             string
+	ChildCode                      int64
+	ChildBusinessCode              string
+	Quantity                       pgtype.Numeric
+	UnidadeDaLinha                 string
+	UnidadeDeEstoque               string
+	QuantityStockUom               pgtype.Numeric
+	ConversionFactor               pgtype.Numeric
+	FatorUmEntreUnidadesDiferentes bool
 }
 
 type Warehouse struct {

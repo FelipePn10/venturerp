@@ -9,6 +9,10 @@ type APSSummaryResponse struct {
 	// da data de entrega, precisariam começar no passado. É a resposta que o PCP
 	// procura: estas não têm como ser entregues no prazo com a capacidade atual.
 	LateOrders []int64 `json:"late_orders,omitempty"`
+	// SemCapacidade: ordens que ficaram fora da programação porque uma etapa
+	// não cabe em um ano de capacidade do centro — uma frase por ordem, com a
+	// OF, a etapa e as horas. As demais ordens foram programadas.
+	SemCapacidade []string `json:"without_capacity,omitempty"`
 }
 
 type SequencingExportRowResponse struct {

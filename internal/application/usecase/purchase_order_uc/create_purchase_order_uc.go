@@ -71,11 +71,6 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 		return nil, err
 	}
 
-	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)
-	if err != nil {
-		return nil, err
-	}
-
 	emissionDate := time.Now()
 	if dto.EmissionDate != "" {
 		emissionDate, err = time.Parse("2006-01-02", dto.EmissionDate)
@@ -128,7 +123,6 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 	}
 
 	o := &entity.PurchaseOrder{
-		OrderNumber:         orderNum,
 		EnterpriseCode:      dto.EnterpriseCode,
 		Status:              status,
 		Origin:              origin,

@@ -170,6 +170,12 @@ func (uc *PurchasePriceUseCase) AddItem(ctx context.Context, dto request.AddPurc
 	if err != nil {
 		return nil, err
 	}
+	// Fornecedor 0 (campo limpo na tela, planilha) é preço GENÉRICO: grava
+	// vazio. Gravado como 0, a linha não casava com fornecedor nenhum na busca
+	// de preço e a tabela inteira era ignorada (Tecnofer, v1.19.8).
+	if dto.SupplierCode != nil && *dto.SupplierCode <= 0 {
+		dto.SupplierCode = nil
+	}
 	item.SupplierCode, item.UOM, item.MinQty, item.UpdateReplacementValue = dto.SupplierCode, unit_of_measure_uc.NormalizarUnidade(dto.UOM), dto.MinQty, dto.UpdateReplacementValue
 	if err := unit_of_measure_uc.ConferirNoCatalogo(ctx, uc.Unidades, "unidade do preço", item.UOM); err != nil {
 		return nil, err

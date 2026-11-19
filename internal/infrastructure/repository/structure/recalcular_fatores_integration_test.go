@@ -143,6 +143,24 @@ func TestFatorDaEstruturaAcompanhaAUnidadeDeEstoque(t *testing.T) {
 		t.Fatalf("tubo 1: %s / fator %s, esperado 0,104 M / 0,001", q, f)
 	}
 
+	// Só a estrutura de um pai (o que a OF manual faz antes de copiar): a da
+	// empresa B não muda, nem pelo código do pai dela; o aviso da linha sem
+	// conversão volta para barrar a OF.
+	testutil.Exec(t, pool, `UPDATE item_structures SET quantity_stock_uom = 104, conversion_factor = 1 WHERE parent_code = $1 AND child_code = $2 AND is_active`, paiB, tuboB)
+	if n, _, err := uc.RecalcularDoPai(a.Ctx, paiB, "OF"); err != nil || n != 0 {
+		t.Fatalf("empresa A recalculou a estrutura da B pelo código do pai: n=%d err=%v", n, err)
+	}
+	if q, _ := gravado(paiB, tuboB); !q.Equal(decimal.NewFromInt(104)) {
+		t.Fatalf("a estrutura da B mudou: %s", q)
+	}
+	if n, avisos, err := uc.RecalcularDoPai(a.Ctx, pai, "OF"); err != nil || n != 1 || len(avisos) != 1 {
+		t.Fatalf("pai da A: n=%d avisos=%v err=%v", n, avisos, err)
+	}
+	if q, _ := gravado(pai, tubo2); !q.Equal(decimal.RequireFromString("0.104")) {
+		t.Fatalf("tubo 2 pela OF: %s, esperado 0,104 M", q)
+	}
+	testutil.Exec(t, pool, `UPDATE item_structures SET quantity_stock_uom = 0.0173333333, conversion_factor = 0.0001666667 WHERE parent_code = $1 AND child_code = $2 AND is_active`, pai, tubo2)
+
 	// A empresa toda (o que o MRP faz antes de calcular).
 	n, avisos, err = uc.RecalcularDaEmpresa(a.Ctx, "MRP")
 	if err != nil || n != 1 {
@@ -163,7 +181,7 @@ func TestFatorDaEstruturaAcompanhaAUnidadeDeEstoque(t *testing.T) {
 		AND after_state ? 'motivo'`, pai).Scan(&hist); err != nil {
 		t.Fatal(err)
 	}
-	if hist != 2 {
-		t.Fatalf("histórico do recálculo: %d linha(s), esperado 2", hist)
+	if hist != 3 {
+		t.Fatalf("histórico do recálculo: %d linha(s), esperado 3 (componente, OF e MRP)", hist)
 	}
 }

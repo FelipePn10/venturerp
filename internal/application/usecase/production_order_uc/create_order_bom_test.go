@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,5 +149,54 @@ func TestCriarOFExigeVersaoAprovadaDaEstrutura(t *testing.T) {
 	}
 	if err := criar(versaoFixa{}); err != nil {
 		t.Fatalf("item sem controle de versão não pode ser travado: %v", err)
+	}
+}
+
+// fatoresDuble faz o papel do recálculo: acerta a quantidade gravada na linha
+// (como o banco faria) e devolve as linhas sem conversão.
+type fatoresDuble struct {
+	estrutura *estruturaPorMascara
+	pai       int64
+	sem       []string
+}
+
+func (f *fatoresDuble) RecalcularDoPai(_ context.Context, pai int64, _ string) (int, []string, error) {
+	f.pai = pai
+	for _, c := range f.estrutura.filhos {
+		c.QuantityStockUOM = decimal.RequireFromString("0.104") // 104 mm → 0,104 m
+	}
+	return len(f.estrutura.filhos), f.sem, nil
+}
+
+// OF manual antes do primeiro MRP: a linha ainda guarda "104" do tempo em que
+// o tubo era estocado em mm. A OF recalcula a estrutura antes de copiar e
+// leva 0,104 m por peça — não 104 m. Linha sem conversão barra a OF.
+func TestOFManualCopiaAEstruturaNaUnidadeAtual(t *testing.T) {
+	estrutura := &estruturaPorMascara{filhos: []*structentity.ItemStructure{
+		{ChildCode: 20, Quantity: decimal.NewFromInt(104), QuantityStockUOM: decimal.NewFromInt(104)},
+	}}
+	fatores := &fatoresDuble{estrutura: estrutura}
+	repo := &fakePORepo{automatic: map[int64]int64{}}
+	uc := CreateProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: estrutura, Fatores: fatores,
+		Items: &fakeOrderItems{item: &itementity.Item{Code: 10, BusinessCode: "RN-10"}}}
+	if _, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "RN-10", PlannedQty: decimal.NewFromInt(10), CreatedBy: uuid.New()}); err != nil {
+		t.Fatal(err)
+	}
+	if fatores.pai != 10 {
+		t.Fatalf("recalculou a estrutura do item %d, esperado 10", fatores.pai)
+	}
+	if len(repo.createdMaterials) != 1 || !repo.createdMaterials[0].Quantity.Equal(decimal.RequireFromString("1.04")) {
+		t.Fatalf("10 peças × 0,104 m = 1,04 m; veio %+v", repo.createdMaterials)
+	}
+
+	fatores.sem = []string{"estrutura do item RN-10: o componente TUBO é estocado em M e a linha está em KG, sem conversão"}
+	repo = &fakePORepo{automatic: map[int64]int64{}}
+	uc.Repo = repo
+	_, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "RN-10", PlannedQty: decimal.NewFromInt(10), CreatedBy: uuid.New()})
+	if err == nil || !strings.Contains(err.Error(), "sem conversão") {
+		t.Fatalf("linha sem conversão deveria barrar a OF: %v", err)
+	}
+	if len(repo.createdMaterials) != 0 {
+		t.Fatal("a OF foi gravada mesmo com a estrutura sem conversão")
 	}
 }

@@ -33,6 +33,9 @@ type ProductionOrderResponse struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CreatedBy      uuid.UUID  `json:"created_by"`
+	// Origin: cliente, projeto, pedido/demanda e lugar na cadeia (OF pai e
+	// produto final) — para reconhecer a OF sem decorar o número.
+	Origin *ProductionOrderOrigin `json:"origin,omitempty"`
 	// Warnings: avisos do início da OF (componente sem saldo, OF filha aberta)
 	// quando o parâmetro de planejamento 52 está em AVISAR.
 	Warnings []string `json:"warnings,omitempty"`
@@ -147,8 +150,11 @@ type ProductionOrderCostResponse struct {
 type ProductionChainResponse struct {
 	ProductionOrderID int64                       `json:"production_order_id"`
 	SalesOrders       []ProductionChainSalesOrder `json:"sales_orders"`
-	Parents           []ProductionChainOrder      `json:"parents"`
-	Children          []ProductionChainOrder      `json:"children"`
+	// IndependentDemands: demandas independentes (sem pedido de venda) que a
+	// OF atende, direto ou pela OF pai.
+	IndependentDemands []ProductionChainDemand `json:"independent_demands"`
+	Parents            []ProductionChainOrder  `json:"parents"`
+	Children           []ProductionChainOrder  `json:"children"`
 }
 
 type ProductionChainSalesOrder struct {
@@ -157,6 +163,18 @@ type ProductionChainSalesOrder struct {
 	SalesOrderItemCode *int64 `json:"sales_order_item_code,omitempty"`
 	Sequence           *int32 `json:"sequence,omitempty"`
 	Customer           string `json:"customer"`
+}
+
+type ProductionChainDemand struct {
+	DemandCode   int64           `json:"demand_code"`
+	Reason       string          `json:"reason"`
+	ReasonLabel  string          `json:"reason_label"`
+	ItemCode     int64           `json:"item_code"`
+	BusinessCode string          `json:"business_code,omitempty"`
+	Description  string          `json:"description"`
+	Quantity     decimal.Decimal `json:"quantity"`
+	DemandDate   string          `json:"demand_date"`
+	Status       string          `json:"status"`
 }
 
 type ProductionChainOrder struct {
@@ -170,4 +188,28 @@ type ProductionChainOrder struct {
 	Quantity          decimal.Decimal `json:"quantity"`
 	Produced          decimal.Decimal `json:"produced"`
 	Reserved          decimal.Decimal `json:"reserved"`
+}
+
+// ProductionOrderOrigin identifica a OF: de quem, para quê e para qual OF.
+type ProductionOrderOrigin struct {
+	ItemBusinessCode string  `json:"item_business_code"`
+	ItemName         string  `json:"item_name"`
+	CustomerCode     *int64  `json:"customer_code,omitempty"`
+	CustomerName     string  `json:"customer_name,omitempty"`
+	ProjectID        *int64  `json:"project_id,omitempty"`
+	ProjectCode      string  `json:"project_code,omitempty"`
+	ProjectName      string  `json:"project_name,omitempty"`
+	SalesOrders      []int64 `json:"sales_orders"`
+	Demands          []int64 `json:"demands"`
+	// ParentOrderID: OF pai (id); ParentPlannedOrder: a ordem planejada pai
+	// quando ela ainda não virou OF.
+	ParentOrderID      *int64 `json:"parent_order_id,omitempty"`
+	ParentOrderNumber  *int64 `json:"parent_order_number,omitempty"`
+	ParentPlannedOrder *int64 `json:"parent_planned_order,omitempty"`
+	ParentItem         string `json:"parent_item,omitempty"`
+	RootOrderID        *int64 `json:"root_order_id,omitempty"`
+	RootOrderNumber    *int64 `json:"root_order_number,omitempty"`
+	RootItem           string `json:"root_item,omitempty"`
+	Level              int    `json:"level"`
+	Children           int    `json:"children"`
 }

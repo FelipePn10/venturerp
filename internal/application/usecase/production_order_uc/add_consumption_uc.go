@@ -15,8 +15,10 @@ import (
 )
 
 type AddConsumptionUseCase struct {
-	Repo repository.ProductionOrderRepository
-	Auth ports.AuthService
+	// CustoAutomatico recalcula o custo real da OF depois do movimento. Opcional.
+	CustoAutomatico *SettleProductionCostUseCase
+	Repo            repository.ProductionOrderRepository
+	Auth            ports.AuthService
 	// StockRepo is optional. When set, registering a consumption also posts an
 	// OUT stock movement (which updates the balance) for the consumed item.
 	StockRepo stockrepo.StockRepository
@@ -24,7 +26,17 @@ type AddConsumptionUseCase struct {
 	Transacao EmTransacaoApontamento
 }
 
-func (uc *AddConsumptionUseCase) Execute(
+// Execute grava o movimento e, dando certo, atualiza o custo real da OF
+// (CustoAutomatico; ver SettleProductionCostUseCase.Atualizar).
+func (uc *AddConsumptionUseCase) Execute(ctx context.Context, dto request.AddConsumptionDTO) (*entity.ProductionConsumption, error) {
+	out, err := uc.executar(ctx, dto)
+	if err == nil {
+		uc.CustoAutomatico.Atualizar(ctx, dto.ProductionOrderID)
+	}
+	return out, err
+}
+
+func (uc *AddConsumptionUseCase) executar(
 	ctx context.Context,
 	dto request.AddConsumptionDTO,
 ) (*entity.ProductionConsumption, error) {

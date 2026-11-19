@@ -513,3 +513,96 @@ func TestOFPaiCriadaDepoisDaEntrega(t *testing.T) {
 		t.Fatalf("a reserva do outro RN mudou para %s", got)
 	}
 }
+
+// TestCadeiaMostraADemandaIndependente: sem pedido de venda (o RN feito para
+// estoque), a cadeia diz para que a peça está sendo feita — a demanda
+// independente do topo aparece em todos os níveis abaixo, pela ordem planejada
+// firmada pelo MRP e pela OF gerada direto da demanda ("Gerar OF"). A demanda
+// não é gravada nas filhas (contaria como cobertura com item diferente), e a
+// outra empresa não vê nada.
+func TestCadeiaMostraADemandaIndependente(t *testing.T) {
+	pool := testutil.Pool(t)
+	base := context.Background()
+	actor := testutil.Actor(t, pool)
+	a, b := testutil.DuasEmpresas(t, pool, nil)
+	rn, bu, pc := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
+	testutil.NovosItens(t, pool, a.ID, actor, rn, bu, pc)
+	hoje := time.Now()
+
+	planejada := func(item int64, qtd int) int64 {
+		t.Helper()
+		var id int64
+		if err := pool.QueryRow(base, `INSERT INTO planned_orders(order_number,item_code,quantity,order_type,demand_type,need_date,created_by,demand_code,enterprise_id,is_firm)
+			VALUES($1,$2,$3,'PRODUCTION','INDEPENDENT',$4::date,$5,1,$6,TRUE) RETURNING id`, testutil.UniqueCode()%1_000_000, item, qtd, hoje, actor, a.ID).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	of := func(item int64, plan *int64) int64 {
+		t.Helper()
+		var id int64
+		if err := pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,planned_qty,status,start_date,created_by,enterprise_id,planned_order_id)
+			VALUES($1,$2,10,'OPEN',$3::date,$4,$5,$6) RETURNING id`, testutil.UniqueCode()%1_000_000, item, hoje, actor, a.ID, plan).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	demanda := func(item int64, motivo string) (code, id int64) {
+		t.Helper()
+		code = testutil.UniqueCode() % 1_000_000_000
+		if err := pool.QueryRow(base, `INSERT INTO independent_demands(code,item_code,quantity,demand_date,created_by,enterprise_id,motivo)
+			VALUES($1,$2,10,$3::date,$4,$5,$6) RETURNING id`, code, item, hoje, actor, a.ID, motivo).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return code, id
+	}
+
+	// 1) Pelo MRP: demanda → planejada do RN ← bucha ← peça (três níveis).
+	dem, demID := demanda(rn, "ESTOQUE")
+	rnPlan, buPlan, pcPlan := planejada(rn, 10), planejada(bu, 20), planejada(pc, 20)
+	testutil.Exec(t, pool, `INSERT INTO independent_demand_orders(enterprise_id,demand_id,planned_order_id,quantity,created_by) VALUES($1,$2,$3,10,$4)`, a.ID, demID, rnPlan, actor)
+	testutil.Exec(t, pool, `INSERT INTO production_chain_links(enterprise_id,child_planned_order_id,parent_planned_order_id,quantity,created_by)
+		VALUES($1,$2,$3,20,$5),($1,$4,$2,20,$5)`, a.ID, buPlan, rnPlan, pcPlan, actor)
+	ofRN, ofBU, ofPC := of(rn, &rnPlan), of(bu, &buPlan), of(pc, &pcPlan)
+
+	repo := productionrepo.NewProductionOrderRepositoryPGX(pool)
+	for nome, id := range map[string]int64{"RN": ofRN, "bucha": ofBU, "peça (neta)": ofPC} {
+		c, err := repo.CadeiaDaOF(a.Ctx, id)
+		if err != nil {
+			t.Fatalf("cadeia da OF %s: %v", nome, err)
+		}
+		if len(c.Demandas) != 1 || c.Demandas[0].Code != dem || c.Demandas[0].Motivo != "ESTOQUE" || c.Demandas[0].ItemCode != rn {
+			t.Fatalf("a OF %s deveria mostrar a demanda %d do RN: %+v", nome, dem, c.Demandas)
+		}
+		if len(c.Pedidos) != 0 {
+			t.Fatalf("a OF %s não tem pedido de venda: %+v", nome, c.Pedidos)
+		}
+	}
+	var gravadas int
+	if err := pool.QueryRow(base, `SELECT COUNT(*) FROM independent_demand_orders WHERE demand_id=$1 AND planned_order_id IN ($2,$3)`, demID, buPlan, pcPlan).Scan(&gravadas); err != nil || gravadas != 0 {
+		t.Fatalf("a demanda do RN não pode ser gravada nas filhas (cobertura com item errado): %d %v", gravadas, err)
+	}
+
+	// 2) "Gerar OF" direto da demanda: a OF do RN não tem planejada; a bucha
+	// firmada pelo MRP aponta a OF (empenho) como pai.
+	dem2, dem2ID := demanda(rn, "AMOSTRA")
+	ofRN2 := of(rn, nil)
+	testutil.Exec(t, pool, `INSERT INTO independent_demand_orders(enterprise_id,demand_id,production_order_id,quantity,created_by) VALUES($1,$2,$3,10,$4)`, a.ID, dem2ID, ofRN2, actor)
+	buPlan2 := planejada(bu, 20)
+	testutil.Exec(t, pool, `INSERT INTO production_chain_links(enterprise_id,child_planned_order_id,parent_production_order_id,quantity,created_by) VALUES($1,$2,$3,20,$4)`, a.ID, buPlan2, ofRN2, actor)
+	ofBU2 := of(bu, &buPlan2)
+	c, err := repo.CadeiaDaOF(a.Ctx, ofBU2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Demandas) != 1 || c.Demandas[0].Code != dem2 || c.Demandas[0].Motivo != "AMOSTRA" {
+		t.Fatalf("a bucha da OF gerada à mão deveria mostrar a demanda %d: %+v", dem2, c.Demandas)
+	}
+
+	// 3) A outra empresa não lê a cadeia nem a demanda pelo id da OF.
+	for _, id := range []int64{ofPC, ofBU2} {
+		if outra, err := repo.CadeiaDaOF(b.Ctx, id); err != nil || len(outra.Demandas)+len(outra.Pedidos)+len(outra.Pais)+len(outra.Filhas) != 0 {
+			t.Fatalf("a empresa B leu a cadeia da OF %d da A: %+v %v", id, outra, err)
+		}
+	}
+}

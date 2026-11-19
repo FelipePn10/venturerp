@@ -99,11 +99,15 @@ type Ficha struct {
 	TemCustoPadrao          bool
 	TemConversao            bool // conversão da unidade de compra para a de estoque
 	CompraEmOutraUM         bool
-	ControlaLote            bool
-	TemRotaInspecao         bool
-	TemDesenho              bool
-	TemFichaFerramenta      bool
-	Fiscal                  FichaFiscal
+	// Unidades em que o item é de fato comprado (cadastro, fonte de suprimento
+	// e tabela de preço vigentes) sem conversão para a do estoque — o pedido
+	// recusaria a linha na aprovação. Ex.: "UN (fonte de suprimento)".
+	UnidadesSemConversao []string
+	ControlaLote         bool
+	TemRotaInspecao      bool
+	TemDesenho           bool
+	TemFichaFerramenta   bool
+	Fiscal               FichaFiscal
 }
 
 func (f Ficha) texto(campo string) string {

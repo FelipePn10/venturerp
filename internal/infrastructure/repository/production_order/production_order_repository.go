@@ -48,9 +48,9 @@ func (r *ProductionOrderRepositoryPGX) Create(ctx context.Context, o *entity.Pro
 		`INSERT INTO public.production_orders
 			(order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 			 status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
-			 is_active, created_by, warehouse_id, enterprise_id, origin_type)
+			 is_active, created_by, warehouse_id, enterprise_id, origin_type, customer_code, project_id)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-		 CASE WHEN $2::bigint IS NULL THEN 'MANUAL' WHEN EXISTS(SELECT 1 FROM kanban_cards k WHERE k.item_code=$3 AND k.enterprise_id=$19) THEN 'KANBAN' ELSE 'MRP' END)
+		 CASE WHEN $2::bigint IS NULL THEN 'MANUAL' WHEN EXISTS(SELECT 1 FROM kanban_cards k WHERE k.item_code=$3 AND k.enterprise_id=$19) THEN 'KANBAN' ELSE 'MRP' END, $20, $21)
 		 RETURNING id, order_number, planned_order_id, item_code, mask, planned_qty, produced_qty, scrapped_qty,
 		           status, start_date, end_date, machine_id, cost_center_id, employee_id, priority, notes,
 		           is_active, created_at, updated_at, created_by, warehouse_id`,
@@ -61,7 +61,7 @@ func (r *ProductionOrderRepositoryPGX) Create(ctx context.Context, o *entity.Pro
 		string(o.Status),
 		pgDatePtr(o.StartDate), pgDatePtr(o.EndDate),
 		o.MachineID, o.CostCenterID, o.EmployeeID,
-		o.Priority, o.Notes, o.IsActive, pgutil.ToPgUUID(o.CreatedBy), o.WarehouseID, enterpriseID,
+		o.Priority, o.Notes, o.IsActive, pgutil.ToPgUUID(o.CreatedBy), o.WarehouseID, enterpriseID, o.CustomerCode, o.ProjectID,
 	)
 	created, err := scanProductionOrder(row)
 	if err != nil {

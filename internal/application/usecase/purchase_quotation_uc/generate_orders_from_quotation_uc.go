@@ -126,13 +126,7 @@ func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto r
 			}
 		}
 
-		orderNum, oerr := uc.POs.NextOrderNumber(ctx, q.EnterpriseCode)
-		if oerr != nil {
-			return nil, oerr
-		}
-
 		po := &poentity.PurchaseOrder{
-			OrderNumber:      orderNum,
 			EnterpriseCode:   q.EnterpriseCode,
 			Origin:           poentity.PurchaseOrderOriginNORMAL,
 			EmissionDate:     time.Now(),

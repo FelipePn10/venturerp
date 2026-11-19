@@ -23,5 +23,9 @@ func (uc *ListProductionOrdersUseCase) Execute(ctx context.Context) ([]*response
 	if err != nil {
 		return nil, err
 	}
-	return toProductionOrderResponses(list), nil
+	out := toProductionOrderResponses(list)
+	if err := identificar(ctx, uc.Repo, out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }

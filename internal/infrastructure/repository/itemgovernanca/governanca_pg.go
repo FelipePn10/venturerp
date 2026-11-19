@@ -17,6 +17,7 @@ import (
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	dom "github.com/FelipePn10/panossoerp/internal/domain/items/governanca"
+	uomrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/unit_of_measure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
@@ -179,14 +180,117 @@ func (r *PG) Ficha(ctx context.Context, itemCode int64) (*dom.Ficha, error) {
 	// direta, inversa, encadeada, padrão da empresa — vigente hoje. Antes só a
 	// direta compra→estoque contava, e quem cadastrou "1 UN = 6 KG" (inversa
 	// de KG→UN) via o item barrado na liberação.
-	if compra, estoque, ok := strings.Cut(parUM, "|"); ok && f.CompraEmOutraUM && compra != "" {
-		cam, err := uomgraph.Resolver(ctx, r.pool, empresa, itemCode, "", "", time.Time{}, compra, estoque)
-		if err != nil {
-			return nil, err
-		}
-		f.TemConversao = cam != nil
+	//
+	// Não basta a unidade de compra do cadastro: o pedido usa primeiro a da
+	// fonte de suprimento (VSUP0130) e a faixa de preço está na unidade da
+	// linha da tabela. A Tecnofer tinha chapa com "CHAPA" no cadastro (com
+	// conversão para kg) e "UN" na fonte: liberada aqui, recusada na aprovação
+	// do pedido. Confere todas as unidades vigentes, pelo catálogo (sinônimo
+	// vira o código) e pelo mesmo motor de conversão do pedido.
+	_, estoque, _ := strings.Cut(parUM, "|")
+	f.CompraEmOutraUM, f.TemConversao = false, true
+	if err := r.conferirUnidadesDeCompra(ctx, empresa, itemCode, strings.ToUpper(strings.TrimSpace(estoque)), &f); err != nil {
+		return nil, err
 	}
 	return &f, nil
+}
+
+// UnidadesDeCompraSemConversao: as unidades em que o item é comprado
+// (cadastro, fonte de suprimento e tabela de preço vigentes) sem conversão
+// para a do estoque. Usada também pelo "pronto para ativar" do item.
+func (r *PG) UnidadesDeCompraSemConversao(ctx context.Context, itemCode int64) ([]string, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var estoque string
+	err = r.pool.QueryRow(ctx, `SELECT COALESCE(warehouse_unit_of_measurement::text, '') FROM items WHERE code=$1 AND enterprise_id=$2`, itemCode, empresa).Scan(&estoque)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("item %d", itemCode))
+	}
+	if err != nil {
+		return nil, err
+	}
+	f := dom.Ficha{}
+	if err := r.conferirUnidadesDeCompra(ctx, empresa, itemCode, strings.ToUpper(strings.TrimSpace(estoque)), &f); err != nil {
+		return nil, err
+	}
+	return f.UnidadesSemConversao, nil
+}
+
+// conferirUnidadesDeCompra marca CompraEmOutraUM quando alguma unidade em que
+// o item é comprado difere da do estoque e TemConversao=false quando alguma
+// delas não converte (ou nem está no catálogo — o pedido também recusaria).
+func (r *PG) conferirUnidadesDeCompra(ctx context.Context, empresa, itemCode int64, estoque string, f *dom.Ficha) error {
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT ON (u) u, origem FROM (
+		  SELECT upper(btrim(i.supplies_purchase_uom::text)) u, 1 ordem, 'cadastro do item' origem
+		    FROM items i WHERE i.code=$1 AND i.enterprise_id=$2
+		  UNION ALL
+		  SELECT upper(btrim(p.uom)), 2, 'fonte de suprimento'
+		    FROM item_preferred_suppliers p
+		   WHERE p.item_code=$1 AND p.enterprise_id=$2 AND p.is_active AND NOT p.blocked
+		     AND (p.valid_from IS NULL OR p.valid_from<=CURRENT_DATE) AND (p.valid_until IS NULL OR p.valid_until>=CURRENT_DATE)
+		  UNION ALL
+		  SELECT upper(btrim(ti.uom)), 3, 'tabela de preço ' || t.code
+		    FROM purchase_price_table_items ti JOIN purchase_price_tables t ON t.id=ti.table_id
+		   WHERE ti.item_code=$1 AND t.enterprise_id=$2 AND ti.is_active AND t.is_active
+		     AND (t.validity_start IS NULL OR t.validity_start<=CURRENT_DATE) AND (t.validity_end IS NULL OR t.validity_end>=CURRENT_DATE)
+		) x WHERE COALESCE(u,'') <> ''
+		ORDER BY u, ordem, origem`, itemCode, empresa)
+	if err != nil {
+		return fmt.Errorf("lendo as unidades de compra do item: %w", err)
+	}
+	type unidade struct{ texto, origem string }
+	var unidades []unidade
+	for rows.Next() {
+		var x unidade
+		if err := rows.Scan(&x.texto, &x.origem); err != nil {
+			rows.Close()
+			return err
+		}
+		unidades = append(unidades, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(unidades) == 0 || estoque == "" {
+		return nil
+	}
+	textos := make([]string, 0, len(unidades))
+	for _, x := range unidades {
+		textos = append(textos, x.texto)
+	}
+	catalogo, err := uomrepo.NewCatalogo(r.pool).Resolver(ctx, nil, textos)
+	if err != nil {
+		return fmt.Errorf("conferindo as unidades de compra no catálogo: %w", err)
+	}
+	vistas := map[string]bool{}
+	for _, x := range unidades {
+		compra := x.texto
+		if res, ok := catalogo[x.texto]; ok && res.Unidade != "" {
+			compra = strings.ToUpper(res.Unidade)
+		} else if x.texto != estoque {
+			f.CompraEmOutraUM, f.TemConversao = true, false
+			f.UnidadesSemConversao = append(f.UnidadesSemConversao, fmt.Sprintf("%s (%s, fora do catálogo)", x.texto, x.origem))
+			continue
+		}
+		if compra == estoque || vistas[compra] {
+			continue
+		}
+		vistas[compra] = true
+		f.CompraEmOutraUM = true
+		cam, err := uomgraph.Resolver(ctx, r.pool, empresa, itemCode, "", "", time.Time{}, compra, estoque)
+		if err != nil {
+			return err
+		}
+		if cam == nil {
+			f.TemConversao = false
+			f.UnidadesSemConversao = append(f.UnidadesSemConversao, fmt.Sprintf("%s→%s (%s)", compra, estoque, x.origem))
+		}
+	}
+	return nil
 }
 
 func (r *PG) Situacao(ctx context.Context, itemCode int64) (*dom.Situacao, error) {

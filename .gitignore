@@ -62,6 +62,8 @@ scripts/*
 !scripts/demo-app.sh
 !scripts/demo-sync.sh
 !scripts/seed-demo-beneficiamento.sh
+!scripts/seed-demo-cadeia.sh
+!scripts/seed-demo-perfis.sh
 !scripts/seed-demo-cadastros-fiscais.sql
 !scripts/loadtest/
 # Aceite do fluxo pedido de venda → fábrica, pela API, sobre o demo. A senha vem
@@ -69,6 +71,7 @@ scripts/*
 !scripts/test-fluxo-pedido-fabrica.sh
 !scripts/test-cadeia-of.sh
 !scripts/test-unidades-compras.sh
+!scripts/test-cadeia-demanda-independente.sh
 scripts/test-e2e.sh
 scripts/test-flow.sh
 scripts/test-focusnfe.sh

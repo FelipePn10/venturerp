@@ -18,12 +18,24 @@ import (
 // shop sells back or reuses). It posts an IN movement of the scrap item at the
 // informed unit value, so the by-product carries a cost in inventory.
 type ReturnScrapUseCase struct {
-	Repo      repository.ProductionOrderRepository
-	Auth      ports.AuthService
-	StockRepo stockrepo.StockRepository
+	// CustoAutomatico recalcula o custo real da OF depois do movimento. Opcional.
+	CustoAutomatico *SettleProductionCostUseCase
+	Repo            repository.ProductionOrderRepository
+	Auth            ports.AuthService
+	StockRepo       stockrepo.StockRepository
 }
 
+// Execute grava o movimento e, dando certo, atualiza o custo real da OF
+// (CustoAutomatico; ver SettleProductionCostUseCase.Atualizar).
 func (uc *ReturnScrapUseCase) Execute(ctx context.Context, dto request.ReturnScrapDTO) (*stockentity.StockMovement, error) {
+	out, err := uc.executar(ctx, dto)
+	if err == nil {
+		uc.CustoAutomatico.Atualizar(ctx, dto.ProductionOrderID)
+	}
+	return out, err
+}
+
+func (uc *ReturnScrapUseCase) executar(ctx context.Context, dto request.ReturnScrapDTO) (*stockentity.StockMovement, error) {
 	if !uc.Auth.CanReportProduction(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}

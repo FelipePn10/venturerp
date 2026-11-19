@@ -90,6 +90,13 @@ func (uc *ApprovePurchaseSuggestionUseCase) aplicarCondicaoDeCompra(ctx context.
 			item.PurchaseUOM = &compra
 			linha = compra
 		}
+	} else if compra != "" && compra == estoque && cond.Casas >= 0 {
+		// Compra na própria unidade de estoque: a quantidade também vai às
+		// casas dela, para cima. Sem isso saía pedido de 0,4067 barra (UN) — a
+		// necessidade do MRP vem com 4 casas e ninguém compra fração de barra.
+		if q := item.RequestedQty.RoundCeil(cond.Casas); q.IsPositive() {
+			item.RequestedQty = q
+		}
 	}
 
 	preco := precoInformado

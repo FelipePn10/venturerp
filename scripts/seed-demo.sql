@@ -222,13 +222,16 @@ INSERT INTO products (id, code, group_code, name, created_by, created_at)
 SELECT ic.code, ic.code::text, '10', ic.name, :'ADMIN'::uuid, :'START_TS'
 FROM item_catalog ic;
 
--- Estrutura de produto (BOM) — cada acabado consome 2-4 matérias-primas
+-- Estrutura de produto (BOM) — cada acabado consome 2-4 matérias-primas, na
+-- unidade de estoque do componente (antes saía tudo em UN e o MRP recusava a
+-- linha de chapa em KG e de tubo em M por falta de conversão).
 INSERT INTO item_structures (parent_code, child_code, quantity, unit_of_measurement, loss_percentage, sequence, health, created_by, created_at, updated_at)
-SELECT f.code, 20000 + (1 + ((f.code * 7 + s.seq) % 80)),
-  round((0.5 + random()*8)::numeric, 4), 'UN', round((random()*6)::numeric, 2),
+SELECT f.code, m.code,
+  round((0.5 + random()*8)::numeric, 4), m.uom, round((random()*6)::numeric, 2),
   s.seq, 'ATIVO', :'ADMIN'::uuid, :'START_TS', :'START_TS'
 FROM item_catalog f
 CROSS JOIN LATERAL generate_series(1, 2 + (f.code % 3)) s(seq)
+JOIN item_catalog m ON m.code = 20000 + (1 + ((f.code * 7 + s.seq) % 80))
 WHERE f.kind = 'FINISHED';
 
 -- Roteiros de fabricação — 1 por acabado (id = code-10000, p/ FK das OFs)
@@ -251,10 +254,10 @@ CROSS JOIN LATERAL (VALUES (10, 1), (20, 2 + (r.id % 3)::int), (30, 5)) e(seq, o
 -- Produtividade do acabado em cada máquina dos centros do roteiro dele: é o
 -- que o planejamento usa para escolher a máquina e ocupar a agenda.
 INSERT INTO item_machine_times (item_code, mask, production_time, setup_time, priority, machine_code,
-  production_time_unit, production_base_qty, efficiency_rate)
+  production_time_unit, production_base_qty, efficiency_rate, enterprise_id)
 SELECT r.item_code, '', round(o.standard_time * 60, 2), round(o.setup_time * 60, 2),
   row_number() OVER (PARTITION BY r.item_code, m.machine_type_code ORDER BY m.code),
-  m.code, 'MINUTO', 1, m.efficiency_rate
+  m.code, 'MINUTO', 1, m.efficiency_rate, m.enterprise_id
 FROM manufacturing_routes r
 JOIN route_operations ro ON ro.route_id = r.id
 JOIN operations o ON o.id = ro.operation_id

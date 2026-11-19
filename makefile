@@ -162,6 +162,8 @@ demo-seed:
 		-v admin_password="$(DEMO_ADMIN_PASS)" < scripts/seed-demo.sql
 	@until [ "$$(docker inspect -f '{{.State.Health.Status}}' panossoerp-api-demo 2>/dev/null)" = "healthy" ]; do sleep 2; done
 	@DEMO_ADMIN_PASSWORD="$(DEMO_ADMIN_PASS)" bash scripts/seed-demo-beneficiamento.sh
+	@DEMO_ADMIN_PASSWORD="$(DEMO_ADMIN_PASS)" bash scripts/seed-demo-cadeia.sh
+	@DEMO_ADMIN_PASSWORD="$(DEMO_ADMIN_PASS)" bash scripts/seed-demo-perfis.sh
 	@docker exec -i -e PGPASSWORD="$(DEMO_DB_PASS)" $(DEMO_DB_CONTAINER) \
 		psql -U $(DEMO_DB_USER) -d $(DEMO_DB_NAME) -v ON_ERROR_STOP=1 < scripts/seed-demo-cadastros-fiscais.sql
 
