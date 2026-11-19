@@ -114,7 +114,7 @@ func (uc *CreatePurchaseOrderUseCase) Execute(
 			paymentTerm = def.PaymentConditionID
 		}
 		if priceTable == nil {
-			priceTable = def.PurchasePriceTableID
+			priceTable = def.PurchasePriceTableCode
 		}
 		if invoiceType == nil {
 			invoiceType = def.DefaultInvoiceTypeID

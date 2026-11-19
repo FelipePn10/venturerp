@@ -18,7 +18,17 @@ type SupplierPurchasingDefaults struct {
 	FinancialAccount     *string `json:"financial_account,omitempty"`
 	DefaultInvoiceTypeID *int64  `json:"default_invoice_type_id,omitempty"`
 	PurchasePriceTableID *int64  `json:"purchase_price_table_id,omitempty"`
-	AppliesIPI           bool    `json:"applies_ipi"`
+	// PurchasePriceTableCode é o CÓDIGO da tabela acima, que é o que o pedido
+	// guarda e o que a busca de preço usa. O vínculo guarda o id: usar o id
+	// como código levava o pedido a outra tabela, ou a nenhuma.
+	PurchasePriceTableCode *int64 `json:"purchase_price_table_code,omitempty"`
+	AppliesIPI             bool   `json:"applies_ipi"`
+}
+
+// TabelaDeCompraPorID traduz o id da tabela de preço de compra no código dela,
+// na empresa da sessão.
+type TabelaDeCompraPorID interface {
+	CodigoDaTabela(ctx context.Context, id int64) (code int64, achou bool, err error)
 }
 
 // SupplierPurchasingDefaultsProvider is the outbound port implemented by the

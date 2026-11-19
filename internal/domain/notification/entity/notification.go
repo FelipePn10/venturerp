@@ -2,6 +2,7 @@ package entity
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"strings"
@@ -49,6 +50,8 @@ var (
 	ErrNotFound   = domainerr.NewNotFound("recurso de notificação não encontrado")
 	ErrConflict   = domainerr.NewValidation("conflito de estado da notificação")
 	ErrValidation = domainerr.NewValidation("regra de notificação inválida")
+	// ErrConfigFiscalDeOutraEmpresa: a marca do e-mail só pode vir da configuração fiscal da própria empresa.
+	ErrConfigFiscalDeOutraEmpresa = errors.New("a configuração fiscal informada não é desta empresa")
 )
 
 type Event struct {

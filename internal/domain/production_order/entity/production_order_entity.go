@@ -48,6 +48,9 @@ type ProductionOrder struct {
 	// na mesma transação da criação ("Gerar OF agora" da VPLA0102). Só na
 	// criação; a leitura não o preenche.
 	VinculoDemanda *VinculoDemanda
+	// AvisosDoInicio: o que a conferência do início (parâmetro 52, modo
+	// AVISAR) encontrou — componente sem saldo, OF filha aberta. Só no início.
+	AvisosDoInicio []string
 }
 
 // VinculoDemanda é a demanda que a OF cobre e quanto dela. OrdensVistas é

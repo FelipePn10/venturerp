@@ -3,6 +3,7 @@ package planning_params_uc
 import (
 	"context"
 	mrpentity "github.com/FelipePn10/panossoerp/internal/domain/mrp_calculation/entity"
+	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,14 @@ func (uc *UpdatePlanningParamUseCase) Execute(
 		v := strings.ToUpper(strings.TrimSpace(dto.Value))
 		if !mrpentity.LotePeriodoValido(v) {
 			return nil, errorsuc.NewValidationError("o período de lote é NENHUM, DIA, SEMANA ou MES")
+		}
+		dto.Value = v
+	}
+	// 52: conferência ao iniciar a OF (componente sem saldo, OF filha aberta).
+	if dto.ParamNumber == productionentity.ParametroConferenciaInicio {
+		v := strings.ToUpper(strings.TrimSpace(dto.Value))
+		if !productionentity.ModoConferenciaValido(v) {
+			return nil, errorsuc.NewValidationError("a conferência ao iniciar a OF é NAO, AVISAR ou BLOQUEAR")
 		}
 		dto.Value = v
 	}

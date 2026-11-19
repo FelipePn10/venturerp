@@ -2,6 +2,7 @@ package item_uc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -26,6 +27,9 @@ type UpdateItemUseCase struct {
 	Uso leitorDeUso
 	// Unidades confere as unidades alteradas no catálogo da empresa. Opcional.
 	Unidades catalogoDeUnidades
+	// Estruturas recalcula as linhas em que o item é componente quando a
+	// unidade de estoque muda. Opcional.
+	Estruturas ports.RecalculoDeEstrutura
 }
 
 type updateItemBusinessRepository interface {
@@ -108,7 +112,21 @@ func (uc *UpdateItemUseCase) update(ctx context.Context, item *entity.Item, dto 
 	if err != nil {
 		return nil, err
 	}
-	return toItemResponse(updated), nil
+	out := toItemResponse(updated)
+	// A unidade de estoque mudou: a quantidade das linhas de estrutura em que
+	// o item é componente estava na unidade antiga (o tubo passou de MM para M
+	// e a linha "104 MM, fator 1" seguia dizendo 104).
+	if depois := unidadesDoItem(item)["unidade de estoque"]; uc.Estruturas != nil && depois != unidadesAntes["unidade de estoque"] {
+		n, avisos, err := uc.Estruturas.RecalcularDoComponente(ctx, int64(item.Code), "unidade de estoque do componente alterada")
+		if err != nil {
+			// O item já está gravado: a falha vira aviso e o próximo MRP recalcula.
+			out.Warnings = append(out.Warnings, fmt.Sprintf("as estruturas que usam o item não foram recalculadas agora (%v); o próximo cálculo do MRP recalcula", err))
+		} else if n > 0 {
+			out.Warnings = append(out.Warnings, fmt.Sprintf("%d linha(s) de estrutura que usam o item foram recalculadas para %s", n, depois))
+		}
+		out.Warnings = append(out.Warnings, avisos...)
+	}
+	return out, nil
 }
 
 // aplicar leva a requisição para a entidade e valida, sem gravar: a conferência

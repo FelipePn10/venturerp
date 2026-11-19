@@ -7,7 +7,6 @@ import (
 	"github.com/shopspring/decimal"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -97,6 +96,8 @@ type FirmPlannedOrderUseCase struct {
 	Structure          productionStructureReader
 	// Items resolve o código de negócio do item para a criação da OF.
 	Items any
+	// UnidadesDeServico: a unidade de compra do item de serviço. Opcional.
+	UnidadesDeServico unidadeDoServico
 }
 
 func (uc *FirmPlannedOrderUseCase) Execute(ctx context.Context, dto request.FirmOrderDTO) (*response.PlannedOrderResponse, error) {
@@ -330,23 +331,28 @@ func (uc *FirmPlannedOrderUseCase) generateServiceRequisition(ctx context.Contex
 		return 0, err
 	}
 
-	serv := "SERV"
+	datas := uc.datasDoServico(ctx, order, withService)
 	for i, op := range withService {
-		app := fmt.Sprintf("Op. externa: %s (%.2fh)", op.OperationName, op.EffectiveHours)
+		unidade, err := uc.unidadeDoItemDeServico(ctx, *op.ServiceItemCode)
+		if err != nil {
+			return created.Code, err
+		}
+		janela := datas[op.RouteOpID]
+		envio, entrega := janela[0], janela[1]
+		app := fmt.Sprintf("Op. externa: %s (%.2fh) — enviar ao terceiro até %s", op.OperationName, op.EffectiveHours, envio.Format("02/01/2006"))
 		item := &reqentity.PurchaseRequisitionItem{
 			RequisitionCode: created.Code,
 			Sequence:        int32(i + 1),
 			ItemCode:        *op.ServiceItemCode,
 			Quantity:        order.Quantity,
-			UOM:             &serv,
+			UOM:             unidade,
 			SuggestedPrice:  op.CostPerUnit,
 			Application:     &app,
 			// O serviço é gasto do centro de custo da ordem.
 			CostCenterCode: order.CostCenterCode,
 		}
-		if op.LeadTimeDays > 0 {
-			d := time.Now().AddDate(0, 0, int(op.LeadTimeDays))
-			item.DeliveryDate = &d
+		if !entrega.IsZero() {
+			item.DeliveryDate = &entrega
 		}
 		if _, err := uc.ReqRepo.AddItem(ctx, item); err != nil {
 			return created.Code, err

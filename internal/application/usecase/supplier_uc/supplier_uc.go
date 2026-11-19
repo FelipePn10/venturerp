@@ -22,6 +22,9 @@ type SupplierUseCase struct {
 	// TransportadoraAtiva diz se o fornecedor tem perfil de transportadora
 	// ativo (VSUP0140). Opcional: sem ele, a conferência não é feita.
 	TransportadoraAtiva func(ctx context.Context, supplierCode int64) (bool, error)
+	// TabelasDeCompra traduz o id da tabela de preço do vínculo no código.
+	// Opcional: sem ele, as defaults não trazem tabela de preço.
+	TabelasDeCompra ports.TabelaDeCompraPorID
 }
 
 func NewSupplierUseCase(repo repository.SupplierRepository, auth ...ports.AuthService) *SupplierUseCase {

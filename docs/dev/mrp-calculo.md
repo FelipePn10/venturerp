@@ -605,9 +605,10 @@ Sem condição de máscara o tipo não importa: a regra vale para o item inteiro
 
 ## Saldo que o MRP conta
 
-A reserva do pedido de venda e a do produzido para a demanda independente não
-saem do disponível do netting (`DisponivelParaNecessidade`): o pedido e a demanda
-já são necessidade. A reserva do produzido nasce na entrega da OF ligada a
+A reserva do pedido de venda, a do produzido para a demanda independente e a
+do componente para a OF pai (`OF_COMPONENTE`, migração 503) não saem do
+disponível do netting (`DisponivelParaNecessidade`): o pedido, a demanda e o
+empenho da OF pai já são necessidade. A reserva do produzido nasce na entrega da OF ligada a
 demanda de finalidade própria (mesma transação), é consumida pela saída com
 referência `DEMANDA_INDEPENDENTE` e liberada ao encerrar/cancelar a demanda.
 

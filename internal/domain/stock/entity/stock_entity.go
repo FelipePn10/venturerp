@@ -47,6 +47,9 @@ const (
 	ReferenceTypeManual          = "MANUAL"
 	// Saída para a finalidade de uma demanda independente (VPLA0102).
 	ReferenceTypeIndependentDemand = "DEMANDA_INDEPENDENTE"
+	// Peça entregue pela OF filha e reservada para a OF pai (reference_code =
+	// id da OF pai): só a saída de material da OF pai a consome.
+	ReferenceTypeComponenteDaOF = "OF_COMPONENTE"
 	// Saldo que entrou sem lote e recebeu um depois.
 	ReferenceTypeLotImplant = "IMPLANTACAO_LOTE"
 )

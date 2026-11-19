@@ -48,8 +48,9 @@ type StockSnapshot struct {
 	WarehouseCode int64
 	Quantity      decimal.Decimal
 	ReservedQty   decimal.Decimal
-	// SalesReservedQty é a parte da reserva feita para pedidos de venda e para
-	// demandas independentes (o produzido para amostra, feira, projeto…).
+	// SalesReservedQty é a parte da reserva feita para pedidos de venda, para
+	// demandas independentes (o produzido para amostra, feira, projeto…) e para
+	// a OF pai (o componente que a OF filha entregou): o que já é necessidade.
 	SalesReservedQty decimal.Decimal
 	SafetyStock      decimal.Decimal
 	SnapshotDate     time.Time
@@ -59,7 +60,8 @@ type StockSnapshot struct {
 // DisponivelParaNecessidade é o estoque que cobre a necessidade do MRP. A
 // reserva do pedido de venda não sai dele: o próprio pedido já entra como
 // demanda, e descontar os dois contava o pedido duas vezes. O mesmo vale para
-// a reserva do produzido para a demanda independente.
+// a reserva do produzido para a demanda independente e a do componente para a
+// OF pai (o empenho da OF pai já é demanda).
 func (s *StockSnapshot) DisponivelParaNecessidade() decimal.Decimal {
 	reservaDeOutros := decimal.Max(decimal.Zero, s.ReservedQty.Sub(s.SalesReservedQty))
 	return s.Quantity.Sub(reservaDeOutros).Sub(s.SafetyStock)

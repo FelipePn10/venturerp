@@ -622,6 +622,22 @@ func (h *ProductionOrderHandler) MaterialAvailability(w http.ResponseWriter, r *
 	security.RespondJSON(w, http.StatusOK, result)
 }
 
+// Chain devolve a cadeia de fabricação da OF: pedidos de venda, OFs pai e
+// OFs filhas.
+func (h *ProductionOrderHandler) Chain(w http.ResponseWriter, r *http.Request) {
+	orderID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := h.materialControlUC.Chain(r.Context(), orderID)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
 // MaterialAvailabilitySummary resume as faltas de várias OFs (?ids=1,2,3) — o
 // selo da lista.
 func (h *ProductionOrderHandler) MaterialAvailabilitySummary(w http.ResponseWriter, r *http.Request) {

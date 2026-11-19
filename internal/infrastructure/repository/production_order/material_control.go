@@ -128,6 +128,11 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 	if err := vincularDemandaTx(ctx, tx, enterpriseID, created.ID, order); err != nil {
 		return nil, err
 	}
+	// OF pai criada depois de a OF filha entregar (firmar de baixo para cima):
+	// a peça já feita para ela fica reservada agora.
+	if _, err := stockrepository.ReservarEntregasDasFilhasTx(ctx, tx, enterpriseID, created.ID, order.CreatedBy); err != nil {
+		return nil, err
+	}
 	if complete != nil {
 		if err := complete(ctx, tx, created); err != nil {
 			return nil, err

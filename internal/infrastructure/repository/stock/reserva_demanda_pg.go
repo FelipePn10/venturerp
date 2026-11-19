@@ -132,6 +132,13 @@ func loteDoMovimento(m *entity.StockMovement) string {
 // nela, e grava a reserva com endereço e lote. Devolve o reservado.
 func reservarParaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandCode int64, m *entity.StockMovement,
 	qtd decimal.Decimal, nota string, por uuid.UUID) (decimal.Decimal, error) {
+	return reservarNaLinhaTx(ctx, tx, enterpriseID, entity.ReferenceTypeIndependentDemand, demandCode, nil, m, qtd, nota, por)
+}
+
+// reservarNaLinhaTx é a reserva na linha de saldo do movimento para qualquer
+// documento (refType/refCode; refItem = linha do documento, quando há).
+func reservarNaLinhaTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, refType string, refCode int64, refItem *int64,
+	m *entity.StockMovement, qtd decimal.Decimal, nota string, por uuid.UUID) (decimal.Decimal, error) {
 	if !qtd.IsPositive() {
 		return decimal.Zero, nil
 	}
@@ -174,10 +181,10 @@ func reservarParaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandC
 		}
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO stock_reservations
-		(item_code, mask, warehouse_id, address, lot, quantity, reference_type, reference_code, reservation_date, status, notes, created_by, enterprise_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_DATE, 'ACTIVE', $9, $10, $11)`,
-		m.ItemCode, m.Mask, m.WarehouseID, endereco, lote, q, entity.ReferenceTypeIndependentDemand, demandCode, nota, por, enterpriseID); err != nil {
-		return decimal.Zero, fmt.Errorf("reservando para a demanda %d: %w", demandCode, err)
+		(item_code, mask, warehouse_id, address, lot, quantity, reference_type, reference_code, reference_item_code, reservation_date, status, notes, created_by, enterprise_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_DATE, 'ACTIVE', $10, $11, $12)`,
+		m.ItemCode, m.Mask, m.WarehouseID, endereco, lote, q, refType, refCode, refItem, nota, por, enterpriseID); err != nil {
+		return decimal.Zero, fmt.Errorf("reservando para %s %d: %w", refType, refCode, err)
 	}
 	return q, nil
 }
@@ -188,12 +195,28 @@ func reservarParaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandC
 // Devolve o liberado.
 func LiberarReservasDaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, demandCode int64, warehouseID *int64,
 	qtd *decimal.Decimal, consumir bool) (decimal.Decimal, error) {
+	return liberarReservasTx(ctx, tx, enterpriseID, entity.ReferenceTypeIndependentDemand, demandCode, filtroDaReserva{almox: warehouseID}, qtd, consumir)
+}
+
+// filtroDaReserva restringe as reservas do documento (nil = qualquer).
+type filtroDaReserva struct {
+	almox *int64
+	item  *int64
+	mask  *string
+}
+
+// liberarReservasTx tira as reservas ativas do documento (refType/refCode)
+// que passam no filtro, até qtd (nil = todas): consumir marca CONSUMED, senão
+// CANCELLED. Devolve o liberado.
+func liberarReservasTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, refType string, refCode int64, f filtroDaReserva,
+	qtd *decimal.Decimal, consumir bool) (decimal.Decimal, error) {
 	liberado := decimal.Zero
 	var item int64
 	if err := tx.QueryRow(ctx, `SELECT COALESCE(MIN(item_code), 0) FROM stock_reservations
-		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = $3 AND status = 'ACTIVE'`,
-		enterpriseID, entity.ReferenceTypeIndependentDemand, demandCode).Scan(&item); err != nil {
-		return liberado, fmt.Errorf("lendo o item das reservas da demanda %d: %w", demandCode, err)
+		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = $3 AND status = 'ACTIVE'
+		   AND ($4::bigint IS NULL OR item_code = $4)`,
+		enterpriseID, refType, refCode, f.item).Scan(&item); err != nil {
+		return liberado, fmt.Errorf("lendo o item das reservas de %s %d: %w", refType, refCode, err)
 	}
 	if item != 0 {
 		if err := TravarItensTx(ctx, tx, enterpriseID, item); err != nil {
@@ -204,9 +227,11 @@ func LiberarReservasDaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, de
 		  FROM stock_reservations
 		 WHERE enterprise_id = $1 AND reference_type = $2 AND reference_code = $3 AND status = 'ACTIVE'
 		   AND ($4::bigint IS NULL OR warehouse_id = $4)
-		 ORDER BY id FOR UPDATE`, enterpriseID, entity.ReferenceTypeIndependentDemand, demandCode, warehouseID)
+		   AND ($5::bigint IS NULL OR item_code = $5)
+		   AND ($6::text IS NULL OR mask = $6)
+		 ORDER BY id FOR UPDATE`, enterpriseID, refType, refCode, f.almox, f.item, f.mask)
 	if err != nil {
-		return liberado, fmt.Errorf("lendo as reservas da demanda %d: %w", demandCode, err)
+		return liberado, fmt.Errorf("lendo as reservas de %s %d: %w", refType, refCode, err)
 	}
 	type reserva struct {
 		id, item, almox      int64
@@ -218,7 +243,7 @@ func LiberarReservasDaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, de
 		var r reserva
 		if err := rows.Scan(&r.id, &r.item, &r.mask, &r.almox, &r.endereco, &r.lote, &r.qtd); err != nil {
 			rows.Close()
-			return liberado, fmt.Errorf("lendo a reserva da demanda: %w", err)
+			return liberado, fmt.Errorf("lendo a reserva de %s %d: %w", refType, refCode, err)
 		}
 		reservas = append(reservas, r)
 	}
@@ -265,6 +290,9 @@ func LiberarReservasDaDemandaTx(ctx context.Context, tx pgx.Tx, enterpriseID, de
 // consumirReservaDaSaidaTx: a saída para a finalidade da demanda usa a peça
 // reservada para ela. Roda antes de o movimento baixar o saldo.
 func consumirReservaDaSaidaTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
+	if err := consumirReservaDoComponenteTx(ctx, tx, enterpriseID, m); err != nil {
+		return err
+	}
 	if m.MovementType != entity.MovementTypeOut || m.ReferenceType == nil || *m.ReferenceType != entity.ReferenceTypeIndependentDemand ||
 		m.ReferenceCode == nil {
 		return nil

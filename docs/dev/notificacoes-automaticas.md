@@ -23,6 +23,13 @@ Branding usa o
 `fiscal_config_id` explicitamente vinculado aos settings da empresa; uma mesma
 configuração fiscal não pode ser vinculada a dois tenants. Sem vínculo, aplica-se o
 nome da empresa e a identidade visual profissional padrão.
+A configuração vinculada tem de ser da PRÓPRIA empresa: `SaveSettings` grava por
+`INSERT ... SELECT ... WHERE EXISTS (fiscal_configs da empresa)` e devolve
+`ErrValidation` + `ErrConfigFiscalDeOutraEmpresa` (422 com mensagem clara; antes
+era o 23503 cru do gatilho de conferência de empresa). A consulta da entrega junta
+`fiscal_configs` também por `enterprise_id`, então um vínculo legado cruzado cai no
+padrão em vez de mostrar a marca de outra empresa. A VNOT0100 oferece só a
+configuração da própria empresa (razão social e CNPJ).
 
 ## Enums públicos
 

@@ -368,7 +368,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 			})
 			if err != nil {
 				if !falhaDeCadastroOuCapacidade(err) {
-					return nil, 0, fmt.Errorf("item %d: %w", sug.ItemCode, err)
+					return nil, 0, fmt.Errorf("%s: %w", s.rotuloDoItem(ctx, sug.ItemCode), err)
 				}
 				naoCoube = err
 				break
@@ -378,7 +378,7 @@ func (s *MRPServiceImpl) scheduleMachineIntegration(ctx context.Context, planCod
 			day = slots[len(slots)-1].End.Add(step.after)
 		}
 		if naoCoube != nil {
-			semAgenda = append(semAgenda, fmt.Sprintf("item %d: %v", sug.ItemCode, naoCoube))
+			semAgenda = append(semAgenda, fmt.Sprintf("%s: %v", s.rotuloDoItem(ctx, sug.ItemCode), naoCoube))
 			ready.record(sug, sug.NeedDate)
 			continue
 		}

@@ -66,6 +66,11 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		}
 		return orders[i].Entrega().Before(orders[j].Entrega())
 	})
+	// Cadeia de fabricação: a OF da bucha vem antes da OF do RN que a consome.
+	filhasDaOrdem, fimDasFilhasDeFora, err := uc.filhasDasOrdens(ctx, orders)
+	if err != nil {
+		return nil, err
+	}
 
 	// wcNextAvailable tracks when each work center is next free.
 	startFrom := dto.StartFrom
@@ -84,6 +89,12 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		return uc.sequenciaRegressivo(ctx, dto, orders, selection, selected, startFrom)
 	}
 
+	orders = ordenaPorCadeia(orders, filhasDaOrdem)
+	// Término de cada OF programada nesta rodada: a OF pai espera as filhas.
+	fimDaOrdem := make(map[int64]time.Time, len(orders)+len(fimDasFilhasDeFora))
+	for id, fim := range fimDasFilhasDeFora {
+		fimDaOrdem[id] = fim
+	}
 	scheduledCount := 0
 	atrasadas := make([]int64, 0)
 	for _, order := range orders {
@@ -142,12 +153,13 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		fimDaOperacao := make(map[int64]time.Time, len(ops))
 		duracaoDaOperacao := make(map[int64]time.Duration, len(ops))
 
-		opEndTime := startFrom
+		inicioDaOrdem := inicioPelaCadeia(startFrom, filhasDaOrdem[order.ID], fimDaOrdem)
+		opEndTime := inicioDaOrdem
 		for _, op := range ordenadas {
 			if op.WorkCenterID == nil {
 				// Etapa em terceiro: não ocupa recurso nosso, mas as peças só
 				// voltam depois do prazo do fornecedor — a seguinte espera.
-				pronto := startFrom
+				pronto := inicioDaOrdem
 				for _, e := range predecessores[op.ID] {
 					if fim, ok := fimDaOperacao[e.PredecessorID]; ok {
 						pronto = maxTime(pronto, fim)
@@ -169,7 +181,7 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			// a sobreposição acordada) e a liberação do recurso. Sem predecessor,
 			// a operação pode começar já no início do horizonte — é isso que
 			// permite dois ramos correrem em paralelo.
-			prontoPorPrecedencia := startFrom
+			prontoPorPrecedencia := inicioDaOrdem
 			for _, e := range predecessores[op.ID] {
 				fim, ok := fimDaOperacao[e.PredecessorID]
 				if !ok {
@@ -265,6 +277,9 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			ultimaFamiliaNoRecurso[wcID] = familiaDaOrdem
 			opEndTime = end
 			scheduledCount++
+		}
+		for _, fim := range fimDaOperacao {
+			fimDaOrdem[order.ID] = maxTime(fimDaOrdem[order.ID], fim)
 		}
 		// Só com entrega conhecida: sem ela a data da ordem é o início, e
 		// terminar depois do início não é atraso.
@@ -1025,6 +1040,20 @@ func (uc *APSUseCase) sequenciaRegressivo(
 		}
 		return orders[i].Priority < orders[j].Priority
 	})
+	// Cadeia de fabricação, de trás para frente: a OF do RN é programada antes
+	// e a da bucha tem de terminar até o RN começar.
+	filhasDaOrdem, _, err := uc.filhasDasOrdens(ctx, orders)
+	if err != nil {
+		return nil, err
+	}
+	paisDaOrdem := make(map[int64][]int64)
+	for pai, filhas := range filhasDaOrdem {
+		for _, f := range filhas {
+			paisDaOrdem[f] = append(paisDaOrdem[f], pai)
+		}
+	}
+	orders = ordenaPorCadeia(orders, paisDaOrdem)
+	inicioDaOrdem := make(map[int64]time.Time, len(orders))
 
 	// Caminhando para trás, guardamos o instante mais cedo já ocupado em cada
 	// recurso: a próxima operação precisa terminar antes disso.
@@ -1047,7 +1076,6 @@ func (uc *APSUseCase) sequenciaRegressivo(
 			}
 		}
 		var ops []repository.OpRow
-		var err error
 		if selected {
 			ops, err = selection.GetSelectedOrderOperations(ctx, order.ID, filter)
 		} else {
@@ -1081,6 +1109,13 @@ func (uc *APSUseCase) sequenciaRegressivo(
 		duracao := make(map[int64]time.Duration, len(ops))
 		sequencias := make([]*entity.ProductionSequence, 0, len(ops))
 		inicioMaisCedo := time.Time{}
+		// A peça tem de estar pronta quando a OF pai começa.
+		entregaDaOrdem := order.Entrega()
+		for _, pai := range paisDaOrdem[order.ID] {
+			if inicio, ok := inicioDaOrdem[pai]; ok {
+				entregaDaOrdem = minTime(entregaDaOrdem, inicio)
+			}
+		}
 
 		// Do fim para o começo: as sucessoras já têm início definido.
 		for i := len(ordenadas) - 1; i >= 0; i-- {
@@ -1088,7 +1123,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 			if op.WorkCenterID == nil {
 				// Etapa em terceiro: as predecessoras têm de terminar antes do
 				// prazo do fornecedor, contado da sucessora mais cedo.
-				fim := order.Entrega()
+				fim := entregaDaOrdem
 				for _, e := range sucessores[op.ID] {
 					if inicioSuc, ok := inicioDaOperacao[e.SuccessorID]; ok {
 						fim = minTime(fim, inicioSuc)
@@ -1108,7 +1143,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 
 			// Termina, no máximo, na entrega — e antes do início das sucessoras
 			// (descontada a sobreposição acordada).
-			fim := order.Entrega()
+			fim := entregaDaOrdem
 			for _, e := range sucessores[op.ID] {
 				inicioSuc, ok := inicioDaOperacao[e.SuccessorID]
 				if !ok {
@@ -1157,6 +1192,9 @@ func (uc *APSUseCase) sequenciaRegressivo(
 				return nil, fmt.Errorf("falha ao gravar a sequência da ordem %d: %w", order.ID, err)
 			}
 			agendadas++
+		}
+		if !inicioMaisCedo.IsZero() {
+			inicioDaOrdem[order.ID] = inicioMaisCedo
 		}
 	}
 

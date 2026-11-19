@@ -36,7 +36,9 @@ type MaterialAvailabilityLine struct {
 	FreeStock    decimal.Decimal `json:"free_stock"`
 	// CommittedEarlier: o que OFs anteriores vão consumir do mesmo saldo.
 	CommittedEarlier decimal.Decimal `json:"committed_earlier"`
-	// Available é o que sobra do saldo livre para esta OF.
+	// ReservedForOrder: a peça que a OF filha entregou reservada para esta OF.
+	ReservedForOrder decimal.Decimal `json:"reserved_for_order"`
+	// Available é o que sobra do saldo livre para esta OF, mais o reservado para ela.
 	Available decimal.Decimal `json:"available"`
 	Shortage  decimal.Decimal `json:"shortage"`
 	Status    string          `json:"status"`
@@ -153,9 +155,7 @@ func (uc *ProductionMaterialControlUseCase) AvailabilitySummary(ctx context.Cont
 }
 
 func availabilityLine(l entity.MaterialAvailabilityLine) MaterialAvailabilityLine {
-	restante := decimal.Max(l.Required.Sub(l.Issued), decimal.Zero)
-	livre := decimal.Max(l.FreeStock.Sub(l.CommittedEarlier), decimal.Zero)
-	falta := decimal.Max(restante.Sub(livre), decimal.Zero)
+	restante, livre, falta := l.Restante(), l.Disponivel(), l.Falta()
 	status := AvailabilityComplete
 	switch {
 	case falta.IsPositive() && livre.IsPositive():
@@ -167,7 +167,7 @@ func availabilityLine(l entity.MaterialAvailabilityLine) MaterialAvailabilityLin
 		MaterialID: l.MaterialID, ItemCode: l.ItemCode, BusinessCode: l.BusinessCode, Description: l.Description,
 		Mask: l.Mask, UOM: l.UOM, WarehouseID: l.WarehouseID,
 		Required: l.Required, Issued: l.Issued, Remaining: restante,
-		FreeStock: l.FreeStock, CommittedEarlier: l.CommittedEarlier,
+		FreeStock: l.FreeStock, CommittedEarlier: l.CommittedEarlier, ReservedForOrder: l.ReservedForOrder,
 		Available: livre, Shortage: falta, Status: status,
 	}
 }

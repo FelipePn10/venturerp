@@ -33,6 +33,9 @@ type ProductionOrderResponse struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CreatedBy      uuid.UUID  `json:"created_by"`
+	// Warnings: avisos do início da OF (componente sem saldo, OF filha aberta)
+	// quando o parâmetro de planejamento 52 está em AVISAR.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // ProductionAppointmentResponse is the API representation of a production appointment.
@@ -137,4 +140,34 @@ type ProductionOrderCostResponse struct {
 
 	Currency  string `json:"currency"`
 	SettledAt string `json:"settled_at,omitempty"`
+}
+
+// ProductionChainResponse é a cadeia de fabricação da OF: pedidos de venda,
+// ordens pai que ela abastece e ordens filhas dos componentes fabricados.
+type ProductionChainResponse struct {
+	ProductionOrderID int64                       `json:"production_order_id"`
+	SalesOrders       []ProductionChainSalesOrder `json:"sales_orders"`
+	Parents           []ProductionChainOrder      `json:"parents"`
+	Children          []ProductionChainOrder      `json:"children"`
+}
+
+type ProductionChainSalesOrder struct {
+	SalesOrderCode     int64  `json:"sales_order_code"`
+	SalesOrderNumber   int64  `json:"sales_order_number"`
+	SalesOrderItemCode *int64 `json:"sales_order_item_code,omitempty"`
+	Sequence           *int32 `json:"sequence,omitempty"`
+	Customer           string `json:"customer"`
+}
+
+type ProductionChainOrder struct {
+	PlannedOrderCode  *int64          `json:"planned_order_code,omitempty"`
+	ProductionOrderID *int64          `json:"production_order_id,omitempty"`
+	OrderNumber       *int64          `json:"order_number,omitempty"`
+	ItemCode          int64           `json:"item_code"`
+	BusinessCode      string          `json:"business_code,omitempty"`
+	Description       string          `json:"description"`
+	Status            string          `json:"status"`
+	Quantity          decimal.Decimal `json:"quantity"`
+	Produced          decimal.Decimal `json:"produced"`
+	Reserved          decimal.Decimal `json:"reserved"`
 }

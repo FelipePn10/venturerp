@@ -109,7 +109,7 @@ func (uc *GenerateOrdersFromQuotationUseCase) Execute(ctx context.Context, dto r
 				result.Skipped = append(result.Skipped, fmt.Sprintf("fornecedor %d (%s): cadastro inativo", supplierCode, def.SupplierName))
 				continue
 			}
-			priceTable = def.PurchasePriceTableID
+			priceTable = def.PurchasePriceTableCode
 			paymentTerm = def.PaymentConditionID
 			invoiceType = def.DefaultInvoiceTypeID
 			financialAccount = def.FinancialAccount

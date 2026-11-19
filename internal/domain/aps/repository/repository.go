@@ -248,3 +248,15 @@ type ConfigurationRepository interface {
 	UpdateMachineSpecialValue(context.Context, int64, int64, SpecialValue) error
 	DeleteMachineSpecialValue(context.Context, int64, int64) error
 }
+
+// CadeiaRepository: a cadeia OF filha → OF pai (a bucha fabricada para o RN).
+// O sequenciamento põe a filha antes e só começa a pai depois de as filhas da
+// mesma rodada terminarem. Extensão opcional, como SelectionRepository.
+type CadeiaRepository interface {
+	// OrdensFilhas devolve, para cada OF pai entre orderIDs, as OFs filha
+	// ainda não concluídas/encerradas/canceladas que fabricam componente para ela.
+	OrdensFilhas(ctx context.Context, orderIDs []int64) (map[int64][]int64, error)
+	// FimProgramado devolve o término já programado (production_sequences) de
+	// cada OF — a filha que ficou fora desta rodada segura a pai por ele.
+	FimProgramado(ctx context.Context, orderIDs []int64) (map[int64]time.Time, error)
+}

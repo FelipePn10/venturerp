@@ -41,6 +41,7 @@ func toProductionOrderResponse(o *entity.ProductionOrder) *response.ProductionOr
 		CreatedAt:      o.CreatedAt,
 		UpdatedAt:      o.UpdatedAt,
 		CreatedBy:      o.CreatedBy,
+		Warnings:       o.AvisosDoInicio,
 	}
 }
 

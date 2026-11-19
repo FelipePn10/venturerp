@@ -135,11 +135,16 @@ func (h *UnitOfMeasureHandler) DeleteStandard(w http.ResponseWriter, r *http.Req
 		jsonError(w, http.StatusBadRequest, "identificador inválido")
 		return
 	}
-	if err := h.uc.DeleteStandardConversion(r.Context(), id); err != nil {
+	avisos, err := h.uc.DeleteStandardConversion(r.Context(), id)
+	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	if len(avisos) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]any{"warnings": avisos})
 }
 
 // Resolve: GET ?text=UND&text=PÇ&supplier=12 — como o sistema lê cada texto.

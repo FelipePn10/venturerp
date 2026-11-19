@@ -250,10 +250,14 @@ type PlanoMateriais struct {
 	Nome        string
 	CalculadoEm *time.Time
 	Status      string
-	Erros       string
+	Erros       string // o que o cálculo registrou, já em texto
 	Demandas    []DemandaPlano
 	Sugestoes   []SugestaoPlano
 	Excecoes    []ExcecaoPlano
+
+	// AvisosEstrutura: linhas de estrutura cuja unidade não converte para a
+	// de estoque do componente, apuradas antes do cálculo.
+	AvisosEstrutura []string
 }
 
 // ─── Capacidade (CRP) ───────────────────────────────────────────────────────

@@ -457,7 +457,8 @@ func (r *IndependentDemandRepositorySQLC) VincularSugestao(ctx context.Context, 
 	if err != nil {
 		return fmt.Errorf("linking sales orders of suggestion %d: %w", suggestionCode, err)
 	}
-	return nil
+	// O componente fabricado fica ligado à ordem pai e herda o pedido dela.
+	return r.vincularCadeia(ctx, enterpriseID, suggestionCode, plannedOrderCode, por)
 }
 
 func (r *IndependentDemandRepositorySQLC) CentroDaSugestao(ctx context.Context, suggestionCode int64) (*int64, error) {

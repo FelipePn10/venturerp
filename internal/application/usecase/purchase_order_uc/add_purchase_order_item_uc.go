@@ -70,8 +70,12 @@ func (uc *AddPurchaseOrderItemUseCase) Execute(ctx context.Context, dto request.
 	unitPrice := dto.UnitPrice
 	purchaseUOM := dto.PurchaseUOM
 	if unitPrice.IsZero() && po.PriceTableCode != nil && uc.PriceProvider != nil {
-		if price, uom, found, perr := uc.PriceProvider.GetItemPrice(ctx, *po.PriceTableCode, dto.ItemCode, po.SupplierCode); perr == nil && found {
-			unitPrice = decimal.NewFromFloat(price)
+		price, uom, found, perr := uc.PriceProvider.GetItemPrice(ctx, *po.PriceTableCode, dto.ItemCode, po.SupplierCode)
+		if perr != nil {
+			return nil, perr
+		}
+		if found {
+			unitPrice = price
 			if purchaseUOM == nil && uom != "" {
 				u := uom
 				purchaseUOM = &u

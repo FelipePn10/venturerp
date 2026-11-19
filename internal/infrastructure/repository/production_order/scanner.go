@@ -8,6 +8,7 @@ import (
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -97,6 +98,21 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	case entity.ScanStart:
 		if status != "OPEN" {
 			return nil, errorsuc.NewValidationError("a ordem de produção precisa estar aberta para iniciar")
+		}
+		// A mesma conferência do início pela tela (parâmetro 52): componente
+		// sem saldo ou OF filha aberta recusa (BLOQUEAR) ou vira aviso.
+		if modo, errModo := r.ModoConferenciaInicio(ctx); errModo != nil {
+			return nil, errModo
+		} else if modo != entity.ConferenciaInicioNao {
+			pendencias, errPend := r.PendenciasDoInicio(ctx, orderID)
+			if errPend != nil {
+				return nil, errPend
+			}
+			recusa, avisos := entity.AvaliarInicio(modo, pendencias)
+			if recusa != "" {
+				return nil, errorsuc.NewValidationError(recusa)
+			}
+			message = strings.Join(avisos, "; ")
 		}
 		if _, err = tx.Exec(ctx, `UPDATE production_orders SET status='IN_PROGRESS',start_date=COALESCE(start_date,CURRENT_DATE),updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, orderID, command.EnterpriseID); err != nil {
 			return nil, err

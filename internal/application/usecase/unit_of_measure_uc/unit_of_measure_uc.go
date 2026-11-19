@@ -20,6 +20,33 @@ import (
 type UseCase struct {
 	repo repository.UnitRepository
 	auth ports.AuthService
+	// Estruturas recalcula as linhas de estrutura quando a conversão padrão
+	// muda (ela vale para todos os itens). Opcional.
+	Estruturas ports.RecalculoDeEstrutura
+}
+
+// recalcularEstruturas: falha vira aviso — a conversão já está gravada e o
+// próximo MRP recalcula.
+func (uc *UseCase) recalcularEstruturas(ctx context.Context, motivo string) []string {
+	if uc.Estruturas == nil {
+		return nil
+	}
+	n, avisos, err := uc.Estruturas.RecalcularDaEmpresa(ctx, motivo)
+	if err != nil {
+		return []string{fmt.Sprintf("as estruturas não foram recalculadas agora (%v); o próximo cálculo do MRP recalcula", err)}
+	}
+	// A conversão padrão vale para a empresa toda: a lista das linhas sem
+	// conversão é da empresa inteira e pode ser longa. Na tela vão as
+	// primeiras; o cálculo do MRP registra todas.
+	const maxNaTela = 5
+	if len(avisos) > maxNaTela {
+		resto := len(avisos) - maxNaTela
+		avisos = append(avisos[:maxNaTela:maxNaTela], fmt.Sprintf("… e mais %d linha(s) de estrutura sem conversão (todas aparecem no aviso do cálculo do MRP e no impresso do plano de materiais)", resto))
+	}
+	if n > 0 {
+		avisos = append([]string{fmt.Sprintf("%d linha(s) de estrutura foram recalculadas com as conversões vigentes", n)}, avisos...)
+	}
+	return avisos
 }
 
 func New(repo repository.UnitRepository, auth ports.AuthService) *UseCase {
@@ -229,11 +256,19 @@ func (uc *UseCase) SaveStandardConversion(ctx context.Context, dto request.Stand
 	if err != nil {
 		return nil, err
 	}
-	return toStandard(salvo), nil
+	out := toStandard(salvo)
+	out.Warnings = uc.recalcularEstruturas(ctx, "conversão padrão gravada")
+	return out, nil
 }
 
-func (uc *UseCase) DeleteStandardConversion(ctx context.Context, id int64) error {
-	return uc.repo.DeleteStandardConversion(ctx, id)
+// DeleteStandardConversion devolve os avisos do recálculo: a linha de
+// estrutura que dependia da conversão excluída fica sem conversão e precisa
+// de revisão — antes o aviso era descartado.
+func (uc *UseCase) DeleteStandardConversion(ctx context.Context, id int64) ([]string, error) {
+	if err := uc.repo.DeleteStandardConversion(ctx, id); err != nil {
+		return nil, err
+	}
+	return uc.recalcularEstruturas(ctx, "conversão padrão excluída"), nil
 }
 
 // Resolve traduz textos recebidos (uCom da nota) para o catálogo.

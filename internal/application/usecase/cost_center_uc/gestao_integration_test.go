@@ -106,12 +106,10 @@ func TestCentroDeCustoUnicoComGestao(t *testing.T) {
 	}
 	gerar := &purchase_requisition_uc.GeneratePurchaseOrdersUseCase{Reqs: reqs, Auth: az, Aprovacoes: repo}
 	sup := int64(1)
-	res, err := gerar.Execute(ctx, request.GeneratePurchaseOrdersDTO{Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[0].ID, QtyToAttend: decimal.NewFromFloat(5), SupplierCode: &sup}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Skipped) != 1 || !strings.Contains(res.Skipped[0], "aguardando o aprovador do centro") {
-		t.Fatalf("a requisição pendente não vira pedido: %+v", res.Skipped)
+	// A requisição pendente não vira pedido: nada gerado é recusa com o motivo.
+	if _, err := gerar.Execute(ctx, request.GeneratePurchaseOrdersDTO{Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[0].ID, QtyToAttend: decimal.NewFromFloat(5), SupplierCode: &sup}}}); err == nil ||
+		!strings.Contains(err.Error(), "aguardando o aprovador do centro") {
+		t.Fatalf("a requisição pendente não vira pedido: %v", err)
 	}
 	if err := uc.Decidir(ctx, pend[0].ID, true, ""); err == nil {
 		t.Fatal("só o aprovador do centro decide")

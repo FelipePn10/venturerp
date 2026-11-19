@@ -63,6 +63,12 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 			return nil, nil
 		}
 		minutes, err := machineMinutes(mt, qtdOrdem)
+		if err != nil {
+			// A mensagem de machineMinutes cita o código interno do item.
+			return nil, domainerr.NewValidation(fmt.Sprintf(
+				"o %s não tem roteiro e a produtividade dele na máquina %d não tem tempo válido: informe o tempo de produção, a quantidade base e a unidade de tempo na produtividade",
+				s.rotuloDoItem(ctx, sug.ItemCode), mt.MachineCode))
+		}
 		step := measuredMachineStep(mt, qtdOrdem, minutes)
 		step.alternativas = equivalentes(profiles, mt)
 		return []machineStep{step}, err
@@ -105,7 +111,11 @@ func (s *MRPServiceImpl) machineSteps(ctx context.Context, sug *entity.PlannedOr
 			continue
 		}
 		if op.EffectiveWorkCenterID == nil {
-			return nil, domainerr.NewValidation(fmt.Sprintf("operação %d do item %d sem centro de trabalho", op.ID, sug.ItemCode))
+			// A sequência e o código de negócio são o que o usuário vê; o id da
+			// etapa e a chave do item não dizem nada na tela.
+			return nil, domainerr.NewValidation(fmt.Sprintf(
+				"etapa %d (%s) do roteiro do %s sem centro de trabalho: escolha o centro na etapa ou defina o centro padrão da operação",
+				op.Sequence, op.OperationName, s.rotuloDoItem(ctx, sug.ItemCode)))
 		}
 		candidates := []*entity.MachineTimeInfo{}
 		for _, profile := range profiles {
