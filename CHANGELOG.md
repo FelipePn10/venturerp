@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.9] — 2026-11-19
+
+- feat(producao): OF com cliente/projeto, execução por etapas e custo sempre automático (`702f8826`)
+
 ## [v1.19.8] — 2026-11-19
 
 - feat(cadeia-of): OF filha ligada à OF pai, etapas em ordem e preço líquido de compra (`e050f77d`)
