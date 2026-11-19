@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.8] — 2026-11-19
+
+- feat(cadeia-of): OF filha ligada à OF pai, etapas em ordem e preço líquido de compra (`e050f77d`)
+
 ## [v1.19.7] — 2026-11-18
 
 - feat(suprimento): fonte de suprimento obrigatória na VSUP0130 (`f34d2462`)
