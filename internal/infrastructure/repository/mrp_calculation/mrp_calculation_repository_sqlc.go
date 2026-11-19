@@ -669,7 +669,8 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 	// fall back to stock_balances which always reflects the live position.
 	// A reserva ativa de pedido de venda e a do produzido para a demanda
 	// independente vêm à parte: o MRP não as desconta, porque o pedido e a
-	// demanda já são necessidade (DisponivelParaNecessidade). Só a do pedido
+	// demanda já são necessidade (DisponivelParaNecessidade) — e a do componente
+	// para a OF pai, cujo empenho também é. Só a do pedido
 	// que o MRP lê (P/A, ativo, não bloqueado): a reserva de um pedido
 	// bloqueado continua tirando o estoque, já que ele não entra como demanda.
 	rows, err := r.db.Query(ctx, `
@@ -684,6 +685,17 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 			                   AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))
 			 GROUP BY r.item_code
 		),
+		componente AS (
+			-- A peça que a OF filha deixou reservada para a OF pai: o empenho da
+			-- OF pai já é necessidade (ListOpenProductionOrderAllocations), e a
+			-- reserva só vive enquanto a OF pai está aberta (gatilho da 503).
+			SELECT r.item_code, SUM(r.quantity) AS qtd
+			  FROM stock_reservations r
+			 WHERE r.enterprise_id = $1 AND r.status = 'ACTIVE' AND r.reference_type = 'OF_COMPONENTE'
+			   AND NOT EXISTS (SELECT 1 FROM warehouse w WHERE w.id = r.warehouse_id AND w.enterprise_id = r.enterprise_id
+			                   AND (NOT w.disposition AND w.location::text <> 'INSPECAO' OR w.location::text = 'REJEICAO'))
+			 GROUP BY r.item_code
+		),
 		retido AS (
 			SELECT b.item_code, SUM(b.quantity) AS qtd
 			  FROM stock_lot_balances b
@@ -694,10 +706,11 @@ func (r *MRPCalculationRepositorySQLC) ListAllStockSnapshots(
 			b.item_code,
 			COALESCE(SUM(b.quantity), 0) - COALESCE(MAX(rt.qtd), 0) AS quantity,
 			COALESCE(SUM(b.reserved_qty), 0)  AS reserved_qty,
-			COALESCE(MAX(v.qtd), 0)           AS sales_reserved_qty,
+			COALESCE(MAX(v.qtd), 0) + COALESCE(MAX(c.qtd), 0) AS sales_reserved_qty,
 			COALESCE(SUM(b.safety_stock), 0)  AS safety_stock
 		FROM stock_balances b
 		LEFT JOIN venda v ON v.item_code = b.item_code
+		LEFT JOIN componente c ON c.item_code = b.item_code
 		LEFT JOIN retido rt ON rt.item_code = b.item_code
 		WHERE b.enterprise_id = $1 AND `+saldoPlanejavel+`
 		GROUP BY b.item_code

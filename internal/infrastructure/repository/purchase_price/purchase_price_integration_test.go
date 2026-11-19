@@ -60,6 +60,17 @@ func TestIntegrationPurchasePriceTenantResolutionAndAdjustments(t *testing.T) {
 	if !got.Price.Equal(item.Price) {
 		t.Fatalf("price=%s want=%s", got.Price, item.Price)
 	}
+	// O pedido usa o preço líquido: os ajustes vêm junto (8,500001 − 2,5 %).
+	if len(got.Adjustments) != 1 || !got.PrecoLiquido().Equal(decimal.RequireFromString("8.287501")) {
+		t.Fatalf("preço líquido %s com %d ajuste(s), esperado 8,287501", got.PrecoLiquido(), len(got.Adjustments))
+	}
+	// Sem linha não é erro (nil, nil) — nem de outra empresa.
+	if x, err := repo.GetItemPrice(ctx, enterpriseID, code, item.ItemCode+1, &supplier); err != nil || x != nil {
+		t.Fatalf("item sem preço: %+v %v", x, err)
+	}
+	if x, err := repo.GetItemPrice(ctx, enterpriseID+987654, code, item.ItemCode, &supplier); err != nil || x != nil {
+		t.Fatalf("outra empresa leu o preço: %+v %v", x, err)
+	}
 	items, err := repo.ListItems(ctx, enterpriseID, created.ID)
 	if err != nil {
 		t.Fatal(err)

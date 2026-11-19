@@ -28,9 +28,9 @@ func TestPlanningParamsAreSeededPerEnterprise(t *testing.T) {
 	}
 	// 23 até a 450; a 451 acrescenta 48 (horizonte firme) e 49 (tempo de
 	// segurança); a 457, 50 (lote por período); a 484, 51 (horizonte de
-	// reprogramação).
-	if len(lista) != 27 {
-		t.Fatalf("empresa nova com %d parâmetro(s), esperado 27", len(lista))
+	// reprogramação); a 503, 52 (conferência ao iniciar a OF).
+	if len(lista) != 28 {
+		t.Fatalf("empresa nova com %d parâmetro(s), esperado 28", len(lista))
 	}
 
 	mrp := mrp_calculation.NewMRPCalculationRepositorySQLC(q, pool)

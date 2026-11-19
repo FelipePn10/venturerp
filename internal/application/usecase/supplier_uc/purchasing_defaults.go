@@ -62,6 +62,15 @@ func (uc *SupplierUseCase) GetPurchasingDefaults(ctx context.Context, supplierCo
 				out.DefaultInvoiceTypeID = l.DefaultInvoiceTypeID
 				out.PurchasePriceTableID = l.PurchasePriceTableID
 				out.AppliesIPI = l.AppliesIPI
+				if l.PurchasePriceTableID != nil && uc.TabelasDeCompra != nil {
+					code, achou, err := uc.TabelasDeCompra.CodigoDaTabela(ctx, *l.PurchasePriceTableID)
+					if err != nil {
+						return nil, fmt.Errorf("lendo a tabela de preço de compra do fornecedor: %w", err)
+					}
+					if achou {
+						out.PurchasePriceTableCode = &code
+					}
+				}
 				break
 			}
 		}

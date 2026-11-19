@@ -24,6 +24,9 @@ type PurchasePriceRepository interface {
 	CreateTable(context.Context, *entity.PurchasePriceTable) (*entity.PurchasePriceTable, error)
 	UpdateTable(context.Context, *entity.PurchasePriceTable) (*entity.PurchasePriceTable, error)
 	GetTableByCode(ctx context.Context, enterpriseID, code int64) (*entity.PurchasePriceTable, error)
+	// CodigoDaTabelaPorID traduz o id (que o vínculo fornecedor×empresa guarda)
+	// no código da tabela, só dentro da empresa.
+	CodigoDaTabelaPorID(ctx context.Context, enterpriseID, id int64) (code int64, achou bool, err error)
 	ListTables(ctx context.Context, enterpriseID int64, supplierCode *int64, onlyActive bool) ([]*entity.PurchasePriceTable, error)
 	NextTableCode(ctx context.Context, enterpriseID int64) (int64, error)
 	AddItem(context.Context, int64, *entity.PurchasePriceTableItem) (*entity.PurchasePriceTableItem, error)

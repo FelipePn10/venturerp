@@ -42,6 +42,9 @@ type ItemResponse struct {
 	FiscalEffective ItemFiscalEffectiveResponse `json:"fiscal_effective"`
 	CreatedBy       uuid.UUID                   `json:"created_by"`
 	CreatedAt       time.Time                   `json:"created_at"`
+	// Warnings: o que a alteração fez além do cadastro (estruturas recalculadas
+	// com a nova unidade de estoque, linha que ficou sem conversão).
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type EffectiveFiscalContextResponse struct {

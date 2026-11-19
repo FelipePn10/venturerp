@@ -161,12 +161,28 @@ func (Gerador) PlanoMateriais(d uc.PlanoMateriais) []byte {
 	// 6. Exceções.
 	sec(6, "Exceções e mensagens", "")
 	if d.Erros != "" {
-		f.cabe(22)
-		f.p.FillRect(mg, f.y, cw, 18, mistura(verm, branco, 0.88))
-		f.texto(mg+8, f.y+12, neg, 7.4, verm, fit("Erro no cálculo: "+d.Erros, neg, 7.4, cw-16))
-		f.y += 24
+		// Inteiro, em quantas linhas precisar: cortado, o motivo some.
+		ls := quebrar("Erro no cálculo: "+d.Erros, neg, 7.4, cw-16)
+		h := float64(len(ls))*10 + 8
+		f.cabe(h + 6)
+		f.p.FillRect(mg, f.y, cw, h, mistura(verm, branco, 0.88))
+		for i, l := range ls {
+			f.texto(mg+8, f.y+12+float64(i)*10, neg, 7.4, verm, l)
+		}
+		f.y += h + 6
 	}
-	if len(d.Excecoes) == 0 && d.Erros == "" {
+	for _, a := range d.AvisosEstrutura {
+		ls := quebrar(a, reg, 7.2, cw-150)
+		h := float64(len(ls))*9.5 + 5.5
+		f.cabe(h)
+		f.p.FillRect(mg, f.y+3, 3, h-5, ambar)
+		f.texto(mg+8, f.y+11, neg, 7.4, tinta, "Estrutura sem conversão")
+		for i, l := range ls {
+			f.texto(mg+140, f.y+11+float64(i)*9.5, reg, 7.2, tinta, l)
+		}
+		f.y += h
+	}
+	if len(d.Excecoes) == 0 && d.Erros == "" && len(d.AvisosEstrutura) == 0 {
 		f.cabe(22)
 		f.p.FillRect(mg, f.y, cw, 18, mistura(verde, branco, 0.88))
 		marcaOK(f.p, mg+8, f.y+5, verde)

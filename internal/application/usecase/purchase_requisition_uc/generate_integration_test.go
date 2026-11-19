@@ -3,8 +3,11 @@
 package purchase_requisition_uc_test
 
 import (
+	"errors"
+
 	"context"
 	"fmt"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/shopspring/decimal"
 	"strings"
 	"testing"
@@ -202,14 +205,14 @@ func TestIntegration_GeneratePurchaseOrders_E2E(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer testutil.Exec(t, pool, "DELETE FROM suppliers WHERE code = $1", outro)
-	res2, err := gen.Execute(ctx, request.GeneratePurchaseOrdersDTO{
+	// Nada gerado é recusa com o motivo (antes: 201 com "orders: []" e o
+	// motivo escondido em "skipped").
+	_, err = gen.Execute(ctx, request.GeneratePurchaseOrdersDTO{
 		EnterpriseCode: 1, CreatedBy: uuid.New(),
 		Selections: []request.GenerationSelection{{RequisitionItemID: req.Items[1].ID, QtyToAttend: decimal.NewFromFloat(3), SupplierCode: &outro}},
 	})
-	if err != nil {
-		t.Fatalf("fornecedor que não é fonte derrubou a geração: %v", err)
-	}
-	if len(res2.Orders) != 0 || len(res2.Skipped) != 1 || !strings.Contains(res2.Skipped[0], "VSUP0130") {
-		t.Fatalf("esperava a linha ignorada com motivo VSUP0130: pedidos=%d ignorados=%v", len(res2.Orders), res2.Skipped)
+	var validacao *errorsuc.ValidationError
+	if !errors.As(err, &validacao) || !strings.Contains(err.Error(), "VSUP0130") {
+		t.Fatalf("esperava recusa (422) com o motivo VSUP0130: %v", err)
 	}
 }

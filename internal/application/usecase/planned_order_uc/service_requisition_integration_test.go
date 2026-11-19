@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -15,6 +16,7 @@ import (
 	plannedentity "github.com/FelipePn10/panossoerp/internal/domain/planned_order/entity"
 	routingentity "github.com/FelipePn10/panossoerp/internal/domain/routing/entity"
 	costcenterRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
+	purchaseOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_order"
 	purchasereqRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_requisition"
 	routingRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/routing"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/testutil"
@@ -37,6 +39,11 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	ctx := testutil.TenantContext(t, pool)
 
 	serviceItem := testutil.UniqueCode()
+	// O item de serviço é comprado em UN: a requisição não pode gravar "SERV",
+	// que não está no catálogo e travava a geração do pedido.
+	testutil.Exec(t, pool, "INSERT INTO items (code, business_code, warehouse_code, created_by, enterprise_id, warehouse_unit_of_measurement, supplies_purchase_uom) VALUES ($1,$2,$1,$3,$4,'H','UN')",
+		serviceItem, fmt.Sprintf("SV-%d", serviceItem), uid, enterpriseID)
+	defer testutil.Exec(t, pool, "DELETE FROM items WHERE code = $1", serviceItem)
 	supplier := testutil.UniqueCode()
 
 	// External operation with subcontracting data.
@@ -83,8 +90,15 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	defer testutil.Exec(t, pool, "DELETE FROM requisicao_aprovacoes_centro WHERE cost_center_id = $1", ccID)
 
 	uc := &FirmPlannedOrderUseCase{ReqRepo: reqRepo, ExternalOps: rRepo, Auth: &serviceReqAuth{enterprise: enterpriseID, actor: uid},
-		AprovacoesDoCentro: costcenterRepo.NewGestaoPG(pool)}
-	order := &plannedentity.PlannedOrder{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), CreatedBy: uid, CostCenterCode: &ccCode}
+		AprovacoesDoCentro: costcenterRepo.NewGestaoPG(pool), UnidadesDeServico: purchaseOrderRepo.NewPurchaseOrderRepositorySQLC(pool)}
+	// A OF começa daqui a 30 dias e precisa estar pronta em 60: a única etapa é
+	// a externa, então o serviço vai no início e volta 7 dias depois — não
+	// "hoje + 7".
+	hoje := time.Now()
+	inicio := time.Date(hoje.Year(), hoje.Month(), hoje.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 30)
+	necessidade := inicio.AddDate(0, 0, 30)
+	order := &plannedentity.PlannedOrder{ItemCode: itemCode, Quantity: decimal.NewFromFloat(10), CreatedBy: uid, CostCenterCode: &ccCode,
+		StartDate: &inicio, NeedDate: necessidade}
 
 	reqCode, err := uc.generateServiceRequisition(ctx, order)
 	if err != nil {
@@ -106,6 +120,12 @@ func TestIntegration_FirmGeneratesServiceRequisition(t *testing.T) {
 	it := items[0]
 	if it.ItemCode != serviceItem || !it.Quantity.Equal(decimal.NewFromFloat(10)) || !it.SuggestedPrice.Equal(decimal.NewFromFloat(12.5)) {
 		t.Errorf("item = %+v, want service %d qty 10 price 12.5", it, serviceItem)
+	}
+	if it.UOM == nil || *it.UOM != "UN" {
+		t.Errorf("unidade da linha de serviço = %v, esperado UN (a de compra do item)", it.UOM)
+	}
+	if it.DeliveryDate == nil || it.DeliveryDate.Format("2006-01-02") != inicio.AddDate(0, 0, 7).Format("2006-01-02") {
+		t.Errorf("entrega do serviço = %v, esperado %s (início da operação + 7 dias)", it.DeliveryDate, inicio.AddDate(0, 0, 7).Format("02/01/2006"))
 	}
 	if it.CostCenterCode == nil || *it.CostCenterCode != ccCode {
 		t.Errorf("a requisição de serviço leva o centro da ordem: %v", it.CostCenterCode)

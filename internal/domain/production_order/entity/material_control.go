@@ -128,6 +128,25 @@ type MaterialAvailabilityLine struct {
 	FreeStock decimal.Decimal
 	// CommittedEarlier é o que falta baixar nas OFs abertas que começam antes
 	// desta (ou no mesmo dia e foram criadas antes): elas têm prioridade sobre
-	// o mesmo saldo.
+	// o mesmo saldo. Não conta o que já está reservado para elas.
 	CommittedEarlier decimal.Decimal
+	// ReservedForOrder é o que está reservado para esta OF no depósito (a
+	// peça que a OF filha entregou para ela): fora do saldo livre, mas dela.
+	ReservedForOrder decimal.Decimal
+}
+
+// Restante é o que falta baixar da linha.
+func (l MaterialAvailabilityLine) Restante() decimal.Decimal {
+	return decimal.Max(l.Required.Sub(l.Issued), decimal.Zero)
+}
+
+// Disponivel é o que a OF pode usar: o livre depois das OFs da frente mais o
+// que está reservado para ela.
+func (l MaterialAvailabilityLine) Disponivel() decimal.Decimal {
+	return decimal.Max(l.FreeStock.Sub(l.CommittedEarlier), decimal.Zero).Add(decimal.Max(l.ReservedForOrder, decimal.Zero))
+}
+
+// Falta é o que a OF não tem para baixar.
+func (l MaterialAvailabilityLine) Falta() decimal.Decimal {
+	return decimal.Max(l.Restante().Sub(l.Disponivel()), decimal.Zero)
 }

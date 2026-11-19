@@ -16,7 +16,14 @@ ponto flutuante no novo domínio.
    configurada do item, que prevalece sobre a conversão global.
 4. O MRP cria uma sugestão `SERVICO` enriquecida por operação externa. Ao criar
    uma OF manual ou firmar a sugestão de produção, o ERP cria atomicamente uma
-   OS firme por operação e vincula requisição e pedido de compra.
+   OS firme por operação e vincula requisição e pedido de compra. A linha da
+   requisição vai na unidade de compra do item de serviço (senão a de estoque;
+   antes era "SERV" fixo, fora do catálogo) e é datada pela posição da operação
+   na OF: início da etapa = fração do caminho crítico aplicada à janela início →
+   necessidade da ordem; entrega = início + prazo do terceiro (no máximo a
+   necessidade); "enviar até" = entrega − prazo, no texto da aplicação. O pedido
+   gerado da requisição leva no cabeçalho a entrega mais cedo das linhas, e a
+   geração que não produz pedido nenhum é recusada (422) com os motivos.
 5. A geração da OC atualiza a ordem de serviço para `RELEASED_WITH_PO` na mesma
    transação. Remessas, retornos, recebimentos e ajustes formam a rastreabilidade;
    o recebimento total conclui a ordem.

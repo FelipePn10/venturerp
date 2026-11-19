@@ -51,3 +51,15 @@ func TestUpdate_AutorVemDaSessaoENaoDoCorpo(t *testing.T) {
 		t.Fatalf("autor gravado %s, esperado o da sessão %s", repo.gravadoPor, actor)
 	}
 }
+
+// 52 (conferência ao iniciar a OF) só aceita NAO, AVISAR ou BLOQUEAR.
+func TestUpdate_ConferenciaDoInicioDaOF(t *testing.T) {
+	uc := &UpdatePlanningParamUseCase{Repo: &fakeRepo{}, Auth: &fakeAuth{actor: uuid.New()}}
+	p, err := uc.Execute(context.Background(), request.UpdatePlanningParamDTO{ParamNumber: 52, Value: " bloquear "})
+	if err != nil || p.Value != "BLOQUEAR" {
+		t.Fatalf("BLOQUEAR recusado ou não normalizado: %+v, %v", p, err)
+	}
+	if _, err := uc.Execute(context.Background(), request.UpdatePlanningParamDTO{ParamNumber: 52, Value: "S"}); err == nil {
+		t.Fatal("valor fora de NAO/AVISAR/BLOQUEAR aceito")
+	}
+}

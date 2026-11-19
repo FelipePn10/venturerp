@@ -33,6 +33,27 @@ type ItemConversionUseCase struct {
 	// items resolve o código de negócio do item (texto) para a chave legada.
 	items any
 	now   func() time.Time
+	// Estruturas regrava as linhas de estrutura em que o item é componente
+	// depois de a conversão mudar (opcional: os testes não o têm).
+	Estruturas ports.RecalculoDeEstrutura
+}
+
+// recalcularEstruturas: a conversão mudou, a quantidade das linhas de estrutura
+// na unidade de estoque muda junto (a OF já aberta copiou o material e não
+// muda). Falha aqui vira aviso: a conversão já está gravada, e o próximo MRP
+// recalcula de novo.
+func (uc *ItemConversionUseCase) recalcularEstruturas(ctx context.Context, itemCode int64) []string {
+	if uc.Estruturas == nil {
+		return nil
+	}
+	n, avisos, err := uc.Estruturas.RecalcularDoComponente(ctx, itemCode, "conversão do componente alterada")
+	if err != nil {
+		return []string{fmt.Sprintf("as estruturas que usam o item não foram recalculadas agora (%v); o próximo cálculo do MRP recalcula", err)}
+	}
+	if n > 0 {
+		avisos = append([]string{fmt.Sprintf("%d linha(s) de estrutura que usam o item foram recalculadas com a nova conversão", n)}, avisos...)
+	}
+	return avisos
 }
 
 func NewItemConversionUseCase(repo repository.ManagedItemConversionRepository, auth ports.AuthService, items ...any) *ItemConversionUseCase {
@@ -219,6 +240,7 @@ func (uc *ItemConversionUseCase) Create(ctx context.Context, dto request.CreateI
 	}
 	out := toItemConversionResponse(created, uc.itemOf(ctx, itemCode), uc.hoje())
 	out.Warnings = append(append(uc.avisosDeUso(ctx, created), uc.segundaUnidade(ctx, created)...), uc.avisoEmbalagem(ctx, created)...)
+	out.Warnings = append(out.Warnings, uc.recalcularEstruturas(ctx, itemCode)...)
 	return out, nil
 }
 
@@ -437,6 +459,7 @@ func (uc *ItemConversionUseCase) Update(ctx context.Context, id int64, dto reque
 	out := toItemConversionResponse(salvo, uc.itemOf(ctx, salvo.ItemCode), uc.hoje())
 	if mudouFator {
 		avisos = append(append(avisos, uc.segundaUnidade(ctx, salvo)...), uc.avisoEmbalagem(ctx, salvo)...)
+		avisos = append(avisos, uc.recalcularEstruturas(ctx, salvo.ItemCode)...)
 	}
 	out.Warnings = avisos
 	return out, nil
@@ -461,15 +484,15 @@ func (uc *ItemConversionUseCase) avisosDeTroca(ctx context.Context, atual, nova 
 		avisos = append(avisos, fmt.Sprintf("%d linha(s) de nota de entrada pendente terão a conversão reaplicada na aprovação", imp.NotasPendentes))
 	}
 	if n := uc.estruturasDesatualizadas(ctx, nova, imp); n > 0 {
-		avisos = append(avisos, fmt.Sprintf("%d linha(s) de estrutura guardaram um fator diferente do novo: revise-as no cadastro da estrutura (o fator fica congelado de propósito)", n))
+		avisos = append(avisos, fmt.Sprintf("%d linha(s) de estrutura usam um fator diferente do novo e serão recalculadas (as OFs já abertas não mudam)", n))
 	}
 	return avisos, nil
 }
 
-// estruturasDesatualizadas compara o fator congelado em cada unidade das
+// estruturasDesatualizadas compara o fator gravado em cada unidade das
 // estruturas com o fator que o grafo dá considerando a conversão `nova`.
 func (uc *ItemConversionUseCase) estruturasDesatualizadas(ctx context.Context, nova *entity.ItemUnitConversion, imp *repository.Impacto) int64 {
-	// A estrutura congela o fator sem máscara: conversão de máscara não a afeta.
+	// A estrutura grava o fator sem máscara: conversão de máscara não a afeta.
 	if nova == nil || len(imp.FatoresCongelados) == 0 || nova.Mask != "" {
 		return 0
 	}
@@ -522,8 +545,12 @@ func (uc *ItemConversionUseCase) DeleteWithReason(ctx context.Context, id int64,
 		return errorsuc.NewValidationError("informe o motivo da exclusão: ele fica no histórico da conversão")
 	}
 	r := &t
-	return uc.repo.Deactivate(ctx, id, &entity.Event{ItemCode: atual.ItemCode, ConversionID: &atual.ID,
-		Action: entity.EventoExcluida, Before: atual.Snapshot(), Reason: r, CreatedBy: actor})
+	if err := uc.repo.Deactivate(ctx, id, &entity.Event{ItemCode: atual.ItemCode, ConversionID: &atual.ID,
+		Action: entity.EventoExcluida, Before: atual.Snapshot(), Reason: r, CreatedBy: actor}); err != nil {
+		return err
+	}
+	uc.recalcularEstruturas(ctx, atual.ItemCode)
+	return nil
 }
 
 func (uc *ItemConversionUseCase) ListByItem(ctx context.Context, itemCode int64) ([]*response.ItemUnitConversionResponse, error) {
@@ -786,6 +813,19 @@ func (uc *ItemConversionUseCase) FactorConfigured(ctx context.Context, itemCode 
 
 func (uc *ItemConversionUseCase) ConvertQuantity(ctx context.Context, itemCode int64, qty decimal.Decimal, fromUOM, toUOM string) (decimal.Decimal, bool, error) {
 	return uc.ConvertQuantityConfigured(ctx, itemCode, "", qty, fromUOM, toUOM)
+}
+
+// CaminhoExato devolve, numa consulta só, o fator e a conversão pela fração
+// exata entre duas unidades do item — o mesmo caminho de Factor e de
+// ConvertQuantityExact. Quem converte muitas linhas do mesmo item (o recálculo
+// das estruturas) guarda o resultado e não remonta o grafo a cada linha.
+func (uc *ItemConversionUseCase) CaminhoExato(ctx context.Context, itemCode int64, fromUOM, toUOM string) (decimal.Decimal, func(decimal.Decimal) decimal.Decimal, bool, error) {
+	c, err := uc.Path(ctx, itemCode, "", "", time.Time{}, fromUOM, toUOM)
+	if err != nil || c == nil {
+		return decimal.Zero, nil, false, err
+	}
+	caminho := *c
+	return caminho.Fator(), caminho.Converter, true, nil
 }
 
 // ConvertQuantityExact converte pela fração exata do caminho, sem a política de

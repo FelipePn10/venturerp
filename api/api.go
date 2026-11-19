@@ -376,6 +376,12 @@ func (app *application) mount() chi.Router {
 	// estrutura porque é ela quem valida a unidade da linha contra a unidade de
 	// estoque do componente.
 	itemConversionUC := item_conversion_uc.NewItemConversionUseCase(itemConversionRepo.New(queries, app.db.Pool), authService, itemRepo)
+	// Quantidade da estrutura na unidade de estoque ATUAL do componente: quem
+	// muda unidade de estoque ou conversão recalcula as linhas, e o MRP confere
+	// antes de cada cálculo.
+	recalculoDeFatores := &structure_uc.RecalcularFatores{Repo: structure.NewFatoresDaEstrutura(app.db.Pool), Conv: itemConversionUC}
+	itemConversionUC.Estruturas = recalculoDeFatores
+	updateItemUc.Estruturas = recalculoDeFatores
 
 	itemRepoStructure := structure.NewItemStructureRepository(queries).WithHistory(app.db.Pool)
 	createStructureUc := structure_uc.NewCreateStructureComponentUseCase(itemRepoStructure, authService, itemRepo, itemConversionUC)
@@ -757,6 +763,9 @@ func (app *application) mount() chi.Router {
 		impl.Politicas = politicaRepo
 		impl.PontosDePedido = stockRepo.NewStockRepositorySQLC(app.db.Pool)
 	}
+	// Depois de configurar o motor (as asserções acima precisam do tipo
+	// concreto): toda chamada ao cálculo confere as unidades da estrutura antes.
+	mrpService = &mrp_calculation_uc.MRPComEstruturaEmDia{MRPService: mrpService, Estruturas: recalculoDeFatores, Log: mrpRepo}
 	planningPolicyHandler := handler.NewPlanningPolicyHandler(&planning_policy_uc.UseCase{Repo: politicaRepo, Params: mrpRepo, Auth: authService, Items: itemRepo})
 	mrpRunUC := &mrp_calculation_uc.RunMRPCalculationUseCase{Service: mrpService, Auth: authService, Plans: productionPlanRepo}
 	mrpGetProfileUC := &mrp_calculation_uc.GetItemProfileUseCase{Repo: mrpRepo, Auth: authService}
@@ -923,10 +932,13 @@ func (app *application) mount() chi.Router {
 
 	itemConversionHandler := handler.NewItemConversionHandler(itemConversionUC)
 	unitOfMeasureUC := unit_of_measure_uc.New(unitOfMeasureRepo.New(app.db.Pool), authService)
+	unitOfMeasureUC.Estruturas = recalculoDeFatores
 	unitOfMeasureHandler := handler.NewUnitOfMeasureHandler(unitOfMeasureUC)
 
 	// purchase price tables (Tabela de Preço de Compra)
 	purchasePriceUC := purchase_price_uc.NewPurchasePriceUseCase(purchasePriceRepo.New(queries, app.db.Pool), authService, itemRepo)
+	// O vínculo fornecedor×empresa guarda o id da tabela; o pedido usa o código.
+	supplierUC.TabelasDeCompra = purchasePriceUC
 	purchasePriceUC.Unidades = unitOfMeasureRepo.NewCatalogo(app.db.Pool)
 	purchasePriceHandler := handler.NewPurchasePriceHandler(purchasePriceUC)
 
@@ -945,6 +957,7 @@ func (app *application) mount() chi.Router {
 		Suppliers:     itemSupplierUC,
 		Conversions:   itemConversionRepo.New(queries, app.db.Pool),
 		Auth:          authService,
+		Fatores:       recalculoDeFatores,
 	}
 	itemActivationHandler := handler.NewItemActivationHandler(itemActivationUC)
 
@@ -1019,7 +1032,7 @@ func (app *application) mount() chi.Router {
 	// MRP purchase suggestions (PURCHASE planned orders → purchase order)
 	purchaseSuggestionHandler := handler.NewPurchaseSuggestionHandler(
 		&purchase_order_uc.ListPurchaseSuggestionsUseCase{Planned: plannedRepo, Auth: authService, Sugeridos: poRepo},
-		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade, Sugeridos: poRepo},
+		&purchase_order_uc.ApprovePurchaseSuggestionUseCase{Planned: plannedRepo, Repo: poRepo, Auth: authService, SupplierDefaults: supplierUC, Almoxarifados: poRepo, Aprovacao: poApproveUC, Unidade: poUnidade, Sugeridos: poRepo, Condicoes: poRepo},
 		&purchase_order_uc.RejectPurchaseSuggestionUseCase{Planned: plannedRepo, Auth: authService},
 	)
 
@@ -1030,6 +1043,7 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ReqRepo = purchaseReqRepository
 	plannedFirmUC.AprovacoesDoCentro = costCenterGestaoRepo
 	plannedFirmUC.ExternalOps = rRepo
+	plannedFirmUC.UnidadesDeServico = poRepo
 	plannedFirmUC.ServiceOrders = thirdPartyServiceRepository
 	wireAtomicPlannedRelease(app.db.Pool, queries, plannedFirmUC, orderOpsUC)
 	purchaseRequisitionHandler := handler.NewPurchaseRequisitionHandler(
@@ -2125,6 +2139,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR"), httpmw.RequirePermission(httpmw.PermProductionReport)).Post("/operations/advance", prodOrderHandler.AdvanceOperation)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/materials", prodOrderHandler.ListMaterials)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/material-availability", prodOrderHandler.MaterialAvailability)
+			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/chain", prodOrderHandler.Chain)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials", prodOrderHandler.AddMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/materials/replace", prodOrderHandler.ReplaceMaterial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/materials/{materialID}", prodOrderHandler.DeleteMaterial)

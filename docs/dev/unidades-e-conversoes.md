@@ -59,7 +59,7 @@ vigentes na data. Usam esse pacote:
 
 - compra (fator de compra);
 - nota de entrada;
-- estrutura (fator congelado na linha, migrações 354/356);
+- estrutura (fator gravado na linha, migrações 354/356, e recalculado — ver abaixo);
 - saldo em segunda unidade;
 - sucata da OP;
 - serviços de terceiros.
@@ -84,9 +84,40 @@ A empresa do item confere por `EXISTS (items … enterprise_id)`.
   - SPED 0220: o fator não muda dentro do mês;
   - pedidos em aberto;
   - notas pendentes;
-  - estruturas com fator congelado diferente.
+  - estruturas com fator diferente (recalculadas na gravação).
 
 **Delete** exige motivo e grava o evento.
+
+### Fator da estrutura em dia (migração 504)
+
+A linha de estrutura grava `quantity_stock_uom` e `conversion_factor`. Antes
+ficavam congelados e envelheciam quando a unidade de estoque ou a conversão do
+componente mudava (Tecnofer: tubo de MM para M, linha "104 MM, fator 1" → o MRP
+comprava 4.160 m). Como a OF copia o material na criação, recalcular a
+estrutura não altera ordem aberta.
+
+`structure_uc.RecalcularFatores` (repositório `structure.FatoresDaEstruturaPG`,
+empresa pelo item pai) regrava a linha e o histórico da estrutura quando:
+
+- a unidade de estoque do item muda (`UpdateItemUseCase`, aviso em `warnings`);
+- conversão do item é criada, alterada ou excluída (`ItemConversionUseCase`);
+- conversão padrão do catálogo é gravada ou excluída;
+- antes de cada cálculo do MRP (`MRPComEstruturaEmDia`, inclusive cenário).
+
+A linha que não converte vai para o log do MRP (`estrutura_sem_conversao`) e
+para a liberação do item. A migração acerta só o que SQL resolve (unidade da
+linha igual à de estoque → fator 1) e cria `vw_estrutura_unidade_a_conferir`.
+
+- **Custo:** a rodada guarda a conversão por (item, unidade da linha,
+  unidade de estoque) — `conversorDaRodada`, via `CaminhoExato` do
+  conversor — e só vale durante a rodada. Medido no banco de aceite: 2.000
+  linhas do mesmo tubo de 6,8 s para 28 ms; 1.000 componentes distintos
+  ~1,8 s (uma leitura do grafo por item). Carregar o grafo de vários itens numa
+  consulta só fica como melhoria se a base crescer.
+- **Concorrência:** `GravarFator` só grava se a linha (quantidade, unidade,
+  valores gravados) e a unidade de estoque do componente ainda estão como
+  foram lidas; senão pula e a gravação mais nova vale. Avisos para a tela
+  (conversão padrão) mostram 5 linhas e "e mais N"; o log do MRP guarda todas.
 
 **Sincronização com a segunda unidade (VENT0200).** Ao criar uma conversão
 (sem máscara, vigente hoje), ou ao corrigir o fator dela, no par

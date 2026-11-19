@@ -230,8 +230,75 @@ e criada antes), o disponível para esta OF e a falta. Situação por linha e da
 OF: `COMPLETA`, `PARCIAL`, `SEM_SALDO` ou `SEM_LISTA`.
 
 `GET /api/production-order/material-availability?ids=1,2,3` (até 500) devolve
-só o resumo por OF, para o selo da lista. A checagem é aviso: iniciar a
-produção com falta continua permitido (a tela pede confirmação).
+só o resumo por OF, para o selo da lista.
+
+A peça reservada para a OF (`reserved_for_order`, o componente que a OF filha
+entregou para ela — ver "Cadeia OF filha → OF pai") está fora do saldo livre mas
+conta como disponível para ela; no `committed_earlier` das outras OFs, a parte
+já reservada para cada uma não pesa na fila.
+
+### Conferência ao iniciar a OF (parâmetro 52)
+
+`POST /api/production-order/{id}/start` e o coletor (ação `INICIAR`) conferem,
+pelo parâmetro de planejamento 52 (`CONFERE_COMPONENTES_INICIO_OF`, migração
+503), o material a baixar sem disponível e as OFs filhas ainda não concluídas
+(ou ordem planejada filha sem OF):
+
+| Valor | Efeito |
+|---|---|
+| `NAO` | não confere |
+| `AVISAR` (padrão) | inicia e devolve os avisos em `warnings` (no coletor, em `message`) |
+| `BLOQUEAR` | recusa o início (422) listando cada pendência |
+
+### Cadeia OF filha → OF pai (migração 503)
+
+Ver `.ai/tasks/cadeia-of-pai-filha.md`. Firmada a sugestão do MRP de um
+componente fabricado, `production_chain_links` liga a ordem planejada dele à
+ordem pai (a sugestão do pai já firmada, a planejada firme ou a OF do empenho),
+e o pedido de venda do pai desce para `sales_order_planned_orders` de toda a
+cadeia abaixo. Vale firmando de cima para baixo ou de baixo para cima; o
+pegging só é lido na hora de firmar (`VincularSugestao`).
+
+A entrega da OF filha reserva o produzido para a OF pai (`stock_reservations`,
+`reference_type = OF_COMPONENTE`, `reference_code` = id da OF pai,
+`reference_item_code` = linha de material), até o que falta baixar dela, no
+almoxarifado da entrega — material da OF pai em outro almoxarifado não é
+reservado. A saída com referência `PRODUCTION_ORDER` da OF pai (baixa,
+requisição, abastecimento da linha) consome a reserva primeiro; a saída de
+qualquer outro documento que deixaria o saldo abaixo do reservado é recusada.
+Saídas liberadas (inventário, estorno, ajuste, devolução) passam, e a reserva
+cai até o saldo que sobrou — da OF pai que começa mais tarde para a que começa
+antes —, para não ficar reserva de peça que já saiu travando o item.
+Com uma OF filha abastecendo mais de uma OF pai (lote mínimo, lote por
+período), a entrega reserva primeiro para a OF pai que começa antes; o que
+passa da necessidade dos pais fica livre. A OF pai
+concluída, encerrada ou cancelada libera a sobra (gatilho
+`trg_liberar_reservas_de_componente`). A reserva pode ser cancelada à mão para
+liberar a peça a outra OF.
+
+OF pai criada **depois** da entrega da filha (firmar de baixo para cima: a
+bucha é feita antes de o RN ser firmado, ou a planejada do RN só é liberada
+depois): ao nascer, a OF pai reserva o que as filhas ligadas a ela entregaram
+e ainda está livre (`ReservarEntregasDasFilhasTx`, chamado em
+`CreateWithMaterialsAndCallback`). Teto por material: o que falta baixar e o
+entregue pelas filhas menos o já reservado ou consumido pelas outras OFs pai
+dessas filhas; vai nas linhas (almoxarifado, endereço, lote) das entregas,
+mais nova primeiro, nunca além do saldo livre. Peça comprada livre no mesmo
+almoxarifado não é tomada.
+
+Sequenciamento (APS): a OF filha entra antes da OF pai, e a pai só começa
+depois do término das filhas programadas na mesma rodada ou, fora dela, do
+término já gravado em `production_sequences` (`CadeiaRepository`). Na
+programação regressiva a pai é programada primeiro e a filha termina até o
+início dela. OF filha concluída, encerrada ou cancelada não segura nada.
+
+`GET /api/production-order/{id}/chain` devolve os pedidos de venda, as ordens
+pai e as ordens filhas da OF (com o reservado de cada filha para ela).
+
+Aceite pela API, com MRP real: `scripts/test-cadeia-of.sh` (monta os próprios
+cadastros; precisa de `PGURL`, `ADMIN_EMAIL` e `ADMIN_PASSWORD`; `PARAR_APOS=5`
+deixa o cenário montado para a simulação da tela no front,
+`scripts/ui-sim/cadeia-of.mjs`).
 
 ## 7. Atomicidade e serviços de terceiros
 

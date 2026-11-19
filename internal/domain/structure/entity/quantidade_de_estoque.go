@@ -7,9 +7,10 @@ import "github.com/shopspring/decimal"
 // O que não pode é o resto do sistema ler o número achando que já está na
 // unidade de estoque: o MRP reservaria 2 kg onde a engenharia pediu 2 m².
 //
-// O fator foi calculado e CONGELADO quando a linha foi gravada (migração 354),
-// a partir do cadastro de conversões por item. Congelado de propósito: corrigir
-// a conversão amanhã não pode reescrever o consumo de uma ordem já aberta.
+// O fator é gravado na linha (migração 354) e RECALCULADO quando a unidade de
+// estoque ou a conversão do componente muda, e antes de cada MRP (migração
+// 504, structure_uc.RecalcularFatores). A ordem já aberta não muda: a OF copia
+// o material quando nasce.
 
 // FatorParaEstoque converte da unidade da estrutura para a de estoque.
 // Linhas anteriores à migração 354 têm fator ausente — nelas a unidade da

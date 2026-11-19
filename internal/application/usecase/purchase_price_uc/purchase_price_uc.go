@@ -15,6 +15,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/purchase_price/repository"
 	"github.com/FelipePn10/panossoerp/internal/shared/ptrutil"
+	"github.com/shopspring/decimal"
 )
 
 type PurchasePriceUseCase struct {
@@ -296,20 +297,31 @@ func (uc *PurchasePriceUseCase) ApplySourcePrices(ctx context.Context, dto reque
 	return uc.repo.ApplySourcePrices(ctx, e, dto.TableCode, dto.Overwrite, s)
 }
 
-// GetItemPrice implements ports.PurchasePriceProvider.
-func (uc *PurchasePriceUseCase) GetItemPrice(ctx context.Context, tableCode, itemCode int64, supplierCode *int64) (float64, string, bool, error) {
+// CodigoDaTabela implementa ports.TabelaDeCompraPorID.
+func (uc *PurchasePriceUseCase) CodigoDaTabela(ctx context.Context, id int64) (int64, bool, error) {
 	e, err := uc.tenant(ctx)
 	if err != nil {
-		return 0, "", false, err
+		return 0, false, err
+	}
+	return uc.repo.CodigoDaTabelaPorID(ctx, e, id)
+}
+
+// GetItemPrice implements ports.PurchasePriceProvider.
+func (uc *PurchasePriceUseCase) GetItemPrice(ctx context.Context, tableCode, itemCode int64, supplierCode *int64) (decimal.Decimal, string, bool, error) {
+	e, err := uc.tenant(ctx)
+	if err != nil {
+		return decimal.Zero, "", false, err
 	}
 	item, err := uc.repo.GetItemPrice(ctx, e, tableCode, itemCode, supplierCode)
-	if err != nil || item == nil {
-		return 0, "", false, nil
+	if err != nil {
+		return decimal.Zero, "", false, fmt.Errorf("lendo o preço do item %d na tabela %d: %w", itemCode, tableCode, err)
+	}
+	if item == nil {
+		return decimal.Zero, "", false, nil
 	}
 	u := ""
 	if item.UOM != nil {
 		u = *item.UOM
 	}
-	p, _ := item.Price.Float64()
-	return p, u, true, nil
+	return item.PrecoLiquido(), u, true, nil
 }

@@ -6,8 +6,10 @@ package impressao
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -557,21 +559,23 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 	if err != nil {
 		return nil, fmt.Errorf("plano: %w", err)
 	}
-	if p.Erros == "{}" {
-		p.Erros = ""
-	}
+	p.Erros, p.AvisosEstrutura = errosDoCalculo(p.Erros)
 
 	// Demanda de origem: pedidos de venda em aberto e demandas independentes
-	// ativas — o que o MRP leu.
+	// ativas — o que o MRP leu. O pedido segue o filtro do MRP (P/A, ativo, não
+	// bloqueado, linha em aberto) e a quantidade é o SALDO: antes entrava o
+	// pedido só digitado e GREATEST(saldo, pedido) devolvia sempre o pedido.
 	dr, err := c.pool.Query(ctx, `
 		SELECT 'Pedido de venda', 'Pedido '||so.order_number, COALESCE(cu.name,''), COALESCE(i.business_code,''), `+nomeInterno("i")+`,
-		       COALESCE(soi.sales_uom,'UN'), GREATEST(soi.requested_qty - soi.attended_qty - soi.cancelled_qty, soi.requested_qty)::text,
-		       COALESCE(soi.delivery_date, so.delivery_date)
+		       COALESCE(soi.sales_uom,'UN'), (soi.requested_qty - soi.attended_qty - soi.cancelled_qty)::text,
+		       COALESCE(soi.delivery_date, so.delivery_date, so.emission_date::date)
 		  FROM sales_order_items soi
 		  JOIN sales_orders so ON so.code = soi.sales_order_code
 		  LEFT JOIN customers cu ON cu.code = so.customer_code AND cu.enterprise_id = $2
 		  LEFT JOIN items i ON i.code = soi.item_code AND i.enterprise_id = $2
-		 WHERE so.enterprise_code = $3 AND so.is_active AND soi.is_active
+		 WHERE so.enterprise_code = $3 AND so.is_active AND NOT so.is_blocked AND so.status IN ('P', 'A')
+		   AND soi.is_active AND soi.status IN ('OPEN', 'PARTIAL')
+		   AND soi.requested_qty > soi.attended_qty + soi.cancelled_qty
 		   AND EXISTS (SELECT 1 FROM mrp_planned_suggestions s WHERE s.plan_code = $1 AND s.enterprise_id = $2 AND s.item_code = soi.item_code AND s.demand_type = 'SALES_ORDER')
 		UNION ALL
 		SELECT 'Demanda independente', 'Demanda '||idm.code, COALESCE(idm.motivo,''), COALESCE(i.business_code,''), `+nomeInterno("i")+`,
@@ -601,7 +605,7 @@ func (c *Consultas) PlanoMateriais(ctx context.Context, t uc.Tenant, plano int64
 
 	sr, err := c.pool.Query(ctx, `
 		SELECT s.code, COALESCE(s.order_number,0), COALESCE(i.business_code, s.item_code::text), `+nomeInterno("i")+`, COALESCE(i.warehouse_unit_of_measurement,'UN'),
-		       s.order_type, COALESCE(s.llc,0), COALESCE(pi.business_code,''), s.quantity::text, s.start_date, s.need_date, COALESCE(s.demand_type,''),
+		       s.order_type, COALESCE(s.llc,0), COALESCE(pi.business_code,''), s.quantity::text, COALESCE(s.start_date, s.need_date), s.need_date, COALESCE(s.demand_type,''),
 		       po.id IS NOT NULL OR poi.code IS NOT NULL OR COALESCE(pl.is_firm,false),
 		       COALESCE('OF '||po.id, 'PC '||poi.purchase_order_code, ''),
 		       COALESCE(sup.name,''), COALESCE(pr.price,0)::text,
@@ -1120,4 +1124,50 @@ func (c *Consultas) Romaneio(ctx context.Context, t uc.Tenant, code int64) (*uc.
 		r.Embalagens = append(r.Embalagens, v)
 	}
 	return r, vr.Err()
+}
+
+// chaveEstruturaSemConversao é a chave que o MRP grava no log
+// (mrp_calculation_uc.ChaveEstruturaSemConversao).
+const chaveEstruturaSemConversao = "estrutura_sem_conversao"
+
+// errosDoCalculo traduz o JSON de erros do log para o impresso: a lista das
+// estruturas sem conversão sai à parte (uma linha cada) e o resto vira texto
+// "chave: valor" — antes o impresso mostrava o JSON cru.
+func errosDoCalculo(bruto string) (string, []string) {
+	bruto = strings.TrimSpace(bruto)
+	if bruto == "" || bruto == "{}" || bruto == "null" {
+		return "", nil
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(bruto), &m); err != nil {
+		return bruto, nil
+	}
+	var avisos []string
+	if v, ok := m[chaveEstruturaSemConversao].([]any); ok {
+		for _, x := range v {
+			avisos = append(avisos, fmt.Sprint(x))
+		}
+		delete(m, chaveEstruturaSemConversao)
+	}
+	chaves := make([]string, 0, len(m))
+	for k := range m {
+		chaves = append(chaves, k)
+	}
+	sort.Strings(chaves)
+	partes := make([]string, 0, len(chaves))
+	for _, k := range chaves {
+		var v string
+		switch x := m[k].(type) {
+		case []any:
+			itens := make([]string, 0, len(x))
+			for _, i := range x {
+				itens = append(itens, fmt.Sprint(i))
+			}
+			v = strings.Join(itens, "; ")
+		default:
+			v = fmt.Sprint(x)
+		}
+		partes = append(partes, strings.ReplaceAll(k, "_", " ")+": "+v)
+	}
+	return strings.Join(partes, " · "), avisos
 }

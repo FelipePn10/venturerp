@@ -587,6 +587,16 @@ MRP") até virar pedido. Antes ela sumia: sem pedido, sem fila — e o MRP a con
 como suprimento. Aprovar gera o pedido vinculado (`planned_order_code`); o que já
 virou pedido sai da fila e não é aprovado nem rejeitado de novo.
 
+**Unidade e preço da sugestão aprovada.** A sugestão está na unidade de estoque;
+o pedido sai na unidade de compra (fonte do fornecedor na VSUP0130 → unidade de
+compra do item → estoque), convertida e arredondada para cima nas casas da
+unidade no catálogo (chapa: 376,7932 kg → 5 UN). Preço em branco usa a tabela
+de compra vigente do fornecedor (a do fornecedor vence a geral; faixa de
+quantidade mínima conferida na unidade da linha da TABELA — a quantidade do pedido é convertida para ela; antes comparava com a quantidade de estoque e 5 chapas pegavam o preço de 10), convertida para a unidade da linha; vigência por `CURRENT_DATE`, como a linha manual; preço LÍQUIDO (`entity.PrecoLiquido`: descontos/acréscimos da VSUP0120 em cadeia, pela sequência, 6 casas, nunca negativo) — a mesma regra de `PurchasePriceProvider.GetItemPrice` (agora `decimal`, erro de leitura sobe em vez de virar "sem preço"), usada pela linha manual, requisição e cotação; o vínculo fornecedor×empresa guarda o ID da tabela e `GetPurchasingDefaults` traduz para `PurchasePriceTableCode` (antes o id ia como código: pedido sem preço ou com a tabela errada); sem preço nenhum a
+aprovação é recusada — antes o pedido ia a R$ 0,00 e a alçada o liberava
+(`purchase_order_uc.aplicarCondicaoDeCompra`, `CondicaoDeCompra` no repositório
+do pedido).
+
 **CRP.** A OF manda na carga: ordem planejada que já virou OF (inclusive
 cancelada) sai; cada OF aberta carrega só as etapas não concluídas, com as horas
 que faltam, a partir do início da OF ou de hoje. Etapa em terceiro não ocupa

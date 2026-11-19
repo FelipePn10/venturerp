@@ -260,7 +260,14 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 		if movement.ItemCode != d.ItemCode {
 			continue // coproduto e requisição de componente
 		}
-		if _, err := stockrepository.ReservarEntradaDaOFTx(ctx, tx, enterpriseID, d.ProductionOrderID, movement, d.CreatedBy); err != nil {
+		paraDemanda, err := stockrepository.ReservarEntradaDaOFTx(ctx, tx, enterpriseID, d.ProductionOrderID, movement, d.CreatedBy)
+		if err != nil {
+			return nil, err
+		}
+		// O componente fabricado fica reservado para a OF pai que ele
+		// abastece: a OF de outro pedido não o leva.
+		resta := stockentity.SignedQuantity(movement.MovementType, movement.Quantity).Sub(paraDemanda)
+		if _, err := stockrepository.ReservarParaOFPaiTx(ctx, tx, enterpriseID, d.ProductionOrderID, movement, resta, d.CreatedBy); err != nil {
 			return nil, err
 		}
 	}

@@ -170,6 +170,8 @@ type StandardConversionResponse struct {
 	InverseFactor decimal.Decimal `json:"inverse_factor"`
 	Dimension     string          `json:"dimension"`
 	IsSystem      bool            `json:"is_system"`
+	// Warnings: estruturas recalculadas com a conversão nova.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // UnitResolutionResponse: texto recebido traduzido para o catálogo.

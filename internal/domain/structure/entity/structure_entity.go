@@ -36,8 +36,8 @@ type ItemStructure struct {
 
 	// QuantityStockUOM é a mesma quantidade na unidade de ESTOQUE do filho, e
 	// é o número que MRP, ordem, custo e apontamento leem. ConversionFactor é o
-	// fator aplicado, congelado na gravação: corrigir a conversão amanhã não
-	// pode reescrever o consumo de uma ordem já aberta.
+	// fator aplicado, recalculado quando a unidade de estoque ou a conversão do
+	// filho muda (a OF já aberta copiou o material e não muda).
 	QuantityStockUOM decimal.Decimal
 	ConversionFactor decimal.Decimal
 	// StockUnitOfMeasurement é a unidade em que o FILHO é estocado. Vem do

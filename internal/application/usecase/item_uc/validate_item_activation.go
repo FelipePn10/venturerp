@@ -36,6 +36,15 @@ type ValidateItemActivationUseCase struct {
 	Suppliers     ports.PreferredSupplierProvider
 	Conversions   conversionrepo.ItemConversionRepository
 	Auth          ports.AuthService
+	// Fatores confere se a quantidade das linhas da estrutura está na unidade
+	// de estoque atual dos componentes. Opcional.
+	Fatores conferidorDeFatores
+}
+
+// conferidorDeFatores: as linhas da estrutura do pai com fator velho e as sem
+// conversão (structure_uc.RecalcularFatores com gravar=false).
+type conferidorDeFatores interface {
+	ConferirDoPai(ctx context.Context, pai int64) (defasadas []string, semConversao []string, err error)
 }
 
 type activationBusinessItemRepository interface {
@@ -102,8 +111,17 @@ func (uc *ValidateItemActivationUseCase) validate(ctx context.Context, item *ite
 				report.Issues = append(report.Issues, "item fabricado sem roteiro de fabricação: cadastre o roteiro")
 			}
 		}
+		if err := uc.conferirFatores(ctx, report, code); err != nil {
+			return nil, err
+		}
+		if err := uc.conferirOperacoesExternas(ctx, report, code); err != nil {
+			return nil, err
+		}
 
 	case types.COMPRADO:
+		if err := uc.compradoComProcesso(ctx, report, code); err != nil {
+			return nil, err
+		}
 		if uc.Suppliers != nil {
 			_, found, errForn := uc.Suppliers.GetPreferredSupplier(ctx, code)
 			if errForn != nil {

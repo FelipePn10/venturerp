@@ -20,6 +20,13 @@ type productionOperationsChecker interface {
 	HasProductionOperations(context.Context, int64) (bool, error)
 }
 
+// conferenciaDoInicio lê o parâmetro 52 e as pendências da OF (componente
+// sem saldo, OF filha aberta).
+type conferenciaDoInicio interface {
+	ModoConferenciaInicio(context.Context) (string, error)
+	PendenciasDoInicio(context.Context, int64) (entity.PendenciasDoInicio, error)
+}
+
 func (uc *StartProductionOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.StartProductionOrderDTO,
@@ -40,9 +47,44 @@ func (uc *StartProductionOrderUseCase) Execute(
 		}
 	}
 
+	avisos, err := conferirInicio(ctx, uc.Repo, dto.ID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Default to the real start moment (today) when no valid date is sent,
 	// instead of persisting the zero time (0001-01-01).
 	startDate := datetime.ParseDateOrDefault(dto.StartDate, time.Now())
 
-	return uc.Repo.Start(ctx, dto.ID, startDate)
+	order, err := uc.Repo.Start(ctx, dto.ID, startDate)
+	if err != nil {
+		return nil, err
+	}
+	order.AvisosDoInicio = avisos
+	return order, nil
+}
+
+// conferirInicio aplica o parâmetro 52: BLOQUEAR com pendência recusa o
+// início; AVISAR devolve os avisos; NAO não confere.
+func conferirInicio(ctx context.Context, repo any, orderID int64) ([]string, error) {
+	c, ok := repo.(conferenciaDoInicio)
+	if !ok {
+		return nil, nil
+	}
+	modo, err := c.ModoConferenciaInicio(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if modo == entity.ConferenciaInicioNao {
+		return nil, nil
+	}
+	pendencias, err := c.PendenciasDoInicio(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	recusa, avisos := entity.AvaliarInicio(modo, pendencias)
+	if recusa != "" {
+		return nil, errorsuc.NewValidationError(recusa)
+	}
+	return avisos, nil
 }

@@ -2,6 +2,7 @@ package purchase_price
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"strings"
@@ -140,9 +141,35 @@ func (r *PurchasePriceRepositorySQLC) DeleteItem(ctx context.Context, e, id int6
 	}
 	return err
 }
+
+// CodigoDaTabelaPorID: id → código, só na empresa (tabela de outra empresa ou
+// inexistente = não achou).
+func (r *PurchasePriceRepositorySQLC) CodigoDaTabelaPorID(ctx context.Context, e, id int64) (int64, bool, error) {
+	var code int64
+	err := r.pool.QueryRow(ctx, `SELECT code FROM purchase_price_tables WHERE id=$1 AND enterprise_id=$2`, id, e).Scan(&code)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return code, true, nil
+}
+
+// GetItemPrice devolve a linha vigente com os ajustes (descontos/acréscimos)
+// carregados, ou nil quando não há linha — não é erro.
 func (r *PurchasePriceRepositorySQLC) GetItemPrice(ctx context.Context, e, tableCode, itemCode int64, supplier *int64) (*entity.PurchasePriceTableItem, error) {
 	x, err := scanItem(r.pool.QueryRow(ctx, `SELECT `+itemColumns+` FROM purchase_price_table_items i JOIN purchase_price_tables t ON t.id=i.table_id WHERE t.enterprise_id=$1 AND t.code=$2 AND i.item_code=$3 AND i.is_active AND (i.supplier_code=$4 OR i.supplier_code IS NULL) AND (t.validity_start IS NULL OR t.validity_start<=CURRENT_DATE) AND (t.validity_end IS NULL OR t.validity_end>=CURRENT_DATE) ORDER BY (i.supplier_code=$4) DESC NULLS LAST LIMIT 1`, e, tableCode, itemCode, supplier))
-	return x, err
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if x.Adjustments, err = r.listAdjustments(ctx, x.ID); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 func (r *PurchasePriceRepositorySQLC) IsPreferredSupplier(ctx context.Context, e, item, supplier int64) (bool, error) {
 	var ok bool

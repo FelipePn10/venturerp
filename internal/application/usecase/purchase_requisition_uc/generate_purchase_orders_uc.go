@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/shopspring/decimal"
+	"strings"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -173,7 +174,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 				result.Skipped = append(result.Skipped, fmt.Sprintf("fornecedor %d (%s): cadastro inativo", supplierCode, def.SupplierName))
 				continue
 			}
-			priceTable = def.PurchasePriceTableID
+			priceTable = def.PurchasePriceTableCode
 			paymentTerm = def.PaymentConditionID
 			invoiceType = def.DefaultInvoiceTypeID
 			financialAccount = def.FinancialAccount
@@ -214,7 +215,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 					return nil, fmt.Errorf("lendo o preço do item na tabela: %w", errPreco)
 				}
 				if found {
-					unitPrice = decimal.NewFromFloat(p)
+					unitPrice = p
 				}
 			}
 			reqItemID, reqCode := ln.reqItemID, ln.reqCode
@@ -235,6 +236,16 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 				UtilizationType:           ln.utiliz,
 				IsActive:                  true,
 			})
+		}
+
+		// Entrega do pedido = a mais cedo das linhas (o cabeçalho ia vazio e o
+		// fornecedor via o pedido sem data; o serviço externo já vem datado
+		// pela operação da OF).
+		for _, it := range items {
+			if it.DeliveryDate != nil && (po.DeliveryDate == nil || it.DeliveryDate.Before(*po.DeliveryDate)) {
+				d := *it.DeliveryDate
+				po.DeliveryDate = &d
+			}
 		}
 
 		avisos, err := uc.Geracao.CompletarLinhas(ctx, items)
@@ -276,6 +287,14 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 		}
 	}
 
+	// Nada gerado: é recusa, não sucesso. Antes vinha 201 com "orders: []" e o
+	// motivo escondido em "skipped" — a tela dizia "gerado" e não havia pedido.
+	if len(result.Orders) == 0 {
+		if len(result.Skipped) == 0 {
+			return nil, errorsuc.NewValidationError("nenhum pedido gerado: selecione ao menos um item com quantidade a atender")
+		}
+		return nil, errorsuc.NewValidationError("nenhum pedido gerado — " + strings.Join(result.Skipped, "; "))
+	}
 	result.Pedidos = purchase_order_uc.ToPurchaseOrderResponses(result.Orders)
 	return result, nil
 }

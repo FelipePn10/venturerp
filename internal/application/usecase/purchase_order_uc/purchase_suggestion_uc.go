@@ -115,6 +115,8 @@ type ApprovePurchaseSuggestionUseCase struct {
 	// Sugeridos: o fornecedor que o MRP escolheu para a sugestão (VSUP0130:
 	// preferencial, ranking ou cota). Vale quando o comprador não informa outro.
 	Sugeridos FornecedorDaSugestao
+	// Condicoes: unidade de compra e preço da tabela do fornecedor. Opcional.
+	Condicoes LeitorDeCondicaoDeCompra
 }
 
 // FornecedorDaSugestao lê o fornecedor escolhido pelo MRP para a ordem planejada.
@@ -227,6 +229,9 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	}
 	demandType := string(planned.DemandType)
 	item.DemandType = &demandType
+	if err := uc.aplicarCondicaoDeCompra(ctx, item, *dto.SupplierCode, dto.UnitPrice); err != nil {
+		return nil, err
+	}
 	if err := uc.Unidade.Preencher(ctx, item); err != nil {
 		return nil, err
 	}
