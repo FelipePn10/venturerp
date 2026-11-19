@@ -19,6 +19,9 @@ type PlanningPipelineResponse struct {
 	// APSLateOrders são as ordens de fabricação que, sequenciadas, terminam
 	// depois da data de necessidade.
 	APSLateOrders []int64 `json:"aps_late_orders,omitempty"`
+	// APSSemCapacidade: ordens que ficaram fora da programação (uma etapa não
+	// cabe em um ano do centro), uma frase por ordem.
+	APSSemCapacidade []string `json:"aps_without_capacity,omitempty"`
 
 	// Viable is true when MRP completed, CRP found no capacity overload and no
 	// sequenced order ends after its need date.

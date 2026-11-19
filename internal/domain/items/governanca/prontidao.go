@@ -138,7 +138,11 @@ func AvaliarProntidao(f Ficha, status string, matriz []RegraPolitica) []Prontida
 		comprar = append(comprar, impede("Sem unidade de compra", "VENT0200 — Suprimentos"))
 	}
 	if f.CompraEmOutraUM && !f.TemConversao {
-		comprar = append(comprar, impede("Compra em outra unidade sem conversão para a do estoque", "VSUP0110 — Conversão de UM por Item"))
+		motivo := "Compra em outra unidade sem conversão para a do estoque"
+		if len(f.UnidadesSemConversao) > 0 {
+			motivo += ": " + strings.Join(f.UnidadesSemConversao, ", ")
+		}
+		comprar = append(comprar, impede(motivo, "VSUP0110 — Conversão de UM por Item"))
 	}
 	if !f.preenchido("supplies_warehouse_code") {
 		comprar = append(comprar, atencao("Sem almoxarifado de recebimento: o pedido vai pedir um a cada linha", "VENT0200 — Suprimentos"))

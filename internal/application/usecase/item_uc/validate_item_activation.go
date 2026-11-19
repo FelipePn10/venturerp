@@ -39,6 +39,14 @@ type ValidateItemActivationUseCase struct {
 	// Fatores confere se a quantidade das linhas da estrutura está na unidade
 	// de estoque atual dos componentes. Opcional.
 	Fatores conferidorDeFatores
+	// UnidadesDeCompra confere cada unidade em que o item é comprado (cadastro,
+	// fonte de suprimento, tabela de preço) contra a do estoque, pelo motor de
+	// conversão do pedido. Opcional; sem ele vale só o aviso genérico.
+	UnidadesDeCompra conferidorDeUnidadesDeCompra
+}
+
+type conferidorDeUnidadesDeCompra interface {
+	UnidadesDeCompraSemConversao(ctx context.Context, itemCode int64) ([]string, error)
 }
 
 // conferidorDeFatores: as linhas da estrutura do pai com fator velho e as sem
@@ -131,7 +139,18 @@ func (uc *ValidateItemActivationUseCase) validate(ctx context.Context, item *ite
 				report.Issues = append(report.Issues, "item comprado sem fornecedor preferencial")
 			}
 		}
-		if uc.Conversions != nil {
+		if uc.UnidadesDeCompra != nil {
+			// A Tecnofer tinha chapa liberada aqui com compra em UN (fonte de
+			// suprimento) e só CHAPA→kg cadastrada: o pedido era recusado na
+			// aprovação. Agora a falta impede a liberação, unidade por unidade.
+			faltam, err := uc.UnidadesDeCompra.UnidadesDeCompraSemConversao(ctx, code)
+			if err != nil {
+				return nil, fmt.Errorf("conferindo as unidades de compra do item: %w", err)
+			}
+			for _, f := range faltam {
+				report.Issues = append(report.Issues, "compra sem conversão para a unidade de estoque: "+f+" — cadastre em VSUP0110 (Conversão de UM por Item)")
+			}
+		} else if uc.Conversions != nil {
 			conversions, errConversoes := uc.Conversions.ListByItem(ctx, code)
 			if errConversoes != nil {
 				return nil, fmt.Errorf("lendo as conversões de unidade do item: %w", errConversoes)

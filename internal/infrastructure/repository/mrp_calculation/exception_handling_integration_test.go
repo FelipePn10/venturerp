@@ -80,10 +80,15 @@ func TestTratamentoDeExcecaoNoBanco(t *testing.T) {
 		t.Fatalf("a segunda marcação sobrescreveu a primeira: %+v", de)
 	}
 
-	testutil.Exec(t, pool, `INSERT INTO production_orders(order_number,item_code,planned_qty,created_by,enterprise_id,planned_order_id) VALUES($1,$2,1,$3,$4,$5)`,
-		testutil.UniqueCode(), item, actor, a.ID, idComOF)
-	if n, err := pr.ActiveProductionOrderNumber(a.Ctx, comOF); err != nil || n == nil {
-		t.Fatalf("OF da planejada não encontrada: %v %v", n, err)
+	// Número interno ≠ id (OF firmada pelo MRP): a mensagem cita o "OF n" das
+	// telas, da OP impressa e do código de barras — o id.
+	var idDaOF int64
+	if err := pool.QueryRow(a.Ctx, `INSERT INTO production_orders(order_number,item_code,planned_qty,created_by,enterprise_id,planned_order_id) VALUES($1,$2,1,$3,$4,$5) RETURNING id`,
+		900_000_000+testutil.UniqueCode()%1_000_000, item, actor, a.ID, idComOF).Scan(&idDaOF); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := pr.ActiveProductionOrderNumber(a.Ctx, comOF); err != nil || n == nil || *n != idDaOF {
+		t.Fatalf("OF da planejada: esperado o id %d, veio %v %v", idDaOF, n, err)
 	}
 	if n, err := pr.ActiveProductionOrderNumber(a.Ctx, ordem); err != nil || n != nil {
 		t.Fatalf("planejada sem OF apontou OF: %v %v", n, err)

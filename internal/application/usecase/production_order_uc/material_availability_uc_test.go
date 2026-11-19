@@ -56,8 +56,13 @@ func TestFaltasDaOFAntesDeLiberar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if um.Status != AvailabilityPartial || um.Items != 2 || um.MissingItems != 1 || len(um.Lines) != 2 {
+	// O material já baixado por completo não conta (Items 2), mas aparece no
+	// detalhe para a tela mostrar a lista inteira.
+	if um.Status != AvailabilityPartial || um.Items != 2 || um.MissingItems != 1 || len(um.Lines) != 3 {
 		t.Fatalf("OF 1: %+v", um)
+	}
+	if baixado := um.Lines[2]; !baixado.Remaining.IsZero() || baixado.Status != AvailabilityComplete {
+		t.Fatalf("material já baixado: %+v", baixado)
 	}
 	chapa := um.Lines[0]
 	if !chapa.Remaining.Equal(dq(6)) || !chapa.Available.Equal(dq(2)) || !chapa.Shortage.Equal(dq(4)) || chapa.Status != AvailabilityPartial {

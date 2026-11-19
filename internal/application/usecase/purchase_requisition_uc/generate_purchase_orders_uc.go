@@ -184,13 +184,7 @@ func (uc *GeneratePurchaseOrdersUseCase) Execute(ctx context.Context, dto reques
 			freightType = "SEM_FRETE"
 		}
 
-		orderNum, err := uc.POs.NextOrderNumber(ctx, dto.EnterpriseCode)
-		if err != nil {
-			return nil, err
-		}
-
 		po := &poentity.PurchaseOrder{
-			OrderNumber:      orderNum,
 			EnterpriseCode:   dto.EnterpriseCode,
 			Origin:           poentity.PurchaseOrderOriginNORMAL,
 			EmissionDate:     time.Now(),

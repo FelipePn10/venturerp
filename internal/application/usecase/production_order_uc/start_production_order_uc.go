@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -15,6 +16,13 @@ import (
 type StartProductionOrderUseCase struct {
 	Repo repository.ProductionOrderRepository
 	Auth ports.AuthService
+	// Etapas gera as etapas da OF pelo roteiro vigente quando ela ainda não
+	// tem (OF antiga, criada antes do roteiro). Opcional.
+	Etapas geradorDeEtapas
+}
+
+type geradorDeEtapas interface {
+	ExplodeRoute(ctx context.Context, orderID, routeID int64) ([]*response.ProductionOrderOperationResponse, error)
 }
 type productionOperationsChecker interface {
 	HasProductionOperations(context.Context, int64) (bool, error)
@@ -42,8 +50,18 @@ func (uc *StartProductionOrderUseCase) Execute(
 		if err != nil {
 			return nil, err
 		}
+		// A OF nasce com as etapas do roteiro; a que não tem (criada antes do
+		// roteiro existir) ganha agora, sem o usuário precisar explodir à mão.
+		if !hasOperations && uc.Etapas != nil {
+			if _, err := uc.Etapas.ExplodeRoute(ctx, dto.ID, 0); err != nil {
+				return nil, errorsuc.NewValidationError("a OF não tem etapas e o roteiro não pôde ser aplicado: " + err.Error() + " — cadastre e aprove o roteiro do item")
+			}
+			if hasOperations, err = checker.HasProductionOperations(ctx, dto.ID); err != nil {
+				return nil, err
+			}
+		}
 		if !hasOperations {
-			return nil, errorsuc.NewValidationError("a ordem de produção não possui operações; gere as operações a partir de um roteiro aprovado antes de iniciar")
+			return nil, errorsuc.NewValidationError("a ordem de produção não possui etapas: o item não tem roteiro aprovado; cadastre e aprove o roteiro antes de iniciar")
 		}
 	}
 

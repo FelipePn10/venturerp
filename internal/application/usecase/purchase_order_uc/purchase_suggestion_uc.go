@@ -166,11 +166,6 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("a sugestão %d já virou pedido de compra", planned.Code))
 	}
 
-	orderNum, err := uc.Repo.NextOrderNumber(ctx, dto.EnterpriseCode)
-	if err != nil {
-		return nil, err
-	}
-
 	// Condição de pagamento do cadastro do fornecedor — que, de passagem, é
 	// onde se confere que ele é desta empresa e está ativo.
 	var paymentTerm *int64
@@ -189,7 +184,6 @@ func (uc *ApprovePurchaseSuggestionUseCase) Execute(ctx context.Context, dto req
 	}
 
 	po := &poentity.PurchaseOrder{
-		OrderNumber:    orderNum,
 		EnterpriseCode: dto.EnterpriseCode,
 		// Nasce em rascunho e vai pela aprovação normal (alçada) logo abaixo:
 		// criar já aprovado deixava a sugestão do MRP passar por cima do limite.

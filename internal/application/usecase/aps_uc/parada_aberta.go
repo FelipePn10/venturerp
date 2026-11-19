@@ -121,11 +121,15 @@ func (uc *APSUseCase) reprogramarAposParada(ctx context.Context, machineID int64
 	if err != nil {
 		return &ResumoReprogramacao{Aviso: "a parada foi registrada, mas a fila desta máquina não pôde ser reprogramada agora: " + err.Error()}
 	}
-	return &ResumoReprogramacao{
+	out := &ResumoReprogramacao{
 		OrdensReprogramadas: resumo.OrdersProcessed,
 		OperacoesAgendadas:  resumo.ScheduledOperations,
 		OrdensForaDoPrazo:   resumo.LateOrders,
 	}
+	if len(resumo.SemCapacidade) > 0 {
+		out.Aviso = "ficaram fora da reprogramação: " + strings.Join(resumo.SemCapacidade, "; ")
+	}
+	return out
 }
 
 // ParadaEmAberto responde se a máquina está parada neste instante e há quanto tempo.

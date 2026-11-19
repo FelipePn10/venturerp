@@ -556,6 +556,11 @@ func (h *ProductionOrderHandler) WithMaterialControl(uc *production_order_uc.Pro
 	return h
 }
 
+func (h *ProductionOrderHandler) WithOrigin(uc *production_order_uc.DefinirOrigemDaOFUseCase) *ProductionOrderHandler {
+	h.originUC = uc
+	return h
+}
+
 func (h *ProductionOrderHandler) WithMaintenance(uc *production_order_uc.MaintainProductionOrderUseCase) *ProductionOrderHandler {
 	h.maintainUC = uc
 	return h

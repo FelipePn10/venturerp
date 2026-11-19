@@ -379,8 +379,14 @@ Cadastre o roteiro (operações, predecessores, overlap) — o MRP usa o **camin
 > ✅ **automático (validação de prontidão):** `GET /api/items/{code}/activation-readiness`
 > roda este checklist para você e devolve `{ready, issues, warnings}`:
 > - item **fabricado** → exige **estrutura (BOM)** e **roteiro**;
-> - item **comprado** → exige **fornecedor preferencial** e alerta se faltar
->   **conversão de UM** (necessária quando compra ≠ estoque).
+> - item **comprado** → exige **fornecedor preferencial** e a **conversão de UM**
+>   de CADA unidade em que o item é comprado: a do cadastro, a da fonte de
+>   suprimento vigente (VSUP0130, que o pedido usa primeiro) e a das linhas de
+>   tabela de preço vigentes — pelo catálogo (sinônimo vira código) e pelo motor
+>   de conversão do pedido (`itemgovernanca.PG.UnidadesDeCompraSemConversao`,
+>   o mesmo da prontidão da governança). Antes só a do cadastro contava: chapa
+>   com CHAPA→kg no cadastro e UN na fonte aparecia liberada e era recusada na
+>   aprovação do pedido.
 >
 > Implementado em `item_uc.ValidateItemActivationUseCase`. Observação: o modelo de
 > item ainda **não tem um ciclo ACTIVE/INACTIVE** (o campo `situation` é

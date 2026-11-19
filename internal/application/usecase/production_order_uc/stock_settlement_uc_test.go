@@ -282,34 +282,6 @@ func (f *fakeStockRepo) ListMovements(context.Context) ([]*stockentity.StockMove
 
 func i64p(v int64) *int64 { return &v }
 
-func TestStructureChildrenForBackflush_SelectsPrimaryAndSkipsOutputs(t *testing.T) {
-	raw := []*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: decimal.NewFromFloat(2), SubstituteGroup: 1, SubstitutePriority: 2},
-		{ChildCode: 10, Quantity: decimal.NewFromFloat(3), SubstituteGroup: 1, SubstitutePriority: 1},
-		{ChildCode: 30, Quantity: decimal.NewFromFloat(1), IsCoproduct: true},
-		{ChildCode: 40, Quantity: decimal.NewFromFloat(5), IsFixedQty: true},
-	}
-
-	children := structureChildrenForBackflush(raw)
-
-	got := map[int64]structureChild{}
-	for _, child := range children {
-		got[child.code] = *child
-	}
-	if _, ok := got[20]; ok {
-		t.Error("substituto secundário não deve ser consumido no backflush")
-	}
-	if _, ok := got[30]; ok {
-		t.Error("co-produto não deve ser consumido no backflush")
-	}
-	if !got[10].qty.Equal(decimal.NewFromFloat(3)) {
-		t.Errorf("primário qty = %v, want 3", got[10].qty)
-	}
-	if !got[40].fixed {
-		t.Error("quantidade fixa deve ser preservada para cálculo por OF")
-	}
-}
-
 // ─── AddConsumption → OUT movement ──────────────────────────────────────────
 
 func TestAddConsumption_Unauthorized(t *testing.T) {
@@ -464,7 +436,9 @@ func TestCompleteProductionOrder_ClassifiesExcessAsEPE(t *testing.T) {
 
 func TestCompleteProductionOrder_GeneratesREPForAutomaticChildren(t *testing.T) {
 	quantity := decimal.NewFromInt(4)
-	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 8, ItemCode: 100, PlannedQty: decimal.RequireFromString("4"), CreatedBy: uuid.New()}, automatic: map[int64]int64{200: 9}}
+	// A baixa da entrega sai da lista de materiais da OF (2 × 4 = 8 do item 200).
+	po := &fakePORepo{order: &poentity.ProductionOrder{ID: 8, ItemCode: 100, PlannedQty: decimal.RequireFromString("4"), CreatedBy: uuid.New()},
+		materials: []*poentity.ProductionOrderMaterial{{ItemCode: 200, Quantity: decimal.NewFromInt(8), WarehouseID: 9, AutomaticIssue: true}}}
 	stock := &fakeStockRepo{}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{{ChildCode: 200, Quantity: decimal.NewFromFloat(2)}}}
 	uc := CompleteProductionOrderUseCase{Repo: po, Auth: fakeAuth{canSales: true}, StockRepo: stock, Structure: structure}

@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -32,7 +33,10 @@ type OrderOperationsUseCase struct {
 	Q                 *sqlc.Queries
 	Auth              ports.AuthService
 	WithinTransaction func(context.Context, func(*sqlc.Queries) error) error
-	MachinePlanning   interface {
+	// CustoAutomatico recalcula o custo real da OF quando fechar a etapa grava
+	// horas (o custo de máquina e mão de obra sai delas). Opcional.
+	CustoAutomatico *SettleProductionCostUseCase
+	MachinePlanning interface {
 		ApplyMachinePlanToProduction(context.Context, int64) error
 	}
 	// Lotes calcula a amostragem do lote de inspeção de processo (opcional).
@@ -407,6 +411,13 @@ func (uc *OrderOperationsUseCase) ListOperations(ctx context.Context, orderID in
 		for _, event := range events {
 			r.ExecutionHistory = append(r.ExecutionHistory, response.ProductionOperationEvent{ID: event.ID, PreviousStatus: event.OldStatus, Status: event.NewStatus, Actor: event.ActorName, OccurredAt: event.OccurredAt.Time, ActualHours: pgutil.FromPgNumericToFloat64(event.ActualHoursDelta)})
 		}
+		if poo.Status == "IN_PROGRESS" {
+			if inicio, ok := orderentity.InicioDoTrecho(eventosDaEtapa(events)); ok {
+				r.RunningSince = &inicio
+			} else if r.StartedAt != nil {
+				r.RunningSince = r.StartedAt
+			}
+		}
 		out = append(out, r)
 	}
 	return out, nil
@@ -431,11 +442,13 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 		return nil, errorsuc.NewValidationError("execução transacional de etapas não configurada")
 	}
 	var result *response.ProductionOrderOperationResponse
+	var ordemDaEtapa int64
 	err = uc.WithinTransaction(ctx, func(q *sqlc.Queries) error {
 		prior, err := q.LockOperationExecution(ctx, sqlc.LockOperationExecutionParams{ID: dto.OperationID, EnterpriseID: &empresa})
 		if err != nil {
 			return errorsuc.NewValidationError("etapa não encontrada na empresa autenticada")
 		}
+		ordemDaEtapa = prior.ProductionOrderID
 		if prior.OrderStatus != "IN_PROGRESS" {
 			return errorsuc.NewValidationError("inicie a ordem antes de executar suas etapas; ordens encerradas não podem ser alteradas")
 		}
@@ -470,6 +483,33 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 				return errorsuc.NewValidationError("a etapa anterior ainda não terminou (o terceiro não devolveu todas as peças): esta etapa pode seguir com as peças que voltaram, mas só conclui depois")
 			}
 		}
+		// Cronômetro: sem horas digitadas, fechar o trecho em andamento grava o
+		// tempo corrido desde a última vez que a etapa entrou em andamento (as
+		// pausas ficam de fora). Digitar continua valendo e corrige o relógio.
+		horas, pecas := dto.ActualHours, dto.ProducedQty
+		cronometrado, proposta := false, false
+		if horas == 0 && orderentity.FechaTrecho(prior.Status, dto.Status) {
+			inicio, ok, err := inicioDoTrechoEmAndamento(ctx, q, dto.OperationID, empresa)
+			if err != nil {
+				return err
+			}
+			if ok {
+				horas, cronometrado = orderentity.HorasDoTrecho(inicio, time.Now()), true
+				if orderentity.TrechoEsquecido(horas) {
+					return errorsuc.NewValidationError("a etapa está em andamento há " + orderentity.HorasPorExtenso(horas) + " — parece que ficou aberta: informe as horas trabalhadas")
+				}
+			}
+		}
+		// Peças não informadas na conclusão: a quantidade da ordem, como a
+		// confirmação do SAP propõe a quantidade da operação. Desconta a vida
+		// útil da ferramenta.
+		if pecas == 0 && dto.Status == "DONE" {
+			boas, _, err := q.GetProductionOrderQty(ctx, prior.ProductionOrderID)
+			if err != nil {
+				return fmt.Errorf("lendo a quantidade da ordem: %w", err)
+			}
+			pecas, proposta = boas, boas > 0
+		}
 		actor, err := uc.Auth.UserID(ctx)
 		if err != nil {
 			return err
@@ -477,7 +517,7 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 		if err := q.SetProductionExecutionActor(ctx, sqlc.SetProductionExecutionActorParams{Actor: actor.String(), Source: "OPERATION"}); err != nil {
 			return err
 		}
-		if err := q.UpdateOperationExecution(ctx, sqlc.UpdateOperationExecutionParams{ID: dto.OperationID, Status: dto.Status, Hours: pgutil.ToPgNumericFromFloat64(dto.ActualHours), Reason: reason}); err != nil {
+		if err := q.UpdateOperationExecution(ctx, sqlc.UpdateOperationExecutionParams{ID: dto.OperationID, Status: dto.Status, Hours: pgutil.ToPgNumericFromFloat64(horas), Reason: reason}); err != nil {
 			return err
 		}
 		op, err := q.GetProductionOrderOperation(ctx, dto.OperationID)
@@ -485,6 +525,12 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 			return err
 		}
 		result = pooToResponse(op)
+		if orderentity.FechaTrecho(prior.Status, dto.Status) {
+			result.RecordedHours, result.HoursFromClock = horas, cronometrado
+		}
+		if dto.Status == "DONE" {
+			result.RecordedQty, result.QtyProposed = pecas, proposta
+		}
 		// Começar a etapa é o último instante em que trocar a ferramenta ainda é
 		// barato: depois dela rodar, a peça já saiu fora de medida. O aviso não
 		// bloqueia — quem está no posto pode ter um motivo —, mas aparece.
@@ -496,14 +542,47 @@ func (uc *OrderOperationsUseCase) AdvanceOperation(ctx context.Context, dto requ
 		if dto.Status == "DONE" && op.RouteOperationID.Valid {
 			transactional := *uc
 			transactional.Q = q
-			result.ToolAlerts, err = transactional.consumeToolLife(ctx, op.ID, op.RouteOperationID.Int64, dto.ProducedQty, pgutil.FromPgNumericToFloat64(op.ActualHours))
+			result.ToolAlerts, err = transactional.consumeToolLife(ctx, op.ID, op.RouteOperationID.Int64, pecas, pgutil.FromPgNumericToFloat64(op.ActualHours))
 			if err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	// Horas gravadas (cronômetro ou digitadas) mudam o custo real da OF:
+	// atualiza depois de gravar, como o apontamento e o consumo fazem.
+	if err == nil && result != nil && result.RecordedHours > 0 {
+		uc.CustoAutomatico.Atualizar(ctx, ordemDaEtapa)
+	}
 	return result, err
+}
+
+// inicioDoTrechoEmAndamento: o instante da última entrada em andamento da
+// etapa, pela trilha de auditoria; etapa anterior à trilha usa o started_at.
+func inicioDoTrechoEmAndamento(ctx context.Context, q *sqlc.Queries, operacao, empresa int64) (time.Time, bool, error) {
+	events, err := q.ListProductionExecutionEvents(ctx, sqlc.ListProductionExecutionEventsParams{OperationID: operacao, EnterpriseID: empresa})
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if inicio, ok := orderentity.InicioDoTrecho(eventosDaEtapa(events)); ok {
+		return inicio, true, nil
+	}
+	op, err := q.GetProductionOrderOperation(ctx, operacao)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if op.StartedAt.Valid {
+		return op.StartedAt.Time, true, nil
+	}
+	return time.Time{}, false, nil
+}
+
+func eventosDaEtapa(events []sqlc.ListProductionExecutionEventsRow) []orderentity.EventoDeEtapa {
+	out := make([]orderentity.EventoDeEtapa, 0, len(events))
+	for _, e := range events {
+		out = append(out, orderentity.EventoDeEtapa{Status: e.NewStatus, Quando: e.OccurredAt.Time})
+	}
+	return out
 }
 
 // ferramentasVencidas lista as ferramentas da etapa que já passaram do limite de

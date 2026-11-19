@@ -41,8 +41,10 @@ type atomicDeliveryRepository interface {
 }
 
 type CompleteProductionOrderUseCase struct {
-	Repo repository.ProductionOrderRepository
-	Auth ports.AuthService
+	// CustoAutomatico recalcula o custo real da OF depois do movimento. Opcional.
+	CustoAutomatico *SettleProductionCostUseCase
+	Repo            repository.ProductionOrderRepository
+	Auth            ports.AuthService
 	// StockRepo is optional. When set together with a target warehouse on the
 	// DTO, completing the order posts an IN stock movement of the produced
 	// quantity for the finished item.
@@ -54,7 +56,17 @@ type CompleteProductionOrderUseCase struct {
 	Perdas LeitorDaFormulaDePerda
 }
 
-func (uc *CompleteProductionOrderUseCase) Execute(
+// Execute grava o movimento e, dando certo, atualiza o custo real da OF
+// (CustoAutomatico; ver SettleProductionCostUseCase.Atualizar).
+func (uc *CompleteProductionOrderUseCase) Execute(ctx context.Context, dto request.CompleteProductionOrderDTO) (*entity.ProductionOrder, error) {
+	out, err := uc.executar(ctx, dto)
+	if err == nil {
+		uc.CustoAutomatico.Atualizar(ctx, dto.ID)
+	}
+	return out, err
+}
+
+func (uc *CompleteProductionOrderUseCase) executar(
 	ctx context.Context,
 	dto request.CompleteProductionOrderDTO,
 ) (*entity.ProductionOrder, error) {
@@ -164,10 +176,6 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				}
 				children = structentity.SelectPrimarySubstituteComponents(lidos)
 			}
-			formula, ferr := formulaDePerda(ctx, uc.Perdas)
-			if ferr != nil {
-				return nil, ferr
-			}
 			// OF de beneficiamento (estrutura com material do cliente): o produto
 			// processado é do CLIENTE e volta pela nota de retorno (CFOP 5902).
 			// A entrega fica registrada, sem entrada no estoque próprio — nem do
@@ -177,12 +185,10 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 			refCode := order.ID
 			baixado := map[int64]decimal.Decimal{}
 			entregueAntes := decimal.Zero
-			conheceBaixas := false
 			if b, ok := uc.Repo.(baixasDaOrdemRepository); ok {
 				if baixado, entregueAntes, _, err = b.BaixasDaOrdem(ctx, order.ID); err != nil {
 					return nil, err
 				}
-				conheceBaixas = true
 			}
 			appendFinishedMovement := func(class string, movementQty decimal.Decimal) {
 				mov := &stockentity.StockMovement{
@@ -221,37 +227,9 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				if child.IsCoproduct && beneficiamento {
 					continue // sucata do material do cliente é do cliente
 				}
+				// Componente consumido sai pela lista de materiais da OF (abaixo),
+				// não pela estrutura.
 				if !child.IsCoproduct || !child.QuantidadeNaUnidadeDeEstoque().IsPositive() {
-					automatic, componentWarehouse, infoErr := uc.Repo.GetItemAutomaticIssue(ctx, child.ChildCode)
-					if infoErr != nil {
-						return nil, fmt.Errorf("lendo a baixa automática do componente: %w", infoErr)
-					}
-					if !automatic || child.IsCoproduct {
-						continue
-					}
-					// Na unidade de estoque, como a OF e o apontamento: a
-					// quantidade crua da estrutura pode estar em outra unidade
-					// (g contra kg) e a baixa sairia mil vezes maior.
-					porUnidade := child.QuantidadeNaUnidadeDeEstoque()
-					componentQty := porUnidade
-					if !child.IsFixedQty {
-						componentQty = porUnidade.Mul(qty)
-						if conheceBaixas {
-							componentQty = porUnidade.Mul(entregueAntes.Add(qty))
-						}
-					}
-					componentQty = structentity.QuantidadeComPerdaDecimal(componentQty, child.LossPercentage, formula)
-					if conheceBaixas {
-						// Já saiu pelo apontamento ou por entrega anterior: não sai de novo.
-						componentQty = quantidadeAindaABaixar(componentQty, baixado[child.ChildCode])
-						if !componentQty.IsPositive() {
-							continue
-						}
-					}
-					rep := &stockentity.StockMovement{ItemCode: child.ChildCode, WarehouseID: componentWarehouse,
-						MovementType: stockentity.MovementTypePlannedRequisition, Quantity: componentQty, ReferenceType: &refType,
-						ReferenceCode: &refCode, Notes: stringPtr("REP"), CreatedBy: ator}
-					movements = append(movements, rep)
 					continue
 				}
 				coMov := &stockentity.StockMovement{
@@ -268,6 +246,19 @@ func (uc *CompleteProductionOrderUseCase) Execute(
 				}
 				movements = append(movements, coMov)
 			}
+			// Materiais automáticos da OF até a parte entregue (tudo na entrega
+			// final), descontado o que já saiu pelo apontamento, consumo ou
+			// requisição. Sai como REP do almoxarifado de cada material.
+			materiais, merr := lerMateriaisAutomaticos(ctx, uc.Repo, order.ID)
+			if merr != nil {
+				return nil, merr
+			}
+			fracao := fracaoProduzida(entregueAntes.Add(qty), plannedQty)
+			if dto.Final {
+				fracao = decimal.NewFromInt(1)
+			}
+			movements = append(movements, baixasAutomaticas(materiais, baixado, fracao, nil,
+				stockentity.MovementTypePlannedRequisition, stringPtr("REP"), order.ID, ator)...)
 		}
 	}
 	if len(movements) > 0 {

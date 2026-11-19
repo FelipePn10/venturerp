@@ -47,7 +47,19 @@ type pgQuerier interface {
 }
 
 func (r *PurchaseOrderRepositorySQLC) Create(ctx context.Context, o *entity.PurchaseOrder) (*entity.PurchaseOrder, error) {
-	return insertOrder(ctx, r.db, o)
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	created, err := insertOrder(ctx, tx, o)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+	return created, nil
 }
 
 // CreateWithItems creates the order and its items atomically in one transaction.
@@ -86,6 +98,20 @@ func insertOrder(ctx context.Context, q pgQuerier, o *entity.PurchaseOrder) (*en
 	}
 	if o.EnterpriseCode != enterpriseCode {
 		return nil, fmt.Errorf("empresa do pedido diverge do tenant autenticado")
+	}
+	// Número do pedido sem buraco: reservado na MESMA transação que grava o
+	// pedido. Antes quem gerava o pedido reservava o número logo no início,
+	// fora da transação; qualquer recusa depois (fornecedor, unidade sem
+	// conversão, linha inválida) queimava o número — a Tecnofer viu 9, 10, 13.
+	if o.OrderNumber == 0 {
+		if err := q.QueryRow(ctx,
+			`INSERT INTO purchase_order_sequences (enterprise_code, last_number)
+			 VALUES ($1, 1)
+			 ON CONFLICT (enterprise_code)
+			 DO UPDATE SET last_number = purchase_order_sequences.last_number + 1
+			 RETURNING last_number`, enterpriseCode).Scan(&o.OrderNumber); err != nil {
+			return nil, fmt.Errorf("next purchase order number: %w", err)
+		}
 	}
 	var deliveryDate pgtype.Date
 	if o.DeliveryDate != nil {

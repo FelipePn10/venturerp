@@ -53,15 +53,15 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 	defer tx.Rollback(ctx)
 	created, err := scanProductionOrder(tx.QueryRow(ctx, `INSERT INTO production_orders
 		(order_number,planned_order_id,item_code,mask,planned_qty,produced_qty,scrapped_qty,status,start_date,end_date,
-		machine_id,cost_center_id,employee_id,priority,notes,is_active,created_by,warehouse_id,enterprise_id,origin_type)
+		machine_id,cost_center_id,employee_id,priority,notes,is_active,created_by,warehouse_id,enterprise_id,origin_type,customer_code,project_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
-		CASE WHEN $2::bigint IS NULL THEN 'MANUAL' WHEN EXISTS(SELECT 1 FROM kanban_cards k WHERE k.item_code=$3 AND k.enterprise_id=$19) THEN 'KANBAN' ELSE 'MRP' END)
+		CASE WHEN $2::bigint IS NULL THEN 'MANUAL' WHEN EXISTS(SELECT 1 FROM kanban_cards k WHERE k.item_code=$3 AND k.enterprise_id=$19) THEN 'KANBAN' ELSE 'MRP' END,$20,$21)
 		RETURNING id,order_number,planned_order_id,item_code,mask,planned_qty,produced_qty,scrapped_qty,status,
 		start_date,end_date,machine_id,cost_center_id,employee_id,priority,notes,is_active,created_at,updated_at,created_by,warehouse_id`,
 		order.OrderNumber, order.PlannedOrderID, order.ItemCode, order.Mask, pgutil.ToPgNumericFromDecimal(order.PlannedQty),
 		pgutil.ToPgNumericFromDecimal(order.ProducedQty), pgutil.ToPgNumericFromDecimal(order.ScrappedQty), string(order.Status),
 		pgDatePtr(order.StartDate), pgDatePtr(order.EndDate), order.MachineID, order.CostCenterID, order.EmployeeID, order.Priority,
-		order.Notes, order.IsActive, pgutil.ToPgUUID(order.CreatedBy), order.WarehouseID, enterpriseID))
+		order.Notes, order.IsActive, pgutil.ToPgUUID(order.CreatedBy), order.WarehouseID, enterpriseID, order.CustomerCode, order.ProjectID))
 	if err != nil {
 		return nil, err
 	}
@@ -73,11 +73,17 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 		if !material.Quantity.IsPositive() {
 			return nil, errorsuc.NewValidationError("a quantidade do material deve ser maior que zero")
 		}
+		var lineWarehouse *int64
 		if orderIssueType == "TRANSFER" && material.AutomaticIssue {
-			var lineWarehouse *int64
-			if err := tx.QueryRow(ctx, `SELECT line_warehouse_id FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&lineWarehouse); err != nil || lineWarehouse == nil {
-				return nil, errorsuc.NewValidationError(fmt.Sprintf("a transferência automática exige um almoxarifado de linha para o componente %s", codigoDoItem(ctx, tx, enterpriseID, material.ItemCode)))
+			if err := opcional(tx.QueryRow(ctx, `SELECT line_warehouse_id FROM manufacturing_stock_item_controls WHERE enterprise_id=$1 AND item_code=$2`, enterpriseID, material.ItemCode).Scan(&lineWarehouse)); err != nil {
+				return nil, fmt.Errorf("lendo o almoxarifado de linha do componente: %w", err)
 			}
+		}
+		if orderIssueType == "TRANSFER" && material.AutomaticIssue && lineWarehouse == nil {
+			// Componente sem almoxarifado de linha não é transferido: sai do
+			// próprio depósito na baixa automática do apontamento (a baixa
+			// automática é o padrão desde a migração 506; antes isso recusava a OF).
+		} else if orderIssueType == "TRANSFER" && material.AutomaticIssue {
 			var balance decimal.Decimal
 			// O saldo do almoxarifado é a soma dos endereços; a trava fica com o
 			// movimento, que confere de novo ao baixar.
@@ -110,17 +116,8 @@ func (r *ProductionOrderRepositoryPGX) CreateWithMaterialsAndCallback(ctx contex
 	}
 	// Em que etapa do roteiro cada material entra: cópia da estrutura no
 	// momento da criação (como o resto da OP, não muda se a estrutura mudar).
-	if _, err = tx.Exec(ctx, `UPDATE production_order_materials material
-		SET route_operation_sequence = linha.route_operation_sequence
-		FROM (SELECT DISTINCT ON (s.child_code) s.child_code, s.route_operation_sequence
-		      FROM item_structures s
-		      WHERE s.parent_code = $2 AND s.is_active AND s.route_operation_sequence IS NOT NULL
-		        AND (s.parent_mask IS NULL OR s.parent_mask = '' OR s.parent_mask = $4)
-		      ORDER BY s.child_code, (s.parent_mask = $4) DESC NULLS LAST, s.id) linha
-		WHERE material.production_order_id = $1 AND material.enterprise_id = $3
-		  AND linha.child_code = COALESCE(material.substituted_item_code, material.item_code)`,
-		created.ID, order.ItemCode, enterpriseID, order.Mask); err != nil {
-		return nil, fmt.Errorf("gravando a etapa dos materiais: %w", err)
+	if err = gravarEtapaDosMateriaisTx(ctx, tx, enterpriseID, created.ID, order.ItemCode, order.Mask); err != nil {
+		return nil, err
 	}
 	if err = createThirdPartyOrdersTx(ctx, tx, enterpriseID, created); err != nil {
 		return nil, err
@@ -1222,4 +1219,23 @@ func codigoDoItem(ctx context.Context, tx pgx.Tx, enterpriseID, itemCode int64) 
 		return strconv.FormatInt(itemCode, 10)
 	}
 	return codigo
+}
+
+// gravarEtapaDosMateriaisTx copia da estrutura a etapa do roteiro em que cada
+// material da OF entra.
+func gravarEtapaDosMateriaisTx(ctx context.Context, tx pgx.Tx, enterpriseID, ordemID, itemCode int64, mask string) error {
+	if _, err := tx.Exec(ctx, `UPDATE production_order_materials material
+		SET route_operation_sequence = linha.route_operation_sequence
+		FROM (SELECT DISTINCT ON (s.child_code) s.child_code, s.route_operation_sequence
+		      FROM item_structures s
+		      WHERE s.parent_code = $2 AND s.is_active AND s.route_operation_sequence IS NOT NULL
+		        AND (s.parent_mask IS NULL OR s.parent_mask = '' OR s.parent_mask = $4)
+		      ORDER BY s.child_code, (s.parent_mask = $4) DESC NULLS LAST, s.id) linha
+		WHERE material.production_order_id = $1 AND material.enterprise_id = $3
+		  AND material.route_operation_sequence IS NULL
+		  AND linha.child_code = COALESCE(material.substituted_item_code, material.item_code)`,
+		ordemID, itemCode, enterpriseID, mask); err != nil {
+		return fmt.Errorf("gravando a etapa dos materiais: %w", err)
+	}
+	return nil
 }

@@ -146,3 +146,33 @@ func TestFaixaDaTabelaNaUnidadeDaTabela(t *testing.T) {
 		t.Fatalf("faixa não alcançada virou preço: %v", err)
 	}
 }
+
+// Compra na mesma unidade do estoque: arredonda às casas dela, para cima
+// (Tecnofer: pedido de 0,4067 barra em UN). Casas desconhecidas: fica como veio.
+func TestMesmaUnidadeArredondaAsCasas(t *testing.T) {
+	d := decimal.RequireFromString
+	aplicar := func(casas int32, qtd string) decimal.Decimal {
+		t.Helper()
+		uc := &ApprovePurchaseSuggestionUseCase{
+			Unidade:   &UnidadeInterna{Unidades: estoqueKG{}, Conversor: conversorChapa{}},
+			Condicoes: condicaoFixa{CondicaoDeCompra{Unidade: "KG", Casas: casas, Precos: []PrecoDeTabela{{Preco: d("2"), Unidade: "KG"}}}},
+		}
+		l := &poentity.PurchaseOrderItem{ItemCode: 7, RequestedQty: d(qtd)}
+		if err := uc.aplicarCondicaoDeCompra(context.Background(), l, 1, decimal.Zero); err != nil {
+			t.Fatal(err)
+		}
+		if l.PurchaseUOM != nil {
+			t.Fatalf("mesma unidade não vira unidade de compra: %v", *l.PurchaseUOM)
+		}
+		return l.RequestedQty
+	}
+	if q := aplicar(0, "0.4067"); !q.Equal(d("1")) {
+		t.Fatalf("0,4067 em unidade sem casas deveria ir a 1, veio %s", q)
+	}
+	if q := aplicar(2, "3.4011"); !q.Equal(d("3.41")) {
+		t.Fatalf("3,4011 com 2 casas deveria ir a 3,41, veio %s", q)
+	}
+	if q := aplicar(-1, "0.4067"); !q.Equal(d("0.4067")) {
+		t.Fatalf("casas desconhecidas não arredonda, veio %s", q)
+	}
+}

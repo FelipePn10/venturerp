@@ -95,6 +95,9 @@ var rotasPorModulo = []struct {
 	{"/api/planning-policy", acesso.Planejamento},
 	{"/api/planned-order", acesso.Planejamento},
 	{"/api/independent-demand", acesso.Planejamento},
+	// Projetos: o pedido de venda, a demanda e a OF apontam para eles; a
+	// gravação é do PCP, a leitura é referência (leituraDeReferencia).
+	{"/api/projects", acesso.Planejamento},
 	{"/api/forecast", acesso.Planejamento},
 	{"/api/sales-forecast", acesso.Planejamento},
 	{"/api/production-plan", acesso.Planejamento},
@@ -161,7 +164,7 @@ var rotasPorModulo = []struct {
 // como pesquisa. Quem tem perfil comercial precisa achar o item no pedido sem
 // ganhar acesso à engenharia — ler o cadastro não é poder alterá-lo.
 var leituraDeReferencia = []string{
-	"/api/items", "/api/pdm", "/api/customers", "/api/suppliers", "/api/item-suppliers", "/api/item-conversions",
+	"/api/items", "/api/pdm", "/api/customers", "/api/projects", "/api/suppliers", "/api/item-suppliers", "/api/item-conversions",
 	"/api/warehouse", "/api/warehouse-addresses", "/api/location", "/api/employee", "/api/enterprise",
 	"/api/fiscal-classifications", "/api/fiscal/support", "/api/fiscal/reforma/classificacoes", "/api/shipping-carriers",
 	"/api/industrial-calendar", "/api/order-priority", "/api/estoque/tipos-movimento", "/api/lot-masks",

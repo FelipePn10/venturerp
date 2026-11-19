@@ -118,7 +118,12 @@ func (uc *ProductionMaterialControlUseCase) AvailabilitySummary(ctx context.Cont
 		}
 		linha := availabilityLine(l)
 		if linha.Remaining.IsZero() {
-			continue // já baixado por completo: não conta na checagem
+			// Já baixado por completo: não conta na checagem, mas aparece no
+			// detalhe — a tela mostra a lista inteira (previsto, saiu, falta).
+			if detalhe {
+				s.Lines = append(s.Lines, linha)
+			}
+			continue
 		}
 		s.Items++
 		if linha.Available.IsPositive() {

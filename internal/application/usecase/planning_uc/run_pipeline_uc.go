@@ -3,6 +3,7 @@ package planning_uc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
@@ -81,6 +82,12 @@ func (uc *RunPlanningPipelineUseCase) Execute(ctx context.Context, dto request.R
 	if n := len(apsSummary.LateOrders); n > 0 {
 		out.Viable = false
 		out.Notes = append(out.Notes, fmt.Sprintf("%d ordem(ns) de fabricação terminam depois da data de necessidade no sequenciamento (APS)", n))
+	}
+
+	out.APSSemCapacidade = apsSummary.SemCapacidade
+	if n := len(apsSummary.SemCapacidade); n > 0 {
+		out.Viable = false
+		out.Notes = append(out.Notes, fmt.Sprintf("%d ordem(ns) de fabricação ficaram fora da programação por falta de capacidade (APS): %s", n, strings.Join(apsSummary.SemCapacidade, "; ")))
 	}
 
 	if out.Viable {

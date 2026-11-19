@@ -167,11 +167,15 @@ func TestIntegration_EntregaNaoBaixaDeNovoOQueOApontamentoBaixou(t *testing.T) {
 		testutil.UniqueCode(), produto, uid, enterpriseID, almox).Scan(&ordem); err != nil {
 		t.Fatal(err)
 	}
+	// A OF nasce com a lista de materiais (a baixa automática sai dela).
+	testutil.Exec(t, pool, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,mask,quantity,warehouse_id,automatic_issue,created_by)
+		VALUES ($1,$2,'DEMAND',$3,'',2,$4,TRUE,$5)`, ordem, enterpriseID, material, almox, uid)
 	t.Cleanup(func() {
 		pool.Exec(ctx, "DELETE FROM production_delivery_lines WHERE production_delivery_id IN (SELECT id FROM production_deliveries WHERE production_order_id=$1)", ordem)
 		pool.Exec(ctx, "DELETE FROM production_deliveries WHERE production_order_id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM stock_movements WHERE enterprise_id=$1 AND item_code = ANY($2)", enterpriseID, []int64{produto, material})
 		pool.Exec(ctx, "DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code = ANY($2)", enterpriseID, []int64{produto, material})
+		pool.Exec(ctx, "DELETE FROM production_order_materials WHERE production_order_id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM production_orders WHERE id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM item_structures WHERE parent_code=$1", produto)
 	})
@@ -238,6 +242,11 @@ func TestIntegration_FechamentoApuraAOrdemEntregueDeVerdade(t *testing.T) {
 		900_000+testutil.UniqueCode()%90_000, produto, ator, a.ID, almox).Scan(&ordem); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(bg, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,mask,quantity,warehouse_id,automatic_issue,created_by)
+		VALUES ($1,$2,'DEMAND',$3,'',2,$4,TRUE,$5)`, ordem, a.ID, material, almox, ator); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(bg, "DELETE FROM production_order_materials WHERE production_order_id=$1", ordem) })
 	stock := stockrepo.NewStockRepositorySQLC(pool)
 	if _, err := stock.CreateMovement(ctx, &stockentity.StockMovement{ItemCode: material, WarehouseID: almox, MovementType: "IN", Quantity: decimal.NewFromInt(10), UnitPrice: decimal.NewFromInt(7), CreatedBy: ator}); err != nil {
 		t.Fatal(err)

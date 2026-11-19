@@ -202,8 +202,17 @@ s0 = fab[0]
 check(str(s0.get("start_date"))[:10] < str(s0.get("need_date"))[:10],
       f"prazo do roteiro aplicado (início {str(s0.get('start_date'))[:10]} < necessidade {str(s0.get('need_date'))[:10]})")
 
+# Cada componente do item ganha sugestão de compra — ou o estoque já cobre o
+# que o pedido consome (rodadas anteriores podem ter comprado de sobra).
+st, filhos = call("GET", f"/api/items/structure/{ITEM}/children")
+filhos = filhos.get("data", filhos) if isinstance(filhos, dict) else (filhos or [])
 compras = [s for s in sug if s["order_type"] == "COMPRA" and str(s.get("parent_item_code")) == str(ITEM)]
-check(len(compras) >= 1, f"componentes explodidos em sugestões de COMPRA ({len(compras)})")
+com_compra = {legado(s) for s in compras}
+descobertos = [f for f in filhos if f.get("legacy_child_code") not in com_compra
+               and saldo(f.get("legacy_child_code")) < d(f.get("quantity")) * QTD]
+check(len(filhos) >= 1 and not descobertos,
+      f"componentes explodidos: {len(com_compra)} com sugestão de COMPRA, {len(filhos) - len(com_compra)} cobertos pelo estoque",
+      [f.get("legacy_child_code") for f in descobertos])
 for c in compras:
     check(str(c.get("need_date"))[:10] <= str(s0.get("need_date"))[:10],
           f"componente {legado(c)} chega antes da entrega do acabado")
@@ -243,18 +252,29 @@ check(sum(d(s["quantity"]) for s in fab3) == qtd_fab - d(alvo["quantity"]),
 
 # ── 5. Compra: firmar → pedido de compra → recebimento ───────────────────────
 secao("5. Compra do componente")
-comp = [s for s in sugestoes(plano) if s["order_type"] == "COMPRA" and d(s["quantity"]) > 0]
+sug5 = sugestoes(plano)
+comp = [s for s in sug5 if s["order_type"] == "COMPRA" and d(s["quantity"]) > 0]
 exige(len(comp) >= 1, "há sugestão de compra para firmar")
 c = sorted(comp, key=lambda s: -d(s["quantity"]))[0]
 item_c, qtd_c = legado(c), d(c["quantity"])
+compra_antes = sum((d(s["quantity"]) for s in comp if legado(s) == item_c), D(0))
 st, cf = call("POST", f"/api/mrp-calculation/suggestions/{c['code']}/firm", {})
 exige(st in (200, 201) and cf.get("is_firm"), f"sugestão de compra firmada (item {item_c}, {qtd_c})", cf)
 st, fila = call("GET", "/api/purchase-order/suggestions")
-check(any(o.get("code") == cf["planned_code"] for o in fila or []), "aparece na fila do comprador")
+na_fila = next((o for o in fila or [] if o.get("code") == cf["planned_code"]), None)
+check(na_fila is not None, "aparece na fila do comprador")
+sugerido = (na_fila or {}).get("suggested_supplier_code")
 st, r = call("POST", f"/api/purchase-order/suggestions/{cf['planned_code']}/approve", {"unit_price": "3.50"})
-check(st == 422, "aprovar sem fornecedor é recusado", (st, r))
-st, pc = call("POST", f"/api/purchase-order/suggestions/{cf['planned_code']}/approve", {"supplier_code": 1, "unit_price": "3.50"})
-exige(st == 201 and pc.get("items"), "pedido de compra gerado", pc)
+if sugerido:
+    # Fonte de suprimento (VSUP0130): o MRP já escolheu o fornecedor e a
+    # aprovação sem informar outro usa o sugerido.
+    pc = r
+    exige(st == 201 and pc.get("items") and pc.get("supplier_code") == sugerido,
+          f"sem informar fornecedor, o pedido usa o da fonte de suprimento ({sugerido})", (st, r))
+else:
+    check(st == 422, "aprovar sem fornecedor é recusado (item sem fonte de suprimento)", (st, r))
+    st, pc = call("POST", f"/api/purchase-order/suggestions/{cf['planned_code']}/approve", {"supplier_code": 1, "unit_price": "3.50"})
+    exige(st == 201 and pc.get("items"), "pedido de compra gerado", pc)
 pci = pc["items"][0]
 check(d(pci["requested_qty"]) == qtd_c, "quantidade do pedido de compra = sugestão", pci["requested_qty"])
 st, fila = call("GET", "/api/purchase-order/suggestions")
@@ -278,8 +298,12 @@ check(pc2.get("status") == "RECEIVED", "pedido de compra recebido", pc2.get("sta
 
 st, _ = pipeline(plano)
 resto = [s for s in sugestoes(plano) if s["order_type"] == "COMPRA" and legado(s) == item_c]
-check(sum((d(s["quantity"]) for s in resto), D(0)) < qtd_c,
-      "recálculo não repete a compra já recebida", [s["quantity"] for s in resto])
+# O item pode ter várias necessidades: o recebido abate exatamente o que foi
+# comprado do total a comprar, sem sugerir de novo.
+compra_depois = sum((d(s["quantity"]) for s in resto), D(0))
+check(abs(compra_depois - (compra_antes - qtd_c)) <= D("0.01"),
+      f"recálculo abate a compra recebida (antes {compra_antes}, comprado {qtd_c}, depois {compra_depois})",
+      [s["quantity"] for s in resto])
 check(all(d(s["quantity"]) > 0 for s in sugestoes(plano)), "sem sugestão de quantidade zero depois da compra")
 
 # ── 6. Produção ──────────────────────────────────────────────────────────────
@@ -372,6 +396,32 @@ check(st == 200 and "run_hour" in (auto or {}), "parametrização da execução 
 secao("9. Rastreamento")
 st, peg = call("GET", f"/api/mrp-calculation/pegging/sales-order/{pedido}")
 check(st == 200, "pegging do pedido de venda consultado", peg)
+
+# ── 10. Encerramento: o aceite não deixa OF nem pedido pendurado no banco ────
+# Antes cada rodada deixava uma OF de milhares de peças em produção e o pedido
+# aberto: as rodadas seguintes viam essa oferta, o MRP não sugeria nada e o APS
+# tentava programar milhares de horas.
+secao("10. Encerramento da OF e do pedido")
+st, r = call("POST", f"/api/production-order/{oid}/close", {})
+check(st == 422, "OF em produção não encerra antes de concluir", (st, r))
+st, ops = call("GET", f"/api/production-order/{oid}/operations")
+for op in sorted(ops or [], key=lambda o: o["sequence"]):
+    if op.get("status") == "PENDING":
+        call("POST", "/api/production-order/operations/advance", {"operation_id": op["id"], "status": "IN_PROGRESS"})
+    if op.get("status") != "DONE":
+        st, r = call("POST", "/api/production-order/operations/advance",
+                     {"operation_id": op["id"], "status": "DONE", "actual_hours": 0.5, "produced_qty": 10})
+        check(st == 200, f"etapa {op['sequence']} concluída", r)
+final = {"id": oid, "end_date": hoje.isoformat(), "warehouse_id": 2, "quantity": 0, "final": True,
+         "idempotency_key": f"aceite-final-{plano}"}
+st, r = call("POST", f"/api/production-order/{oid}/complete", final)
+check(st == 200, "entrega final com o que foi produzido", r)
+st, r = call("POST", f"/api/production-order/{oid}/close", {})
+check(st == 200, "OF encerrada", r)
+st, of3 = call("GET", f"/api/production-order/{oid}")
+check(of3.get("status") == "CLOSED", "OF fica encerrada", of3.get("status"))
+st, r = call("DELETE", f"/api/sales-order/{pedido}/cancel", {"code": pedido, "reason": "Pedido do teste de aceite"})
+check(st in (200, 204), "pedido do aceite cancelado (sai da carteira do MRP)", (st, r))
 
 resumo()
 PY

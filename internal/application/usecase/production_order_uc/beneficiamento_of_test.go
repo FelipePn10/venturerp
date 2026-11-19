@@ -37,13 +37,40 @@ func TestCriarOFNaoGeraDemandaDoMaterialDoCliente(t *testing.T) {
 	}
 }
 
-func TestBaixaAutomaticaNaoConsomeMaterialDoCliente(t *testing.T) {
-	children := structureChildrenForBackflush([]*structentity.ItemStructure{
-		{ChildCode: 20, Quantity: decimal.NewFromFloat(1)},
-		{ChildCode: 30, Quantity: decimal.NewFromFloat(2), CustomerSupplied: true},
-	})
-	if len(children) != 1 || children[0].code != 20 {
-		t.Fatalf("o apontamento só pode baixar o material próprio, veio %+v", children)
+// A baixa automática sai da LISTA DE MATERIAIS DA OF: só o marcado
+// automático, na proporção do produzido, sem repetir o que já saiu, e o
+// substituto (item_code) no lugar do original.
+func TestBaixaAutomaticaSaiDaListaDaOF(t *testing.T) {
+	original := int64(21)
+	materiais := []*poentity.ProductionOrderMaterial{
+		{ItemCode: 20, Quantity: decimal.NewFromInt(10), WarehouseID: 7, AutomaticIssue: true},
+		{ItemCode: 22, SubstitutedItemCode: &original, Quantity: decimal.NewFromInt(4), WarehouseID: 8, AutomaticIssue: true},
+		{ItemCode: 20, Quantity: decimal.NewFromInt(2), WarehouseID: 7, AutomaticIssue: true}, // mesma peça em outra linha
+	}
+	baixado := map[int64]decimal.Decimal{20: decimal.NewFromInt(3)} // consumo manual anterior
+	movs := baixasAutomaticas(materiais, baixado, fracaoProduzida(decimal.NewFromInt(5), decimal.NewFromInt(10)), nil,
+		stockentity.MovementTypeOut, nil, 9, uuid.New())
+	if len(movs) != 2 {
+		t.Fatalf("esperadas 2 saídas, veio %+v", movs)
+	}
+	if movs[0].ItemCode != 20 || !movs[0].Quantity.Equal(decimal.NewFromInt(3)) || movs[0].WarehouseID != 7 {
+		t.Fatalf("item 20: metade de 12 = 6, menos 3 já baixados = 3 no almoxarifado 7; veio %+v", movs[0])
+	}
+	if movs[1].ItemCode != 22 || !movs[1].Quantity.Equal(decimal.NewFromInt(2)) || movs[1].WarehouseID != 8 {
+		t.Fatalf("substituto 22: metade de 4 = 2 no almoxarifado 8; veio %+v", movs[1])
+	}
+	// Tudo já baixado: nada sai de novo. Depósito escolhido troca o de todos.
+	movs = baixasAutomaticas(materiais, map[int64]decimal.Decimal{20: decimal.NewFromInt(12), 22: decimal.NewFromInt(4)},
+		decimal.NewFromInt(1), i64p(5), stockentity.MovementTypeOut, nil, 9, uuid.New())
+	if len(movs) != 0 {
+		t.Fatalf("nada falta baixar, veio %+v", movs)
+	}
+	movs = baixasAutomaticas(materiais[:1], nil, decimal.NewFromInt(1), i64p(5), stockentity.MovementTypeOut, nil, 9, uuid.New())
+	if len(movs) != 1 || movs[0].WarehouseID != 5 {
+		t.Fatalf("o depósito do apontador vale para todos, veio %+v", movs)
+	}
+	if !fracaoProduzida(decimal.NewFromInt(15), decimal.NewFromInt(10)).Equal(decimal.NewFromInt(1)) {
+		t.Fatal("produzir além do planejado não baixa mais que a lista")
 	}
 }
 
@@ -52,6 +79,9 @@ func TestConcluirOFDeBeneficiamentoNaoDaEntradaNoEstoqueProprio(t *testing.T) {
 	po := &fakePORepo{
 		order:     &poentity.ProductionOrder{ID: 9, ItemCode: 100, PlannedQty: decimal.NewFromInt(4), CreatedBy: uuid.New()},
 		automatic: map[int64]int64{200: 9, 300: 9},
+		// A OF de beneficiamento só lista o material próprio (o do cliente fica
+		// fora na criação — ver o teste acima).
+		materials: []*poentity.ProductionOrderMaterial{{ItemCode: 200, Quantity: decimal.NewFromInt(8), WarehouseID: 9, AutomaticIssue: true}},
 	}
 	stock := &fakeStockRepo{}
 	structure := &fakeDeliveryStructure{children: []*structentity.ItemStructure{

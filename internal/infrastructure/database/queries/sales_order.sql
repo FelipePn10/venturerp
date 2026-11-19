@@ -1,8 +1,12 @@
 -- name: NextSalesOrderNumber :one
+-- O contador acompanha o maior número gravado: pedido que entrou por
+-- importação ou carga direta não faz o próximo da tela repetir o número
+-- (antes dava "já existe um registro" e o pedido não saía).
 INSERT INTO public.sales_order_sequences (enterprise_code, last_number)
-VALUES ($1, 1)
+VALUES ($1, COALESCE((SELECT MAX(so.order_number) FROM public.sales_orders so WHERE so.enterprise_code = $1), 0) + 1)
 ON CONFLICT (enterprise_code)
-DO UPDATE SET last_number = sales_order_sequences.last_number + 1
+DO UPDATE SET last_number = GREATEST(sales_order_sequences.last_number,
+    COALESCE((SELECT MAX(so.order_number) FROM public.sales_orders so WHERE so.enterprise_code = EXCLUDED.enterprise_code), 0)) + 1
 RETURNING last_number;
 
 -- name: CreateSalesOrder :one

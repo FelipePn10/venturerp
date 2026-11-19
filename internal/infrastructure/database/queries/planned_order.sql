@@ -162,9 +162,10 @@ UPDATE planned_orders
 RETURNING *;
 
 -- name: GetPlannedOrderActiveProductionOrder :one
--- OF ainda viva gerada pela ordem planejada. O vínculo é pelo ID interno da
--- ordem planejada (production_orders.planned_order_id → planned_orders.id).
-SELECT po.order_number
+-- OF ainda viva gerada pela ordem planejada, pelo ID (o número "OF n" que a
+-- VPRO0900, a OP impressa e o código de barras mostram). O vínculo é pelo ID
+-- interno da ordem planejada (production_orders.planned_order_id → planned_orders.id).
+SELECT po.id
   FROM production_orders po
   JOIN planned_orders planned ON planned.id = po.planned_order_id
  WHERE planned.code = $1 AND planned.enterprise_id = @enterprise_id

@@ -110,6 +110,15 @@ func (uc *RecalcularFatores) DaEmpresa(ctx context.Context, motivo string) (Resu
 	return res, err
 }
 
+// RecalcularDoPai regrava as linhas da estrutura de UM item: a OF chama antes
+// de copiar a estrutura, para a OF manual criada antes do primeiro MRP (ou
+// depois de mudar a conversão por um caminho que não avisa) não copiar a
+// quantidade do fator velho.
+func (uc *RecalcularFatores) RecalcularDoPai(ctx context.Context, pai int64, motivo string) (int, []string, error) {
+	res, _, err := uc.Executar(ctx, entity.FiltroDeFatores{Pai: &pai}, true, motivo)
+	return res.Atualizadas, res.Mensagens(), err
+}
+
 // RecalcularDoComponente implementa ports.RecalculoDeEstrutura.
 func (uc *RecalcularFatores) RecalcularDoComponente(ctx context.Context, itemCode int64, motivo string) (int, []string, error) {
 	res, err := uc.DoComponente(ctx, itemCode, motivo)

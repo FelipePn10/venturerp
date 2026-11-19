@@ -31,6 +31,7 @@ type ProductionOrderHandler struct {
 	operationalUC        *production_order_uc.OperationalConsultationUseCase
 	materialControlUC    *production_order_uc.ProductionMaterialControlUseCase
 	maintainUC           *production_order_uc.MaintainProductionOrderUseCase
+	originUC             *production_order_uc.DefinirOrigemDaOFUseCase
 	deliveryCandidatesUC *production_order_uc.ListDeliveryCandidatesUseCase
 	scannerUC            *production_order_uc.ProductionScannerUseCase
 	fichaUC              *production_order_uc.FichaDaOrdemUseCase
@@ -90,6 +91,29 @@ func (h *ProductionOrderHandler) Maintain(w http.ResponseWriter, r *http.Request
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, production_order_uc.ToProductionOrderResponse(result))
+}
+
+// Origin grava cliente e projeto da OF (também com a OF em andamento).
+func (h *ProductionOrderHandler) Origin(w http.ResponseWriter, r *http.Request) {
+	if h.originUC == nil {
+		security.RespondError(w, http.StatusNotImplemented, "cliente e projeto da OF não estão disponíveis")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var dto request.ProductionOrderOriginDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	result, err := h.originUC.Execute(r.Context(), id, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
 }
 
 func (h *ProductionOrderHandler) ListMaterials(w http.ResponseWriter, r *http.Request) {

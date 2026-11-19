@@ -7,9 +7,12 @@ import (
 	"errors"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_policy_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/project_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/setor_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/custoof"
 	pedidocompraExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/pedidocompra"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/materiaisof"
 	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
 	planningPolicyRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_policy"
 	setorRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/setor"
@@ -212,6 +215,7 @@ import (
 	procurementRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/procurement"
 	productionOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_order"
 	productionPlan "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/production_plan"
+	projectRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/project"
 	purchaseOrderRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_order"
 	purchasePriceRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_price"
 	purchaseQuotationRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/purchase_quotation"
@@ -254,14 +258,18 @@ import (
 )
 
 type application struct {
-	config              *config.Config
-	logger              *applogger.Logger
-	db                  *database.DB
-	authDB              *database.DB
-	metrics             *httpmw.Metrics
-	auditSink           *audit.PgSink
-	notificationWorker  *notification.Worker
-	planningScheduler   *planningsched.Scheduler
+	config             *config.Config
+	logger             *applogger.Logger
+	db                 *database.DB
+	authDB             *database.DB
+	metrics            *httpmw.Metrics
+	auditSink          *audit.PgSink
+	notificationWorker *notification.Worker
+	planningScheduler  *planningsched.Scheduler
+	// materiaisOFRotina completa a lista de materiais das OFs abertas que estão sem ela.
+	materiaisOFRotina *materiaisof.Rotina
+	// custoOFRotina apura o custo das OFs que se moveram e nunca tiveram custo.
+	custoOFRotina       *custoof.Rotina
 	dfeScheduler        *dfesched.Scheduler
 	efeitosNFeScheduler *fiscalefeitos.Scheduler
 	revisoesScheduler   *itemrevisoes.Scheduler
@@ -586,6 +594,8 @@ func (app *application) mount() chi.Router {
 	industrialCalendarRepo := industrialCalendar.NewIndustrialCalendarRepositorySQLC(queries)
 	manageIndustrialCalendarRepoUC := &industrial_calendar_uc.ManageCalendarUseCase{Repo: industrialCalendarRepo, Auth: authService}
 	industrialCalendarHandler := handler.NewIndustrialCalendarHandler(manageIndustrialCalendarRepoUC)
+	projetosRepo := projectRepo.New(app.db.Pool)
+	projectHandler := handler.NewProjectHandler(&project_uc.UseCase{Repo: projetosRepo, Auth: authService})
 
 	// item calendar promise
 	itemCalendarPromise := itemCalendarPromise.NewItemCalendarPromiseRepositorySQLC(queries)
@@ -833,17 +843,21 @@ func (app *application) mount() chi.Router {
 	plannedFirmUC.ProdOrderRepo = prodOrderRepo
 	plannedFirmUC.ServiceLinker = prodOrderRepo
 	plannedFirmUC.ReleaseValidator = prodOrderRepo
-	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo}
+	prodOrderCreateUC := &productionOrderUc.CreateProductionOrderUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService, Items: itemRepo, Employees: employeeRepo, Projetos: projetosRepo}
 	prodOrderCreateUC.Structure = itemRepoStructure
 	// Item sob controle de versão da estrutura só gera OF com MBOM aprovada.
 	bomVersionGate := bomHeaderRepo.New(queries, app.db.Pool).(productionOrderUc.VersaoDaEstrutura)
 	prodOrderCreateUC.BomVersions = bomVersionGate
 	plannedFirmUC.BomVersions = bomVersionGate
 	prodOrderCreateUC.MaskVars = itemRepoStructureQuery
+	// A OF copia a estrutura na unidade de estoque atual (OF manual antes do MRP).
+	prodOrderCreateUC.Fatores = recalculoDeFatores
+	// OF aberta sem lista de materiais (carga antiga) ganha a da estrutura, uma vez, ao subir.
+	app.materiaisOFRotina = materiaisof.NewRotina(prodOrderRepo, &productionOrderUc.CompletarMateriaisDaOFUseCase{Montador: prodOrderCreateUC, Repo: prodOrderRepo}, app.logger)
 	prodOrderGetByCodeUC := &productionOrderUc.GetProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderListUC := &productionOrderUc.ListProductionOrdersUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderStartUC := &productionOrderUc.StartProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
-	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService, Employees: employeeRepo}
+	prodOrderAddAppointmentUC := &productionOrderUc.AddAppointmentUseCase{Repo: prodOrderRepo, Auth: authService, Employees: employeeRepo}
 	prodOrderAddConsumptionUC := &productionOrderUc.AddConsumptionUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderCompleteUC := &productionOrderUc.CompleteProductionOrderUseCase{Perdas: mrpRepo, Repo: prodOrderRepo, Auth: authService}
 	prodOrderCloseUC := &productionOrderUc.CloseProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
@@ -855,9 +869,15 @@ func (app *application) mount() chi.Router {
 	prodOrderSettleCostUC := &productionOrderUc.SettleProductionCostUseCase{Repo: prodOrderRepo, Auth: authService, StdCostRepo: scRepo}
 	prodOrderGetCostUC := &productionOrderUc.GetProductionCostUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderCloseUC.SettleUC = prodOrderSettleCostUC
+	// Custo real sempre em dia: cada movimento da OF reapura (sem botão).
+	prodOrderAddAppointmentUC.CustoAutomatico = prodOrderSettleCostUC
+	// OF antiga (ou de carga direta) que se moveu sem custo: apura uma vez, ao subir.
+	app.custoOFRotina = custoof.NewRotina(prodOrderRepo, prodOrderSettleCostUC, app.logger)
+	prodOrderAddConsumptionUC.CustoAutomatico = prodOrderSettleCostUC
+	prodOrderCompleteUC.CustoAutomatico = prodOrderSettleCostUC
 	// Scrap return (sucata valorizada). StockRepo is wired below once available.
 	prodOrderReturnScrapUC := &productionOrderUc.ReturnScrapUseCase{Repo: prodOrderRepo, Auth: authService}
-	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo, Auth: authService, Routing: rRepo, Lotes: loteUC,
+	orderOpsUC := &productionOrderUc.OrderOperationsUseCase{Q: queries, MachinePlanning: mrpRepo, Auth: authService, Routing: rRepo, Lotes: loteUC, CustoAutomatico: prodOrderSettleCostUC,
 		WithinTransaction: func(ctx context.Context, fn func(*sqlc.Queries) error) error {
 			tx, err := app.db.Pool.Begin(ctx)
 			if err != nil {
@@ -892,13 +912,16 @@ func (app *application) mount() chi.Router {
 	prodOrderMaterialControlUC := &productionOrderUc.ProductionMaterialControlUseCase{Repo: prodOrderRepo, Auth: authService, Items: itemRepo}
 	prodOrderMaintainUC := &productionOrderUc.MaintainProductionOrderUseCase{Repo: prodOrderRepo, Auth: authService}
 	prodOrderDeliveryCandidatesUC := &productionOrderUc.ListDeliveryCandidatesUseCase{Reader: prodOrderRepo, Auth: authService}
-	prodOrderScannerUC := &productionOrderUc.ProductionScannerUseCase{Repo: prodOrderRepo, Auth: authService}
+	prodOrderScannerUC := &productionOrderUc.ProductionScannerUseCase{Repo: prodOrderRepo, Auth: authService, CustoAutomatico: prodOrderSettleCostUC}
 	prodOrderHandler := handler.NewProductionOrderHandler(
 		prodOrderCreateUC, prodOrderGetByCodeUC, prodOrderListUC,
 		prodOrderStartUC, prodOrderAddAppointmentUC, prodOrderAddConsumptionUC,
 		prodOrderCompleteUC, prodOrderCloseUC, prodOrderCancelUC,
 		prodOrderGetAppointmentsUC, prodOrderGetConsumptionsUC,
-	).WithOrderOps(orderOpsUC).WithScanner(prodOrderScannerUC).WithOperational(prodOrderOperationalUC).WithMaterialControl(prodOrderMaterialControlUC).WithMaintenance(prodOrderMaintainUC).WithDeliveryCandidates(prodOrderDeliveryCandidatesUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC)
+	).WithOrderOps(orderOpsUC).WithScanner(prodOrderScannerUC).WithOperational(prodOrderOperationalUC).WithMaterialControl(prodOrderMaterialControlUC).WithMaintenance(prodOrderMaintainUC).WithDeliveryCandidates(prodOrderDeliveryCandidatesUC).WithCost(prodOrderSettleCostUC, prodOrderGetCostUC).WithScrap(prodOrderReturnScrapUC).
+		WithOrigin(&productionOrderUc.DefinirOrigemDaOFUseCase{Repo: prodOrderRepo, Auth: authService, Projetos: projetosRepo})
+	// Iniciar OF sem etapas aplica o roteiro vigente (OF antiga).
+	prodOrderStartUC.Etapas = orderOpsUC
 
 	// supplier (created before purchase order so it can provide purchasing defaults)
 	suppRepo := supplierRepo.New(queries, app.db.Pool)
@@ -958,6 +981,8 @@ func (app *application) mount() chi.Router {
 		Conversions:   itemConversionRepo.New(queries, app.db.Pool),
 		Auth:          authService,
 		Fatores:       recalculoDeFatores,
+		// Mesma conferência de unidade de compra da governança do item.
+		UnidadesDeCompra: itemGovernancaRepo.New(app.db.Pool),
 	}
 	itemActivationHandler := handler.NewItemActivationHandler(itemActivationUC)
 
@@ -1220,8 +1245,8 @@ func (app *application) mount() chi.Router {
 	prodOrderCompleteUC.Structure = itemRepoStructure // recebe co-produtos/sucata no fecho da OF
 	// Scrap return posts a valued IN movement of the scrap by-product.
 	prodOrderReturnScrapUC.StockRepo = stockRepository
-	// Appointment backflush: auto-consume BOM components from stock.
-	prodOrderAddAppointmentUC.StructureRepo = itemRepoStructure
+	prodOrderReturnScrapUC.CustoAutomatico = prodOrderSettleCostUC
+	// Apontamento baixa os materiais automáticos da OF (lista da OF).
 	prodOrderAddAppointmentUC.StockRepo = stockRepository
 	prodOrderAddAppointmentUC.Transacao = func(ctx context.Context, fn func(productionOrderUc.ApontamentoRepos) error) error {
 		tx, err := app.db.Pool.Begin(ctx)
@@ -2026,6 +2051,10 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/atender", independentDemandHandler.Atender)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/gerar-of", independentDemandHandler.GerarOF)
 		})
+		r.Route("/api/projects", func(r chi.Router) {
+			r.Use(httpmw.RequireRole("ADMIN", "USER"))
+			r.Mount("/", projectHandler.Routes())
+		})
 		r.Route("/api/industrial-calendar", func(r chi.Router) {
 			r.Use(httpmw.RequireRole("ADMIN", "USER"))
 			r.Mount("/", industrialCalendarHandler.Routes())
@@ -2120,6 +2149,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/material-availability", prodOrderHandler.MaterialAvailabilitySummary)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}", prodOrderHandler.GetByCode)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}", prodOrderHandler.Maintain)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/{id}/origin", prodOrderHandler.Origin)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/operational", prodOrderHandler.Operational)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/{id}/pdf", prodOrderHandler.PDF)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{id}/start", prodOrderHandler.Start)
@@ -4161,6 +4191,12 @@ func (app *application) run(r chi.Router) error {
 	}
 	if app.planningScheduler != nil {
 		go app.planningScheduler.Run(ctx)
+	}
+	if app.materiaisOFRotina != nil {
+		go app.materiaisOFRotina.Run(ctx)
+	}
+	if app.custoOFRotina != nil {
+		go app.custoOFRotina.Run(ctx)
 	}
 	workerDone := make(chan struct{})
 	if app.notificationWorker != nil {

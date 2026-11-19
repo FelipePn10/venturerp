@@ -5,6 +5,7 @@ import (
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	apsentity "github.com/FelipePn10/panossoerp/internal/domain/aps/entity"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -97,6 +98,11 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 	}
 	scheduledCount := 0
 	atrasadas := make([]int64, 0)
+	// Ordem com etapa que não cabe em um ano de máquina fica fora e é avisada;
+	// as demais seguem programadas. Antes uma OF grande demais (ou com tempo de
+	// roteiro na unidade errada) parava a programação da fábrica inteira.
+	semCapacidade := make([]string, 0)
+ordens:
 	for _, order := range orders {
 		if plans, ok := uc.repo.(interface {
 			MachinePlanOperationCount(context.Context, int64) (int, error)
@@ -122,6 +128,10 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		if len(ops) == 0 {
 			continue
 		}
+		// Se uma etapa desta ordem não couber, a ordem sai inteira: as reservas
+		// das etapas que couberam antes dela voltam ao que eram, senão a
+		// máquina ficaria "ocupada" por uma ordem que não foi programada.
+		antes := fotoDaAgenda(wcNextAvailable, machineNextAvailable, ultimoItemNoRecurso, ultimaFamiliaNoRecurso, scheduledCount)
 
 		// Clear previous sequences for this order.
 		if err := uc.repo.DeleteByOrder(ctx, order.ID); err != nil {
@@ -245,7 +255,12 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 			}
 			if end.IsZero() {
 				if selected {
-					return nil, errorsuc.NewValidationError(fmt.Sprintf("não há capacidade disponível para a operação %d no horizonte de um ano", op.ID))
+					if err := uc.repo.DeleteByOrder(ctx, order.ID); err != nil {
+						return nil, fmt.Errorf("limpando a sequência da ordem %d: %w", order.ID, err)
+					}
+					semCapacidade = append(semCapacidade, semCapacidadeNoAno(order.ID, op.Sequence, totalHours))
+					wcNextAvailable, machineNextAvailable, ultimoItemNoRecurso, ultimaFamiliaNoRecurso, scheduledCount = antes.restaura()
+					continue ordens
 				}
 				end = advanceByWorkHours(earliest, totalHours, avail)
 			}
@@ -293,6 +308,7 @@ func (uc *APSUseCase) SequenceOrders(ctx context.Context, dto request.SequenceOr
 		ScheduledOperations: scheduledCount,
 		OrdersProcessed:     len(orders),
 		LateOrders:          atrasadas,
+		SemCapacidade:       semCapacidade,
 	}, nil
 }
 
@@ -1060,6 +1076,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 	wcLivreAte := make(map[int64]time.Time)
 	agendadas := 0
 	atrasadas := make([]int64, 0)
+	semCapacidade := make([]string, 0)
 	paraFrente := make([]repository.OrderRow, 0)
 
 	for _, order := range orders {
@@ -1211,6 +1228,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 			return nil, err
 		}
 		agendadas += resumo.ScheduledOperations
+		semCapacidade = append(semCapacidade, resumo.SemCapacidade...)
 	}
 
 	sort.Slice(atrasadas, func(i, j int) bool { return atrasadas[i] < atrasadas[j] })
@@ -1218,6 +1236,7 @@ func (uc *APSUseCase) sequenciaRegressivo(
 		ScheduledOperations: agendadas,
 		OrdersProcessed:     len(orders),
 		LateOrders:          atrasadas,
+		SemCapacidade:       semCapacidade,
 	}, nil
 }
 
@@ -1342,4 +1361,30 @@ func (uc *APSUseCase) DeleteSetupTransition(ctx context.Context, id int64) error
 		return errorsuc.NewValidationError("informe a transição a excluir")
 	}
 	return uc.repo.DeleteSetupTransicao(ctx, id)
+}
+
+// semCapacidadeNoAno: a mensagem de quando a etapa não cabe em um ano de
+// máquina. Antes dizia "operação 1" (o id interno) e o planejador não sabia
+// qual OF nem qual etapa olhar; quase sempre é tempo de roteiro na unidade
+// errada (300 segundos lidos como 300 horas).
+func semCapacidadeNoAno(ordem int64, etapa int, horas float64) string {
+	h := strings.Replace(fmt.Sprintf("%.1f", horas), ".", ",", 1)
+	return fmt.Sprintf("a etapa %d da OF %d precisa de %s h (preparação + operação) e não cabe em um ano de capacidade das máquinas do centro: confira o tempo e a unidade do roteiro do item", etapa, ordem, h)
+}
+
+// agendaAntesDaOrdem guarda a ocupação dos recursos antes de uma ordem, para
+// desfazer as reservas dela quando ela fica fora da programação.
+type agendaAntesDaOrdem struct {
+	centro, maquina map[int64]time.Time
+	item            map[int64]int64
+	familia         map[int64]string
+	programadas     int
+}
+
+func fotoDaAgenda(centro, maquina map[int64]time.Time, item map[int64]int64, familia map[int64]string, programadas int) agendaAntesDaOrdem {
+	return agendaAntesDaOrdem{centro: maps.Clone(centro), maquina: maps.Clone(maquina), item: maps.Clone(item), familia: maps.Clone(familia), programadas: programadas}
+}
+
+func (a agendaAntesDaOrdem) restaura() (map[int64]time.Time, map[int64]time.Time, map[int64]int64, map[int64]string, int) {
+	return a.centro, a.maquina, a.item, a.familia, a.programadas
 }

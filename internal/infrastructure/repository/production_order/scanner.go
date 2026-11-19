@@ -184,7 +184,30 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 				dbStatus = "DONE"
 				publicStatus = "CONCLUIDA"
 			}
-			_, err = tx.Exec(ctx, `UPDATE production_order_operations SET status=$3::text,started_at=COALESCE(started_at,NOW()),completed_at=CASE WHEN $3::text='DONE' THEN NOW() ELSE completed_at END,actual_hours=COALESCE(actual_hours,0)+$4::numeric,updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, *operationID, command.EnterpriseID, dbStatus, command.Hours.String())
+			// Etapa esquecida em andamento (virou a noite): a leitura não grava o
+			// tempo parado como trabalhado; pede as horas.
+			if command.CompleteOperation && command.Hours.IsZero() {
+				var corridas float64
+				if err := tx.QueryRow(ctx, `SELECT COALESCE(CASE WHEN o.status = 'IN_PROGRESS' THEN EXTRACT(EPOCH FROM (clock_timestamp() - COALESCE(
+						(SELECT max(e.occurred_at) FROM production_operation_execution_events e WHERE e.operation_id = o.id AND e.enterprise_id = o.enterprise_id AND e.new_status = 'IN_PROGRESS'),
+						o.started_at, clock_timestamp()))) / 3600 END, 0)::float8
+					FROM production_order_operations o WHERE o.id = $1 AND o.enterprise_id = $2`, *operationID, command.EnterpriseID).Scan(&corridas); err != nil {
+					return nil, err
+				}
+				if entity.TrechoEsquecido(corridas) {
+					return nil, errorsuc.NewValidationError("a etapa está em andamento há " + entity.HorasPorExtenso(corridas) + " — parece que ficou aberta: informe as horas trabalhadas na leitura ou conclua pela tela")
+				}
+			}
+			// Concluir pela leitura sem informar horas grava o tempo corrido desde
+			// a última entrada em andamento (o cronômetro da etapa, como na tela).
+			// No SET, "status" ainda é o valor de antes da leitura.
+			_, err = tx.Exec(ctx, `UPDATE production_order_operations SET status=$3::text,started_at=COALESCE(started_at,NOW()),completed_at=CASE WHEN $3::text='DONE' THEN NOW() ELSE completed_at END,
+				actual_hours=COALESCE(actual_hours,0)+CASE WHEN $4::numeric = 0 AND $3::text = 'DONE' AND status = 'IN_PROGRESS'
+					THEN GREATEST(0, round((EXTRACT(EPOCH FROM (clock_timestamp() - COALESCE(
+						(SELECT max(e.occurred_at) FROM production_operation_execution_events e WHERE e.operation_id = production_order_operations.id AND e.enterprise_id = production_order_operations.enterprise_id AND e.new_status = 'IN_PROGRESS'),
+						started_at, clock_timestamp()))) / 3600)::numeric, 4))
+					ELSE $4::numeric END,
+				updated_at=NOW() WHERE id=$1 AND enterprise_id=$2`, *operationID, command.EnterpriseID, dbStatus, command.Hours.String())
 			if err != nil {
 				return nil, err
 			}

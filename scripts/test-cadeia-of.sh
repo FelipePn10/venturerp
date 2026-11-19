@@ -323,9 +323,12 @@ concluir_etapas(rn1, 10)
 st, r = entregar(rn1, 10, True)
 exige(st == 200, "RN entregue (10), OF concluída", r)
 check(reservado(rn1) == 0, "nada mais reservado para a OF concluída", reservado(rn1))
-st, r = call("POST", "/api/production-order/consumption", {"production_order_id": rn2, "item_code": BU, "consumed_qty": 1,
-                                                          "warehouse_id": almox, "consumption_date": hoje.isoformat()})
-check(st == 201, "a sobra da bucha agora pode ir para a OF do pedido 2", (st, r))
+# Baixa automática (mig 506): a entrega final tira da lista da OF o que ainda
+# faltava — as 8 buchas que o consumo manual (12) não cobriu. Nada sobra.
+saiu_bu = d(sql(f"""SELECT COALESCE(SUM(quantity),0) FROM stock_movements WHERE enterprise_id={emp}
+                   AND reference_type='PRODUCTION_ORDER' AND reference_code={rn1} AND item_code={BU}
+                   AND movement_type IN ('OUT','REP')"""))
+check(saiu_bu == 20, "a entrega final baixou sozinha as 8 buchas que faltavam (20 no total)", saiu_bu)
 
 # ── 9. Uma OF de bucha para os dois RNs ──────────────────────────────────────
 secao("9. Lote mínimo: uma OF de bucha abastece os RNs dos dois pedidos")

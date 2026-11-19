@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Põe no ambiente demo o código DESTA pasta, inclusive o que ainda não foi
 # commitado: reconstrói a API, aplica as migrações pendentes (com backup antes)
-# e carrega o cenário de beneficiamento. Sem release e sem perder os dados.
+# e carrega os cenários de beneficiamento e de cadeia de fabricação. Sem release e sem perder os dados.
 # Rodar de novo sem mudança nenhuma é rápido e não altera nada.
 set -euo pipefail
 
@@ -79,7 +79,73 @@ fi
 "${COMPOSE[@]}" up -d api-demo
 aguardar_saude "$API_CONTAINER" 60
 
+# Demo carregado antes da correção do seed-demo.sql: acabado como "de terceiro"
+# (o MRP não gera ordem para ele), matéria-prima como "fabricado" e serviço com
+# o código 4, que não existe. Reclassifica pelo papel do item; não muda nada
+# na segunda vez.
+psql_demo -q -c "UPDATE items SET engineering_type = CASE
+    WHEN engineering_type_struct = 0 AND supplies_type_of_use = 1 THEN 0
+    WHEN supplies_type_of_use = 3 THEN 3
+    ELSE 1 END
+  WHERE (engineering_type = 2 AND engineering_type_struct = 0 AND supplies_type_of_use = 1)
+     OR (engineering_type = 0 AND engineering_type_struct = 1 AND supplies_type_of_use = 0)
+     OR (engineering_type = 4 AND supplies_type_of_use = 3)"
+# Tipo de MRP 2 não existe (0 normal, 1 projeto) e o MRP o lia como projeto:
+# a matéria-prima nunca ganhava sugestão de compra.
+psql_demo -q -c "UPDATE items SET planning_type_mrp = 0 WHERE planning_type_mrp NOT IN (0, 1)"
+# Mesma origem: a estrutura dos acabados saiu toda em UN (chapa em KG, tubo em
+# M ficavam sem conversão e o MRP não comprava), o roteiro guardou tempos de
+# teste sem unidade (300 "horas" por peça) e um teste deixou o roteiro do 10002
+# inativo. Corrige só o que está nesse estado.
+psql_demo -q -c "BEGIN;
+UPDATE item_structures s SET unit_of_measurement = c.warehouse_unit_of_measurement, conversion_factor = NULL
+  FROM items c, items p
+ WHERE c.code = s.child_code AND p.code = s.parent_code AND p.engineering_type_struct = 0
+   AND s.unit_of_measurement = 'UN' AND c.warehouse_unit_of_measurement IN ('KG','M')
+   AND s.child_code BETWEEN 20001 AND 20080;
+UPDATE route_operations SET standard_time = NULL, setup_time = NULL, run_time = NULL, labor_time = NULL
+ WHERE time_unit IS NULL AND (standard_time >= 100 OR setup_time >= 100 OR run_time >= 100);
+UPDATE manufacturing_routes r SET is_active = TRUE
+ WHERE r.is_standard AND r.situation = 'APROVADA' AND NOT r.is_active
+   AND NOT EXISTS (SELECT 1 FROM manufacturing_routes o WHERE o.item_code = r.item_code AND o.is_active);
+-- Centro padrão das operações do demo (o tipo de máquina de mesmo número),
+-- como no seed: sem ele a etapa fica sem centro e sem máquina.
+UPDATE operations SET default_work_center_id = id WHERE id BETWEEN 1 AND 5 AND default_work_center_id IS NULL;
+-- Roteiro de acabado sem nenhuma etapa (demo antigo): sem etapas não há
+-- prazo, carga, máquina nem OF. Mesmas etapas do seed-demo.sql.
+INSERT INTO route_operations (route_id, sequence, operation_id, situation, is_active, created_at, updated_at)
+SELECT r.id, e.seq, e.op, 'APROVADA', TRUE, now(), now()
+FROM manufacturing_routes r
+CROSS JOIN LATERAL (VALUES (10, 1), (20, 2 + (r.id % 3)::int), (30, 5)) e(seq, op)
+WHERE r.is_active AND r.item_code BETWEEN 10001 AND 10050
+  AND NOT EXISTS (SELECT 1 FROM route_operations x WHERE x.route_id = r.id);
+-- Produtividade por máquina apagada por limpeza antiga: sem ela o MRP não
+-- escolhe máquina nem ocupa a agenda. Mesma regra do seed-demo.sql, só para o
+-- item com roteiro que ficou sem nenhuma.
+INSERT INTO item_machine_times (item_code, mask, production_time, setup_time, priority, machine_code,
+  production_time_unit, production_base_qty, efficiency_rate, enterprise_id)
+SELECT r.item_code, '', round(o.standard_time * 60, 2), round(o.setup_time * 60, 2),
+  row_number() OVER (PARTITION BY r.item_code, m.machine_type_code ORDER BY m.code),
+  m.code, 'MINUTO', 1, m.efficiency_rate, m.enterprise_id
+FROM manufacturing_routes r
+JOIN route_operations ro ON ro.route_id = r.id
+JOIN operations o ON o.id = ro.operation_id
+JOIN machines m ON m.machine_type_code = o.default_work_center_id
+WHERE r.is_active AND r.item_code BETWEEN 10001 AND 10050
+  AND NOT EXISTS (SELECT 1 FROM item_machine_times t WHERE t.item_code = r.item_code)
+ON CONFLICT DO NOTHING;
+-- Produtividade sem empresa (o seed antigo não gravava): a leitura é por
+-- empresa e a linha ficava invisível. A empresa é a da máquina.
+UPDATE item_machine_times t SET enterprise_id = m.enterprise_id FROM machines m
+ WHERE t.enterprise_id IS NULL AND m.code = t.machine_code;
+-- Versão de estrutura de teste: obsoleta, nunca aprovada e sem linha. Deixava
+-- o item sob controle de versão sem versão vigente e travava a OF.
+DELETE FROM bom_headers h WHERE h.status = 'OBSOLETE' AND h.approved_at IS NULL
+   AND NOT EXISTS (SELECT 1 FROM bom_header_lines l WHERE l.bom_header_id = h.id);
+COMMIT;"
 bash scripts/seed-demo-beneficiamento.sh
+bash scripts/seed-demo-cadeia.sh
+bash scripts/seed-demo-perfis.sh
 # Só completa o que falta: novos cadastros de apoio chegam sem recriar o demo.
 psql_demo -q < scripts/seed-demo-cadastros-fiscais.sql
 # Os 50 clientes do demo têm 2 raízes de CNPJ (um só grupo econômico) e títulos

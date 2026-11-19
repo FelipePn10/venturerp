@@ -141,6 +141,46 @@ func (r *ProductionOrderRepositoryPGX) CadeiaDaOF(ctx context.Context, orderID i
 		return out, err
 	}
 
+	// A demanda independente não desce pela cadeia gravada (como o pedido): a
+	// ordem da bucha ligada à demanda do RN contaria como cobertura da demanda
+	// com item diferente. Ela é lida subindo a cadeia até a OF do topo.
+	demandas, err := r.pool.Query(ctx, `
+		WITH RECURSIVE acima(pl, ofid) AS (
+		    SELECT o.planned_order_id, o.id FROM production_orders o WHERE o.id = $1 AND o.enterprise_id = $2
+		    UNION
+		    SELECT COALESCE(l.parent_planned_order_id, po.planned_order_id),
+		           COALESCE(l.parent_production_order_id,
+		                    (SELECT x.id FROM production_orders x
+		                      WHERE x.planned_order_id = l.parent_planned_order_id AND x.enterprise_id = $2 AND x.is_active
+		                      ORDER BY x.id DESC LIMIT 1))
+		      FROM acima a
+		      JOIN production_chain_links l ON l.enterprise_id = $2 AND l.child_planned_order_id = a.pl
+		      LEFT JOIN production_orders po ON po.id = l.parent_production_order_id AND po.enterprise_id = $2
+		)
+		SELECT DISTINCT d.code, d.motivo, d.item_code, COALESCE(i.business_code::text, ''), COALESCE(i.name, ''),
+		       d.quantity, d.demand_date, d.situacao
+		  FROM acima a
+		  JOIN independent_demand_orders v ON v.enterprise_id = $2
+		       AND (v.planned_order_id = a.pl OR v.production_order_id = a.ofid)
+		  JOIN independent_demands d ON d.id = v.demand_id AND d.enterprise_id = $2
+		  LEFT JOIN items i ON i.code = d.item_code AND i.enterprise_id = $2
+		 ORDER BY d.demand_date, d.code`, orderID, enterpriseID)
+	if err != nil {
+		return out, fmt.Errorf("lendo as demandas da OF %d: %w", orderID, err)
+	}
+	for demandas.Next() {
+		var dm entity.DemandaDaCadeia
+		if err := demandas.Scan(&dm.Code, &dm.Motivo, &dm.ItemCode, &dm.BusinessCode, &dm.Description, &dm.Quantity, &dm.DemandDate, &dm.Situacao); err != nil {
+			demandas.Close()
+			return out, fmt.Errorf("lendo a demanda da OF: %w", err)
+		}
+		out.Demandas = append(out.Demandas, dm)
+	}
+	demandas.Close()
+	if err := demandas.Err(); err != nil {
+		return out, err
+	}
+
 	if out.Pais, err = r.elosDaCadeia(ctx, `
 		SELECT DISTINCT pp.code, COALESCE(lof.id, pof.id), COALESCE(lof.order_number, pof.order_number),
 		       COALESCE(lof.item_code, pp.item_code), COALESCE(i.business_code::text, ''), COALESCE(i.name, ''),

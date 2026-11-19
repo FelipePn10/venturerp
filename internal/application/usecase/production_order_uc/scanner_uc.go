@@ -22,6 +22,9 @@ import (
 type ProductionScannerUseCase struct {
 	Repo repository.ProductionScannerRepository
 	Auth ports.AuthService
+	// CustoAutomatico recalcula o custo real da OF depois da leitura que
+	// apontou peças ou fechou etapa (horas). Opcional.
+	CustoAutomatico *SettleProductionCostUseCase
 }
 
 func (uc *ProductionScannerUseCase) CreateToken(ctx context.Context, dto request.CreateProductionScanTokenDTO) (*response.ProductionScanTokenResponse, error) {
@@ -103,7 +106,13 @@ func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.Produc
 	payload, _ := json.Marshal(dto)
 	fingerprint := sha256.Sum256(payload)
 	tokenHash := sha256.Sum256([]byte(dto.Token))
-	return uc.Repo.ExecuteScan(ctx, entity.ScanCommand{EnterpriseID: enterpriseID, UserID: userID, TokenHash: tokenHash[:], Action: action, IdempotencyKey: dto.IdempotencyKey, DeviceID: dto.DeviceID, Fingerprint: fingerprint[:], EmployeeID: dto.EmployeeID, GoodQuantity: good, ScrapQuantity: scrap, Hours: hours, ScrapReason: dto.ScrapReason, CompleteOperation: dto.CompleteOperation})
+	res, err := uc.Repo.ExecuteScan(ctx, entity.ScanCommand{EnterpriseID: enterpriseID, UserID: userID, TokenHash: tokenHash[:], Action: action, IdempotencyKey: dto.IdempotencyKey, DeviceID: dto.DeviceID, Fingerprint: fingerprint[:], EmployeeID: dto.EmployeeID, GoodQuantity: good, ScrapQuantity: scrap, Hours: hours, ScrapReason: dto.ScrapReason, CompleteOperation: dto.CompleteOperation})
+	// A leitura que aponta mexe no custo como o apontamento da tela: material
+	// da baixa automática, peças e horas da etapa. Repetição não muda nada.
+	if err == nil && res != nil && !res.Replayed && action == entity.ScanAppoint {
+		uc.CustoAutomatico.Atualizar(ctx, res.ProductionOrderID)
+	}
+	return res, err
 }
 func defaultZero(v string) string {
 	if strings.TrimSpace(v) == "" {

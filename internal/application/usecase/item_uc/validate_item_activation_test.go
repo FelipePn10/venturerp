@@ -122,3 +122,30 @@ func TestProntidaoPegaOsCasosDaTecnofer(t *testing.T) {
 		t.Fatalf("comprado limpo reprovado: %+v", r)
 	}
 }
+
+type ativacaoUnidades struct{ faltam []string }
+
+func (a ativacaoUnidades) UnidadesDeCompraSemConversao(context.Context, int64) ([]string, error) {
+	return a.faltam, nil
+}
+
+// Chapas 8 e 9 da Tecnofer: compra em UN (fonte de suprimento), estoque em KG
+// e só CHAPA→KG cadastrada. Antes saíam liberadas e só falhavam na aprovação
+// do pedido; agora a liberação acusa a unidade sem conversão.
+func TestLiberacaoBarraCompraSemConversao(t *testing.T) {
+	item := &entity.Item{Code: 500, Engineering: entity.Engineering{Type: types.COMPRADO}}
+	base := func(u conferidorDeUnidadesDeCompra) *ValidateItemActivationUseCase {
+		return &ValidateItemActivationUseCase{Auth: ativacaoAuth{}, StructureRepo: ativacaoEstrutura{}, RoutingRepo: ativacaoRoteiro{},
+			Suppliers: ativacaoFontes{com: map[int64]bool{500: true}}, UnidadesDeCompra: u}
+	}
+	r, err := base(ativacaoUnidades{faltam: []string{"UN→KG (fonte de suprimento)"}}).validate(context.Background(), item, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Ready || !temProblema(r, "compra sem conversão para a unidade de estoque: UN→KG (fonte de suprimento)") {
+		t.Fatalf("compra sem conversão passou na liberação: %+v", r)
+	}
+	if r, _ = base(ativacaoUnidades{}).validate(context.Background(), item, 500); !r.Ready {
+		t.Fatalf("com conversão cadastrada deveria liberar: %+v", r)
+	}
+}
