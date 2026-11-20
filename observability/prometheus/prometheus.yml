@@ -40,6 +40,18 @@ scrape_configs:
           env: production
           tenant: usimac
 
+  - job_name: venturerp-api-truckparts
+    metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/tokens/truckparts
+    static_configs:
+      - targets: ["host.docker.internal:5076"]
+        labels:
+          service: venturerp-api-truckparts
+          env: production
+          tenant: truckparts
+
   - job_name: venturerp-api-development
     metrics_path: /metrics
     static_configs:

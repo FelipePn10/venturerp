@@ -74,8 +74,8 @@ func TestSelfUpdateSuccessAndRollback(t *testing.T) {
 const dockerMock = `#!/bin/sh
 printf 'docker %s\n' "$*" >>"${MOCK_LOG:-/dev/null}"
 if [ "$1" = compose ]; then
-  printf 'composeenv profiles=%s main=%s usimac=%s\n' \
-    "${COMPOSE_PROFILES:-}" "${VENTURERP_API_ENV:-}" "${VENTURERP_USIMAC_API_ENV:-}" >>"${MOCK_LOG:-/dev/null}"
+  printf 'composeenv profiles=%s main=%s usimac=%s truckparts=%s\n' \
+    "${COMPOSE_PROFILES:-}" "${VENTURERP_API_ENV:-}" "${VENTURERP_USIMAC_API_ENV:-}" "${VENTURERP_TRUCKPARTS_API_ENV:-}" >>"${MOCK_LOG:-/dev/null}"
 fi
 case "$1" in
   inspect|pull|rm|compose) exit 0 ;;
@@ -106,8 +106,8 @@ func mustWrite(t *testing.T, path, content string, mode os.FileMode) {
 	}
 }
 
-// TestSelfUpdateMultiTenant cobre o ciclo com duas empresas clientes na mesma
-// VPS: cada base precisa de backup próprio, migration própria e health-check
+// TestSelfUpdateMultiTenant cobre o ciclo com três empresas na mesma VPS
+// (Tecnofer, Usimac e Truckparts): cada base precisa de backup próprio, migration própria e health-check
 // próprio, e uma falha precisa restaurar as duas — nunca só a principal.
 func TestSelfUpdateMultiTenant(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -132,12 +132,14 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			logPath := filepath.Join(root, "docker.log")
 			mainEnv := filepath.Join(root, ".env")
 			usimacEnv := filepath.Join(root, ".env.usimac")
+			truckpartsEnv := filepath.Join(root, ".env.truckparts")
 			mustMkdir(t, bin)
 			mustMkdir(t, updateDir)
 			mustWrite(t, filepath.Join(updateDir, "request.json"), `{"version":"1.2.3","requested_at":"2026-07-15T12:00:00Z"}`, 0o600)
 			mustWrite(t, filepath.Join(updateDir, "active.lock"), "", 0o600)
 			mustWrite(t, mainEnv, "", 0o600)
 			mustWrite(t, usimacEnv, "", 0o600)
+			mustWrite(t, truckpartsEnv, "", 0o600)
 			mustWrite(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\n[ \"$1\" = is-active ] && exit 1\nexit 0\n", 0o755)
 			mustWrite(t, filepath.Join(bin, "curl"), "#!/bin/sh\nexit 0\n", 0o755)
 			mustWrite(t, filepath.Join(bin, "docker"), dockerMock, 0o755)
@@ -150,10 +152,13 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 				"LOCK_FILE=" + filepath.Join(root, "update.lock") + "\n" +
 				"DATABASE_CONTAINER=db\nDATABASE_USER=user\nDATABASE_NAME=erp\n" +
 				"DATABASE_URL=postgres://user:secret@127.0.0.1:5432/erp?sslmode=disable\n" +
-				"VENTURERP_TENANTS=usimac\n" +
+				"VENTURERP_TENANTS=\"usimac truckparts\"\n" +
 				"TENANT_USIMAC_DATABASE_URL=postgres://venturerp_usimac:outra@127.0.0.1:5432/venturerp_usimac?sslmode=disable\n" +
 				"TENANT_USIMAC_API_ENV_FILE=" + usimacEnv + "\n" +
 				"TENANT_USIMAC_HEALTH_URL=http://127.0.0.1:5075/health/ready\n" +
+				"TENANT_TRUCKPARTS_DATABASE_URL=postgres://venturerp_truckparts:tp@127.0.0.1:5432/venturerp_truckparts?sslmode=disable\n" +
+				"TENANT_TRUCKPARTS_API_ENV_FILE=" + truckpartsEnv + "\n" +
+				"TENANT_TRUCKPARTS_HEALTH_URL=http://127.0.0.1:5076/health/ready\n" +
 				"LEGACY_SERVICE=legacy.service\nHEALTH_ATTEMPTS=1\nHEALTH_INTERVAL_SECONDS=0\n"
 			configPath := filepath.Join(root, "update.env")
 			mustWrite(t, configPath, config, 0o600)
@@ -188,14 +193,17 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			assertLoggedCall(t, logged, "pg_dump -U venturerp_usimac", "-d venturerp_usimac ")
 			assertBackupExists(t, backupDir, "pre-update-1.2.3-")
 			assertBackupExists(t, backupDir, "pre-update-usimac-1.2.3-")
+			assertLoggedCall(t, logged, "pg_dump -U venturerp_truckparts", "-d venturerp_truckparts ")
+			assertBackupExists(t, backupDir, "pre-update-truckparts-1.2.3-")
 
 			if !test.failRun {
 				// Migration precisa rodar contra as duas bases, não só a principal.
 				assertLoggedCall(t, logged, "migrate/migrate", "-database=postgres://user:secret@127.0.0.1:5432/erp?sslmode=disable")
 				assertLoggedCall(t, logged, "migrate/migrate", "-database=postgres://venturerp_usimac:outra@127.0.0.1:5432/venturerp_usimac?sslmode=disable")
-				// O contêiner da Usimac só sobe se o perfil e o env file chegarem ao compose.
-				if !strings.Contains(logged, "composeenv profiles=usimac main="+mainEnv+" usimac="+usimacEnv) {
-					t.Fatalf("compose não recebeu perfil/env da Usimac:\n%s", logged)
+				assertLoggedCall(t, logged, "migrate/migrate", "-database=postgres://venturerp_truckparts:tp@127.0.0.1:5432/venturerp_truckparts?sslmode=disable")
+				// Os contêineres só sobem se perfis e env files chegarem ao compose.
+				if !strings.Contains(logged, "composeenv profiles=usimac,truckparts main="+mainEnv+" usimac="+usimacEnv+" truckparts="+truckpartsEnv) {
+					t.Fatalf("compose não recebeu perfis/env de Usimac e Truckparts:\n%s", logged)
 				}
 				return
 			}
@@ -203,6 +211,7 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			// No rollback, as duas bases precisam ser restauradas.
 			assertLoggedCall(t, logged, "pg_restore -U user", "-d erp ")
 			assertLoggedCall(t, logged, "pg_restore -U venturerp_usimac", "-d venturerp_usimac ")
+			assertLoggedCall(t, logged, "pg_restore -U venturerp_truckparts", "-d venturerp_truckparts ")
 		})
 	}
 }
