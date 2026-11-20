@@ -263,10 +263,21 @@ func run(databaseURL string, code int, name string, users userList, fiscal fisca
 				break
 			}
 		}
+		// id = código quando o id está livre. A sequência não volta no rollback
+		// (o -dry-run a gasta), e id ≠ código esconde em produção o erro de
+		// comparar enterprise_code com tenant.ID, que a Tecnofer (1/1) nunca mostra.
 		if err := tx.QueryRow(ctx,
-			`INSERT INTO enterprise (code, name, created_by) VALUES ($1, $2, $3::uuid) RETURNING id`,
+			`INSERT INTO enterprise (id, code, name, created_by)
+			 VALUES (CASE WHEN EXISTS (SELECT 1 FROM enterprise WHERE id = $1::bigint)
+			              THEN nextval(pg_get_serial_sequence('enterprise', 'id')) ELSE $1::bigint END,
+			         $1::bigint, $2, $3::uuid)
+			 RETURNING id`,
 			code, name, creator).Scan(&enterpriseID); err != nil {
 			return fmt.Errorf("criar empresa: %w", err)
+		}
+		if _, err := tx.Exec(ctx,
+			`SELECT setval(pg_get_serial_sequence('enterprise', 'id'), (SELECT max(id) FROM enterprise))`); err != nil {
+			return fmt.Errorf("acertar a sequência da empresa: %w", err)
 		}
 	case err != nil:
 		return fmt.Errorf("consultar empresa: %w", err)
