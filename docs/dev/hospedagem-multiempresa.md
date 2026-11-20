@@ -102,6 +102,12 @@ o `defaultApiUrl`:
   sempre. Daí em diante as senhas são independentes: trocar numa empresa não
   troca na outra. Quando os e-mails @truckparts.com.br chegarem, o ADMIN da
   Truckparts troca o e-mail no cadastro, e o seletor continua aparecendo.
+- A empresa nasce com **id = código** (Truckparts: 1/1, como Tecnofer e Usimac).
+  O `seed-tenant` garante isso mesmo depois de um `-dry-run`, que gasta a
+  sequência. Com id ≠ código, um filtro que compara `enterprise_code` com
+  `tenant.ID` só falharia em produção. Em 20/11/2026 a Truckparts tinha nascido
+  como id 2 e foi recriada como id 1, com backup em
+  `/var/backups/venturerp/manual/pre-id1-truckparts-*.dump`.
 - `defaultTenantId` só vale se o tenant tiver o mesmo `apiUrl` do padrão. Um
   catálogo incoerente não desvia o padrão para outro servidor.
 - O catálogo fica guardado por 24 h. Domínio desconhecido força uma nova busca, uma
