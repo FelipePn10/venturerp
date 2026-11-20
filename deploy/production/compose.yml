@@ -8,6 +8,7 @@
 #   serviço        perfil      porta   database              subdomínio
 #   api            (sempre)    5070    venturerp             api.venturerp.com
 #   api-usimac     usimac      5075    venturerp_usimac      usimac.api.venturerp.com
+#   api-truckparts truckparts  5076    venturerp_truckparts  truckparts.api.venturerp.com
 #   api-training   training    5071    venturerp_training    dev-api.venturerp.com
 #
 # Para adicionar um cliente, copie o bloco `api-usimac`, troque nome do
@@ -70,6 +71,36 @@ services:
       - /tmp:size=64m,mode=1777
     mem_limit: 768m
     cpus: 1.00
+
+  # Truckparts: segunda empresa do grupo Tecnofer (CNPJ e base próprios). No
+  # login, o desktop oferece Tecnofer/Truckparts lado a lado — ver
+  # docs/dev/hospedagem-multiempresa.md, "Grupo de empresas".
+  api-truckparts:
+    profiles: ["truckparts"]
+    image: ${VENTURERP_IMAGE:?VENTURERP_IMAGE is required}
+    container_name: venturerp-api-truckparts
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - ${VENTURERP_TRUCKPARTS_API_ENV:-/opt/venturerp/panossoerp/.env.truckparts}
+    environment:
+      SERVER_ADDR: "5076"
+      ENV: production
+      DATA_ENVIRONMENT: production
+      SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+    volumes:
+      - /var/lib/venturerp-update:/var/lib/venturerp-update:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    # Empresa nova e pequena: a API ociosa usa ~20 MB. O teto menor protege as
+    # outras duas na VPS de 3,7 GB; suba junto com o hardware se a operação crescer.
+    mem_limit: 384m
+    cpus: 0.75
 
   api-training:
     profiles: ["training"]

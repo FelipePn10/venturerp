@@ -75,7 +75,10 @@ func main() {
 	fiscalRazao := flag.String("fiscal-razao-social", "", "razão social completa")
 	fiscalIE := flag.String("fiscal-ie", "", "inscrição estadual")
 	fiscalUF := flag.String("fiscal-uf", "", "UF da empresa")
-	fiscalRegime := flag.String("fiscal-regime", "lucro_presumido", "regime tributário")
+	fiscalRegime := flag.String("fiscal-regime", "2", "regime tributário: 1 (Simples), 2 (Presumido) ou 3 (Real)")
+	fiscalFantasia := flag.String("fiscal-nome-fantasia", "", "nome fantasia")
+	fiscalComplemento := flag.String("fiscal-complemento", "", "complemento do endereço")
+	fiscalTelefone := flag.String("fiscal-telefone", "", "telefone, só dígitos com DDD")
 	fiscalLogradouro := flag.String("fiscal-logradouro", "", "logradouro")
 	fiscalNumero := flag.String("fiscal-numero", "", "número")
 	fiscalBairro := flag.String("fiscal-bairro", "", "bairro")
@@ -106,12 +109,21 @@ func main() {
 		os.Exit(2)
 	}
 
+	regime, err := regimeDoCadastro(*fiscalRegime)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "seed-tenant: %v\n", err)
+		os.Exit(2)
+	}
+
 	if err := run(*databaseURL, *enterpriseCode, *enterpriseName, users, fiscalConfig{
 		cnpj:            digitsOnly(*fiscalCNPJ),
 		razaoSocial:     *fiscalRazao,
 		ie:              digitsOnly(*fiscalIE),
 		uf:              strings.ToUpper(*fiscalUF),
-		regime:          *fiscalRegime,
+		regime:          regime,
+		nomeFantasia:    strings.TrimSpace(*fiscalFantasia),
+		complemento:     strings.TrimSpace(*fiscalComplemento),
+		telefone:        digitsOnly(*fiscalTelefone),
 		logradouro:      *fiscalLogradouro,
 		numero:          *fiscalNumero,
 		bairro:          *fiscalBairro,
@@ -128,6 +140,23 @@ type fiscalConfig struct {
 	cnpj, razaoSocial, ie, uf, regime     string
 	logradouro, numero, bairro, municipio string
 	codigoMunicipio, cep                  string
+	nomeFantasia, complemento, telefone   string
+}
+
+// regimeDoCadastro devolve o código que a identificação da empresa (VEMP0100)
+// aceita: "1" Simples, "2" Presumido, "3" Real. Gravar o texto por extenso
+// ("lucro_presumido") passava no seed e travava o primeiro salvamento da tela.
+func regimeDoCadastro(v string) (string, error) {
+	r := strings.ToLower(strings.TrimSpace(v))
+	switch {
+	case r == "1" || strings.Contains(r, "simples"):
+		return "1", nil
+	case r == "2" || strings.Contains(r, "presumido"):
+		return "2", nil
+	case r == "3" || r == "real" || strings.Contains(r, "lucro_real") || strings.Contains(r, "lucro real"):
+		return "3", nil
+	}
+	return "", fmt.Errorf("-fiscal-regime %q: use 1 (Simples), 2 (Presumido) ou 3 (Real)", v)
 }
 
 func (f fiscalConfig) requested() bool { return f.cnpj != "" }
@@ -267,12 +296,13 @@ func run(databaseURL string, code int, name string, users userList, fiscal fisca
 		tag, err := tx.Exec(ctx,
 			`INSERT INTO fiscal_configs (
 			   enterprise_id, cnpj_empresa, razao_social, ie_empresa, regime_tributario, uf_empresa,
-			   focus_nfe_ambiente, logradouro, numero, bairro, municipio, codigo_municipio, cep, updated_by)
-			 SELECT $1, $2, $3, $4, $5, $6, 'homologacao', $7, $8, $9, $10, $11, $12, $13::uuid
+			   focus_nfe_ambiente, logradouro, numero, bairro, municipio, codigo_municipio, cep, updated_by,
+			   trade_name, complemento, telefone)
+			 SELECT $1, $2, $3, $4, $5, $6, 'homologacao', $7, $8, $9, $10, $11, $12, $13::uuid, $14, $15, $16
 			 WHERE NOT EXISTS (SELECT 1 FROM fiscal_configs WHERE enterprise_id = $1)`,
 			enterpriseID, fiscal.cnpj, fiscal.razaoSocial, nullable(fiscal.ie), fiscal.regime, fiscal.uf,
 			fiscal.logradouro, fiscal.numero, fiscal.bairro, fiscal.municipio, fiscal.codigoMunicipio,
-			fiscal.cep, actor)
+			fiscal.cep, actor, nullable(fiscal.nomeFantasia), nullable(fiscal.complemento), nullable(fiscal.telefone))
 		if err != nil {
 			return fmt.Errorf("criar configuração fiscal: %w", err)
 		}

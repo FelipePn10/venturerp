@@ -31,6 +31,7 @@ mesma senha. Uma empresa cliente **nunca** define essa variável.
 |---|---|---|---|---|
 | Tecnofer | (sempre ativo) | 5070 | `venturerp` | `api.venturerp.com` |
 | Usimac | `usimac` | 5075 | `venturerp_usimac` | `usimac.api.venturerp.com` |
+| Truckparts (grupo Tecnofer) | `truckparts` | 5076 | `venturerp_truckparts` | `truckparts.api.venturerp.com` |
 | Treinamento | `training` | 5071 | `venturerp_training` | `dev-api.venturerp.com` |
 
 Portal de instalação e catálogo de empresas: `app.venturerp.com`
@@ -68,6 +69,48 @@ Detalhes que importam:
 
 Código: `src/services/tenantDirectory.ts` e `src/services/httpClient.ts` no
 repositório do frontend. Testes: `npm run test:tenant-directory`.
+
+### Grupo de empresas (Tecnofer + Truckparts)
+
+A Truckparts (CNPJ 64.815.197/0001-08, Simples Nacional) é do mesmo dono da
+Tecnofer (Lucro Real), mas é **outra empresa**: base, usuários, senhas e
+`JWT_SECRET` próprios. Ser do mesmo grupo não abre nada entre as duas — só muda o
+login.
+
+No catálogo, `group` reúne as empresas do grupo e `defaultTenantId` diz de quem é
+o `defaultApiUrl`:
+
+```json
+"defaultTenantId": "tecnofer",
+"tenants": [
+  { "id": "tecnofer",   "apiUrl": "https://api.venturerp.com",            "emailDomains": ["tecnofer.com.br"],   "group": "tecnofer" },
+  { "id": "truckparts", "apiUrl": "https://truckparts.api.venturerp.com", "emailDomains": ["truckparts.com.br"], "group": "tecnofer" },
+  { "id": "usimac",     "apiUrl": "https://usimac.api.venturerp.com",     "emailDomains": ["usimacusinagem.com.br"] }
+]
+```
+
+- E-mail que cai numa empresa de grupo com **mais de uma** empresa mostra o
+  seletor "Entrar em" (Tecnofer | Truckparts). Começa na empresa do domínio, ou na
+  última escolhida naquela máquina.
+- Quem cai no padrão (domínio fora do catálogo, ex.: Gmail) cai na Tecnofer e
+  também vê o seletor: o padrão sempre foi a Tecnofer.
+- Usimac não tem `group`: não aparece seletor, e uma escolha gravada de outra
+  empresa é ignorada. A escolha só vale **dentro** do grupo do e-mail.
+- Implantação (20/11/2026): a Truckparts nasceu com os mesmos 6 usuários da
+  Tecnofer (mesmo e-mail @tecnofer.com.br, mesmo papel e o hash da senha copiado).
+  A pessoa digita o e-mail de sempre, escolhe "Truckparts" e usa a senha de
+  sempre. Daí em diante as senhas são independentes: trocar numa empresa não
+  troca na outra. Quando os e-mails @truckparts.com.br chegarem, o ADMIN da
+  Truckparts troca o e-mail no cadastro, e o seletor continua aparecendo.
+- `defaultTenantId` só vale se o tenant tiver o mesmo `apiUrl` do padrão. Um
+  catálogo incoerente não desvia o padrão para outro servidor.
+- O catálogo fica guardado por 24 h. Domínio desconhecido força uma nova busca, uma
+  vez por sessão, para que o primeiro usuário de uma empresa recém-publicada não
+  caia no servidor padrão.
+- A troca de senha da tela de login vai para a empresa escolhida, não para o
+  último servidor usado na máquina.
+- Para trocar de empresa: sair e entrar escolhendo a outra. Cada sessão fala com
+  um servidor só.
 
 ## Entrando com um cliente novo
 
@@ -111,8 +154,14 @@ go run ./cmd/seed-tenant \
   -user "NOME COMPLETO|email@empresa.com.br|ADMIN" \
   -fiscal-cnpj "00.000.000/0000-00" -fiscal-razao-social "RAZÃO SOCIAL LTDA" \
   -fiscal-uf SP -fiscal-logradouro "Rua" -fiscal-numero "1" -fiscal-bairro "Centro" \
-  -fiscal-municipio "Cidade" -fiscal-codigo-municipio "<IBGE>" -fiscal-cep "00000-000"
+  -fiscal-municipio "Cidade" -fiscal-codigo-municipio "<IBGE>" -fiscal-cep "00000-000" \
+  -fiscal-regime 1 -fiscal-ie "<IE>" -fiscal-nome-fantasia "FANTASIA" \
+  -fiscal-complemento "<compl.>" -fiscal-telefone "<DDD+número>"
 ```
+
+`-fiscal-regime` grava o código que a VEMP0100 aceita: `1` Simples, `2` Presumido
+(padrão) ou `3` Real. Por extenso (`simples_nacional`, `lucro_real`) também serve.
+O texto por extenso, gravado como estava, travava o primeiro salvamento da tela.
 
 As senhas temporárias aparecem **uma vez** na saída. A configuração fiscal nasce em
 `homologacao` e sem token: emissão real só depois do certificado A1 e da
@@ -227,8 +276,9 @@ Agora o teto é explícito por empresa, e a soma cabe no limite compartilhado:
 |---|---|
 | Tecnofer | 25 |
 | Usimac | 15 |
+| Truckparts | 10 |
 | Treinamento | 8 |
-| **Total** | **48 de 100** |
+| **Total** | **58 de 100** |
 
 `DB_MIN_CONNS=2` mantém conexões quentes (a primeira tela depois de um período
 ocioso não paga abertura e autenticação). `DB_MAX_CONN_IDLE_MIN=15` é menor que os
