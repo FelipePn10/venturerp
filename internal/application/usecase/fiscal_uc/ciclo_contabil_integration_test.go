@@ -255,8 +255,18 @@ func TestIntegration_CicloContabil(t *testing.T) {
 	juros = juros.Add(jurosResto)
 
 	// 3. Recolhimento do IRRF.
+	// Pago em dia: o IRRF vence no dia 20 do mês seguinte à nota, e pagar "hoje"
+	// passava a cobrar multa e juros conforme o dia do mês em que o teste rodava.
 	ret, _ := titulo(`tipo_documento='RETENCAO'`)
-	if err := baixarP.Execute(ctx, ret, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(1500), DataPagamento: hoje}); err != nil {
+	pagoIRRF := hoje
+	var vencIRRF time.Time
+	if err := pool.QueryRow(bg, `SELECT data_vencimento FROM contas_pagar WHERE id=$1`, ret).Scan(&vencIRRF); err != nil {
+		t.Fatal(err)
+	}
+	if v := vencIRRF.Format("2006-01-02"); v < hoje {
+		pagoIRRF = v
+	}
+	if err := baixarP.Execute(ctx, ret, request.BaixarContaPagarDTO{ContaBancariaID: banco, ValorPago: decimal.NewFromFloat(1500), DataPagamento: pagoIRRF}); err != nil {
 		t.Fatalf("recolhimento do IRRF: %v", err)
 	}
 
