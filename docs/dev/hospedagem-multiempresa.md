@@ -84,14 +84,16 @@ o `defaultApiUrl`:
 "defaultTenantId": "tecnofer",
 "tenants": [
   { "id": "tecnofer",   "apiUrl": "https://api.venturerp.com",            "emailDomains": ["tecnofer.com.br"],   "group": "tecnofer" },
-  { "id": "truckparts", "apiUrl": "https://truckparts.api.venturerp.com", "emailDomains": ["truckparts.com.br"], "group": "tecnofer" },
+  { "id": "truckparts", "apiUrl": "https://truckparts.api.venturerp.com", "emailDomains": ["truckpartsir.com.br"], "group": "tecnofer" },
   { "id": "usimac",     "apiUrl": "https://usimac.api.venturerp.com",     "emailDomains": ["usimacusinagem.com.br"] }
 ]
 ```
 
 - E-mail que cai numa empresa de grupo com **mais de uma** empresa mostra o
-  seletor "Entrar em" (Tecnofer | Truckparts). Começa na empresa do domínio, ou na
-  última escolhida naquela máquina.
+  seletor "Entrar em" (Tecnofer | Truckparts). Começa na última empresa escolhida
+  naquela máquina **com o mesmo domínio de e-mail** (desktop ≥ 1.19.12), ou na
+  dona do domínio. É por domínio porque a mesma pessoa entra na Tecnofer com
+  @tecnofer.com.br e na Truckparts com @truckpartsir.com.br.
 - Quem cai no padrão (domínio fora do catálogo, ex.: Gmail) cai na Tecnofer e
   também vê o seletor: o padrão sempre foi a Tecnofer.
 - Usimac não tem `group`: não aparece seletor, e uma escolha gravada de outra
@@ -100,8 +102,10 @@ o `defaultApiUrl`:
   Tecnofer (mesmo e-mail @tecnofer.com.br, mesmo papel e o hash da senha copiado).
   A pessoa digita o e-mail de sempre, escolhe "Truckparts" e usa a senha de
   sempre. Daí em diante as senhas são independentes: trocar numa empresa não
-  troca na outra. Quando os e-mails @truckparts.com.br chegarem, o ADMIN da
-  Truckparts troca o e-mail no cadastro, e o seletor continua aparecendo.
+  troca na outra. Em 21/11/2026 Rulian (ADMIN) e Karin passaram, só na base da
+  Truckparts, para comercial@ e financeiro@truckpartsir.com.br, com a senha
+  padrão combinada. Os outros 4 seguem com @tecnofer.com.br até terem e-mail; o
+  ADMIN da Truckparts troca no cadastro quando chegarem.
 - A empresa nasce com **id = código** (Truckparts: 1/1, como Tecnofer e Usimac).
   O `seed-tenant` garante isso mesmo depois de um `-dry-run`, que gasta a
   sequência. Com id ≠ código, um filtro que compara `enterprise_code` com
