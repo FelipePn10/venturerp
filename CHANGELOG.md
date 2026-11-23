@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.16] — 2026-11-23
+
+- fix: apontamentos da revisão — linha ambígua, down da 509 e descarte com duas empresas (`9955eb30`)
+- fix: NF-e do romaneio, remessa ao terceiro, promessa e descarte de NF-e (bugs Y U R Q S V W Z H) (`f15fd6b0`)
+
 ### Correções
 - fix(romaneio/NF-e): a NF-e do romaneio e da carga grava a linha do pedido — autorizar soma o
   atendido e cancelar devolve o atendido, o status do pedido e a reserva (antes o pedido
