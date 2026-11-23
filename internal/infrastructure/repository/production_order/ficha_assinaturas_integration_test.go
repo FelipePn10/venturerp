@@ -19,7 +19,7 @@ func TestFichaDaOrdemHistoricoEAssinaturas(t *testing.T) {
 	a, b := testutil.DuasEmpresas(t, pool, nil)
 	item := testutil.UniqueCode()
 	testutil.NovosItens(t, pool, a.ID, ator, item)
-	var of, op, rota, roteiro, operacao, lote int64
+	var of, op, rota, roteiro, operacao int64
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -34,8 +34,6 @@ func TestFichaDaOrdemHistoricoEAssinaturas(t *testing.T) {
 	must(pool.QueryRow(base, `INSERT INTO production_order_operations(production_order_id,route_operation_id,sequence,operation_name,status,enterprise_id)
 		VALUES($1,$2,10,'Solda','PENDING',$3) RETURNING id`, of, rota, a.ID).Scan(&op))
 	t.Cleanup(func() {
-		pool.Exec(base, `DELETE FROM quality_lot_decisions WHERE lot_id=$1`, lote)
-		pool.Exec(base, `DELETE FROM quality_inspection_lots WHERE id=$1`, lote)
 		pool.Exec(base, `DELETE FROM production_order_operations WHERE id=$1`, op)
 		pool.Exec(base, `DELETE FROM production_orders WHERE id=$1`, of)
 		pool.Exec(base, `DELETE FROM route_operations WHERE id=$1`, rota)
@@ -52,12 +50,26 @@ func TestFichaDaOrdemHistoricoEAssinaturas(t *testing.T) {
 		must(err)
 		must(tx.Commit(base))
 	}
-	must(pool.QueryRow(base, `INSERT INTO quality_inspection_lots(enterprise_id,numero,origem,item_code,quantidade,production_order_id,status,created_by)
-		VALUES($1,$2,'FINAL',$3,2,$4,'DECIDIDO',$5) RETURNING id`, a.ID, testutil.UniqueCode()%1_000_000, item, of, ator).Scan(&lote))
-	_, err := pool.Exec(base, `INSERT INTO quality_lot_decisions(lot_id,enterprise_id,decisao,qtd_aceita,decided_at,decided_by) VALUES($1,$2,'ACEITO',2,NOW(),$3)`, lote, a.ID, ator)
-	must(err)
-
 	repo := productionrepo.NewProductionOrderRepositoryPGX(pool)
+	decidir := func(origem, decisao string) {
+		t.Helper()
+		var id int64
+		must(pool.QueryRow(base, `INSERT INTO quality_inspection_lots(enterprise_id,numero,origem,item_code,quantidade,production_order_id,status,created_by)
+			VALUES($1,$2,$3,$4,2,$5,'DECIDIDO',$6) RETURNING id`, a.ID, testutil.UniqueCode()%1_000_000, origem, item, of, ator).Scan(&id))
+		_, err := pool.Exec(base, `INSERT INTO quality_lot_decisions(lot_id,enterprise_id,decisao,qtd_aceita,decided_at,decided_by) VALUES($1,$2,$3,2,NOW(),$4)`, id, a.ID, decisao, ator)
+		must(err)
+		t.Cleanup(func() {
+			pool.Exec(base, `DELETE FROM quality_lot_decisions WHERE lot_id=$1`, id)
+			pool.Exec(base, `DELETE FROM quality_inspection_lots WHERE id=$1`, id)
+		})
+	}
+	// Inspeção de processo não é liberação final.
+	decidir("PROCESSO", "REJEITADO")
+	if f, err := repo.FichaDaOrdem(a.Ctx, of); err != nil || f.InspecaoFinal != nil || f.Qualidade.Quando != nil {
+		t.Fatalf("a decisão de processo saiu como inspeção final: %+v err=%v", f.InspecaoFinal, err)
+	}
+	decidir("FINAL", "ACEITO")
+
 	if _, err := repo.FichaDaOrdem(b.Ctx, of); err == nil {
 		t.Fatal("a empresa B leu a ficha da OF da A")
 	}

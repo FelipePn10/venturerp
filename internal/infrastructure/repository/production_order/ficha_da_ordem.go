@@ -310,14 +310,15 @@ func (r *ProductionOrderRepositoryPGX) assinaturasDaFicha(ctx context.Context, e
 			return fmt.Errorf("lendo a execução da ordem: %w", err)
 		}
 	}
-	// Qualidade: a última decisão de lote de inspeção da ordem.
+	// Qualidade: a última decisão do lote de inspeção FINAL da ordem — a de
+	// processo não é liberação e não pode aparecer como inspeção final.
 	var insp entity.InspecaoFinalDaFicha
 	err := r.pool.QueryRow(ctx, `SELECT d.decisao, COALESCE(d.qtd_aceita, 0), COALESCE(u.name, ''), d.decided_at
 		FROM quality_inspection_lots l
 		JOIN quality_lot_decisions d ON d.lot_id = l.id AND d.enterprise_id = l.enterprise_id
 		LEFT JOIN users u ON u.id = d.decided_by
-		WHERE l.production_order_id = $1 AND l.enterprise_id = $2 AND l.status = 'DECIDIDO'
-		ORDER BY (l.origem = 'FINAL') DESC, d.decided_at DESC LIMIT 1`, f.ID, eid).Scan(&insp.Decisao, &insp.QtdAceita, &insp.Inspetor, &insp.Quando)
+		WHERE l.production_order_id = $1 AND l.enterprise_id = $2 AND l.status = 'DECIDIDO' AND l.origem = 'FINAL'
+		ORDER BY d.decided_at DESC LIMIT 1`, f.ID, eid).Scan(&insp.Decisao, &insp.QtdAceita, &insp.Inspetor, &insp.Quando)
 	if err != nil && err != pgx.ErrNoRows {
 		return fmt.Errorf("lendo a liberação da qualidade: %w", err)
 	}
