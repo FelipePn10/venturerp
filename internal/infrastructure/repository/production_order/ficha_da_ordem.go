@@ -3,6 +3,7 @@ package production_order
 import (
 	"context"
 	"fmt"
+	"time"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
@@ -193,4 +194,21 @@ func (r *ProductionOrderRepositoryPGX) OrdensComCustoApurado(ctx context.Context
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// FusoDaEmpresa: fuso da empresa da sessão (padrão America/Sao_Paulo).
+func (r *ProductionOrderRepositoryPGX) FusoDaEmpresa(ctx context.Context) (*time.Location, error) {
+	eid, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var tz string
+	if err := r.pool.QueryRow(ctx, `SELECT COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo')`, eid).Scan(&tz); err != nil {
+		return nil, fmt.Errorf("lendo o fuso da empresa: %w", err)
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return nil, fmt.Errorf("fuso da empresa %q inválido: %w", tz, err)
+	}
+	return loc, nil
 }

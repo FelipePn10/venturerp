@@ -28,6 +28,9 @@ type manualOrderRepository interface {
 type manualOrderDefaultsReader interface {
 	GetManualOrderPlanner(context.Context, int64) (*int64, error)
 }
+type fusoDaEmpresaReader interface {
+	FusoDaEmpresa(context.Context) (*time.Location, error)
+}
 type warehouseChecker interface {
 	AlmoxarifadoDaEmpresa(context.Context, int64) (bool, error)
 }
@@ -156,7 +159,15 @@ func (uc *CreateProductionOrderUseCase) Execute(
 	if order.StartDate != nil && order.EndDate != nil && order.StartDate.After(*order.EndDate) {
 		return nil, errorsuc.NewValidationError("o início da ordem não pode ser depois do término")
 	}
-	order.StartDate, order.EndDate = inicioAPartirDeHoje(order.StartDate, order.EndDate, time.Now())
+	agora := time.Now()
+	if r, ok := uc.Repo.(fusoDaEmpresaReader); ok { // "hoje" é o dia da empresa, não o do processo
+		loc, err := r.FusoDaEmpresa(ctx)
+		if err != nil {
+			return nil, err
+		}
+		agora = agora.In(loc)
+	}
+	order.StartDate, order.EndDate = inicioAPartirDeHoje(order.StartDate, order.EndDate, agora)
 	if dto.CustomerCode != nil || dto.ProjectCode != nil {
 		repo, ok := uc.Repo.(origemDaOFRepo)
 		if !ok {
