@@ -168,6 +168,34 @@ func (r *APSRepositorySQLC) GetOpenProductionOrders(ctx context.Context) ([]doma
 	if err != nil {
 		return nil, err
 	}
+	if r.pool != nil {
+		// Mesma consulta do sqlc, com a data no fuso da empresa (ver diaNaEmpresa).
+		rows, err := r.pool.Query(ctx, `SELECT id,
+			CASE WHEN priority ~ '^[0-9]+$' THEN priority::int
+			     WHEN upper(priority) IN ('ALTA','HIGH','URGENTE','URGENT') THEN 1
+			     WHEN upper(priority) IN ('BAIXA','LOW') THEN 9 ELSE 5 END,
+			`+diaNaEmpresa("COALESCE(start_date, end_date)")+` AS planned_date
+			FROM production_orders
+			WHERE status IN ('OPEN','IN_PROGRESS') AND is_active AND enterprise_id = $1
+			ORDER BY 2, planned_date`, e)
+		if err != nil {
+			return nil, fmt.Errorf("fetching open production orders: %w", err)
+		}
+		defer rows.Close()
+		out := []domainrepo.OrderRow{}
+		for rows.Next() {
+			var o domainrepo.OrderRow
+			var quando *time.Time
+			if err := rows.Scan(&o.ID, &o.Priority, &quando); err != nil {
+				return nil, err
+			}
+			if quando != nil {
+				o.PlannedDate = *quando
+			}
+			out = append(out, o)
+		}
+		return out, rows.Err()
+	}
 	rows, err := r.q.GetOpenProductionOrders(ctx, e)
 	if err != nil {
 		return nil, fmt.Errorf("fetching open production orders: %w", err)

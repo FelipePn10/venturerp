@@ -14,6 +14,13 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 )
 
+// diaNaEmpresa: data pura vira a meia-noite no fuso da EMPRESA ($1 = id). Com
+// ::timestamptz valia o fuso da sessão (UTC em produção) e o dia começava às 21h
+// da véspera em São Paulo.
+func diaNaEmpresa(col string) string {
+	return "(" + col + "::timestamp AT TIME ZONE COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo'))"
+}
+
 func (r *APSRepositorySQLC) GetSelectedProductionOrders(ctx context.Context, f domainrepo.SequenceFilter) ([]domainrepo.OrderRow, error) {
 	if r.pool == nil {
 		return nil, fmt.Errorf("APS selection repository requires database pool")
@@ -24,8 +31,8 @@ func (r *APSRepositorySQLC) GetSelectedProductionOrders(ctx context.Context, f d
 	}
 	rows, err := r.pool.Query(ctx, `SELECT DISTINCT po.id,
 		CASE WHEN po.priority ~ '^[0-9]+$' THEN po.priority::int WHEN UPPER(po.priority) IN ('ALTA','HIGH','URGENTE') THEN 1 WHEN UPPER(po.priority) IN ('BAIXA','LOW') THEN 9 ELSE 5 END,
-		COALESCE(po.start_date::timestamptz,po.created_at),
-		COALESCE(pl.need_date::timestamptz,po.end_date::timestamptz,po.start_date::timestamptz,po.created_at)
+		COALESCE(`+diaNaEmpresa("po.start_date")+`,po.created_at),
+		COALESCE(`+diaNaEmpresa("pl.need_date")+`,`+diaNaEmpresa("po.end_date")+`,`+diaNaEmpresa("po.start_date")+`,po.created_at)
 		FROM production_orders po JOIN production_order_operations op ON op.production_order_id=po.id AND op.enterprise_id=po.enterprise_id
 		LEFT JOIN planned_orders pl ON pl.id=po.planned_order_id AND pl.enterprise_id=po.enterprise_id
 		WHERE po.enterprise_id=$1 AND po.status IN ('OPEN','RELEASED','IN_PROGRESS')
@@ -84,7 +91,7 @@ func (r *APSRepositorySQLC) ListSequencingEvents(ctx context.Context, f domainre
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.pool.Query(ctx, `SELECT 'SCRAP',po.id,po.order_number,NULL::bigint,op.work_center_id,op.id,d.destination_date::timestamptz,d.scrap_quantity::text,COALESCE(d.destination_kind,'')
+	rows, err := r.pool.Query(ctx, `SELECT 'SCRAP',po.id,po.order_number,NULL::bigint,op.work_center_id,op.id,`+diaNaEmpresa("d.destination_date")+`,d.scrap_quantity::text,COALESCE(d.destination_kind,'')
 		FROM production_order_scrap_destinations d JOIN production_orders po ON po.id=d.production_order_id AND po.enterprise_id=d.enterprise_id
 		LEFT JOIN LATERAL (SELECT candidate.id,candidate.work_center_id FROM production_order_operations candidate
 			WHERE candidate.production_order_id=po.id AND candidate.enterprise_id=po.enterprise_id
@@ -92,7 +99,7 @@ func (r *APSRepositorySQLC) ListSequencingEvents(ctx context.Context, f domainre
 			AND ($5::bigint[] IS NULL OR EXISTS(SELECT 1 FROM machines m JOIN machine_types mt ON mt.code=m.machine_type_code WHERE m.id=ANY($5) AND m.enterprise_id=$1 AND mt.id=candidate.work_center_id))
 			ORDER BY candidate.sequence LIMIT 1) op ON TRUE
 		WHERE d.enterprise_id=$1 AND ($2::bigint[] IS NULL OR po.id=ANY($2)) AND (($3::bigint[] IS NULL AND $4::bigint[] IS NULL AND $5::bigint[] IS NULL) OR op.id IS NOT NULL)
-		UNION ALL SELECT 'DOWNTIME',0,0,mp.machine_id,mo.work_center_id,NULL,mo.scheduled_date::timestamptz,mo.estimated_hours::text,COALESCE(mo.notes,'')
+		UNION ALL SELECT 'DOWNTIME',0,0,mp.machine_id,mo.work_center_id,NULL,`+diaNaEmpresa("mo.scheduled_date")+`,mo.estimated_hours::text,COALESCE(mo.notes,'')
 		FROM maintenance_orders mo JOIN maintenance_plans mp ON mp.id=mo.plan_id JOIN machines m ON m.id=mp.machine_id
 		WHERE m.enterprise_id=$1 AND ($3::bigint[] IS NULL OR mo.work_center_id=ANY($3)) AND ($5::bigint[] IS NULL OR mp.machine_id=ANY($5)) ORDER BY 7`,
 		enterpriseID, nullIDs(f.OrderIDs), nullIDs(f.WorkCenterIDs), nullIDs(f.OperationIDs), nullIDs(f.MachineIDs))

@@ -6,6 +6,19 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(OF): a OF nasce com início a partir de hoje — início vazio ou no passado (prazo
+  vencido do MRP, data digitada para trás) vira a data de hoje, e o término nunca fica
+  antes do início. Vale para OF manual, firmada do MRP e gerada da demanda independente.
+- fix(ficha da OF): "Iniciada em" mostra o primeiro apontamento real das etapas e
+  "Concluída em" o último término; sem apontamento, a ficha mantém "Início previsto".
+- fix(datas): data pura convertida com `::timestamptz` virava 21h da véspera (banco em
+  UTC, API em São Paulo). Corrigido também na Central de Pendências ("mais antiga de"
+  saía um dia antes), no sequenciamento do APS (início/necessidade da OF, refugo e
+  manutenção agora à meia-noite no fuso da empresa), na acuracidade do inventário (o
+  fechamento no dia 1º contava no mês anterior) e no relatório de horas de
+  beneficiamento (recebimento e apontamentos).
+
 ## [v1.19.14] — 2026-11-23
 
 - fix(ficha da OF): datas impressas um dia antes (`27c11d90`)

@@ -21,38 +21,38 @@ func New(pool *pgxpool.Pool) *Repo { return &Repo{pool: pool} }
 // do processo, não CURRENT_DATE: ver AGENTS.md, dois relógios).
 const contagensSQL = `
 WITH plano AS (SELECT MAX(plan_code) p FROM mrp_planned_suggestions WHERE enterprise_id = $1)
-SELECT 'ofs_atrasadas', COUNT(*), 0::numeric, MIN(end_date)::timestamptz
+SELECT 'ofs_atrasadas', COUNT(*), 0::numeric, MIN(end_date)::date
   FROM production_orders WHERE enterprise_id = $1 AND status IN ('OPEN','IN_PROGRESS') AND end_date < $3::date
 UNION ALL
-SELECT 'sugestoes_a_firmar', COUNT(*), 0, MIN(s.start_date)::timestamptz
+SELECT 'sugestoes_a_firmar', COUNT(*), 0, MIN(s.start_date)::date
   FROM mrp_planned_suggestions s, plano
  WHERE s.enterprise_id = $1 AND s.plan_code = plano.p AND s.start_date <= $3::date + 7
    AND NOT EXISTS (SELECT 1 FROM planned_orders o WHERE o.enterprise_id = $1 AND o.mrp_suggestion_code = s.code AND o.is_active)
 UNION ALL
-SELECT 'excecoes_mrp', COUNT(*), 0, NULL::timestamptz
+SELECT 'excecoes_mrp', COUNT(*), 0, NULL::date
   FROM mrp_exception_messages m, plano WHERE m.enterprise_id = $1 AND m.plan_code = plano.p
 UNION ALL
-SELECT 'compras_sem_preco', COUNT(*), 0, MIN(po.emission_date)::timestamptz
+SELECT 'compras_sem_preco', COUNT(*), 0, MIN(po.emission_date)::date
   FROM purchase_order_items i JOIN purchase_orders po ON po.code = i.purchase_order_code
  WHERE po.enterprise_code = $2 AND po.status IN ('DRAFT','REQUESTED','APPROVED','PARTIAL')
    AND COALESCE(i.status,'') NOT IN ('CANCELLED','RECEIVED') AND COALESCE(i.unit_price, 0) <= 0
 UNION ALL
-SELECT 'pedidos_portal', COUNT(*), COALESCE(SUM(total_net),0), MIN(emission_date)::timestamptz
+SELECT 'pedidos_portal', COUNT(*), COALESCE(SUM(total_net),0), MIN(emission_date)::date
   FROM sales_orders WHERE enterprise_code = $2 AND origin = 'PORTAL' AND status = 'R'
 UNION ALL
-SELECT 'notas_a_lancar', COUNT(*), COALESCE(SUM(valor_total),0), MIN(data_entrada)::timestamptz
+SELECT 'notas_a_lancar', COUNT(*), COALESCE(SUM(valor_total),0), MIN(data_entrada)::date
   FROM fiscal_entries WHERE enterprise_id = $1 AND status IN ('PENDING','CONFERRED') AND is_active
 UNION ALL
-SELECT 'efeitos_nfe_pendentes', COUNT(*), 0, NULL::timestamptz
+SELECT 'efeitos_nfe_pendentes', COUNT(*), 0, NULL::date
   FROM fiscal_exit_pendencias WHERE enterprise_id = $1 AND resolvido_em IS NULL
 UNION ALL
-SELECT 'pagar_vencendo', COUNT(*), COALESCE(SUM(valor_bruto - COALESCE(valor_pago,0)),0), MIN(data_vencimento)::timestamptz
+SELECT 'pagar_vencendo', COUNT(*), COALESCE(SUM(valor_bruto - COALESCE(valor_pago,0)),0), MIN(data_vencimento)::date
   FROM contas_pagar WHERE enterprise_id = $1 AND status NOT IN ('PAGO','CANCELADO') AND data_vencimento <= $3::date + 3
 UNION ALL
-SELECT 'receber_vencidos', COUNT(*), COALESCE(SUM(valor_bruto - COALESCE(valor_recebido,0)),0), MIN(data_vencimento)::timestamptz
+SELECT 'receber_vencidos', COUNT(*), COALESCE(SUM(valor_bruto - COALESCE(valor_recebido,0)),0), MIN(data_vencimento)::date
   FROM contas_receber WHERE enterprise_id = $1 AND status NOT IN ('RECEBIDO','CANCELADO') AND data_vencimento < $3::date
 UNION ALL
-SELECT 'inventarios_abertos', COUNT(*), 0, MIN(start_date)::timestamptz
+SELECT 'inventarios_abertos', COUNT(*), 0, MIN(start_date)::date
   FROM physical_inventories WHERE enterprise_id = $1 AND status IN ('OPEN','EM_CONFERENCIA','AGUARDANDO_APROVACAO')`
 
 // Contagens lê as pendências da empresa da sessão.

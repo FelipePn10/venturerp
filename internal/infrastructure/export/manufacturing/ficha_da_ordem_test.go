@@ -115,3 +115,24 @@ func TestOrdemImpressaEmPretoEBranco(t *testing.T) {
 		t.Skip("conteúdo do PDF comprimido: a checagem de cor não se aplica")
 	}
 }
+
+// "Iniciada em" mostra o primeiro apontamento real; sem apontamento fica o previsto.
+func TestOrdemImpressaUsaADataReal(t *testing.T) {
+	previsto := time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
+	f := fichaDeTeste()
+	f.Inicio = &previsto
+	if o := MontarOrdemImpressa(f, time.Now()); o.Grade[2][0].Valor != "16/11/2026" {
+		t.Fatalf("em produção vale o início apontado: %+v", o.Grade[2][0])
+	}
+	for i := range f.Etapas {
+		f.Etapas[i].Inicio = nil
+	}
+	if o := MontarOrdemImpressa(f, time.Now()); o.Grade[2][0].Rotulo != "Início previsto" || o.Grade[2][0].Valor != "10/11/2026" {
+		t.Fatalf("sem apontamento fica o previsto: %+v", o.Grade[2][0])
+	}
+	fim := time.Date(2026, 11, 18, 17, 0, 0, 0, time.UTC)
+	f.Status, f.Etapas[0].Inicio, f.Etapas[0].Fim = "COMPLETED", &previsto, &fim
+	if o := MontarOrdemImpressa(f, time.Now()); o.Grade[2][1].Rotulo != "Concluída em" || o.Grade[2][1].Valor != "18/11/2026" {
+		t.Fatalf("concluída mostra o último término apontado: %+v", o.Grade[2][1])
+	}
+}

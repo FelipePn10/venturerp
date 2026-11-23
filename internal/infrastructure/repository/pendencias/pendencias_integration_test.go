@@ -32,6 +32,11 @@ func TestCentralDePendenciasPorEmpresa(t *testing.T) {
 	if ca["ofs_atrasadas"].Quantidade != 1 {
 		t.Fatalf("empresa A: %+v", ca["ofs_atrasadas"])
 	}
+	// "mais antiga de" é dia puro: o texto do JSON tem de trazer o mesmo dia,
+	// sem virar 21h da véspera (banco em UTC, API em São Paulo).
+	if j, _ := ca["ofs_atrasadas"].MaisAntiga.MarshalJSON(); string(j[1:11]) != vencida.Format("2006-01-02") {
+		t.Fatalf("mais antiga = %s, quer %s", j, vencida.Format("2006-01-02"))
+	}
 	cb, err := repo.Contagens(b.Ctx)
 	if err != nil {
 		t.Fatal(err)
