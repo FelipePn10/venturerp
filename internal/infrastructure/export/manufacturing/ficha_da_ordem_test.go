@@ -136,3 +136,56 @@ func TestOrdemImpressaUsaADataReal(t *testing.T) {
 		t.Fatalf("concluída mostra o último término apontado: %+v", o.Grade[2][1])
 	}
 }
+
+// A prioridade sai em português; a instrução e as pausas da etapa, o operador e
+// as assinaturas com data saem do que o sistema registrou.
+func TestOrdemImpressaPrioridadeHistoricoEAssinaturas(t *testing.T) {
+	f := fichaDeTeste()
+	f.Prioridade, f.Status = "HIGH", "COMPLETED"
+	f.Observacoes = "Rebarbar as bordas antes da pintura"
+	h := func(hh, mm int) time.Time { return time.Date(2026, 11, 16, hh, mm, 0, 0, time.UTC) }
+	f.Etapas[0].Instrucao = "Conferir   o esquadro"
+	f.Etapas[0].Eventos = []entity.EventoDaEtapa{
+		{Status: "IN_PROGRESS", Quando: h(8, 5), Quem: "Ana"},
+		{Status: "PAUSED", Quando: h(10, 0), Quem: "Ana", Motivo: "almoço"},
+		{Status: "IN_PROGRESS", Quando: h(11, 0), Quem: "Bruno"},
+		{Status: "DONE", Quando: h(12, 0), Quem: "Bruno"},
+	}
+	emitida, separada, executada := h(7, 0), h(7, 30), h(12, 0)
+	f.Emissao = entity.AssinaturaDaFicha{Nome: "Carla PCP", Quando: &emitida}
+	f.Separacao = entity.AssinaturaDaFicha{Nome: "Davi", Quando: &separada}
+	f.Execucao = entity.AssinaturaDaFicha{Nome: "Bruno", Quando: &executada}
+	f.InspecaoFinal = &entity.InspecaoFinalDaFicha{Decisao: "ACEITO", QtdAceita: decimal.NewFromInt(10), Inspetor: "Eva", Quando: h(13, 0)}
+	f.Qualidade = entity.AssinaturaDaFicha{Nome: "Eva", Quando: &executada}
+
+	o := MontarOrdemImpressa(f, h(14, 0))
+	if got := o.Grade[1][3].Valor; got != "Alta" {
+		t.Fatalf("prioridade = %q, quer Alta", got)
+	}
+	if len(o.Observacoes) != 1 || o.Observacoes[0] != "Rebarbar as bordas antes da pintura" {
+		t.Fatalf("observação da ordem: %v", o.Observacoes)
+	}
+	corte := o.Operacoes[0]
+	if corte.Operador != "Bruno" {
+		t.Fatalf("operador = %q, quer quem concluiu", corte.Operador)
+	}
+	if len(corte.Notas) != 2 || corte.Notas[0] != "Instrução: Conferir o esquadro" ||
+		corte.Notas[1] != "Histórico: Pausada 16/11 10:00 (almoço) · Ana; Retomada 16/11 11:00 · Bruno" {
+		t.Fatalf("notas da etapa: %q", corte.Notas)
+	}
+	quer := [4]AssinaturaImpressa{{"Carla PCP", "16/11/2026"}, {"Davi", "16/11/2026"}, {"Bruno", "16/11/2026"}, {"Eva", "16/11/2026"}}
+	if o.Assinaturas != quer {
+		t.Fatalf("assinaturas = %+v", o.Assinaturas)
+	}
+	if o.Inspecao != (InspecaoImpressa{"Aprovado", "10 UN", "Eva", "16/11/2026"}) {
+		t.Fatalf("inspeção = %+v", o.Inspecao)
+	}
+	if len(RenderFichaDaOrdem(f, Branding{}, h(14, 0))) == 0 {
+		t.Fatal("PDF vazio")
+	}
+	for p, quer := range map[string]string{"": "Normal", "LOW": "Baixa", "URGENTE": "Urgente", "urgent": "Urgente", "3": "3"} {
+		if got := rotuloPrioridade(p); got != quer {
+			t.Errorf("rotuloPrioridade(%q) = %q, quer %q", p, got, quer)
+		}
+	}
+}

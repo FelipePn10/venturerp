@@ -36,6 +36,31 @@ type FichaDaOrdem struct {
 	Materiais      []MaterialDaFicha
 	Ferramentas    []FerramentaDaFicha
 	OrdensTerceiro []OrdemTerceiroDaFicha
+	// Assinaturas: quem fez e quando, pelo que o sistema registrou. Vazia,
+	// a ficha deixa a linha para assinar à mão.
+	Emissao, Separacao, Execucao, Qualidade AssinaturaDaFicha
+	// InspecaoFinal: a decisão do lote de inspeção da OF (nil = sem decisão).
+	InspecaoFinal *InspecaoFinalDaFicha
+}
+
+type AssinaturaDaFicha struct {
+	Nome   string
+	Quando *time.Time
+}
+
+type InspecaoFinalDaFicha struct {
+	Decisao   string // ACEITO, ACEITO_COM_RESTRICAO, REJEITADO, PARCIAL
+	QtdAceita decimal.Decimal
+	Inspetor  string
+	Quando    time.Time
+}
+
+// EventoDaEtapa: uma mudança de situação da etapa (início, pausa, retomada…).
+type EventoDaEtapa struct {
+	Status string
+	Quando time.Time
+	Quem   string
+	Motivo string
 }
 
 type RoteiroDaFicha struct {
@@ -59,6 +84,10 @@ type EtapaDaFicha struct {
 	Observacao    string
 	Inicio        *time.Time
 	Fim           *time.Time
+	ID            int64
+	// Instrucao: a observação da etapa no roteiro (para o operador).
+	Instrucao string
+	Eventos   []EventoDaEtapa
 }
 
 type MaterialDaFicha struct {

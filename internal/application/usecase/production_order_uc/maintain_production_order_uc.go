@@ -23,9 +23,12 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 	if !uc.Auth.CanUpdateSalesOrder(ctx) {
 		return nil, errorsuc.ErrUnauthorized
 	}
+	// Só observação e prioridade: vale com a ordem em produção — é a instrução
+	// que o operador lê na ficha. Quantidade, datas e máquina seguem travadas.
+	soTexto := dto.PlannedQty == nil && dto.StartDate == nil && dto.EndDate == nil && dto.MachineID == nil
 	if phase4, ok := uc.Repo.(interface {
 		GetMaintenance(context.Context, *int64) ([]entity.ProductionOrderMaintenanceView, error)
-	}); ok {
+	}); ok && !soTexto {
 		views, err := phase4.GetMaintenance(ctx, &dto.ID)
 		if err != nil {
 			return nil, err
@@ -41,9 +44,11 @@ func (uc *MaintainProductionOrderUseCase) Execute(ctx context.Context, dto reque
 	if order.Status == entity.StatusCompleted || order.Status == entity.StatusClosed || order.Status == entity.StatusCancelled {
 		return nil, errorsuc.NewValidationError("ordem de produção encerrada, concluída ou cancelada não pode ser alterada")
 	}
-	activity, err := uc.Repo.HasProductionActivity(ctx, dto.ID)
-	if err != nil {
-		return nil, err
+	activity := false
+	if !soTexto {
+		if activity, err = uc.Repo.HasProductionActivity(ctx, dto.ID); err != nil {
+			return nil, err
+		}
 	}
 	if activity {
 		return nil, errorsuc.NewValidationError("ordem de produção com movimento, apontamento, consumo ou separação no WMS não pode ser alterada")
