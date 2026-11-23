@@ -118,8 +118,11 @@ processar() { # dir
   lista="$(mktemp /tmp/venturerp-simulacao.XXXXXX.list)"
   docker exec -i "${TRAINING_DATABASE_CONTAINER}" pg_restore --list <"${dump}" >"${lista}"
   extensoes="$(awk '$4 == "EXTENSION" {print $6}' "${lista}" | sort -u)"
+  # Nome com hífen é válido (uuid-ossp): vai entre aspas. Falha ao criar derruba
+  # a cópia (set -e), então nenhuma extensão sai da lista sem ter sido criada.
   for ext in ${extensoes}; do
-    valid_name "${ext}" && psql_super "${TRAINING_DB_NAME}" -c "CREATE EXTENSION IF NOT EXISTS ${ext};" >/dev/null
+    [[ "${ext}" =~ ^[a-z0-9_-]{1,63}$ ]] || { printf 'simulacao: nome de extensão inesperado: %s\n' "${ext}" >&2; return 1; }
+    psql_super "${TRAINING_DB_NAME}" -c "CREATE EXTENSION IF NOT EXISTS \"${ext}\";" >/dev/null
   done
   grep -vE '^[0-9]+; [0-9]+ [0-9]+ (EXTENSION|COMMENT - EXTENSION) ' "${lista}" \
     | docker exec -i "${TRAINING_DATABASE_CONTAINER}" sh -c 'cat > /tmp/venturerp-simulacao.list'
