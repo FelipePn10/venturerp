@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.17] — 2026-11-23
+
+- fix(ficha da OF): inspeção final só pelo lote FINAL (revisão) (`e663b22c`)
+- fix(ficha da OF): prioridade em português, histórico das etapas, assinaturas datadas e observação em produção (`25efaff5`)
+
 ### Correções
 - fix(ficha da OF): prioridade impressa em português (Alta, Normal, Baixa, Urgente) — saía "HIGH".
 - fix(ficha da OF): cada etapa sai com a instrução do roteiro, o histórico de pausas, interrupções
