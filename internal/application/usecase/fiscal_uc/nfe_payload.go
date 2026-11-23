@@ -318,8 +318,8 @@ func montarPayloadNFe(
 // Quem numera é a Focus, na autorização (ela não recebe número nem série no
 // envio); até lá o que está gravado é só controle interno e não vai para o XML.
 func numeroDefinitivo(exit *entity.FiscalExit) int64 {
-	if strings.TrimSpace(derefStr(exit.ChaveAcesso)) == "" &&
-		exit.Status != entity.ExitStatusAuthorized && exit.Status != entity.ExitStatusCancelled {
+	// Cancelada sem chave é rascunho descartado: o número nunca existiu na SEFAZ.
+	if strings.TrimSpace(derefStr(exit.ChaveAcesso)) == "" && exit.Status != entity.ExitStatusAuthorized {
 		return 0
 	}
 	return exit.NumeroNF

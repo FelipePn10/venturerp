@@ -589,7 +589,8 @@ func (app *application) mount() chi.Router {
 		Linhas:          deliveryPromiseReservationRepo,
 	}
 	deliveryPromiseHandler := handler.NewDeliveryPromiseHandler(deliveryPromiseUC)
-	deliveryPromiseHandler.Promessa = &delivery_promise_uc.PromessaUseCase{Repo: deliveryPromiseReservationRepo, Items: itemRepo}
+	promessaUC := &delivery_promise_uc.PromessaUseCase{Repo: deliveryPromiseReservationRepo, Items: itemRepo}
+	deliveryPromiseHandler.Promessa = promessaUC
 
 	// delivery reschedule
 	deliveryRescheduleRepo := deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries, app.db.Pool)
@@ -779,6 +780,10 @@ func (app *application) mount() chi.Router {
 	mrpService := mrpservice.NewMRPService(mrpRepo, itemRepoStructure, independentDemandRepo, industrialCalendarRepo, itemRepo, supplyPort, productionPlanRepo, sfRepo, restrictionR, rRepo, itemRepoStructureQuery)
 	// Cenários de simulação: o motor lê os ajustes do cenário dono do plano.
 	scenarioRepo := planningscenariorepo.New(app.db.Pool)
+	// A promessa de entrega usa o prazo de fabricação do MRP.
+	if impl, ok := mrpService.(*mrpservice.MRPServiceImpl); ok {
+		promessaUC.Prazos = impl
+	}
 	if impl, ok := mrpService.(*mrpservice.MRPServiceImpl); ok {
 		impl.Scenarios = scenarioRepo
 		// Os pedidos de venda consomem a previsão e a demanda de estoque.
@@ -1671,6 +1676,7 @@ func (app *application) mount() chi.Router {
 		ShipmentRepo:   shipmentRepoPG,
 		SalesOrderRepo: soRepo,
 		Itens:          fiscalEntryDocs,
+		Faturamento:    faturamentoDoPedido,
 	}
 	// Fluxo guiado da expedição (melhoria 6): NF-e direto do romaneio e o estado
 	// amarrado pedido → romaneio → nota → despacho.
@@ -1717,6 +1723,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
+	fiscalHandler.Descartar = &fiscalUC.DescartarNotaUseCase{Auth: authService, Notas: fiscalRepository.(fiscalUC.NotasDescartaveis), Romaneios: shipmentRepoPG, Beneficiamento: customerMaterialUC}
 
 	// company branding (report letterhead logo + brand colour)
 	fiscalBrandingHandler := handler.NewFiscalBrandingHandler(
@@ -3009,6 +3016,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tributacao/simular", simularTributacaoHandler.Simular)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/authorize", fiscalHandler.AuthorizeExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/cancel", fiscalHandler.CancelExit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/descartar", fiscalHandler.DescartarExit)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{code}/carta-correcao", fiscalHandler.EmitirCCe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/list", fiscalHandler.ListExits)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{code}", fiscalHandler.GetExit)
@@ -3373,6 +3381,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN")).Post("/orders/{id}/movements", thirdPartyServiceHandler.AddMovement)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/orders/{id}/nfe-remessa", thirdPartyServiceHandler.NFeRemessa)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/em-poder", thirdPartyServiceHandler.EmPoder)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/corrigir-remessas", thirdPartyServiceHandler.CorrigirRemessas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/movements", thirdPartyServiceHandler.ListMovements)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/history", thirdPartyServiceHandler.OrderHistory)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/global-conversions", thirdPartyServiceHandler.ListGlobalConversions)

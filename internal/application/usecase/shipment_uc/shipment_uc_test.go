@@ -42,6 +42,12 @@ type fakeShipmentRepo struct {
 	conferredItemID int64
 	conferredQty    decimal.Decimal
 	conferItemErr   error
+
+	emRomaneio map[int64]decimal.Decimal
+}
+
+func (f *fakeShipmentRepo) EmRomaneioAberto(ctx context.Context, _ int64) (map[int64]decimal.Decimal, error) {
+	return f.emRomaneio, nil
 }
 
 func (f *fakeShipmentRepo) NextCode(ctx context.Context) (int64, error) {

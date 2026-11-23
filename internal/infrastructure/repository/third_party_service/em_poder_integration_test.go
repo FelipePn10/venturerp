@@ -175,3 +175,212 @@ func TestRemessaLevaAoAlmoxarifadoDoTerceiro(t *testing.T) {
 		t.Fatalf("fim: fábrica %s, terceiro %s; quer 10 e 0", saldo(almox), saldo(terceiro))
 	}
 }
+
+// Bug Q: a OS guarda o item da OF (o acabado), mas o que vai ao terceiro é o
+// componente da etapa externa. A remessa transferia o acabado (−40 a custo zero
+// no processo) e o valor em poder saía R$ 0.
+func TestRemessaLevaOComponenteDaEtapa(t *testing.T) {
+	pool := testutil.Pool(t)
+	base := context.Background()
+	ator := testutil.Actor(t, pool)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		for _, e := range []int64{a.ID, b.ID} {
+			pool.Exec(base, `DELETE FROM third_party_service_order_history WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_orders WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM production_order_materials WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_balances WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM warehouse WHERE enterprise_id=$1 AND supplier_code IS NOT NULL`, e)
+		}
+	})
+	acabado, peca, parafuso := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
+	testutil.NovosItens(t, pool, a.ID, ator, acabado, peca, parafuso)
+	almox := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	fornecedor := testutil.UniqueCode()
+	var fornecedorID, operacao, roteiro, rotaOp, of int64
+	if err := pool.QueryRow(base, `INSERT INTO suppliers(code,name,document_type,document_number,created_by,enterprise_id) VALUES($1,'TRATE','CNPJ',$2,$3,$4) RETURNING id`,
+		fornecedor, fmt.Sprint(fornecedor), ator, a.ID).Scan(&fornecedorID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM suppliers WHERE id=$1`, fornecedorID) })
+	if err := pool.QueryRow(base, `INSERT INTO operations(code,name,origin,created_by,enterprise_id) VALUES($1,'Zincagem','TERCEIROS',$2,$3) RETURNING id`, testutil.UniqueCode(), ator, a.ID).Scan(&operacao); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) VALUES($1,$2,1,FALSE,$3,$4) RETURNING id`, testutil.UniqueCode(), acabado, ator, a.ID).Scan(&roteiro); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO route_operations(route_id,sequence,operation_id) VALUES($1,20,$2) RETURNING id`, roteiro, operacao).Scan(&rotaOp); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,mask,planned_qty,status,route_id,enterprise_id,created_by) VALUES($1,$2,'',40,'OPEN',$3,$4,$5) RETURNING id`,
+		testutil.UniqueCode()%1_000_000, acabado, roteiro, a.ID, ator).Scan(&of); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(base, `DELETE FROM production_orders WHERE id=$1`, of)
+		pool.Exec(base, `DELETE FROM route_operations WHERE id=$1`, rotaOp)
+		pool.Exec(base, `DELETE FROM manufacturing_routes WHERE id=$1`, roteiro)
+		pool.Exec(base, `DELETE FROM operations WHERE id=$1`, operacao)
+	})
+	// A peça entra na etapa 20 (a externa); o parafuso, no início.
+	for _, m := range []struct {
+		item  int64
+		etapa *int
+	}{{peca, func() *int { v := 20; return &v }()}, {parafuso, nil}} {
+		if _, err := pool.Exec(base, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,quantity,warehouse_id,created_by,route_operation_sequence)
+			VALUES($1,$2,'DEMAND',$3,40,$4,$5,$6)`, of, a.ID, m.item, almox, ator, m.etapa); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testutil.FonteDeSuprimento(t, pool, acabado, fornecedor)
+	hoje := time.Now()
+	var os int64
+	if err := pool.QueryRow(base, `INSERT INTO third_party_service_orders(code,enterprise_id,production_order_id,route_operation_id,operation_id,item_code,supplier_code,uom,quantity,start_date,due_date,status,created_by)
+		VALUES($1,$2,$3,$4,$5,$6,$7,'UN',40,$8::date,$8::date + 10,'RELEASED_WITHOUT_PO',$9) RETURNING id`,
+		testutil.UniqueCode()%1_000_000, a.ID, of, rotaOp, operacao, acabado, fornecedor, hoje, ator).Scan(&os); err != nil {
+		t.Fatal(err)
+	}
+	estoque := stockpg.NewStockRepositorySQLC(pool)
+	if _, err := estoque.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: peca, WarehouseID: almox, MovementType: "IN",
+		Quantity: decimal.NewFromInt(40), UnitPrice: decimal.NewFromInt(7), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	repo := repoimpl.New(pool).(*repoimpl.Repo)
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "REMITTANCE", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q-%d", os), WarehouseID: &almox, CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	var acabadoNoProcesso, pecaNaFabrica decimal.Decimal
+	pool.QueryRow(base, `SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2`, a.ID, acabado).Scan(&acabadoNoProcesso)
+	pool.QueryRow(base, `SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3`, a.ID, peca, almox).Scan(&pecaNaFabrica)
+	if !acabadoNoProcesso.IsZero() || !pecaNaFabrica.IsZero() {
+		t.Fatalf("a remessa mexeu no acabado (%s) ou não levou a peça (fábrica ficou com %s)", acabadoNoProcesso, pecaNaFabrica)
+	}
+	em, err := repo.EmPoder(a.Ctx, domain.FiltroEmPoder{})
+	if err != nil || len(em) != 1 || em[0].ItemCode != peca || !em[0].Value.Equal(decimal.NewFromInt(280)) {
+		t.Fatalf("em poder = %+v err=%v (quer a peça, R$ 280)", em, err)
+	}
+	if r, err := repo.RemessaDaOS(a.Ctx, os, nil); err != nil || r.ItemCode != peca || !r.CustoMedio.Equal(decimal.NewFromInt(7)) {
+		t.Fatalf("a NF-e de remessa leva %+v err=%v (quer a peça a R$ 7)", r, err)
+	}
+}
+
+func TestCorrigirRemessaAntigaDoItemErrado(t *testing.T) {
+	pool := testutil.Pool(t)
+	base := context.Background()
+	ator := testutil.Actor(t, pool)
+	a, b := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		for _, e := range []int64{a.ID, b.ID} {
+			pool.Exec(base, `DELETE FROM third_party_service_order_history WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_orders WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM production_order_materials WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_balances WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM warehouse WHERE enterprise_id=$1 AND supplier_code IS NOT NULL`, e)
+		}
+	})
+	acabado, peca, parafuso := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
+	testutil.NovosItens(t, pool, a.ID, ator, acabado, peca, parafuso)
+	almox := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	fornecedor := testutil.UniqueCode()
+	var fornecedorID, operacao, roteiro, rotaOp, of int64
+	if err := pool.QueryRow(base, `INSERT INTO suppliers(code,name,document_type,document_number,created_by,enterprise_id) VALUES($1,'TRATE','CNPJ',$2,$3,$4) RETURNING id`,
+		fornecedor, fmt.Sprint(fornecedor), ator, a.ID).Scan(&fornecedorID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM suppliers WHERE id=$1`, fornecedorID) })
+	if err := pool.QueryRow(base, `INSERT INTO operations(code,name,origin,created_by,enterprise_id) VALUES($1,'Zincagem','TERCEIROS',$2,$3) RETURNING id`, testutil.UniqueCode(), ator, a.ID).Scan(&operacao); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) VALUES($1,$2,1,FALSE,$3,$4) RETURNING id`, testutil.UniqueCode(), acabado, ator, a.ID).Scan(&roteiro); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO route_operations(route_id,sequence,operation_id) VALUES($1,20,$2) RETURNING id`, roteiro, operacao).Scan(&rotaOp); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,mask,planned_qty,status,route_id,enterprise_id,created_by) VALUES($1,$2,'',40,'OPEN',$3,$4,$5) RETURNING id`,
+		testutil.UniqueCode()%1_000_000, acabado, roteiro, a.ID, ator).Scan(&of); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(base, `DELETE FROM production_orders WHERE id=$1`, of)
+		pool.Exec(base, `DELETE FROM route_operations WHERE id=$1`, rotaOp)
+		pool.Exec(base, `DELETE FROM manufacturing_routes WHERE id=$1`, roteiro)
+		pool.Exec(base, `DELETE FROM operations WHERE id=$1`, operacao)
+	})
+	// A peça entra na etapa 20 (a externa); o parafuso, no início.
+	for _, m := range []struct {
+		item  int64
+		etapa *int
+	}{{peca, func() *int { v := 20; return &v }()}, {parafuso, nil}} {
+		if _, err := pool.Exec(base, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,quantity,warehouse_id,created_by,route_operation_sequence)
+			VALUES($1,$2,'DEMAND',$3,40,$4,$5,$6)`, of, a.ID, m.item, almox, ator, m.etapa); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testutil.FonteDeSuprimento(t, pool, acabado, fornecedor)
+	hoje := time.Now()
+	var os int64
+	if err := pool.QueryRow(base, `INSERT INTO third_party_service_orders(code,enterprise_id,production_order_id,route_operation_id,operation_id,item_code,supplier_code,uom,quantity,start_date,due_date,status,created_by,remittance_type)
+		VALUES($1,$2,$3,$4,$5,$6,$7,'UN',40,$8::date,$8::date + 10,'RELEASED_WITHOUT_PO',$9,'ORDER_ITEM') RETURNING id`,
+		testutil.UniqueCode()%1_000_000, a.ID, of, rotaOp, operacao, acabado, fornecedor, hoje, ator).Scan(&os); err != nil {
+		t.Fatal(err)
+	}
+	estoque := stockpg.NewStockRepositorySQLC(pool)
+	if _, err := estoque.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: peca, WarehouseID: almox, MovementType: "IN",
+		Quantity: decimal.NewFromInt(40), UnitPrice: decimal.NewFromInt(7), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := estoque.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: acabado, WarehouseID: almox, MovementType: "IN",
+		Quantity: decimal.NewFromInt(40), UnitPrice: decimal.NewFromInt(50), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	repo := repoimpl.New(pool).(*repoimpl.Repo)
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "REMITTANCE", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q-%d", os), WarehouseID: &almox, CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	// A remessa antiga: o acabado foi ao terceiro. Depois a OS volta a ser de
+	// itens demandados (o que ela sempre deveria ter sido).
+	if _, err := pool.Exec(base, `UPDATE third_party_service_orders SET remittance_type='DEMAND_ITEMS' WHERE id=$1`, os); err != nil {
+		t.Fatal(err)
+	}
+	saldo := func(item, w int64) string {
+		var q decimal.Decimal
+		pool.QueryRow(base, `SELECT COALESCE(SUM(quantity),0) FROM stock_balances WHERE enterprise_id=$1 AND item_code=$2 AND warehouse_id=$3`, a.ID, item, w).Scan(&q)
+		return q.String()
+	}
+	var terceiro int64
+	if err := pool.QueryRow(base, `SELECT id FROM warehouse WHERE enterprise_id=$1 AND supplier_code=$2`, a.ID, fornecedor).Scan(&terceiro); err != nil {
+		t.Fatal(err)
+	}
+	if saldo(acabado, terceiro) != "40" {
+		t.Fatalf("a remessa antiga deveria ter levado o acabado: %s", saldo(acabado, terceiro))
+	}
+	if l, err := repo.CorrigirRemessasDoItemErrado(b.Ctx, ator, true); err != nil || len(l) != 0 {
+		t.Fatalf("a empresa B corrigiu a OS da A: %+v %v", l, err)
+	}
+	sim, err := repo.CorrigirRemessasDoItemErrado(a.Ctx, ator, false)
+	if err != nil || len(sim) != 1 || sim[0].Situacao != "SIMULADA" || sim[0].ItemCerto != peca || !sim[0].Quantidade.Equal(decimal.NewFromInt(40)) {
+		t.Fatalf("simulação = %+v err=%v", sim, err)
+	}
+	if saldo(acabado, terceiro) != "40" {
+		t.Fatal("a simulação gravou")
+	}
+	feita, err := repo.CorrigirRemessasDoItemErrado(a.Ctx, ator, true)
+	if err != nil || len(feita) != 1 || feita[0].Situacao != "CORRIGIDA" {
+		t.Fatalf("correção = %+v err=%v", feita, err)
+	}
+	if saldo(acabado, terceiro) != "0" || saldo(acabado, almox) != "40" || saldo(peca, terceiro) != "40" || saldo(peca, almox) != "0" {
+		t.Fatalf("depois da correção: acabado %s/%s, peça %s/%s (terceiro/fábrica)", saldo(acabado, terceiro), saldo(acabado, almox), saldo(peca, terceiro), saldo(peca, almox))
+	}
+	if deNovo, err := repo.CorrigirRemessasDoItemErrado(a.Ctx, ator, true); err != nil || len(deNovo) != 0 {
+		t.Fatalf("repetir corrigiu de novo: %+v %v", deNovo, err)
+	}
+	em, err := repo.EmPoder(a.Ctx, domain.FiltroEmPoder{})
+	if err != nil || len(em) != 1 || em[0].ItemCode != peca || !em[0].Value.Equal(decimal.NewFromInt(280)) {
+		t.Fatalf("em poder = %+v err=%v", em, err)
+	}
+}

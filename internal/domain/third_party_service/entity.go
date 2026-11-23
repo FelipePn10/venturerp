@@ -132,22 +132,41 @@ const PrazoLegalDeRetorno = 180
 
 // EmPoder é o que uma OS de terceiro deixou com o fornecedor.
 type EmPoder struct {
-	SupplierCode                          int64
-	SupplierName                          string
-	ServiceOrderID, ServiceOrderCode      int64
-	ProductionOrderID                     int64
-	ItemCode                              int64
-	ItemBusinessCode, ItemName            string
-	Remitted, Returned, Received, InHands decimal.Decimal
+	SupplierCode      int64  `json:"supplier_code"`
+	SupplierName      string `json:"supplier_name"`
+	ServiceOrderID    int64  `json:"service_order_id"`
+	ServiceOrderCode  int64  `json:"service_order_code"`
+	ProductionOrderID int64  `json:"production_order_id"`
+	// ItemCode é a peça que foi ao terceiro (o componente da etapa), não
+	// necessariamente o item da OF.
+	ItemCode         int64           `json:"item_code"`
+	ItemBusinessCode string          `json:"item_business_code"`
+	ItemName         string          `json:"item_name"`
+	Remitted         decimal.Decimal `json:"remitted"`
+	Returned         decimal.Decimal `json:"returned"`
+	Received         decimal.Decimal `json:"received"`
+	InHands          decimal.Decimal `json:"in_hands"`
 	// Valor do que está com o terceiro, pelo custo médio do item.
-	Value               decimal.Decimal
-	FirstRemittance     time.Time
-	DueDate             time.Time
-	DaysInHands         int
-	Overdue             bool // passou da data prevista da OS
-	LegalDeadline       time.Time
-	LegalDeadlineNear   bool // faltam 30 dias ou menos para o prazo legal
-	LegalDeadlinePassed bool
+	Value               decimal.Decimal `json:"value"`
+	FirstRemittance     time.Time       `json:"first_remittance"`
+	DueDate             time.Time       `json:"due_date"`
+	DaysInHands         int             `json:"days_in_hands"`
+	Overdue             bool            `json:"overdue"` // passou da data prevista da OS
+	LegalDeadline       time.Time       `json:"legal_deadline"`
+	LegalDeadlineNear   bool            `json:"legal_deadline_near"` // faltam 30 dias ou menos para o prazo legal
+	LegalDeadlinePassed bool            `json:"legal_deadline_passed"`
+}
+
+// CorrecaoDeRemessa é uma OS cuja remessa levou o item da OF no lugar da peça
+// da etapa (antes da correção do bug Q) e o que o reparo fez com ela.
+type CorrecaoDeRemessa struct {
+	ServiceOrderCode int64           `json:"service_order_code"`
+	ItemLevado       int64           `json:"item_moved"`
+	ItemCerto        int64           `json:"item_expected"`
+	Quantidade       decimal.Decimal `json:"quantity"`
+	// Situacao: CORRIGIDA, AMBIGUA (a OF tem vários materiais e nenhum na
+	// etapa: corrija a estrutura e rode de novo) ou SIMULADA (sem gravar).
+	Situacao string `json:"status"`
 }
 
 // FiltroEmPoder filtra o saldo em poder de terceiros.

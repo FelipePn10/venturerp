@@ -1790,6 +1790,22 @@ func (s *MRPServiceImpl) temPrazoInformado(rulesMap map[int64][]*entity.Configur
 	return false
 }
 
+// PrazoDeFabricacao é o prazo que o MRP daria a uma ordem de fabricação de
+// qtd do item, em dias úteis: o do cadastro (roteiro por unidade ou prazo do
+// item) ou o do roteiro para o lote, o maior — os dias no terceiro inclusos. A
+// promessa de entrega usa este prazo para não prometer o que o MRP não planeja.
+func (s *MRPServiceImpl) PrazoDeFabricacao(ctx context.Context, itemCode int64, qtd decimal.Decimal) (int, error) {
+	base, err := s.prazoDoItem(ctx, nil, nil, itemCode, "")
+	if err != nil {
+		return 0, err
+	}
+	lote, err := s.prazoDoRoteiroParaQuantidade(ctx, itemCode, "", qtd)
+	if err != nil {
+		return 0, err
+	}
+	return max(base, lote), nil
+}
+
 // prazoDoRoteiroParaQuantidade: caminho crítico do roteiro que a ordem desta
 // quantidade vai usar, para essa quantidade, em dias úteis (com os dias do
 // terceiro). Item sem roteiro: zero (vale o prazo do cadastro).

@@ -365,22 +365,30 @@ func TestDataHoraEmissaoNoFusoDeBrasilia(t *testing.T) {
 func TestCSTComBeneficioSemCodigoImpedeNoPR(t *testing.T) {
 	items := itemBase()
 	items[0].CstICMS = strp("51")
-	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); !temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+	if pend := conferirTributacao(notaBase(), items, configBase()); !temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
 		t.Fatalf("CST 51 sem cBenef no PR tem de impedir: %+v", pend)
 	}
 	items[0].CodigoBeneficioFiscal = strp("PR830001")
-	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+	if pend := conferirTributacao(notaBase(), items, configBase()); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
 		t.Fatal("com o cBenef informado não deveria impedir")
 	}
 	items[0].CstICMS, items[0].CodigoBeneficioFiscal = strp("00"), nil
-	if pend := conferirNota(notaBase(), items, configBase(), PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+	if pend := conferirTributacao(notaBase(), items, configBase()); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
 		t.Fatal("CST 00 não exige cBenef")
 	}
 	cfg := configBase()
 	cfg.UFEmpresa = "SP"
 	items[0].CstICMS = strp("51")
-	if pend := conferirNota(notaBase(), items, cfg, PlanoDaNota{}); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+	if pend := conferirTributacao(notaBase(), items, cfg); temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
 		t.Fatal("SP não exige cBenef")
+	}
+	// Bug S: a remessa 5901 (CST 50) sem cBenef no PR é barrada antes da SEFAZ.
+	remessa := notaBase()
+	src := SourceRemessaIndustrializacao
+	remessa.SourceType = &src
+	items[0].CstICMS = strp("50")
+	if pend := conferirTributacao(remessa, items, configBase()); !temPendencia(pend, NivelImpede, "itens[1].codigo_beneficio_fiscal") {
+		t.Fatalf("remessa CST 50 sem cBenef no PR tem de impedir: %+v", pend)
 	}
 }
 

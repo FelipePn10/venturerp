@@ -60,6 +60,7 @@ type romaneiosFixos []int64
 
 func (r romaneiosFixos) RomaneiosDaNota(context.Context, int64) ([]int64, error) { return r, nil }
 func (romaneiosFixos) ReabrirPelaNotaCancelada(context.Context, int64) error     { return nil }
+func (romaneiosFixos) NumerarPelaNotaAutorizada(context.Context, int64) error    { return nil }
 
 // Bug L: a NF-e baixava o estoque e a reserva da separação do romaneio ficava
 // ativa até o despacho (saldo 0 com 2 reservados). Consome só a do romaneio da

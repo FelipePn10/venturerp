@@ -6,6 +6,28 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(romaneio/NF-e): a NF-e do romaneio e da carga grava a linha do pedido — autorizar soma o
+  atendido e cancelar devolve o atendido, o status do pedido e a reserva (antes o pedido
+  ficava "Faturado" com a linha em zero e não podia ser refaturado).
+- fix(romaneio): o romaneio não repete o saldo que já está em outro romaneio aberto, e a NF-e
+  confere o saldo da linha (pedido − atendido − já em outra nota) sob bloqueio — não dá mais
+  para faturar o mesmo pedido duas vezes. Carga com pedidos diferentes: uma NF-e por romaneio.
+- fix(NF-e de remessa): origem REMESSA_INDUSTRIALIZACAO cabia em 20 caracteres (migração 509).
+- fix(industrialização por terceiros): a remessa leva a peça da etapa externa (componente da
+  OF), não o acabado; valor em poder pelo custo da peça. `POST /api/third-party-services/corrigir-remessas`
+  refaz as remessas antigas (sem `gravar=true` só simula).
+- fix(cBenef): a remessa usa o cBenef da suspensão da Configuração Fiscal e é recusada sem ele
+  nas UFs que exigem; a falta trava a prévia e a autorização (antes, rejeição 930 da SEFAZ).
+- fix(promessa de entrega): o prazo do fornecedor 0 cai no do item e a fabricação usa o prazo
+  do MRP (roteiro com a etapa no terceiro).
+- feat(NF-e): `POST /api/fiscal/exits/{id}/descartar` descarta rascunho/rejeitada e solta o
+  romaneio; cancelar romaneio com NF-e é recusado; a nota cancelada solta a carga.
+- fix(romaneio): número e chave da NF-e gravados na autorização (antes "NF-e 0"); saldo em
+  poder do terceiro em snake_case.
+- fix(estoque): saída que deixaria menos de 0,00001 no saldo leva o saldo inteiro.
+- fix(autorização): pendências tributárias aparecem antes da falta do token da Focus.
+
 ## [v1.19.15] — 2026-11-23
 
 - fix(OF): hoje pelo fuso da empresa, não pelo do processo (`6fb166c7`)

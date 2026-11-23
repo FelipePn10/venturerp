@@ -77,6 +77,23 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 		}
 	}
 
+	// ── cBenef: a SEFAZ dessas UFs rejeita (930) CST com benefício sem o código.
+	// Está aqui, e não só na prévia, para a autorização recusar antes de enviar.
+	if uf := strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa)); ufExigeBeneficioFiscal[uf] {
+		for _, it := range items {
+			cst := strings.TrimSpace(derefStr(it.CstICMS))
+			if !cstComBeneficio[cst] || strings.TrimSpace(derefStr(it.CodigoBeneficioFiscal)) != "" {
+				continue
+			}
+			como := "cadastre o código de benefício no parâmetro de ICMS/IPI do item ou do NCM em VFIS0320 — Parâmetros ICMS/IPI e gere a nota de novo"
+			if tributacaoPropria {
+				como = "cadastre o cBenef da suspensão em VFIS0100 — Configuração Fiscal (ou informe-o na remessa), descarte esta nota e gere outra"
+			}
+			add(NivelImpede, fmt.Sprintf("itens[%d].codigo_beneficio_fiscal", it.Sequence),
+				fmt.Sprintf("a linha %d tem CST %s, e a SEFAZ do %s exige o código de benefício fiscal (cBenef) para ele", it.Sequence, cst, uf), como)
+		}
+	}
+
 	// ── CST do regime: CSOSN (3 dígitos) no Simples, CST (2 dígitos) no normal.
 	// A nota guarda o que foi calculado; se o regime mudou depois, ela está velha.
 	simples := regimeSimples(cfg)

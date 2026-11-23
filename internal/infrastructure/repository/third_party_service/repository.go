@@ -1175,6 +1175,29 @@ const referenciaOSTerceiro = "OS_TERCEIRO"
 // o almoxarifado de onde a peça sai: a peça em processo na OF não está no
 // estoque e segue controlada só pela OS. Antes a remessa era só um registro —
 // a peça continuava no almoxarifado como se nunca tivesse saído.
+// itemRemetidoSQL (junte a third_party_service_orders o) resolve a peça que
+// vai ao terceiro. A OS guarda o item da OF (o acabado), mas na remessa dos
+// itens demandados (DEMAND_ITEMS) o que sai é o componente da OF que entra na
+// etapa externa do roteiro; sem componente marcado na etapa, o único material
+// da OF. Fora disso (ORDER_ITEM, GENERIC ou ambíguo) fica o item da OS.
+// rem_ambiguo diz que a OF tem materiais e nenhum serve.
+const itemRemetidoSQL = ` LEFT JOIN LATERAL (
+	SELECT pm.item_code, pm.mask
+	  FROM production_order_materials pm
+	 WHERE o.remittance_type = 'DEMAND_ITEMS' AND pm.enterprise_id = o.enterprise_id
+	   AND pm.production_order_id = o.production_order_id AND pm.material_kind = 'DEMAND'
+	   AND (pm.route_operation_sequence = (SELECT ro.sequence FROM route_operations ro WHERE ro.id = o.route_operation_id)
+	        OR (NOT EXISTS (SELECT 1 FROM production_order_materials x JOIN route_operations ro ON ro.id = o.route_operation_id
+	                         WHERE x.enterprise_id = o.enterprise_id AND x.production_order_id = o.production_order_id
+	                           AND x.material_kind = 'DEMAND' AND x.route_operation_sequence = ro.sequence)
+	            AND (SELECT COUNT(*) FROM production_order_materials x WHERE x.enterprise_id = o.enterprise_id
+	                   AND x.production_order_id = o.production_order_id AND x.material_kind = 'DEMAND') = 1))
+	 ORDER BY pm.id LIMIT 1) rem ON TRUE `
+
+const remAmbiguoSQL = `(rem.item_code IS NULL AND o.remittance_type = 'DEMAND_ITEMS'
+	AND EXISTS (SELECT 1 FROM production_order_materials x WHERE x.enterprise_id = o.enterprise_id
+	             AND x.production_order_id = o.production_order_id AND x.material_kind = 'DEMAND'))`
+
 func estoqueDaOS(ctx context.Context, tx pgx.Tx, eid, osID int64, v *domain.Movement) error {
 	if v.MovementType != "REMITTANCE" && v.MovementType != "RETURN" && v.MovementType != "RECEIPT" {
 		return nil
@@ -1182,9 +1205,14 @@ func estoqueDaOS(ctx context.Context, tx pgx.Tx, eid, osID int64, v *domain.Move
 	var item, codigo int64
 	var mask string
 	var fornecedor *int64
-	if err := tx.QueryRow(ctx, `SELECT item_code, mask, supplier_code, code FROM third_party_service_orders WHERE id=$1 AND enterprise_id=$2`,
-		osID, eid).Scan(&item, &mask, &fornecedor, &codigo); err != nil {
+	var ambiguo bool
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(rem.item_code, o.item_code), COALESCE(rem.mask, o.mask), o.supplier_code, o.code, `+remAmbiguoSQL+`
+		  FROM third_party_service_orders o`+itemRemetidoSQL+`WHERE o.id=$1 AND o.enterprise_id=$2`,
+		osID, eid).Scan(&item, &mask, &fornecedor, &codigo, &ambiguo); err != nil {
 		return fmt.Errorf("lendo a OS de terceiro: %w", err)
+	}
+	if ambiguo && v.MovementType == "REMITTANCE" && v.WarehouseID != nil {
+		return errorsuc.NewValidationError(fmt.Sprintf("a OF da OS de terceiro %d tem vários materiais e nenhum ligado à etapa externa: informe na estrutura do item (etapa do componente) qual peça vai ao terceiro", codigo))
 	}
 	var lote *string
 	if l := strings.TrimSpace(v.Lot); l != "" {
@@ -1260,17 +1288,21 @@ func (r *Repo) EmPoder(ctx context.Context, f domain.FiltroEmPoder) ([]domain.Em
 		      FROM third_party_service_movements m
 		     WHERE m.enterprise_id=$1
 		     GROUP BY 1)
-		SELECT o.supplier_code, COALESCE(s.name,''), o.id, o.code, o.production_order_id, o.item_code,
+		SELECT o.supplier_code, COALESCE(s.name,''), o.id, o.code, o.production_order_id, COALESCE(rem.item_code, o.item_code),
 		       COALESCE(i.business_code::text,''), COALESCE(NULLIF(i.name,''), i.pdm_description_technique, ''),
 		       mov.remetido, mov.retornado, mov.recebido,
 		       GREATEST(mov.remetido - mov.retornado - mov.recebido, 0),
-		       COALESCE((SELECT b.avg_cost FROM stock_balances b WHERE b.enterprise_id=o.enterprise_id AND b.item_code=o.item_code
-		                  ORDER BY b.quantity DESC LIMIT 1), 0),
+		       -- O valor do que está com o terceiro é o custo no almoxarifado dele.
+		       COALESCE((SELECT b.avg_cost FROM stock_balances b JOIN warehouse w ON w.id = b.warehouse_id
+		                  WHERE b.enterprise_id=o.enterprise_id AND b.item_code=COALESCE(rem.item_code, o.item_code)
+		                    AND w.enterprise_id=o.enterprise_id AND w.supplier_code=o.supplier_code AND b.avg_cost > 0 LIMIT 1),
+		                (SELECT b.avg_cost FROM stock_balances b WHERE b.enterprise_id=o.enterprise_id AND b.item_code=COALESCE(rem.item_code, o.item_code)
+		                  AND b.avg_cost > 0 ORDER BY b.quantity DESC LIMIT 1), 0),
 		       mov.primeira, o.due_date
 		  FROM third_party_service_orders o
-		  JOIN mov ON mov.service_order_id = o.id
+		  JOIN mov ON mov.service_order_id = o.id`+itemRemetidoSQL+`
 		  LEFT JOIN suppliers s ON s.code = o.supplier_code AND s.enterprise_id = o.enterprise_id
-		  LEFT JOIN items i ON i.code = o.item_code AND i.enterprise_id = o.enterprise_id
+		  LEFT JOIN items i ON i.code = COALESCE(rem.item_code, o.item_code) AND i.enterprise_id = o.enterprise_id
 		 WHERE o.enterprise_id=$1 AND o.supplier_code IS NOT NULL AND o.status <> 'CANCELLED'
 		   AND mov.remetido - mov.retornado - mov.recebido > 0
 		   AND ($2::bigint IS NULL OR o.supplier_code = $2)
@@ -1349,4 +1381,115 @@ func (r *Repo) ReceberRetornoDaNota(ctx context.Context, fornecedor, item int64,
 		oss = append(oss, os.ServiceOrderCode)
 	}
 	return recebido, oss, nil
+}
+
+// CorrigirRemessasDoItemErrado desfaz o que a remessa fez antes do bug Q: o item
+// da OF (o acabado) foi ao almoxarifado do terceiro no lugar da peça da etapa.
+// Por OS, devolve à origem o que do acabado ainda está no terceiro por ela e
+// manda a peça certa na mesma quantidade. Repetir não refaz (o líquido do
+// acabado no terceiro zera). gravar=false só simula.
+func (r *Repo) CorrigirRemessasDoItemErrado(ctx context.Context, ator uuid.UUID, gravar bool) ([]domain.CorrecaoDeRemessa, error) {
+	eid, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	type candidata struct {
+		id, codigo, item, fornecedor int64
+		mask                         string
+		certo                        *int64
+		certaMask                    *string
+		ambiguo                      bool
+	}
+	rows, err := r.db.Query(ctx, `
+		SELECT o.id, o.code, o.item_code, o.mask, o.supplier_code, rem.item_code, rem.mask, `+remAmbiguoSQL+`
+		  FROM third_party_service_orders o`+itemRemetidoSQL+`
+		 WHERE o.enterprise_id = $1 AND o.supplier_code IS NOT NULL
+		   AND EXISTS (SELECT 1 FROM third_party_service_movements m
+		                WHERE m.enterprise_id = o.enterprise_id AND m.service_order_id = o.id AND m.moved_stock)
+		 ORDER BY o.code`, eid)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as OS com remessa de estoque: %w", err)
+	}
+	var lista []candidata
+	for rows.Next() {
+		var c candidata
+		if err := rows.Scan(&c.id, &c.codigo, &c.item, &c.mask, &c.fornecedor, &c.certo, &c.certaMask, &c.ambiguo); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if c.ambiguo || (c.certo != nil && (*c.certo != c.item || *c.certaMask != c.mask)) {
+			lista = append(lista, c)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := []domain.CorrecaoDeRemessa{}
+	for _, c := range lista {
+		res, err := r.corrigirRemessa(ctx, eid, c.id, c.codigo, c.item, c.mask, c.fornecedor, c.certo, c.certaMask, c.ambiguo, ator, gravar)
+		if err != nil {
+			return out, fmt.Errorf("OS de terceiro %d: %w", c.codigo, err)
+		}
+		if res != nil {
+			out = append(out, *res)
+		}
+	}
+	return out, nil
+}
+
+func (r *Repo) corrigirRemessa(ctx context.Context, eid, osID, codigo, item int64, mask string, fornecedor int64, certo *int64, certaMask *string, ambiguo bool, ator uuid.UUID, gravar bool) (*domain.CorrecaoDeRemessa, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var terceiro, origem *int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM warehouse WHERE enterprise_id=$1 AND supplier_code=$2`, eid, fornecedor).Scan(&terceiro); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT warehouse_id FROM third_party_service_movements
+		WHERE enterprise_id=$1 AND service_order_id=$2 AND movement_type='REMITTANCE' AND moved_stock ORDER BY id DESC LIMIT 1`, eid, osID).Scan(&origem); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, err
+	}
+	// O que do item da OF esta OS ainda deixou no terceiro.
+	var liquido decimal.Decimal
+	if err := tx.QueryRow(ctx, `
+		SELECT COALESCE(SUM(CASE WHEN movement_type='TRANSFER_IN' THEN quantity WHEN movement_type='TRANSFER_OUT' THEN -quantity ELSE 0 END), 0)
+		  FROM stock_movements
+		 WHERE enterprise_id=$1 AND warehouse_id=$2 AND item_code=$3 AND mask=$4
+		   AND reference_type=$5 AND reference_code=$6`, eid, *terceiro, item, mask, referenciaOSTerceiro, codigo).Scan(&liquido); err != nil {
+		return nil, fmt.Errorf("somando o que a OS deixou no terceiro: %w", err)
+	}
+	if !liquido.IsPositive() || origem == nil {
+		return nil, nil
+	}
+	res := &domain.CorrecaoDeRemessa{ServiceOrderCode: codigo, ItemLevado: item, Quantidade: liquido, Situacao: "SIMULADA"}
+	if ambiguo || certo == nil {
+		res.Situacao = "AMBIGUA"
+		return res, nil
+	}
+	res.ItemCerto = *certo
+	if !gravar {
+		return res, nil
+	}
+	ref := referenciaOSTerceiro
+	nota := fmt.Sprintf("OS de terceiro %d: correção da remessa que levou o item da OF", codigo)
+	for _, t := range []stockentity.TransferenciaEstoque{
+		{ItemCode: item, Mask: mask, DeAlmox: *terceiro, ParaAlmox: *origem, Quantidade: liquido},
+		{ItemCode: *certo, Mask: *certaMask, DeAlmox: *origem, ParaAlmox: *terceiro, Quantidade: liquido},
+	} {
+		t.Notas, t.Ator, t.ReferenciaTipo, t.ReferenciaCodigo = &nota, ator, &ref, &codigo
+		if _, err := stockpg.TransferirTx(ctx, tx, eid, t); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	res.Situacao = "CORRIGIDA"
+	return res, nil
 }

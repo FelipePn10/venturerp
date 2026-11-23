@@ -426,3 +426,20 @@ func TestIntegration_ResumoZeraPeloSaldoAtual(t *testing.T) {
 	// Zera 4 (o saldo de agora) a custo 2 = 8; a foto (6) daria 12.
 	igual(t, "valor do ajuste estimado", r.ValorAbsoluto, "8")
 }
+
+// Bug H: três saídas de 1/3 de chapa deixavam 0,000001 UN, que só o inventário
+// zerava. A saída que deixaria poeira leva o saldo inteiro.
+func TestIntegration_SaidaNaoDeixaPoeira(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	if err := e.mover(t, e.item, e.almox, "IN", 1, 400, ""); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if err := e.mover(t, e.item, e.almox, "OUT", 0.333333, 0, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if q, _ := e.saldo(t, e.item, e.almox); q != 0 {
+		t.Fatalf("sobrou %v no almoxarifado", q)
+	}
+}

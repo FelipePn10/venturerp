@@ -49,6 +49,9 @@ type RomaneiosDaNota interface {
 	// ReabrirPelaNotaCancelada desliga a nota dos romaneios e volta o expedido
 	// para conferido: a mercadoria voltou ao estoque com o cancelamento.
 	ReabrirPelaNotaCancelada(ctx context.Context, exitID int64) error
+	// NumerarPelaNotaAutorizada grava no romaneio e na carga o número e a chave
+	// que a nota ganhou na autorização (no rascunho ela ainda não tem número).
+	NumerarPelaNotaAutorizada(ctx context.Context, exitID int64) error
 }
 
 // referenciaRomaneio é a reserva da separação do romaneio (shipment_uc).
@@ -571,6 +574,11 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 			}
 			if err := consumirReservasDosRomaneios(ctx, r, exitID, items, qtd); err != nil {
 				return err
+			}
+		}
+		if r.Romaneios != nil {
+			if err := r.Romaneios.NumerarPelaNotaAutorizada(ctx, exitID); err != nil {
+				return fmt.Errorf("gravando no romaneio o número da nota: %w", err)
 			}
 		}
 		if r.Series != nil {

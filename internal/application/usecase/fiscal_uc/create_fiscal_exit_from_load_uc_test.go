@@ -294,3 +294,75 @@ func TestCreateFiscalExitFromLoad_LevaOTipoDeNFDoPedido(t *testing.T) {
 		t.Fatalf("tipo de NF da nota da carga: %v, quer 500", fiscal.created.InvoiceTypeID)
 	}
 }
+
+type faturamentoDaCargaFake struct {
+	fiscalrepo.SalesOrderInvoicingRepository
+	emNota map[int64]decimal.Decimal
+}
+
+func (f faturamentoDaCargaFake) TravarPedido(context.Context, int64) (func(), error) {
+	return func() {}, nil
+}
+func (f faturamentoDaCargaFake) QuantidadesEmNota(context.Context, int64) (map[int64]decimal.Decimal, error) {
+	return f.emNota, nil
+}
+
+// Bugs Y e U: a linha da nota aponta a linha do pedido, e o que já está em
+// outra NF-e não é faturado de novo.
+func TestCreateFiscalExitFromShipment_LigaLinhaEConfereSaldo(t *testing.T) {
+	novo := func(emNota decimal.Decimal) (*CreateFiscalExitFromLoadUseCase, *loadFiscalRepo) {
+		fiscal := &loadFiscalRepo{nextNF: 10}
+		shipment := &loadShipmentRepo{shipments: map[int64]*shipentity.Shipment{
+			5001: {ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, SalesOrderCode: i64p(7001),
+				Items: []*shipentity.ShipmentItem{{ItemCode: 1001, SalesOrderItemCode: i64p(3), Quantity: decimal.NewFromInt(20)}}},
+		}}
+		sales := loadSalesRepo{items: []*salesentity.SalesOrderItem{
+			{Code: 3, ItemCode: 1001, UnitPrice: decimal.NewFromInt(5), RequestedQty: decimal.NewFromInt(20)},
+		}}
+		return &CreateFiscalExitFromLoadUseCase{
+			CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}, Transportadoras: transportadoraFake{}},
+			FiscalRepo:     fiscal,
+			ShipmentRepo:   shipment,
+			SalesOrderRepo: sales,
+			Faturamento:    faturamentoDaCargaFake{emNota: map[int64]decimal.Decimal{3: emNota}},
+		}, fiscal
+	}
+	dto := request.CreateFiscalExitFromLoadDTO{Serie: "1", DataEmissao: "2026-11-23", Cfop: "5102", NaturezaOperacao: "Venda", UFDestinatario: strp("SP")}
+
+	uc, fiscal := novo(decimal.Zero)
+	if _, err := uc.ExecuteFromShipment(context.Background(), 5001, dto); err != nil {
+		t.Fatal(err)
+	}
+	if len(fiscal.items) != 1 || fiscal.items[0].SalesOrderItemCode == nil || *fiscal.items[0].SalesOrderItemCode != 3 {
+		t.Fatalf("a linha da nota não aponta a linha 3 do pedido: %+v", fiscal.items)
+	}
+
+	uc, _ = novo(decimal.NewFromInt(20))
+	if _, err := uc.ExecuteFromShipment(context.Background(), 5001, dto); err == nil || !strings.Contains(err.Error(), "só tem 0 a faturar") {
+		t.Fatalf("os 20 já em outra NF-e foram faturados de novo: %v", err)
+	}
+}
+
+// Item do romaneio sem a linha do pedido, num pedido com o produto em duas
+// linhas: ligar a qualquer uma baixaria a linha errada — é recusado.
+func TestCreateFiscalExitFromShipment_LinhaAmbiguaERecusada(t *testing.T) {
+	fiscal := &loadFiscalRepo{nextNF: 10}
+	shipment := &loadShipmentRepo{shipments: map[int64]*shipentity.Shipment{
+		5001: {ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, SalesOrderCode: i64p(7001),
+			Items: []*shipentity.ShipmentItem{{ItemCode: 1001, Quantity: decimal.NewFromInt(2)}}},
+	}}
+	sales := loadSalesRepo{items: []*salesentity.SalesOrderItem{
+		{Code: 3, ItemCode: 1001, Mask: "A", UnitPrice: decimal.NewFromInt(5), RequestedQty: decimal.NewFromInt(2)},
+		{Code: 4, ItemCode: 1001, Mask: "B", UnitPrice: decimal.NewFromInt(7), RequestedQty: decimal.NewFromInt(2)},
+	}}
+	uc := &CreateFiscalExitFromLoadUseCase{
+		CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}, Transportadoras: transportadoraFake{}},
+		FiscalRepo:     fiscal,
+		ShipmentRepo:   shipment,
+		SalesOrderRepo: sales,
+	}
+	_, err := uc.ExecuteFromShipment(context.Background(), 5001, request.CreateFiscalExitFromLoadDTO{Serie: "1", DataEmissao: "2026-11-23", Cfop: "5102", NaturezaOperacao: "Venda", UFDestinatario: strp("SP")})
+	if err == nil || !strings.Contains(err.Error(), "mais de uma linha") || len(fiscal.items) != 0 {
+		t.Fatalf("linha ambígua foi aceita: %v itens=%d", err, len(fiscal.items))
+	}
+}

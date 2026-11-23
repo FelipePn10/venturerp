@@ -122,6 +122,9 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	if err := conferirLoteLiberado(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}
+	if err := absorverPoeiraDaSaida(ctx, tx, enterpriseID, m); err != nil {
+		return err
+	}
 	if err := valorizarSaidaPelaMedia(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}
@@ -172,6 +175,38 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	}
 	if signedDecimalQuantity(m.MovementType, movementQuantity(m)).IsNegative() {
 		return reequilibrarReservadoTx(ctx, tx, enterpriseID, m.ItemCode, m.Mask, m.WarehouseID)
+	}
+	return nil
+}
+
+// absorverPoeiraDaSaida: a saída sem lote que deixaria só poeira no
+// almoxarifado leva o saldo inteiro (o movimento grava a quantidade ajustada).
+func absorverPoeiraDaSaida(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
+	delta := signedDecimalQuantity(m.MovementType, movementQuantity(m))
+	// Transferência fica de fora: a entrada do outro lado é gravada com a
+	// quantidade original e os dois lados divergiriam.
+	if !delta.IsNegative() || loteInformado(m) || m.MovementType == entity.MovementTypeTransferOut {
+		return nil
+	}
+	var saldo decimal.Decimal
+	if err := tx.QueryRow(ctx,
+		`SELECT COALESCE(SUM(quantity), 0) FROM public.stock_balances
+		  WHERE enterprise_id=$1 AND item_code=$2 AND mask=$3 AND warehouse_id=$4`,
+		enterpriseID, m.ItemCode, m.Mask, m.WarehouseID).Scan(&saldo); err != nil {
+		return fmt.Errorf("lendo o saldo para a saída: %w", err)
+	}
+	novo, ok := entity.SaidaSemPoeira(saldo, delta)
+	if !ok {
+		return nil
+	}
+	// O sinal da quantidade segue o tipo (OUT positivo, ajuste negativo).
+	if delta.Equal(m.Quantity.Neg()) {
+		m.Quantity = novo.Neg()
+	} else {
+		m.Quantity = novo
+	}
+	if !m.UnitPrice.IsZero() {
+		m.TotalPrice = m.Quantity.Abs().Mul(m.UnitPrice).Round(4)
 	}
 	return nil
 }

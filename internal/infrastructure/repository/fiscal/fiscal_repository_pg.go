@@ -1372,3 +1372,22 @@ func lerJSON[T any](raw []byte, dest **T) error {
 	*dest = &v
 	return nil
 }
+
+// DescartarRascunho cancela a nota que nunca foi autorizada. A chave sai: a nota
+// não existe na SEFAZ e não pode entrar no SPED como cancelada.
+func (r *FiscalRepositoryPG) DescartarRascunho(ctx context.Context, id int64, motivo string, por uuid.UUID) (bool, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	tag, err := r.db.Exec(ctx,
+		`UPDATE public.fiscal_exits
+		    SET status = 'CANCELLED', motivo_cancelamento = $1, data_cancelamento = NOW(),
+		        cancelado_por = $2, chave_acesso = NULL, updated_at = NOW()
+		  WHERE id = $3 AND enterprise_id = $4 AND status IN ('DRAFT','REJECTED')`,
+		motivo, por, id, enterpriseID)
+	if err != nil {
+		return false, fmt.Errorf("descartando a NF-e %d: %w", id, err)
+	}
+	return tag.RowsAffected() == 1, nil
+}

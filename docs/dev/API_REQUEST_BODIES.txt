@@ -2017,6 +2017,19 @@ MÓDULO: FISCAL (ENTRADAS E SAÍDAS FISCAIS)
 
 --- ENTRADAS FISCAIS ---
 
+POST /api/third-party-services/corrigir-remessas            (sem corpo; ADMIN)
+POST /api/third-party-services/corrigir-remessas?gravar=true
+-- Remessas feitas antes da correção do bug Q levaram o item da OF (acabado) ao
+-- almoxarifado do terceiro. Por OS: devolve o acabado à origem e manda a peça da
+-- etapa na mesma quantidade. Sem gravar=true só lista (status SIMULADA). OS cuja
+-- OF tem vários materiais e nenhum na etapa volta como AMBIGUA (corrija a
+-- estrutura e rode de novo). Repetir não refaz.
+
+POST /api/fiscal/exits/{id}/descartar   { "motivo": "romaneio refeito" }
+-- Descarta a NF-e que nunca foi autorizada (rascunho ou rejeitada): fica
+-- cancelada sem chave, solta o romaneio/carga e o saldo do pedido. Corpo
+-- opcional. Nota autorizada só pelo /cancel (SEFAZ).
+
 POST /api/fiscal/entries/create
 {
   "chave_acesso": "35250612345678901234567890123456789012345678",

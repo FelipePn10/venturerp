@@ -27,6 +27,9 @@ type CreateFiscalExitFromLoadUseCase struct {
 	Itens interface {
 		ItemsByCode(ctx context.Context, codes []int64) (map[int64]fiscalrepo.ItemCandidate, error)
 	}
+	// Faturamento trava o pedido e diz o que já está em outra nota: a linha do
+	// romaneio só vira nota até o saldo do pedido. Opcional (testes).
+	Faturamento fiscalrepo.SalesOrderInvoicingRepository
 }
 
 func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto request.CreateFiscalExitFromLoadDTO) (*response.FiscalExitResponse, error) {
@@ -60,17 +63,17 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, err
 	}
 
-	nfNumber := created.NumeroNF
+	nfNumber := numeroDoRomaneio(created)
 	for idx, link := range load.Shipments {
 		shipmentCode := link.ShipmentCode
-		if err := uc.ShipmentRepo.SetFiscalExit(ctx, shipmentCode, &created.ID, &nfNumber, created.ChaveAcesso, nil); err != nil {
+		if err := uc.ShipmentRepo.SetFiscalExit(ctx, shipmentCode, &created.ID, nfNumber, created.ChaveAcesso, nil); err != nil {
 			return nil, fmt.Errorf("vinculando NF-e ao romaneio %d: %w", shipmentCode, err)
 		}
 		if _, err := uc.ShipmentRepo.AddFiscalNoteToLoad(ctx, shiprepo.AddFiscalNoteToLoadInput{
 			LoadCode:     dto.LoadCode,
 			ShipmentCode: &shipmentCode,
 			FiscalExitID: created.ID,
-			NFeNumber:    &nfNumber,
+			NFeNumber:    nfNumber,
 			NFeKey:       created.ChaveAcesso,
 			Sequence:     idx + 1,
 		}); err != nil {
@@ -88,7 +91,8 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 func (uc *CreateFiscalExitFromLoadUseCase) criarNota(ctx context.Context, links []*shipentity.ShipmentLoadShipment, dto request.CreateFiscalExitFromLoadDTO,
 	source string, loadCode, shipmentCode, carrier *int64) (*response.FiscalExitResponse, error) {
 	overrides := fiscalLoadOverrides(dto.ItemOverrides)
-	items, salesOrderCode, err := uc.itemsFromLoad(ctx, links, dto, overrides)
+	items, salesOrderCode, liberar, err := uc.itemsFromLoad(ctx, links, dto, overrides)
+	defer liberar()
 	if err != nil {
 		return nil, err
 	}
@@ -164,11 +168,20 @@ func (uc *CreateFiscalExitFromLoadUseCase) ExecuteFromShipment(ctx context.Conte
 	if err != nil {
 		return nil, err
 	}
-	nfNumber := created.NumeroNF
-	if err := uc.ShipmentRepo.SetFiscalExit(ctx, shipmentCode, &created.ID, &nfNumber, created.ChaveAcesso, nil); err != nil {
+	if err := uc.ShipmentRepo.SetFiscalExit(ctx, shipmentCode, &created.ID, numeroDoRomaneio(created), created.ChaveAcesso, nil); err != nil {
 		return nil, fmt.Errorf("vinculando NF-e ao romaneio %d: %w", shipmentCode, err)
 	}
 	return created, nil
+}
+
+// numeroDoRomaneio: o rascunho ainda não tem número (vem na autorização, que o
+// grava no romaneio); antes ia 0 e o romaneio mostrava "NF-e 0".
+func numeroDoRomaneio(n *response.FiscalExitResponse) *int64 {
+	if n.NumeroNF == 0 {
+		return nil
+	}
+	v := n.NumeroNF
+	return &v
 }
 
 func derefInt64(v *int64) int64 {
@@ -183,24 +196,34 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 	links []*shipentity.ShipmentLoadShipment,
 	dto request.CreateFiscalExitFromLoadDTO,
 	overrides map[fiscalLoadOverrideKey]request.FiscalExitLoadItemOverride,
-) ([]request.CreateFiscalExitItemDTO, *int64, error) {
-	var out []request.CreateFiscalExitItemDTO
-	var commonSalesOrder *int64
+) (out []request.CreateFiscalExitItemDTO, commonSalesOrder *int64, liberar func(), err error) {
+	// Bloqueios do faturamento de cada pedido, soltos depois de a nota existir:
+	// dois romaneios do mesmo pedido faturados ao mesmo tempo leriam o mesmo saldo.
+	var travas []func()
+	liberar = func() {
+		for _, f := range travas {
+			f()
+		}
+	}
+	// saldo é o que cada linha do pedido ainda pode faturar (pedido − cancelado
+	// − atendido − já em outra nota), consumido conforme a carga usa.
+	saldo := map[int64]decimal.Decimal{}
+	lidos := map[int64]bool{}
 	mixedSalesOrders := false
 	seq := 1
 	for _, link := range links {
 		ship, err := uc.ShipmentRepo.GetByCode(ctx, link.ShipmentCode)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, liberar, err
 		}
 		if ship.Status == shipentity.ShipmentStatusCancelled {
-			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d foi cancelado e não pode ser faturado", ship.Code))
+			return nil, nil, liberar, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d foi cancelado e não pode ser faturado", ship.Code))
 		}
 		if ship.Status == shipentity.ShipmentStatusShipped {
-			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já foi expedido e não pode ser faturado", ship.Code))
+			return nil, nil, liberar, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já foi expedido e não pode ser faturado", ship.Code))
 		}
 		if len(ship.Items) == 0 {
-			return nil, nil, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para faturar", ship.Code))
+			return nil, nil, liberar, errorsuc.NewValidationError(fmt.Sprintf("romaneio %d não possui itens para faturar", ship.Code))
 		}
 
 		orderItems := map[int64]*salesentity.SalesOrderItem{}
@@ -208,11 +231,32 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 		if uc.SalesOrderRepo != nil && ship.SalesOrderCode != nil {
 			items, errItens := uc.SalesOrderRepo.ListItems(ctx, *ship.SalesOrderCode)
 			if errItens != nil {
-				return nil, nil, fmt.Errorf("lendo os itens do pedido do romaneio %d: %w", ship.Code, errItens)
+				return nil, nil, liberar, fmt.Errorf("lendo os itens do pedido do romaneio %d: %w", ship.Code, errItens)
 			}
 			for _, it := range items {
-				orderItems[it.ItemCode] = it
 				orderItemsByCode[it.Code] = it
+				// O produto em mais de uma linha (máscaras, entregas) não serve de
+				// atalho: a linha fica nil e o item do romaneio precisa apontá-la.
+				if _, repetido := orderItems[it.ItemCode]; repetido {
+					orderItems[it.ItemCode] = nil
+				} else {
+					orderItems[it.ItemCode] = it
+				}
+			}
+			if uc.Faturamento != nil && !lidos[*ship.SalesOrderCode] {
+				lidos[*ship.SalesOrderCode] = true
+				f, err := uc.Faturamento.TravarPedido(ctx, *ship.SalesOrderCode)
+				if err != nil {
+					return nil, nil, liberar, err
+				}
+				travas = append(travas, f)
+				emNota, err := uc.Faturamento.QuantidadesEmNota(ctx, *ship.SalesOrderCode)
+				if err != nil {
+					return nil, nil, liberar, fmt.Errorf("lendo o que o pedido %d já tem em nota: %w", *ship.SalesOrderCode, err)
+				}
+				for _, it := range items {
+					saldo[it.Code] = it.RequestedQty.Sub(it.CancelledQty).Sub(it.AttendedQty).Sub(emNota[it.Code])
+				}
 			}
 			if mixedSalesOrders {
 				// Keep sales_order_code empty for multi-order loads.
@@ -220,6 +264,13 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 				v := *ship.SalesOrderCode
 				commonSalesOrder = &v
 			} else if *commonSalesOrder != *ship.SalesOrderCode {
+				// A nota guarda um pedido só; com dois, nenhum seria baixado na
+				// autorização e os dois poderiam ser faturados de novo.
+				if uc.Faturamento != nil {
+					return nil, nil, liberar, errorsuc.NewValidationError(fmt.Sprintf(
+						"a carga junta romaneios dos pedidos %d e %d: emita a NF-e de cada romaneio (uma nota por pedido)",
+						*commonSalesOrder, *ship.SalesOrderCode))
+				}
 				commonSalesOrder = nil
 				mixedSalesOrders = true
 			}
@@ -229,13 +280,22 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 			ov := findFiscalLoadOverride(overrides, ship.Code, si.ItemCode)
 			line, err := fiscalItemFromShipmentItem(seq, ship.Code, si, orderItems, orderItemsByCode, dto, ov)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, liberar, err
+			}
+			if uc.Faturamento != nil && line.SalesOrderItemCode != nil {
+				l := *line.SalesOrderItemCode
+				if line.Quantity.GreaterThan(saldo[l]) {
+					return nil, nil, liberar, errorsuc.NewValidationError(fmt.Sprintf(
+						"o romaneio %d leva %s do item %d, mas a linha %d do pedido %d só tem %s a faturar (o resto já foi faturado ou está em outra NF-e)",
+						ship.Code, line.Quantity.String(), si.ItemCode, l, *ship.SalesOrderCode, decimal.Max(saldo[l], decimal.Zero).String()))
+				}
+				saldo[l] = saldo[l].Sub(line.Quantity)
 			}
 			out = append(out, line)
 			seq++
 		}
 	}
-	return out, commonSalesOrder, nil
+	return out, commonSalesOrder, liberar, nil
 }
 
 type fiscalLoadOverrideKey struct {
@@ -276,7 +336,11 @@ func fiscalItemFromShipmentItem(
 		orderItem = orderItemsByCode[*si.SalesOrderItemCode]
 	}
 	if orderItem == nil {
-		orderItem = orderItems[si.ItemCode]
+		var ok bool
+		if orderItem, ok = orderItems[si.ItemCode]; ok && orderItem == nil {
+			return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf(
+				"o item %d do romaneio %d está em mais de uma linha do pedido: informe no romaneio a linha do pedido que ele atende", si.ItemCode, shipmentCode))
+		}
 	}
 
 	unitPrice := decimal.Zero
@@ -312,11 +376,18 @@ func fiscalItemFromShipmentItem(
 	}
 	itemCode := si.ItemCode
 	mascara := ""
+	// A linha do pedido vai na nota: é por ela que a autorização soma o
+	// atendido e o cancelamento devolve. Sem ela o pedido virava "Faturado"
+	// com a linha em zero e não voltava no cancelamento.
+	var linhaPedido *int64
 	if orderItem != nil {
 		mascara = orderItem.Mask
+		c := orderItem.Code
+		linhaPedido = &c
 	}
 	return request.CreateFiscalExitItemDTO{
 		Mask:                 mascara,
+		SalesOrderItemCode:   linhaPedido,
 		Sequence:             seq,
 		ItemCode:             &itemCode,
 		Ncm:                  ov.Ncm,

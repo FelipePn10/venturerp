@@ -48,6 +48,9 @@ type SituacaoDoItem struct {
 	PrazoFabricacaoDias, PrazoCompraDias int
 	// FilaDias: carga aberta dos centros do roteiro ÷ capacidade diária deles.
 	FilaDias int
+	// DiasNoTerceiro: etapas externas do roteiro (tratamento, zincagem), em
+	// dias úteis — somam à fabricação.
+	DiasNoTerceiro int
 }
 
 // Promessa é a resposta para uma quantidade.
@@ -143,5 +146,9 @@ func NovaReposicao(hoje time.Time, s SituacaoDoItem, componentes time.Time) (tim
 	}
 	fim := DiasUteis(inicio, s.PrazoFabricacaoDias)
 	exp = append(exp, fmt.Sprintf("fabricação: %d dia(s) útil(eis)", s.PrazoFabricacaoDias))
+	if s.DiasNoTerceiro > 0 {
+		fim = DiasUteis(fim, s.DiasNoTerceiro)
+		exp = append(exp, fmt.Sprintf("etapa em terceiro: %d dia(s) útil(eis)", s.DiasNoTerceiro))
+	}
 	return fim, OrigemNovaProducao, exp
 }

@@ -11,6 +11,24 @@ const CasasValor = 4
 
 var umCentavo = decimal.New(1, -2)
 
+// PoeiraDeSaldo: abaixo disto a sobra é arredondamento de conversões e frações
+// (1/3 de chapa três vezes = 0,999999), não material.
+var PoeiraDeSaldo = decimal.New(1, -5)
+
+// SaidaSemPoeira devolve a saída (delta negativo) que esvazia o saldo quando
+// ela só difere dele pela poeira — para mais ou para menos. Sem isso sobravam
+// 0,000001 UN na chapa e no tubo, que só o inventário zerava.
+func SaidaSemPoeira(saldo, delta decimal.Decimal) (decimal.Decimal, bool) {
+	if !delta.IsNegative() || !saldo.IsPositive() {
+		return delta, false
+	}
+	resto := saldo.Add(delta)
+	if resto.IsZero() || resto.Abs().GreaterThanOrEqual(PoeiraDeSaldo) {
+		return delta, false
+	}
+	return saldo.Neg(), true
+}
+
 // CostingState is the weighted-average-cost snapshot of an item's balance in a
 // warehouse: on-hand quantity, average unit cost, and total inventory value.
 type CostingState struct {

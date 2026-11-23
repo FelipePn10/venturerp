@@ -35,6 +35,11 @@ type PromessaUseCase struct {
 	Repo  LeitorDaPromessa
 	Items any
 	Agora func() time.Time
+	// Prazos dá o prazo de fabricação do MRP (roteiro do lote com os dias no
+	// terceiro, ou o do item). Sem ele vale o do cadastro + etapas de terceiro.
+	Prazos interface {
+		PrazoDeFabricacao(ctx context.Context, item int64, qtd decimal.Decimal) (int, error)
+	}
 }
 
 const profundidadeMaxima = 6
@@ -85,6 +90,14 @@ func (uc *PromessaUseCase) prometer(ctx context.Context, hoje time.Time, item in
 	falta := qtd.Sub(livre)
 	consumido[item] = consumido[item].Add(livre)
 	componentes := time.Time{}
+	if s.Fabricado && uc.Prazos != nil {
+		dias, err := uc.Prazos.PrazoDeFabricacao(ctx, item, falta)
+		if err != nil {
+			return p, err
+		}
+		// O prazo do MRP já traz os dias no terceiro: não soma de novo.
+		s.PrazoFabricacaoDias, s.DiasNoTerceiro = dias, 0
+	}
 	if s.Fabricado {
 		if nivel >= profundidadeMaxima {
 			return p, errorsuc.NewValidationError(fmt.Sprintf("a estrutura do item %d passa de %d níveis: confira se não é cíclica", item, profundidadeMaxima))

@@ -134,6 +134,10 @@ type ShipmentRepository interface {
 	List(ctx context.Context) ([]*entity.Shipment, error)
 	ListFiltered(ctx context.Context, f ShipmentFilter) ([]*entity.Shipment, error)
 	ListBySalesOrder(ctx context.Context, salesOrderCode int64) ([]*entity.Shipment, error)
+	// EmRomaneioAberto devolve, por linha do pedido, o que já está em romaneio
+	// não cancelado cuja NF-e ainda não foi autorizada (a autorizada já está no
+	// atendido da linha). É o que um novo romaneio do pedido não pode repetir.
+	EmRomaneioAberto(ctx context.Context, salesOrderCode int64) (map[int64]decimal.Decimal, error)
 	ListByPurchaseOrder(ctx context.Context, purchaseOrderCode int64) ([]*entity.Shipment, error)
 	ListByProductionOrder(ctx context.Context, productionOrderCode int64) ([]*entity.Shipment, error)
 	ListByReference(ctx context.Context, refType entity.ShipmentReferenceType, refCode int64) ([]*entity.Shipment, error)
