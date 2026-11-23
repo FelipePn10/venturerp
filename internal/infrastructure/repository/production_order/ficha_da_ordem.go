@@ -22,7 +22,7 @@ func (r *ProductionOrderRepositoryPGX) FichaDaOrdem(ctx context.Context, id int6
 	var routeID *int64
 	err = r.pool.QueryRow(ctx, `SELECT po.id, po.order_number, po.item_code, COALESCE(i.business_code,''), COALESCE(i.name,''), po.mask,
 			COALESCE(i.warehouse_unit_of_measurement,'UN'), COALESCE(po.item_revision, i.revision, ''),
-			po.status, po.planned_qty, po.produced_qty, po.scrapped_qty, po.start_date::timestamptz, po.end_date::timestamptz,
+			po.status, po.planned_qty, po.produced_qty, po.scrapped_qty, po.start_date, po.end_date, -- DATE puro: ::timestamptz no fuso do banco (UTC) virava o dia anterior no processo (São Paulo)
 			COALESCE(po.priority,''), COALESCE(po.notes,''), COALESCE(po.origin_type,''), po.sales_order_code, po.route_id, po.warehouse_id
 		FROM production_orders po
 		LEFT JOIN items i ON i.code = po.item_code AND i.enterprise_id = po.enterprise_id
@@ -142,7 +142,7 @@ func (r *ProductionOrderRepositoryPGX) FichaDaOrdem(ctx context.Context, id int6
 
 	rows, err = r.pool.Query(ctx, `SELECT so.code, ro.sequence,
 			COALESCE(s.code::text || ' — ' || COALESCE(NULLIF(s.name,''), s.trade_name), so.supplier_code::text),
-			so.quantity, so.fulfilled_quantity, so.due_date::timestamptz, so.status
+			so.quantity, so.fulfilled_quantity, so.due_date, so.status
 		FROM third_party_service_orders so
 		LEFT JOIN route_operations ro ON ro.id = so.route_operation_id
 		LEFT JOIN suppliers s ON s.code = so.supplier_code AND s.enterprise_id = so.enterprise_id
