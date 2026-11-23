@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.18] — 2026-11-23
+
+- fix(OF): destino da filha pela linha da máscara que ela produz (revisão) (`39e9cb5c`)
+- fix: reserva da OF na remessa ao terceiro, destino da OF firmada e "NF-e 0" (bugs AA AB AC) (`cf8f57cd`)
+
 ### Correções
 - fix(terceiros): a remessa da OS usa a reserva da própria OF da OS (antes era recusada por "reservado
   para a OF" e era preciso liberar à mão); a peça que volta do terceiro fica reservada de novo para a OF,
