@@ -6,6 +6,17 @@ pipeline de release.
 
 ## Unreleased
 
+### Implantação (pós v1.19.13, só arquivos do host)
+- fix(treino): API de treino na porta **5077** (a 5071 é da API de desenvolvimento
+  nativa; o teste de saúde do treino respondia pela outra API).
+- fix(simulação): vigia do pedido com um `PathExists` por empresa (o curinga no nome da
+  pasta não disparava a cópia).
+- fix(simulação): extensões da origem (ex.: `pg_stat_statements`) criadas pelo
+  superusuário no treino; a restauração com o papel do treino pula essas entradas.
+- fix(update.env): `VENTURERP_TENANTS` com aspas (sem elas o `source` tentava rodar
+  `truckparts` e nenhuma atualização passava desde a entrada da Truckparts); o
+  `provision-tenant.sh` agora grava a lista sempre entre aspas (e conserta a antiga).
+
 ## [v1.19.13] — 2026-11-23
 
 - fix: apontamentos da revisão — scripts do treino versionados, CNAB por conta, remessa inteira (`ae4e2e27`)

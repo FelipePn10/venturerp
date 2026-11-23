@@ -2,7 +2,12 @@
 Description=Watch VentureERP training-copy requests (modo simulação)
 
 [Path]
-PathExistsGlob=/var/lib/venturerp-simulacao/*/request.json
+# Um PathExists por empresa: com curinga no NOME DA PASTA (PathExistsGlob em
+# */request.json) o systemd só vigia a pasta-mãe e não vê o pedido criado dentro
+# da pasta da empresa — a cópia nunca disparava.
+PathExists=/var/lib/venturerp-simulacao/principal/request.json
+PathExists=/var/lib/venturerp-simulacao/usimac/request.json
+PathExists=/var/lib/venturerp-simulacao/truckparts/request.json
 Unit=venturerp-simulacao.service
 
 [Install]

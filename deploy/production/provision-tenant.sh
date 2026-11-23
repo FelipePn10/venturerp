@@ -336,9 +336,13 @@ if [[ -f "${UPDATE_ENV}" ]]; then
     db_url="$(grep -E '^DATABASE_URL=' "${ENV_FILE}" | head -1 | cut -d= -f2-)"
     cp -a "${UPDATE_ENV}" "${UPDATE_ENV}.bak-$(date -u +%Y%m%dT%H%M%SZ)"
     if grep -qE '^VENTURERP_TENANTS=' "${UPDATE_ENV}"; then
-      sed -i -E "s#^VENTURERP_TENANTS=(.*)#VENTURERP_TENANTS=\1 ${TENANT}#" "${UPDATE_ENV}"
+      # Sempre entre aspas: o update.env é carregado com `source`, e
+      # "VENTURERP_TENANTS=usimac truckparts" sem aspas roda "truckparts" como
+      # comando — nenhuma atualização passava depois da segunda empresa.
+      atuais="$(sed -nE 's#^VENTURERP_TENANTS="?([^"]*)"?$#\1#p' "${UPDATE_ENV}" | head -1)"
+      sed -i -E "s#^VENTURERP_TENANTS=.*#VENTURERP_TENANTS=\"${atuais:+${atuais} }${TENANT}\"#" "${UPDATE_ENV}"
     else
-      printf '\nVENTURERP_TENANTS=%s\n' "${TENANT}" >>"${UPDATE_ENV}"
+      printf '\nVENTURERP_TENANTS="%s"\n' "${TENANT}" >>"${UPDATE_ENV}"
     fi
     cat >>"${UPDATE_ENV}" <<EOF
 TENANT_${TENANT^^}_DATABASE_URL=${db_url}

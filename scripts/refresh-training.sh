@@ -31,7 +31,7 @@ TRAINING_DATABASE_CONTAINER="${TRAINING_DATABASE_CONTAINER:-${DATABASE_CONTAINER
 TRAINING_DB_SUPERUSER="${TRAINING_DB_SUPERUSER:-${SIMULATION_DB_SUPERUSER}}"
 TRAINING_DB_SUPERUSER_PASSWORD="${TRAINING_DB_SUPERUSER_PASSWORD:-${SIMULATION_DB_SUPERUSER_PASSWORD}}"
 TRAINING_CONTAINER="${TRAINING_CONTAINER:-venturerp-api-training}"
-TRAINING_HEALTH_URL="${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}"
+TRAINING_HEALTH_URL="${TRAINING_HEALTH_URL:-http://127.0.0.1:5077/health/ready}"
 SIMULATION_TRAINING_URL="${SIMULATION_TRAINING_URL:-}"
 SANEAMENTO_SQL="${SANEAMENTO_SQL:-/opt/venturerp/updater/simulacao-saneamento.sql}"
 UPDATE_UID="${UPDATE_UID:-10001}"
@@ -112,8 +112,22 @@ processar() { # dir
   status "${dir}" running 40 "Recriando o banco de treino"
   docker stop "${TRAINING_CONTAINER}" >/dev/null 2>&1 || true
   psql_super postgres -c "DROP DATABASE IF EXISTS ${TRAINING_DB_NAME} WITH (FORCE);" -c "CREATE DATABASE ${TRAINING_DB_NAME} OWNER ${TRAINING_DB_USER};" >/dev/null
+  # Extensões (ex.: pg_stat_statements do monitoramento) só o superusuário cria:
+  # ele cria no treino, e a restauração com o papel do treino pula essas entradas.
+  local lista extensoes
+  lista="$(mktemp /tmp/venturerp-simulacao.XXXXXX.list)"
+  docker exec -i "${TRAINING_DATABASE_CONTAINER}" pg_restore --list <"${dump}" >"${lista}"
+  extensoes="$(awk '$4 == "EXTENSION" {print $6}' "${lista}" | sort -u)"
+  for ext in ${extensoes}; do
+    valid_name "${ext}" && psql_super "${TRAINING_DB_NAME}" -c "CREATE EXTENSION IF NOT EXISTS ${ext};" >/dev/null
+  done
+  grep -vE '^[0-9]+; [0-9]+ [0-9]+ (EXTENSION|COMMENT - EXTENSION) ' "${lista}" \
+    | docker exec -i "${TRAINING_DATABASE_CONTAINER}" sh -c 'cat > /tmp/venturerp-simulacao.list'
+  rm -f "${lista}"
   docker exec -i -e PGPASSWORD="${TRAINING_DB_SUPERUSER_PASSWORD}" "${TRAINING_DATABASE_CONTAINER}" \
-    pg_restore -U "${TRAINING_DB_SUPERUSER}" -d "${TRAINING_DB_NAME}" --no-owner --no-acl --role="${TRAINING_DB_USER}" --exit-on-error <"${dump}"
+    pg_restore -U "${TRAINING_DB_SUPERUSER}" -d "${TRAINING_DB_NAME}" --no-owner --no-acl --role="${TRAINING_DB_USER}" \
+      -L /tmp/venturerp-simulacao.list --exit-on-error <"${dump}"
+  docker exec "${TRAINING_DATABASE_CONTAINER}" rm -f /tmp/venturerp-simulacao.list
 
   status "${dir}" running 75 "Saneando a cópia (homologação, filas de envio, nome da empresa)"
   psql_super "${TRAINING_DB_NAME}" -c "SET ROLE ${TRAINING_DB_USER};" -f - <"${SANEAMENTO_SQL}" >/dev/null

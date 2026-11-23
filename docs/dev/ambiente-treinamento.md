@@ -1,7 +1,7 @@
 # Ambiente de treinamento
 
 O treinamento roda com a mesma imagem da produção, em uma segunda instância da
-API (`127.0.0.1:5071`) e uma segunda base lógica no mesmo PostgreSQL. A API de
+API (`127.0.0.1:5077`) e uma segunda base lógica no mesmo PostgreSQL. A API de
 produção continua em `127.0.0.1:5070`.
 
 ## Isolamento e identidade
@@ -31,7 +31,7 @@ produção continua em `127.0.0.1:5070`.
    `/etc/venturerp/update.env`.
 4. Execute o updater oficial. Ele aplica as mesmas migrations nas duas bases e
    ativa o profile Compose `training`.
-5. Valide `/health/ready` nas portas 5070 e 5071 e faça login em ambas.
+5. Valide `/health/ready` nas portas 5070 e 5077 e faça login em ambas.
 
 A base de treinamento não entra no `pg_dump`, restore nem retenção de backups.
 O updater cria e verifica backup somente de `DATABASE_NAME`, que é produção.
@@ -67,7 +67,7 @@ existente.
   (`venturerp-postgres-development`, 127.0.0.1:5433), fora do servidor de produção. O
   `update.env` traz `TRAINING_DATABASE_CONTAINER`, e o atualizador faz backup, migração e
   restauração do treino nesse servidor; o agente lê a origem na produção.
-- Acesso: `https://treino.api.venturerp.com` (nginx → 127.0.0.1:5071) e, no catálogo
+- Acesso: `https://treino.api.venturerp.com` (nginx → 127.0.0.1:5077) e, no catálogo
   `tenants.json`, a empresa **Tecnofer — Treino** no grupo da Tecnofer: no login, quem é da
   Tecnofer escolhe entrar na produção, na Truckparts ou no treino.
 - No desktop, a sessão de treino mostra a faixa laranja "TREINO" em todas as telas (lida do

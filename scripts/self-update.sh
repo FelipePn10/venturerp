@@ -121,7 +121,7 @@ register_tenant principal "${DATABASE_URL}" "${API_ENV_FILE}" "${HEALTH_URL}" ""
 if [[ -n "${TRAINING_DATABASE_URL:-}" ]] && [[ " ${VENTURERP_TENANTS:-} " != *" treinamento "* ]] && [[ " ${VENTURERP_TENANTS:-} " != *" training "* ]]; then
   : "${TRAINING_API_ENV_FILE:?TRAINING_API_ENV_FILE is required when TRAINING_DATABASE_URL is set}"
   register_tenant training "${TRAINING_DATABASE_URL}" "${TRAINING_API_ENV_FILE}" \
-    "${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}" training VENTURERP_TRAINING_API_ENV \
+    "${TRAINING_HEALTH_URL:-http://127.0.0.1:5077/health/ready}" training VENTURERP_TRAINING_API_ENV \
     "${TRAINING_DATABASE_USER:-}" "${TRAINING_DATABASE_NAME:-}" "${TRAINING_DATABASE_PASSWORD:-}" 1 \
     "${TRAINING_DATABASE_CONTAINER:-${DATABASE_CONTAINER}}"
 fi
