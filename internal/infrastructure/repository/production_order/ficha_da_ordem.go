@@ -3,6 +3,7 @@ package production_order
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
@@ -65,7 +66,8 @@ func (r *ProductionOrderRepositoryPGX) FichaDaOrdem(ctx context.Context, id int6
 				WHERE s.enterprise_id = $2 AND (s.code = COALESCE(ro.supplier_id, o.supplier_id) OR s.id = COALESCE(ro.supplier_id, o.supplier_id))
 				ORDER BY (s.code = COALESCE(ro.supplier_id, o.supplier_id)) DESC LIMIT 1), ''),
 			op.setup_hours, op.planned_hours, op.actual_hours, op.planned_qty,
-			COALESCE(ro.inspection_required, FALSE), op.status, COALESCE(op.notes,''), op.started_at, op.completed_at
+			COALESCE(ro.inspection_required, FALSE), op.status, COALESCE(op.notes,''), op.started_at, op.completed_at,
+			op.id, COALESCE(ro.notes,'')
 		FROM production_order_operations op
 		LEFT JOIN route_operations ro ON ro.id = op.route_operation_id
 		LEFT JOIN operations o ON o.id = ro.operation_id AND o.enterprise_id = op.enterprise_id
@@ -78,7 +80,8 @@ func (r *ProductionOrderRepositoryPGX) FichaDaOrdem(ctx context.Context, id int6
 	for rows.Next() {
 		var e entity.EtapaDaFicha
 		if err := rows.Scan(&e.Sequencia, &e.Operacao, &e.Centro, &e.Externa, &e.Terceiro,
-			&e.HorasPrep, &e.HorasPrevista, &e.HorasReais, &e.QtdEntra, &e.Inspecao, &e.Status, &e.Observacao, &e.Inicio, &e.Fim); err != nil {
+			&e.HorasPrep, &e.HorasPrevista, &e.HorasReais, &e.QtdEntra, &e.Inspecao, &e.Status, &e.Observacao, &e.Inicio, &e.Fim,
+			&e.ID, &e.Instrucao); err != nil {
 			rows.Close()
 			return nil, err
 		}
@@ -89,6 +92,13 @@ func (r *ProductionOrderRepositoryPGX) FichaDaOrdem(ctx context.Context, id int6
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := r.eventosDasEtapas(ctx, eid, f); err != nil {
+		return nil, err
+	}
+	if err := r.assinaturasDaFicha(ctx, eid, f); err != nil {
 		return nil, err
 	}
 
@@ -211,4 +221,111 @@ func (r *ProductionOrderRepositoryPGX) FusoDaEmpresa(ctx context.Context) (*time
 		return nil, fmt.Errorf("fuso da empresa %q inválido: %w", tz, err)
 	}
 	return loc, nil
+}
+
+// eventosDasEtapas: as mudanças de situação de cada etapa (trilha imutável), com
+// quem fez e o motivo — é o que mostra início, pausas, retomadas e conclusão.
+func (r *ProductionOrderRepositoryPGX) eventosDasEtapas(ctx context.Context, eid int64, f *entity.FichaDaOrdem) error {
+	rows, err := r.pool.Query(ctx, `SELECT e.operation_id, e.new_status, e.occurred_at, COALESCE(u.name, ''), COALESCE(e.notes, '')
+		FROM production_operation_execution_events e
+		LEFT JOIN users u ON u.id = e.actor_id
+		WHERE e.production_order_id = $1 AND e.enterprise_id = $2 AND e.new_status <> e.old_status
+		ORDER BY e.occurred_at, e.id`, f.ID, eid)
+	if err != nil {
+		return fmt.Errorf("lendo o histórico das etapas: %w", err)
+	}
+	defer rows.Close()
+	porEtapa := map[int64]int{}
+	for i, e := range f.Etapas {
+		porEtapa[e.ID] = i
+	}
+	for rows.Next() {
+		var op int64
+		var ev entity.EventoDaEtapa
+		var notas string
+		if err := rows.Scan(&op, &ev.Status, &ev.Quando, &ev.Quem, &notas); err != nil {
+			return err
+		}
+		ev.Motivo = motivoDoEvento(notas)
+		if i, ok := porEtapa[op]; ok {
+			f.Etapas[i].Eventos = append(f.Etapas[i].Eventos, ev)
+		}
+	}
+	return rows.Err()
+}
+
+// motivoDoEvento: a última linha da observação da etapa é a deste evento
+// ("2026-11-23 10:51:58 -03 · Pausada: almoço"); o motivo vem depois do ": ".
+func motivoDoEvento(notas string) string {
+	linhas := strings.Split(strings.TrimSpace(notas), "\n")
+	ultima := linhas[len(linhas)-1]
+	_, depois, ok := strings.Cut(ultima, " · ")
+	if !ok {
+		return ""
+	}
+	_, motivo, _ := strings.Cut(depois, ": ")
+	return strings.TrimSpace(motivo)
+}
+
+// assinaturasDaFicha: quem emitiu, separou, executou e liberou a ordem, pelo
+// que o sistema registrou. O que não aconteceu fica vazio (assina-se à mão).
+func (r *ProductionOrderRepositoryPGX) assinaturasDaFicha(ctx context.Context, eid int64, f *entity.FichaDaOrdem) error {
+	ler := func(dst *entity.AssinaturaDaFicha, sql string) error {
+		var quando time.Time
+		var nome string
+		err := r.pool.QueryRow(ctx, sql, f.ID, eid).Scan(&quando, &nome)
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		dst.Nome, dst.Quando = nome, &quando
+		return nil
+	}
+	if err := ler(&f.Emissao, `SELECT po.created_at, COALESCE(u.name, '') FROM production_orders po
+		LEFT JOIN users u ON u.id = po.created_by WHERE po.id = $1 AND po.enterprise_id = $2`); err != nil {
+		return fmt.Errorf("lendo a emissão da ordem: %w", err)
+	}
+	// Separação: a primeira baixa de material para a ordem.
+	if err := ler(&f.Separacao, `SELECT c.created_at, COALESCE(u.name, '') FROM production_consumptions c
+		JOIN production_orders po ON po.id = c.production_order_id AND po.enterprise_id = $2
+		LEFT JOIN users u ON u.id = c.created_by
+		WHERE c.production_order_id = $1 ORDER BY c.created_at, c.id LIMIT 1`); err != nil {
+		return fmt.Errorf("lendo a separação da ordem: %w", err)
+	}
+	// Execução: só com a ordem concluída — a última etapa concluída ou, sem
+	// etapas, o último apontamento.
+	if f.Status == "COMPLETED" || f.Status == "CLOSED" {
+		if err := ler(&f.Execucao, `SELECT quando, nome FROM (
+				SELECT e.occurred_at AS quando, COALESCE(u.name, '') AS nome, 1 AS fonte FROM production_operation_execution_events e
+				LEFT JOIN users u ON u.id = e.actor_id
+				WHERE e.production_order_id = $1 AND e.enterprise_id = $2 AND e.new_status = 'DONE' AND e.old_status <> 'DONE'
+				UNION ALL
+				SELECT a.created_at, COALESCE(u.name, ''), 2 FROM production_appointments a
+				JOIN production_orders po ON po.id = a.production_order_id AND po.enterprise_id = $2
+				LEFT JOIN users u ON u.id = a.created_by
+				WHERE a.production_order_id = $1) x
+			ORDER BY fonte, quando DESC LIMIT 1`); err != nil {
+			return fmt.Errorf("lendo a execução da ordem: %w", err)
+		}
+	}
+	// Qualidade: a última decisão do lote de inspeção FINAL da ordem — a de
+	// processo não é liberação e não pode aparecer como inspeção final.
+	var insp entity.InspecaoFinalDaFicha
+	err := r.pool.QueryRow(ctx, `SELECT d.decisao, COALESCE(d.qtd_aceita, 0), COALESCE(u.name, ''), d.decided_at
+		FROM quality_inspection_lots l
+		JOIN quality_lot_decisions d ON d.lot_id = l.id AND d.enterprise_id = l.enterprise_id
+		LEFT JOIN users u ON u.id = d.decided_by
+		WHERE l.production_order_id = $1 AND l.enterprise_id = $2 AND l.status = 'DECIDIDO' AND l.origem = 'FINAL'
+		ORDER BY d.decided_at DESC LIMIT 1`, f.ID, eid).Scan(&insp.Decisao, &insp.QtdAceita, &insp.Inspetor, &insp.Quando)
+	if err != nil && err != pgx.ErrNoRows {
+		return fmt.Errorf("lendo a liberação da qualidade: %w", err)
+	}
+	if err == nil {
+		f.InspecaoFinal = &insp
+		quando := insp.Quando
+		f.Qualidade = entity.AssinaturaDaFicha{Nome: insp.Inspetor, Quando: &quando}
+	}
+	return nil
 }

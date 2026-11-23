@@ -6,6 +6,19 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(ficha da OF): prioridade impressa em português (Alta, Normal, Baixa, Urgente) — saía "HIGH".
+- fix(ficha da OF): cada etapa sai com a instrução do roteiro, o histórico de pausas, interrupções
+  e retomadas (com o motivo e quem fez) e o operador que a concluiu; início, término e horas
+  reais (sem as pausas) seguem por etapa.
+- fix(ficha da OF): assinaturas com nome e data do que o sistema registrou — emissão (quem criou
+  a OF), separação (primeira baixa de material), execução (conclusão, com a OF concluída) e
+  qualidade (decisão do lote de inspeção, que também marca Aprovado/Restrição/Reprovado, a
+  quantidade aprovada, o inspetor e a data). Sem registro, fica a linha para assinar à mão.
+- fix(OF): a observação da ordem pode ser incluída ou alterada com a OF em produção (só
+  observação e prioridade; quantidade, datas e máquina seguem travadas com movimento).
+- fix(ficha da OF): o rodapé não sobrepõe mais o texto central.
+
 ## [v1.19.16] — 2026-11-23
 
 - fix: apontamentos da revisão — linha ambígua, down da 509 e descarte com duas empresas (`9955eb30`)

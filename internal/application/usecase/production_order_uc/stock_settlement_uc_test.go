@@ -229,6 +229,16 @@ func TestMaintainProductionOrder_QuantityRules(t *testing.T) {
 	if _, err := uc.Execute(context.Background(), request.MaintainProductionOrderDTO{ID: 1, PlannedQty: &quantity}); err == nil {
 		t.Fatal("activity must block maintenance")
 	}
+	// A observação para o operador vale com a ordem em produção.
+	obs := "Rebarbar as bordas"
+	repo.order.Status = poentity.StatusInProgress
+	if got, err := uc.Execute(context.Background(), request.MaintainProductionOrderDTO{ID: 1, Notes: &obs}); err != nil || got.Notes == nil || *got.Notes != obs {
+		t.Fatalf("observação com a ordem em produção: %v", err)
+	}
+	repo.order.Status = poentity.StatusCancelled
+	if _, err := uc.Execute(context.Background(), request.MaintainProductionOrderDTO{ID: 1, Notes: &obs}); err == nil {
+		t.Fatal("ordem cancelada não muda")
+	}
 }
 
 func TestProductionMaterialControl_AllCommands(t *testing.T) {

@@ -30,7 +30,17 @@ type OperacaoImpressa struct {
 	Inspecao, Externa, Pulada, Concluida bool
 	Inicio, Fim, Real                    string
 	Fornecedor, OS, Prazo                string
+	// Operador: quem concluiu a etapa. Notas: instrução do roteiro e o
+	// histórico (pausas, retomadas, motivos) já em texto.
+	Operador string
+	Notas    []string
 }
+
+// AssinaturaImpressa: nome e data já formatados (vazios = assina-se à mão).
+type AssinaturaImpressa struct{ Nome, Data string }
+
+// InspecaoImpressa: a decisão da qualidade marcada na ficha.
+type InspecaoImpressa struct{ Marcado, QtdAprovada, Inspetor, Data string }
 
 type MaterialImpresso struct {
 	Etapa, Codigo, Descricao, Necessario, Unidade, Deposito, Consumido string
@@ -53,6 +63,9 @@ type OrdemImpressa struct {
 	Ferramentas                      []FerramentaImpressa
 	Terceiros                        []TerceiroImpresso
 	Rodape                           string
+	// Assinaturas: emissão (PCP), separação, execução e qualidade.
+	Assinaturas [4]AssinaturaImpressa
+	Inspecao    InspecaoImpressa
 }
 
 // MontarOrdemImpressa formata a ficha da ordem para impressão.
@@ -101,7 +114,7 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 		Emissao:        gerado.Format("02/01/2006 15:04"),
 		Grade: [][]CampoImpresso{
 			{{"Produto", item}, {"Descrição", vazioVira(f.ItemNome, "—")}, {"Revisão", revisao}},
-			{{"Quantidade a produzir", qtd(f.QtdPlanejada) + " " + un}, {"Produzido / refugo", qtd(f.QtdProduzida) + " / " + qtd(f.QtdRefugada)}, {"Depósito destino", deposito}, {"Prioridade", vazioVira(f.Prioridade, "Normal")}},
+			{{"Quantidade a produzir", qtd(f.QtdPlanejada) + " " + un}, {"Produzido / refugo", qtd(f.QtdProduzida) + " / " + qtd(f.QtdRefugada)}, {"Depósito destino", deposito}, {"Prioridade", rotuloPrioridade(f.Prioridade)}},
 			{{rotuloInicio, data(inicio)}, {rotuloFim, data(fim)}, {"Roteiro", roteiro}, {"Origem", origem}},
 		},
 		Rodape: fmt.Sprintf("OF %d · %s", f.ID, item),
@@ -125,6 +138,7 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 			Situacao: rotuloStatusEtapa(e.Status), Inspecao: e.Inspecao, Externa: e.Externa,
 			Pulada: e.Status == "SKIPPED", Concluida: e.Status == "DONE",
 			Inicio: dataHora(e.Inicio), Fim: dataHora(e.Fim), Real: horasReais(e),
+			Operador: operadorDaEtapa(e), Notas: notasDaEtapa(e),
 		}
 		if e.QtdEntra != nil {
 			op.Entra = pecas(*e.QtdEntra, un)
@@ -185,7 +199,101 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 			Recebido: qtd(t.Recebida), AReceber: qtd(falta), Prazo: data(t.Prazo), Situacao: rotuloStatusOS(t.Status),
 		})
 	}
+	for i, a := range []entity.AssinaturaDaFicha{f.Emissao, f.Separacao, f.Execucao, f.Qualidade} {
+		o.Assinaturas[i] = AssinaturaImpressa{Nome: a.Nome, Data: dataPtr(a.Quando)}
+	}
+	if q := f.InspecaoFinal; q != nil {
+		o.Inspecao = InspecaoImpressa{Marcado: rotuloDecisao(q.Decisao), QtdAprovada: qtd(q.QtdAceita) + " " + un, Inspetor: q.Inspetor, Data: q.Quando.Format("02/01/2006")}
+	}
 	return o
+}
+
+func dataPtr(t *time.Time) string {
+	if t == nil || t.IsZero() {
+		return ""
+	}
+	return t.Format("02/01/2006")
+}
+
+// rotuloPrioridade: a prioridade fica gravada em código (o APS ordena por ela);
+// na ficha vai em português.
+func rotuloPrioridade(p string) string {
+	switch strings.ToUpper(strings.TrimSpace(p)) {
+	case "":
+		return "Normal"
+	case "LOW", "BAIXA":
+		return "Baixa"
+	case "NORMAL", "MEDIUM", "MEDIA", "MÉDIA":
+		return "Normal"
+	case "HIGH", "ALTA":
+		return "Alta"
+	case "URGENT", "URGENTE":
+		return "Urgente"
+	case "CRITICAL", "CRITICA", "CRÍTICA":
+		return "Crítica"
+	}
+	return p
+}
+
+func rotuloDecisao(d string) string {
+	switch d {
+	case "ACEITO":
+		return "Aprovado"
+	case "ACEITO_COM_RESTRICAO", "PARCIAL":
+		return "Aprovado com restrição"
+	case "REJEITADO":
+		return "Reprovado"
+	}
+	return ""
+}
+
+var rotuloEvento = map[string]string{"IN_PROGRESS": "Em andamento", "PAUSED": "Pausada", "INTERRUPTED": "Interrompida", "DONE": "Concluída", "SKIPPED": "Dispensada"}
+
+// operadorDaEtapa: quem concluiu a etapa (o último evento de conclusão).
+func operadorDaEtapa(e entity.EtapaDaFicha) string {
+	for i := len(e.Eventos) - 1; i >= 0; i-- {
+		if e.Eventos[i].Status == "DONE" {
+			return e.Eventos[i].Quem
+		}
+	}
+	return ""
+}
+
+// notasDaEtapa: a instrução do roteiro e o que aconteceu entre o início e o
+// fim (pausas, interrupções, retomadas e os motivos). Início e conclusão já
+// estão nos campos da ficha.
+func notasDaEtapa(e entity.EtapaDaFicha) []string {
+	var out []string
+	if t := strings.TrimSpace(e.Instrucao); t != "" {
+		out = append(out, "Instrução: "+strings.Join(strings.Fields(t), " "))
+	}
+	var hist []string
+	iniciou := false
+	for _, ev := range e.Eventos {
+		rotulo := rotuloEvento[ev.Status]
+		if ev.Status == "IN_PROGRESS" && !iniciou {
+			iniciou = true
+			continue
+		}
+		if ev.Status == "DONE" || rotulo == "" {
+			continue
+		}
+		if ev.Status == "IN_PROGRESS" {
+			rotulo = "Retomada"
+		}
+		h := rotulo + " " + ev.Quando.Format("02/01 15:04")
+		if ev.Motivo != "" {
+			h += " (" + ev.Motivo + ")"
+		}
+		if ev.Quem != "" {
+			h += " · " + ev.Quem
+		}
+		hist = append(hist, h)
+	}
+	if len(hist) > 0 {
+		out = append(out, "Histórico: "+strings.Join(hist, "; "))
+	}
+	return out
 }
 
 // datasReais: primeiro início e último término apontados nas etapas.
@@ -256,8 +364,11 @@ func desenharOrdem(o OrdemImpressa, b Branding) []byte {
 	doc.SetFooter(func(p *pdfkit.Page, n, total int) {
 		top := f.h - mg - 10
 		p.StrokeLine(mg, top-8, f.w-mg, top-8, borda, corGrade)
-		p.Text(mg, top+2, pdfkit.FontRegular, 7, corRotulo, fit("VentureERP · "+o.Rodape, pdfkit.FontRegular, 7, f.cw*0.4))
-		p.TextCenter(f.w/2, top+2, pdfkit.FontOblique, 6.8, corRotulo, "Emitida em "+o.Emissao+rotular(" por ", o.EmitidaPor)+" · a situação válida é a do sistema (VPRO0900)")
+		centro := "Emitida em " + o.Emissao + rotular(" por ", o.EmitidaPor) + " · a situação válida é a do sistema (VPRO0900)"
+		// O texto da esquerda para antes do central (antes encostava nele).
+		livre := f.w/2 - pdfkit.TextWidth(pdfkit.FontOblique, 6.8, centro)/2 - mg - 8
+		p.Text(mg, top+2, pdfkit.FontRegular, 7, corRotulo, fit("VentureERP · "+o.Rodape, pdfkit.FontRegular, 7, livre))
+		p.TextCenter(f.w/2, top+2, pdfkit.FontOblique, 6.8, corRotulo, centro)
 		p.TextRight(f.w-mg, top+2, pdfkit.FontBold, 7, corRotulo, fmt.Sprintf("Página %d de %d", n, total))
 	})
 
@@ -468,7 +579,7 @@ func (f *folha) operacoes() {
 	for _, op := range f.o.Operacoes {
 		altura := 17.0
 		if !op.Pulada {
-			altura += 22
+			altura += 22 + float64(linhasDasNotas(op.Notas, f.cw))*9
 		}
 		if f.cabe(altura + 2) {
 			ws = f.cabecalhoTabela(cols)
@@ -497,12 +608,37 @@ func (f *folha) operacoes() {
 		}
 		campos := []CampoImpresso{
 			{"Início  _ _ / _ _  _ _ : _ _", op.Inicio}, {"Término  _ _ / _ _  _ _ : _ _", op.Fim}, {"Qtd. boa", ""}, {"Refugo / motivo", ""},
-			{"Operador (matrícula)", ""}, {"Horas", op.Real}, {"Visto", ""},
+			{"Operador (matrícula)", op.Operador}, {"Horas", op.Real}, {"Visto", ""},
 		}
 		f.fichaApontamento(campos, []float64{1.25, 1.25, 0.7, 1.1, 1.3, 0.6, 0.6})
+		f.notasDaOperacao(op.Notas)
 	}
 	f.y += 10
 }
+
+// notasDaOperacao escreve a instrução e o histórico logo abaixo da ficha da etapa.
+func (f *folha) notasDaOperacao(notas []string) {
+	for _, n := range notas {
+		for _, l := range quebrarTexto(n, larguraEmCaracteres(f.cw-20)) {
+			f.p.Text(mg+16, f.y+8, pdfkit.FontOblique, 7, f.th.Text, fit(l[0], pdfkit.FontOblique, 7, f.cw-20))
+			f.y += 9
+		}
+	}
+	if len(notas) > 0 {
+		f.y += 2
+	}
+}
+
+func linhasDasNotas(notas []string, cw float64) int {
+	n := 0
+	for _, t := range notas {
+		n += len(quebrarTexto(t, larguraEmCaracteres(cw-20)))
+	}
+	return n
+}
+
+// larguraEmCaracteres: quantos caracteres de 7 pt cabem (média de 3,6 pt).
+func larguraEmCaracteres(w float64) int { return int(w / 3.6) }
 
 func (f *folha) fichaApontamento(campos []CampoImpresso, pesos []float64) {
 	ws := distribuir(pesos, f.cw-14)
@@ -587,8 +723,18 @@ func (f *folha) liberacao() {
 		x += 22 + pdfkit.TextWidth(pdfkit.FontRegular, 7.5, op)
 	}
 	xx := mg + ws[0]
-	for i, r := range []string{"Qtd. aprovada", "Inspetor", "Data"} {
-		f.celula(xx, f.y, ws[i+1], 26, r, "", false)
+	insp := f.o.Inspecao
+	if insp.Marcado != "" {
+		x := mg + 6
+		for _, op := range []string{"Aprovado", "Aprovado com restrição", "Reprovado"} {
+			if op == insp.Marcado {
+				p.Text(x+1.6, f.y+19.2, pdfkit.FontBold, 8, f.th.Text, "X")
+			}
+			x += 22 + pdfkit.TextWidth(pdfkit.FontRegular, 7.5, op)
+		}
+	}
+	for i, r := range [][2]string{{"Qtd. aprovada", insp.QtdAprovada}, {"Inspetor", insp.Inspetor}, {"Data", insp.Data}} {
+		f.celula(xx, f.y, ws[i+1], 26, r[0], r[1], false)
 		xx += ws[i+1]
 	}
 	f.y += 34
@@ -600,9 +746,17 @@ func (f *folha) liberacao() {
 		p.StrokeRect(bx, f.y, larg, 44, borda, corGrade)
 		p.StrokeLine(bx+8, f.y+28, bx+larg-8, f.y+28, borda, corRotulo)
 		p.TextCenter(bx+larg/2, f.y+36, pdfkit.FontBold, 6.5, corRotulo, strings.ToUpper(r))
-		p.Text(bx+8, f.y+10, pdfkit.FontRegular, 6.2, corRotulo, "Data  _ _ / _ _ / _ _ _ _")
-		if i == 0 && f.o.EmitidaPor != "" {
-			p.TextCenter(bx+larg/2, f.y+24, pdfkit.FontRegular, 7.5, f.th.Text, fit(f.o.EmitidaPor, pdfkit.FontRegular, 7.5, larg-16))
+		a := f.o.Assinaturas[i]
+		if i == 0 && a.Nome == "" {
+			a.Nome = f.o.EmitidaPor // ordem sem autor gravado: quem a imprime
+		}
+		if a.Data != "" {
+			p.Text(bx+8, f.y+10, pdfkit.FontRegular, 7, f.th.Text, "Data  "+a.Data)
+		} else {
+			p.Text(bx+8, f.y+10, pdfkit.FontRegular, 6.2, corRotulo, "Data  _ _ / _ _ / _ _ _ _")
+		}
+		if a.Nome != "" {
+			p.TextCenter(bx+larg/2, f.y+24, pdfkit.FontRegular, 7.5, f.th.Text, fit(a.Nome, pdfkit.FontRegular, 7.5, larg-16))
 		}
 	}
 	f.y += 52
