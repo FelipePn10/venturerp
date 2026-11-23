@@ -41,6 +41,9 @@ type RemessaParaIndustrializar struct {
 	Fornecedor             int64
 	CustoMedio             decimal.Decimal
 	PrevisaoRetorno        time.Time
+	// Com a remessa informada: a quantidade dela e se já tem NF-e válida ligada.
+	QuantidadeDaRemessa *decimal.Decimal
+	RemessaJaTemNota    bool
 }
 
 // DestinatarioDaRemessa é o fornecedor que industrializa.
@@ -128,6 +131,16 @@ func (uc *RemessaIndustrializacaoUseCase) Criar(ctx context.Context, osID int64,
 		return nil, errorsuc.NewValidationError("data de emissão inválida: use AAAA-MM-DD")
 	}
 	os, err := uc.Leitor.RemessaDaOS(ctx, osID, dto.MovementID)
+	if err == nil && dto.MovementID != nil {
+		// A nota cobre a remessa INTEIRA: o cancelamento devolve a quantidade da
+		// remessa, então nota parcial devolveria mais do que saiu.
+		switch {
+		case os.RemessaJaTemNota:
+			return nil, errorsuc.NewValidationError("esta remessa já tem NF-e: cancele a nota anterior antes de emitir outra")
+		case os.QuantidadeDaRemessa != nil && !os.QuantidadeDaRemessa.Equal(qtd):
+			return nil, errorsuc.NewValidationError(fmt.Sprintf("a NF-e de remessa precisa cobrir a remessa inteira (%s); para enviar outra quantidade, registre outra remessa na OS", os.QuantidadeDaRemessa.String()))
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

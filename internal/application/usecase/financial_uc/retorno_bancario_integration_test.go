@@ -82,6 +82,41 @@ func TestRetornoBancarioBaixaOBoleto(t *testing.T) {
 	if r, err := uc.Processar(a.Ctx, financial_uc.RetornoDTO{ContaBancariaID: conta, Conteudo: arq}); err != nil || len(r.JaBaixados) != 1 || len(r.Baixados) != 0 {
 		t.Fatalf("repetir o arquivo: %+v err=%v", r, err)
 	}
+
+	// O mesmo nosso número em DOIS bancos: o retorno do banco 2 baixa só o título
+	// do banco 2, nunca o do banco 1.
+	var conta2, doBanco1, doBanco2 int64
+	if err := pool.QueryRow(bg, `INSERT INTO contas_bancarias(banco,agencia,conta,descricao,saldo_inicial,is_active,created_by,enterprise_id) VALUES('077','1','9','Inter',0,TRUE,$1,$2) RETURNING id`, ator, a.ID).Scan(&conta2); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range []struct {
+		conta int64
+		dst   *int64
+	}{{conta, &doBanco1}, {conta2, &doBanco2}} {
+		if err := pool.QueryRow(bg, `INSERT INTO contas_receber(numero_documento,data_emissao,data_vencimento,valor_bruto,valor_recebido,status,criado_por,enterprise_id,nosso_numero,conta_bancaria_id)
+			VALUES('NF 11/1',$3::date,$3::date + 30,360.50,0,'PENDENTE',$1,$2,'0077777',$4) RETURNING id`, ator, a.ID, hoje, x.conta).Scan(x.dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	arq2 := strings.Replace(arq, "00000000000000012345", "00000000000000077777", 1)
+	if r, err := uc.Processar(a.Ctx, financial_uc.RetornoDTO{ContaBancariaID: conta2, Conteudo: arq2}); err != nil || len(r.Baixados) != 1 {
+		t.Fatalf("retorno do banco 2: %+v err=%v", r, err)
+	}
+	var st1, st2 string
+	_ = pool.QueryRow(bg, `SELECT UPPER(status) FROM contas_receber WHERE id=$1`, doBanco1).Scan(&st1)
+	_ = pool.QueryRow(bg, `SELECT UPPER(status) FROM contas_receber WHERE id=$1`, doBanco2).Scan(&st2)
+	if st1 == "RECEBIDO" || st2 != "RECEBIDO" {
+		t.Fatalf("o retorno do banco 2 baixou o título errado: banco 1 %s, banco 2 %s", st1, st2)
+	}
+	// Dois títulos abertos da mesma conta com o mesmo número: não escolhe sozinho.
+	for range 2 {
+		testutil.Exec(t, pool, `INSERT INTO contas_receber(numero_documento,data_emissao,data_vencimento,valor_bruto,valor_recebido,status,criado_por,enterprise_id,nosso_numero,conta_bancaria_id)
+			VALUES('NF 12/1',$3::date,$3::date + 30,100,0,'PENDENTE',$1,$2,'0088888',$4)`, ator, a.ID, hoje, conta2)
+	}
+	arq3 := strings.Replace(arq, "00000000000000012345", "00000000000000088888", 1)
+	if r, err := uc.Processar(a.Ctx, financial_uc.RetornoDTO{ContaBancariaID: conta2, Conteudo: arq3}); err != nil || len(r.Falhas) != 1 || len(r.Baixados) != 0 {
+		t.Fatalf("nosso número ambíguo precisa ir para falhas: %+v err=%v", r, err)
+	}
 }
 
 type bancoQueConfirma struct{ seu string }

@@ -2,6 +2,7 @@ package financial_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/shopspring/decimal"
@@ -13,7 +14,7 @@ import (
 
 // TitulosPorNossoNumero acha o título do boleto (repositório PG).
 type TitulosPorNossoNumero interface {
-	ContaReceberPorNossoNumero(ctx context.Context, nossoNumero string) (id int64, aberto bool, saldo decimal.Decimal, err error)
+	ContaReceberPorNossoNumero(ctx context.Context, nossoNumero string, conta int64) (id int64, aberto bool, saldo decimal.Decimal, err error)
 }
 
 // RetornoBancarioUseCase dá baixa automática nos boletos pagos que vêm no
@@ -52,7 +53,11 @@ func (uc *RetornoBancarioUseCase) Processar(ctx context.Context, dto RetornoDTO)
 	}
 	out := &ResultadoRetorno{Baixados: []string{}, JaBaixados: []string{}, NaoEncontrados: []string{}, Falhas: []string{}, OutrasOcorrencias: len(outras)}
 	for _, l := range liq {
-		id, aberto, saldo, err := uc.Titulos.ContaReceberPorNossoNumero(ctx, l.NossoNumero)
+		id, aberto, saldo, err := uc.Titulos.ContaReceberPorNossoNumero(ctx, l.NossoNumero, dto.ContaBancariaID)
+		if errors.Is(err, retorno.ErrNossoNumeroAmbiguo) {
+			out.Falhas = append(out.Falhas, fmt.Sprintf("%s: %v", l.NossoNumero, err))
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}

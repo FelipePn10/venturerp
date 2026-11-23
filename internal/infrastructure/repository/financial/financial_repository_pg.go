@@ -15,6 +15,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/financial/retorno"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
@@ -2205,27 +2206,52 @@ func (r *FinancialRepositoryPG) RecebiveisDoPedidoDeVenda(ctx context.Context, p
 }
 
 // ContaReceberPorNossoNumero acha o título da empresa pelo nosso número do
-// boleto (sem os zeros à esquerda) e diz se ele ainda está em aberto.
-func (r *FinancialRepositoryPG) ContaReceberPorNossoNumero(ctx context.Context, nossoNumero string) (int64, bool, decimal.Decimal, error) {
+// boleto (sem os zeros à esquerda) na conta do arquivo de retorno — título de
+// OUTRA conta não entra (o mesmo número pode existir em dois bancos) — e diz se
+// ele ainda está em aberto. Título sem conta definida vale para qualquer conta.
+func (r *FinancialRepositoryPG) ContaReceberPorNossoNumero(ctx context.Context, nossoNumero string, conta int64) (int64, bool, decimal.Decimal, error) {
 	empresa, err := tenant.ID(ctx)
 	if err != nil {
 		return 0, false, decimal.Zero, err
 	}
-	var id int64
-	var status string
-	var saldo decimal.Decimal
-	err = r.pool.QueryRow(ctx,
-		`SELECT id, UPPER(status), valor_bruto - COALESCE(valor_recebido,0) - COALESCE(desconto,0)
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, UPPER(status), valor_bruto - COALESCE(valor_recebido,0) - COALESCE(desconto,0),
+		        (conta_bancaria_id = $3) AS da_conta
 		   FROM contas_receber
 		  WHERE enterprise_id = $1 AND is_active AND LTRIM(COALESCE(nosso_numero,''), '0') = LTRIM($2, '0') AND LTRIM($2, '0') <> ''
-		  ORDER BY id DESC LIMIT 1`, empresa, nossoNumero).Scan(&id, &status, &saldo)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, false, decimal.Zero, nil
-	}
+		    AND (conta_bancaria_id = $3 OR conta_bancaria_id IS NULL)
+		  ORDER BY (conta_bancaria_id = $3) DESC NULLS LAST, id DESC LIMIT 2`, empresa, nossoNumero, conta)
 	if err != nil {
 		return 0, false, decimal.Zero, fmt.Errorf("procurando o título do nosso número %s: %w", nossoNumero, err)
 	}
-	return id, status != "RECEBIDO" && status != "CANCELADO", saldo, nil
+	type achado struct {
+		id      int64
+		status  string
+		saldo   decimal.Decimal
+		daConta *bool
+	}
+	var lista []achado
+	for rows.Next() {
+		var a achado
+		if err := rows.Scan(&a.id, &a.status, &a.saldo, &a.daConta); err != nil {
+			rows.Close()
+			return 0, false, decimal.Zero, err
+		}
+		lista = append(lista, a)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, false, decimal.Zero, err
+	}
+	if len(lista) == 0 {
+		return 0, false, decimal.Zero, nil
+	}
+	mesmo := func(b *bool) bool { return b != nil && *b }
+	if len(lista) == 2 && mesmo(lista[0].daConta) == mesmo(lista[1].daConta) {
+		return 0, false, decimal.Zero, retorno.ErrNossoNumeroAmbiguo
+	}
+	a := lista[0]
+	return a.id, a.status != "RECEBIDO" && a.status != "CANCELADO", a.saldo, nil
 }
 
 // SalvarCobrancaDoTitulo grava o que o banco devolveu: PIX copia e cola,

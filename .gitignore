@@ -46,6 +46,13 @@ scripts/*
 !scripts/self-update.sh
 !scripts/test-self-update.sh
 !scripts/self_update_test.go
+# Modo simulação: agente do host e saneamento da cópia (sem segredo — tudo vem
+# do update.env da VPS).
+!scripts/refresh-training.sh
+!scripts/simulacao-saneamento.sql
+# Simulação ponta a ponta da rodada de validação: credenciais por variável de
+# ambiente e recusa banco que pareça produção.
+!scripts/test-rodada-validacao.sh
 !scripts/test-mrp-manufacturing.sh
 !scripts/audit-mrp-manufacturing.sh
 # Conferência das regras do beneficiamento contra o levantamento da Usimac. Só lê

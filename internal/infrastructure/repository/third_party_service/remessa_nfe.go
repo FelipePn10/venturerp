@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"strings"
 	"time"
 
@@ -56,14 +57,18 @@ func (r *Repo) RemessaDaOS(ctx context.Context, osID int64, movimento *int64) (*
 	}
 	x.Fornecedor = *fornecedor
 	if movimento != nil {
-		var existe bool
-		if err := r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM third_party_service_movements
-			WHERE id=$1 AND service_order_id=$2 AND enterprise_id=$3 AND movement_type='REMITTANCE')`, *movimento, osID, eid).Scan(&existe); err != nil {
-			return nil, fmt.Errorf("conferindo a remessa da OS: %w", err)
-		}
-		if !existe {
+		var qtd decimal.Decimal
+		err := r.db.QueryRow(ctx, `SELECT m.quantity,
+			       EXISTS (SELECT 1 FROM fiscal_exits x WHERE x.id = m.fiscal_exit_id AND x.status NOT IN ('CANCELLED','DENIED','REJECTED'))
+			  FROM third_party_service_movements m
+			 WHERE m.id=$1 AND m.service_order_id=$2 AND m.enterprise_id=$3 AND m.movement_type='REMITTANCE'`, *movimento, osID, eid).Scan(&qtd, &x.RemessaJaTemNota)
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errorsuc.NewValidationError("a remessa informada não é desta OS")
 		}
+		if err != nil {
+			return nil, fmt.Errorf("conferindo a remessa da OS: %w", err)
+		}
+		x.QuantidadeDaRemessa = &qtd
 	}
 	return &x, nil
 }

@@ -89,6 +89,11 @@ func TestPortalIsolaClienteEEmpresa(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	uc.BaseURL = ""
+	if _, err := uc.CriarLink(a.Ctx, x, 1, ""); err == nil {
+		t.Fatal("sem PORTAL_BASE_URL o link não teria onde abrir: precisa recusar")
+	}
+	uc.BaseURL = "https://portal.exemplo"
 	uc.Empresa = "usimac"
 	if l2, err := uc.CriarLink(a.Ctx, x, 1, ""); err != nil || l2.URL != "https://portal.exemplo/#/portal/usimac/"+l2.Token {
 		t.Fatalf("link com a empresa do catálogo: %+v %v", l2, err)

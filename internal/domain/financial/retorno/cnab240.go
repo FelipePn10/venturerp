@@ -14,6 +14,7 @@ package retorno
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -133,3 +134,7 @@ func data(s string) (time.Time, error) {
 	}
 	return time.Parse("02012006", s)
 }
+
+// ErrNossoNumeroAmbiguo: mais de um título da mesma conta com o mesmo nosso
+// número — o retorno não escolhe sozinho qual baixar.
+var ErrNossoNumeroAmbiguo = errors.New("mais de um título com este nosso número nesta conta: baixe à mão")

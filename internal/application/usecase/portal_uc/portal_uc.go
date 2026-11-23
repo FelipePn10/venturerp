@@ -194,6 +194,10 @@ func Hash(token string) []byte {
 
 // CriarLink gera o token (32 bytes aleatórios) do cliente, válido por dias (1 a 365).
 func (uc *UseCase) CriarLink(ctx context.Context, cliente int64, dias int, descricao string) (*Link, error) {
+	// Sem o endereço público (PORTAL_BASE_URL) o link não teria onde abrir.
+	if strings.TrimSpace(uc.BaseURL) == "" {
+		return nil, errorsuc.NewValidationError("o portal do cliente não está ligado neste servidor (endereço público não configurado): fale com o suporte")
+	}
 	if dias <= 0 {
 		dias = 30
 	}
