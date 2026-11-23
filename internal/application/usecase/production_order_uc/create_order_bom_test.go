@@ -121,6 +121,27 @@ func TestCriarOFConfereDatasEAlmoxarifado(t *testing.T) {
 	}
 }
 
+// Bug AB: a OF sem destino informado (a filha firmada pelo MRP) nasce com o
+// almoxarifado do cadastro do item — se for desta empresa.
+func TestCriarOFSemDestinoUsaOAlmoxarifadoDoItem(t *testing.T) {
+	for _, c := range []struct {
+		almoxDoItem int
+		quer        *int64
+	}{{7, func() *int64 { v := int64(7); return &v }()}, {8, nil}, {0, nil}} {
+		repo := repoComAlmoxarifados{fakePORepo: &fakePORepo{automatic: map[int64]int64{}}, daEmpresa: map[int64]bool{7: true}}
+		item := &itementity.Item{Code: 10, BusinessCode: "MOVEL-10"}
+		item.Warehouse.WarehouseCode = c.almoxDoItem
+		uc := CreateProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: &estruturaPorMascara{}, Items: &fakeOrderItems{item: item}}
+		if _, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "MOVEL-10", PlannedQty: decimal.NewFromInt(1), CreatedBy: uuid.New()}); err != nil {
+			t.Fatal(err)
+		}
+		got := repo.fakePORepo.order.WarehouseID
+		if (got == nil) != (c.quer == nil) || (got != nil && *got != *c.quer) {
+			t.Fatalf("almoxarifado do item %d: OF nasceu com %v, quer %v", c.almoxDoItem, got, c.quer)
+		}
+	}
+}
+
 type versaoFixa struct{ controla, aprovada bool }
 
 func (v versaoFixa) SituacaoParaProducao(context.Context, int64, string) (bool, bool, error) {
@@ -198,5 +219,34 @@ func TestOFManualCopiaAEstruturaNaUnidadeAtual(t *testing.T) {
 	}
 	if len(repo.createdMaterials) != 0 {
 		t.Fatal("a OF foi gravada mesmo com a estrutura sem conversão")
+	}
+}
+
+type repoComPai struct {
+	repoComAlmoxarifados
+	destino *int64
+}
+
+func (r repoComPai) DestinoDaOFFilha(context.Context, int64, int64) (*int64, error) {
+	return r.destino, nil
+}
+
+// A OF filha entrega onde a OF pai baixa a peça — vale mais que o cadastro do item.
+func TestCriarOFFilhaEntregaOndeAPaiBaixa(t *testing.T) {
+	pai, planejada := int64(9), int64(55)
+	for _, c := range []struct {
+		destino *int64
+		quer    int64
+	}{{&pai, 9}, {nil, 7}} {
+		repo := repoComPai{repoComAlmoxarifados{fakePORepo: &fakePORepo{automatic: map[int64]int64{}}, daEmpresa: map[int64]bool{7: true, 9: true}}, c.destino}
+		item := &itementity.Item{Code: 10, BusinessCode: "MOVEL-10"}
+		item.Warehouse.WarehouseCode = 7
+		uc := CreateProductionOrderUseCase{Repo: repo, Auth: fakeAuth{canPlanned: true}, Structure: &estruturaPorMascara{}, Items: &fakeOrderItems{item: item}}
+		if _, err := uc.Execute(context.Background(), request.CreateProductionOrderDTO{ItemCode: "MOVEL-10", PlannedQty: decimal.NewFromInt(1), PlannedOrderID: &planejada, CreatedBy: uuid.New()}); err != nil {
+			t.Fatal(err)
+		}
+		if got := repo.fakePORepo.order.WarehouseID; got == nil || *got != c.quer {
+			t.Fatalf("destino = %v, quer %d", got, c.quer)
+		}
 	}
 }

@@ -300,3 +300,15 @@ func (s *Shipment) ValidateForShipping(acceptDivergences bool) error {
 	}
 	return nil
 }
+
+// NotaDoRomaneio nomeia a NF-e ligada ao romaneio nas mensagens: o rascunho
+// ainda não tem número (vem na autorização) — antes saía "NF-e 0".
+func (s *Shipment) NotaDoRomaneio() string {
+	if s.NFeNumber != nil && *s.NFeNumber > 0 {
+		return fmt.Sprintf("a NF-e %d", *s.NFeNumber)
+	}
+	if s.FiscalExitID != nil {
+		return fmt.Sprintf("uma NF-e em rascunho (id %d)", *s.FiscalExitID)
+	}
+	return "uma NF-e"
+}

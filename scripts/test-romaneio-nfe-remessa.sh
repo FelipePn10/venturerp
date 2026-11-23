@@ -290,6 +290,82 @@ for _ in range(3):
 sobra = sql(f"select coalesce(sum(quantity),0) from stock_balances where enterprise_id={EID} and item_code={item_h}")
 ok(Decimal(sobra) == 0, "H: três saídas de 1/3 zeram o saldo (antes sobrava 0,000001)", sobra)
 
+# ── Rodada 8: reserva na remessa (AA), destino da OF firmada (AB), "NF-e 0" (AC) ──
+secao("OF firmada com o almoxarifado do item (AB)")
+ator = sql(f"select id from users where email='{os.environ['ERP_EMAIL']}'")
+fab = sql(f"""select i.code||'|'||i.business_code||'|'||i.warehouse_code from items i
+   join manufacturing_routes mr on mr.item_code=i.code and mr.enterprise_id=i.enterprise_id and mr.is_standard
+   join warehouse w on w.id=i.warehouse_code and w.enterprise_id=i.enterprise_id
+  where i.enterprise_id={EID} and i.engineering_type=0
+    and not exists (select 1 from kanban_cards k where k.item_code=i.code and k.enterprise_id=i.enterprise_id) order by i.code limit 1""")
+if not fab:
+    ok(False, "há item fabricado com roteiro e almoxarifado no cadastro", "nenhum")
+else:
+    fab_code, fab_bc, fab_almox = fab.split("|")
+    st, r = api("POST", "/api/planned-order/create", {"item_code": int(fab_code), "quantity": "2", "order_type": "PRODUCTION", "need_date": hoje}, T)
+    po = dado(r, "code")
+    ok(st < 300 and po and dado(r, "warehouse_code") in (None, 0), "ordem planejada de produção sem almoxarifado", (st, r))
+    if po:
+        st, r = api("GET", f"/api/planned-order/{po}/firm", tok=T)
+        of_firm = sql(f"select id||'|'||coalesce(warehouse_id::text,'') from production_orders where planned_order_id={po} order by id desc limit 1")
+        ok(st < 300 and of_firm and of_firm.split("|")[1] == fab_almox, "AB: a OF firmada nasce com o almoxarifado do item", (st, of_firm, str(r)[:200]))
+    st, r = api("POST", "/api/production-order/create", {"item_code": fab_bc, "planned_qty": 1}, T)
+    destino = sql(f"select coalesce(warehouse_id::text,'') from production_orders where id={dado(r, 'id') or 0}")
+    ok(st == 201 and destino == fab_almox, "AB: a OF manual sem destino também usa o do item", (st, destino, fab_almox))
+
+secao("Remessa da peça reservada para a própria OF (AA)")
+cods = sql(f"""select i.code||'|'||i.business_code||'|'||b.warehouse_id from items i
+   join stock_balances b on b.item_code=i.code and b.enterprise_id=i.enterprise_id and b.mask='' and b.quantity - b.reserved_qty > 50
+   join warehouse w on w.id=b.warehouse_id and w.location::text not in ('TERCEIRO','INSPECAO','REJEICAO','TRANSITO') and w.supplier_code is null and w.reservations_allowed
+  where i.enterprise_id={EID} order by i.code limit 2""").splitlines()
+if len(cods) < 2:
+    ok(False, "há dois itens com saldo para a OS", cods)
+else:
+    (peca, peca_bc, almox), (acabado, _, _) = [c.split("|") for c in cods]
+    n = random.randint(10**8, 9*10**8)
+    forn = int(sql(f"insert into suppliers(code,name,document_type,document_number,created_by,enterprise_id) values ({n},'TRATE AA','CNPJ','11222333000181','{ator}',{EID}) returning code"))
+    sql(f"""insert into item_preferred_suppliers(enterprise_id,item_code,supplier_code,mask,ranking,is_preferred,created_by) values ({EID},{acabado},{forn},'',1,true,'{ator}')
+          on conflict do nothing""")
+    op = sql(f"insert into operations(code,name,origin,created_by,enterprise_id) values ({n},'Têmpera','TERCEIROS','{ator}',{EID}) returning id")
+    rot = sql(f"insert into manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) values ({n},{acabado},{100 + n % 20000},false,'{ator}',{EID}) returning id")
+    ro = sql(f"insert into route_operations(route_id,sequence,operation_id) values ({rot},10,{op}) returning id")
+    of = sql(f"insert into production_orders(order_number,item_code,mask,planned_qty,status,route_id,enterprise_id,created_by) values ({n % 1000000},{acabado},'',10,'IN_PROGRESS',{rot},{EID},'{ator}') returning id")
+    mat = sql(f"insert into production_order_materials(production_order_id,enterprise_id,material_kind,item_code,quantity,warehouse_id,created_by,route_operation_sequence) values ({of},{EID},'DEMAND',{peca},10,{almox},'{ator}',10) returning id")
+    os_id = int(sql(f"""insert into third_party_service_orders(code,enterprise_id,production_order_id,route_operation_id,operation_id,item_code,supplier_code,uom,quantity,start_date,due_date,status,created_by,remittance_type)
+        values ((select coalesce(max(code),0)+1 from third_party_service_orders where enterprise_id={EID}),{EID},{of},{ro},{op},{acabado},{forn},'UN',10,current_date,current_date+10,'RELEASED_WITHOUT_PO','{ator}','DEMAND_ITEMS') returning id"""))
+    reservado = lambda: Decimal(sql(f"select coalesce(sum(quantity),0) from stock_reservations where status='ACTIVE' and reference_type='OF_COMPONENTE' and reference_code={of} and warehouse_id={almox}"))
+    st, r = api("POST", "/api/stock/reservations/create", {"item_code": peca_bc, "mask": "", "warehouse_id": int(almox), "quantity": "10",
+        "reference_type": "OF_COMPONENTE", "reference_code": int(of), "reference_item_code": int(mat)}, T)
+    ok(st < 300 and reservado() == 10, "peça reservada para a OF (componente da OF filha)", (st, r, reservado()))
+    mov = lambda tipo, w=None: api("POST", f"/api/third-party-services/orders/{os_id}/movements", dict({"movement_type": tipo, "quantity": "10",
+        "occurred_at": datetime.datetime.now().astimezone().isoformat(), "idempotency_key": f"aa-{tipo}-{os_id}"}, **({"warehouse_id": int(w)} if w else {})), T)
+    st, r = mov("REMITTANCE", almox)
+    ok(st < 300, "AA: a remessa pela OS da própria OF passa (antes: 'reservado para a OF')", (st, r))
+    ok(reservado() == 0, "AA: a remessa consome a reserva da OF", reservado())
+    st, r = mov("RECEIPT")
+    ok(st < 300 and reservado() == 10, "AA: a peça que volta do terceiro fica reservada de novo para a OF", (st, r, reservado()))
+
+secao("Mensagem do romaneio com NF-e em rascunho (AC)")
+rom = sql(f"""select s.code||'|'||s.fiscal_exit_id from shipments s join fiscal_exits f on f.id=s.fiscal_exit_id
+  where s.enterprise_id={EID} and s.status <> 'CANCELLED' and f.status='DRAFT' order by s.code desc limit 1""")
+if not rom:
+    so = sql(f"""select so.code from sales_orders so where so.status='P' and so.enterprise_code=(select code from enterprise where id={EID})
+       and not exists(select 1 from shipments s where s.sales_order_code=so.code)
+       and not exists(select 1 from fiscal_exits e where e.sales_order_code=so.code and e.status <> 'CANCELLED')
+       and exists(select 1 from sales_order_items l where l.sales_order_code=so.code and l.is_active) order by so.code desc limit 1""")
+    st, r = api("POST", "/api/shipments/auto-fill/sales-order", {"sales_order_code": int(so)}, T)
+    code = dado(r, "code")
+    st, r = api("POST", f"/api/shipments/{code}/nfe", {"serie": "1", "data_emissao": hoje, "cfop": "5102", "natureza_operacao": "VENDA"}, T)
+    rom = f"{code}|{dado(r, 'id')}"
+code, nf = rom.split("|")
+st, r = api("POST", f"/api/shipments/{code}/cancel", {"reason": "teste"}, T)
+ok(st == 422 and "NF-e 0" not in str(r) and f"rascunho (id {nf})" in str(r), "AC: a mensagem nomeia o rascunho pelo id, não 'NF-e 0'", (st, r))
+st, r = api("POST", f"/api/shipments/{code}/nfe", {"serie": "1", "data_emissao": hoje, "cfop": "5102", "natureza_operacao": "VENDA"}, T)
+ok(st == 422 and "NF-e 0" not in str(r), "AC: a 2ª NF-e do romaneio também não diz 'NF-e 0'", (st, r))
+api("POST", f"/api/fiscal/exits/{nf}/descartar", {}, T)
+ev = sql(f"select note from shipment_events e join shipments s on s.id=e.shipment_id where s.code={code} and e.event='NFE_CANCELLED' order by e.id desc limit 1")
+ok(ev.startswith(f"NF-e em rascunho (id {nf}) descartada"), "AC: o histórico do romaneio diz 'rascunho descartado'", ev)
+
 print(f"\n{total - len(falhas)}/{total} cenários OK")
 if falhas:
     print("Falharam:\n  " + "\n  ".join(falhas)); raise SystemExit(1)

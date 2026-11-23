@@ -1168,7 +1168,7 @@ func (r *Repo) OrderHistory(ctx context.Context, id int64) ([]domain.OrderHistor
 }
 
 // referenciaOSTerceiro marca no kardex a transferência da OS de terceiro.
-const referenciaOSTerceiro = "OS_TERCEIRO"
+const referenciaOSTerceiro = stockentity.ReferenceTypeOSTerceiro
 
 // estoqueDaOS leva a peça ao almoxarifado do terceiro na remessa e a traz de
 // volta no retorno ou no recebimento. Só mexe no estoque a remessa que informa

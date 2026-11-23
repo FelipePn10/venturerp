@@ -53,6 +53,7 @@ secao("Expedição guiada (bugs J, L e melhoria 6)")
 so = sql("""with livre as (select item_code, sum(quantity) q from stock_balances group by 1),
  res as (select item_code, sum(quantity) q from stock_reservations where status='ACTIVE' group by 1)
  select so.code from sales_orders so where so.status='P' and not exists(select 1 from shipments s where s.sales_order_code=so.code)
+ and not exists(select 1 from fiscal_exits e where e.sales_order_code=so.code and e.status <> 'CANCELLED')
  and exists(select 1 from sales_order_items l where l.sales_order_code=so.code and l.is_active)
  and not exists (select 1 from sales_order_items l left join livre on livre.item_code=l.item_code left join res on res.item_code=l.item_code
    where l.sales_order_code=so.code and l.is_active and (l.requested_qty-coalesce(l.attended_qty,0)-coalesce(l.cancelled_qty,0)) > coalesce(livre.q,0)-coalesce(res.q,0))

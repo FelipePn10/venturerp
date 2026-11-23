@@ -50,6 +50,8 @@ const (
 	// Peça entregue pela OF filha e reservada para a OF pai (reference_code =
 	// id da OF pai): só a saída de material da OF pai a consome.
 	ReferenceTypeComponenteDaOF = "OF_COMPONENTE"
+	// Remessa e retorno da OS de terceiro (reference_code = código da OS).
+	ReferenceTypeOSTerceiro = "OS_TERCEIRO"
 	// Saldo que entrou sem lote e recebeu um depois.
 	ReferenceTypeLotImplant = "IMPLANTACAO_LOTE"
 )

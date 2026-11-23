@@ -384,3 +384,123 @@ func TestCorrigirRemessaAntigaDoItemErrado(t *testing.T) {
 		t.Fatalf("em poder = %+v err=%v", em, err)
 	}
 }
+
+// Bug AA: a peça reservada para a OF (componente da OF filha) ia à TRATE pela OS
+// da própria OF e a remessa era recusada pela reserva. A remessa usa a reserva
+// da OF da OS, e a peça que volta fica reservada de novo para ela.
+func TestRemessaUsaAReservaDaPropriaOF(t *testing.T) {
+	pool := testutil.Pool(t)
+	base := context.Background()
+	ator := testutil.Actor(t, pool)
+	a, _ := testutil.DuasEmpresas(t, pool, func(a, b testutil.Empresa) {
+		for _, e := range []int64{a.ID, b.ID} {
+			pool.Exec(base, `DELETE FROM third_party_service_order_history WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM third_party_service_orders WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM production_order_materials WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_movements WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM stock_balances WHERE enterprise_id=$1`, e)
+			pool.Exec(base, `DELETE FROM warehouse WHERE enterprise_id=$1 AND supplier_code IS NOT NULL`, e)
+		}
+	})
+	acabado, peca, parafuso := testutil.UniqueCode(), testutil.UniqueCode(), testutil.UniqueCode()
+	testutil.NovosItens(t, pool, a.ID, ator, acabado, peca, parafuso)
+	almox := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	fornecedor := testutil.UniqueCode()
+	var fornecedorID, operacao, roteiro, rotaOp, of int64
+	if err := pool.QueryRow(base, `INSERT INTO suppliers(code,name,document_type,document_number,created_by,enterprise_id) VALUES($1,'TRATE','CNPJ',$2,$3,$4) RETURNING id`,
+		fornecedor, fmt.Sprint(fornecedor), ator, a.ID).Scan(&fornecedorID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { pool.Exec(base, `DELETE FROM suppliers WHERE id=$1`, fornecedorID) })
+	if err := pool.QueryRow(base, `INSERT INTO operations(code,name,origin,created_by,enterprise_id) VALUES($1,'Zincagem','TERCEIROS',$2,$3) RETURNING id`, testutil.UniqueCode(), ator, a.ID).Scan(&operacao); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO manufacturing_routes(code,item_code,alternative,is_standard,created_by,enterprise_id) VALUES($1,$2,1,FALSE,$3,$4) RETURNING id`, testutil.UniqueCode(), acabado, ator, a.ID).Scan(&roteiro); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO route_operations(route_id,sequence,operation_id) VALUES($1,20,$2) RETURNING id`, roteiro, operacao).Scan(&rotaOp); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(base, `INSERT INTO production_orders(order_number,item_code,mask,planned_qty,status,route_id,enterprise_id,created_by) VALUES($1,$2,'',40,'OPEN',$3,$4,$5) RETURNING id`,
+		testutil.UniqueCode()%1_000_000, acabado, roteiro, a.ID, ator).Scan(&of); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		pool.Exec(base, `DELETE FROM production_orders WHERE id=$1`, of)
+		pool.Exec(base, `DELETE FROM route_operations WHERE id=$1`, rotaOp)
+		pool.Exec(base, `DELETE FROM manufacturing_routes WHERE id=$1`, roteiro)
+		pool.Exec(base, `DELETE FROM operations WHERE id=$1`, operacao)
+	})
+	// A peça entra na etapa 20 (a externa); o parafuso, no início.
+	for _, m := range []struct {
+		item  int64
+		etapa *int
+	}{{peca, func() *int { v := 20; return &v }()}, {parafuso, nil}} {
+		if _, err := pool.Exec(base, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,quantity,warehouse_id,created_by,route_operation_sequence)
+			VALUES($1,$2,'DEMAND',$3,40,$4,$5,$6)`, of, a.ID, m.item, almox, ator, m.etapa); err != nil {
+			t.Fatal(err)
+		}
+	}
+	testutil.FonteDeSuprimento(t, pool, acabado, fornecedor)
+	hoje := time.Now()
+	var os int64
+	if err := pool.QueryRow(base, `INSERT INTO third_party_service_orders(code,enterprise_id,production_order_id,route_operation_id,operation_id,item_code,supplier_code,uom,quantity,start_date,due_date,status,created_by)
+		VALUES($1,$2,$3,$4,$5,$6,$7,'UN',40,$8::date,$8::date + 10,'RELEASED_WITHOUT_PO',$9) RETURNING id`,
+		testutil.UniqueCode()%1_000_000, a.ID, of, rotaOp, operacao, acabado, fornecedor, hoje, ator).Scan(&os); err != nil {
+		t.Fatal(err)
+	}
+	estoque := stockpg.NewStockRepositorySQLC(pool)
+	if _, err := estoque.CreateMovement(a.Ctx, &stockentity.StockMovement{ItemCode: peca, WarehouseID: almox, MovementType: "IN",
+		Quantity: decimal.NewFromInt(40), UnitPrice: decimal.NewFromInt(7), CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	var mat int64
+	if err := pool.QueryRow(base, `SELECT id FROM production_order_materials WHERE production_order_id=$1 AND item_code=$2`, of, peca).Scan(&mat); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := estoque.CreateReservation(a.Ctx, &stockentity.StockReservation{ItemCode: peca, WarehouseID: almox, Quantity: decimal.NewFromInt(40),
+		ReferenceType: stockentity.ReferenceTypeComponenteDaOF, ReferenceCode: of, ReferenceItemCode: &mat, ReservationDate: hoje, Status: "ACTIVE", CreatedBy: ator}); err != nil {
+		t.Fatal(err)
+	}
+	repo := repoimpl.New(pool).(*repoimpl.Repo)
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "REMITTANCE", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q-%d", os), WarehouseID: &almox, CreatedBy: ator}); err != nil {
+		t.Fatalf("remessa da peça reservada para a própria OF: %v", err)
+	}
+	reservadoParaOF := func() decimal.Decimal {
+		var q decimal.Decimal
+		pool.QueryRow(base, `SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE enterprise_id=$1 AND reference_type='OF_COMPONENTE'
+			AND reference_code=$2 AND status='ACTIVE' AND warehouse_id=$3`, a.ID, of, almox).Scan(&q)
+		return q
+	}
+	if got := reservadoParaOF(); !got.IsZero() {
+		t.Fatalf("a remessa não consumiu a reserva da OF: %s ainda reservado na fábrica", got)
+	}
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "RECEIPT", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q-volta-%d", os), CreatedBy: ator}); err != nil {
+		t.Fatalf("retorno da TRATE: %v", err)
+	}
+	if got := reservadoParaOF(); !got.Equal(decimal.NewFromInt(40)) {
+		t.Fatalf("a peça voltou sem a reserva da OF: %s reservado", got)
+	}
+	// Voltando a outro almoxarifado, a peça segue reservada para a OF.
+	outro := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	if _, err := pool.Exec(base, `UPDATE third_party_service_orders SET quantity=80, status='RELEASED_WITHOUT_PO' WHERE id=$1`, os); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "REMITTANCE", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q2-%d", os), WarehouseID: &almox, CreatedBy: ator}); err != nil {
+		t.Fatalf("segunda remessa: %v", err)
+	}
+	if _, err := repo.AddMovement(a.Ctx, os, domain.Movement{MovementType: "RECEIPT", Quantity: decimal.NewFromInt(40), OccurredAt: hoje,
+		IdempotencyKey: fmt.Sprintf("q2-volta-%d", os), WarehouseID: &outro, CreatedBy: ator}); err != nil {
+		t.Fatalf("retorno a outro almoxarifado: %v", err)
+	}
+	var noOutro decimal.Decimal
+	pool.QueryRow(base, `SELECT COALESCE(SUM(quantity),0) FROM stock_reservations WHERE enterprise_id=$1 AND reference_type='OF_COMPONENTE'
+		AND reference_code=$2 AND status='ACTIVE' AND warehouse_id=$3`, a.ID, of, outro).Scan(&noOutro)
+	if !noOutro.Equal(decimal.NewFromInt(40)) {
+		t.Fatalf("de volta a outro almoxarifado, reservado para a OF = %s, quer 40", noOutro)
+	}
+}
