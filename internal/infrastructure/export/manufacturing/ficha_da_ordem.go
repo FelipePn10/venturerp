@@ -77,11 +77,16 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 		origem += fmt.Sprintf(" · pedido %d", *f.PedidoVenda)
 	}
 	rotuloInicio, rotuloFim := "Início previsto", "Entrega prevista"
-	switch f.Status {
-	case "IN_PROGRESS":
-		rotuloInicio = "Iniciada em"
-	case "COMPLETED", "CLOSED":
-		rotuloInicio, rotuloFim = "Iniciada em", "Concluída em"
+	inicio, fim := f.Inicio, f.Fim
+	// "Iniciada/Concluída em" só com o apontamento real das etapas; sem ele fica o previsto.
+	realInicio, realFim := datasReais(f.Etapas)
+	if f.Status == "IN_PROGRESS" || f.Status == "COMPLETED" || f.Status == "CLOSED" {
+		if realInicio != nil {
+			rotuloInicio, inicio = "Iniciada em", realInicio
+		}
+	}
+	if (f.Status == "COMPLETED" || f.Status == "CLOSED") && realFim != nil {
+		rotuloFim, fim = "Concluída em", realFim
 	}
 	deposito := "—"
 	if f.Deposito != nil {
@@ -97,7 +102,7 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 		Grade: [][]CampoImpresso{
 			{{"Produto", item}, {"Descrição", vazioVira(f.ItemNome, "—")}, {"Revisão", revisao}},
 			{{"Quantidade a produzir", qtd(f.QtdPlanejada) + " " + un}, {"Produzido / refugo", qtd(f.QtdProduzida) + " / " + qtd(f.QtdRefugada)}, {"Depósito destino", deposito}, {"Prioridade", vazioVira(f.Prioridade, "Normal")}},
-			{{rotuloInicio, data(f.Inicio)}, {rotuloFim, data(f.Fim)}, {"Roteiro", roteiro}, {"Origem", origem}},
+			{{rotuloInicio, data(inicio)}, {rotuloFim, data(fim)}, {"Roteiro", roteiro}, {"Origem", origem}},
 		},
 		Rodape: fmt.Sprintf("OF %d · %s", f.ID, item),
 	}
@@ -181,6 +186,19 @@ func MontarOrdemImpressa(f *entity.FichaDaOrdem, gerado time.Time) OrdemImpressa
 		})
 	}
 	return o
+}
+
+// datasReais: primeiro início e último término apontados nas etapas.
+func datasReais(etapas []entity.EtapaDaFicha) (inicio, fim *time.Time) {
+	for _, e := range etapas {
+		if e.Inicio != nil && (inicio == nil || e.Inicio.Before(*inicio)) {
+			inicio = e.Inicio
+		}
+		if e.Fim != nil && (fim == nil || e.Fim.After(*fim)) {
+			fim = e.Fim
+		}
+	}
+	return inicio, fim
 }
 
 func dataHora(t *time.Time) string {

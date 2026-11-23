@@ -24,7 +24,7 @@ func (r *StockRepositorySQLC) ContagensParaAcuracidade(ctx context.Context, mese
 	desde := time.Now().In(fuso).AddDate(0, -meses, 0)
 	rows, err := r.pool.Query(ctx,
 		`WITH contagens AS (
-		   SELECT COALESCE(p.end_date::timestamptz, p.updated_at) quando, l.item_code, l.warehouse_id, l.address,
+		   SELECT COALESCE(p.end_date::timestamp AT TIME ZONE $5, p.updated_at) quando, l.item_code, l.warehouse_id, l.address,
 		          l.system_qty esperado, l.counted_qty contado, COALESCE(l.unit_cost, 0) custo
 		     FROM physical_inventory_items l JOIN physical_inventories p ON p.id=l.inventory_id
 		    WHERE p.enterprise_id=$1 AND p.status=$4 AND l.counted_qty IS NOT NULL
@@ -40,7 +40,7 @@ func (r *StockRepositorySQLC) ContagensParaAcuracidade(ctx context.Context, mese
 		        COALESCE(i.planning_abc_class::text,''), x.warehouse_id, x.address, x.esperado, x.contado, x.custo
 		   FROM contagens x JOIN items i ON i.enterprise_id=$1 AND i.code=x.item_code
 		  WHERE x.quando >= $2 AND ($3::bigint IS NULL OR x.warehouse_id=$3)`,
-		empresa, desde, almox, entity.InventarioFechado)
+		empresa, desde, almox, entity.InventarioFechado, fuso.String()) // $5: o fechamento do inventário (data pura) conta no mês da empresa
 	if err != nil {
 		return nil, fmt.Errorf("reading counts for accuracy: %w", err)
 	}

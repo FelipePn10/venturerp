@@ -86,7 +86,7 @@ FROM (
     SELECT ri.id, rr.enterprise_id, ri.id, 'RECEIPT',
            ri.qty_received, ri.unit_value, rr.cfop, NULL::bigint, NULL::bigint,
            NULL::text, ri.divergence_reason, '',
-           rr.created_by, rr.received_at::timestamptz, NULL::timestamptz, NULL::uuid, NULL::text
+           rr.created_by, (rr.received_at::timestamp AT TIME ZONE COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo')), NULL::timestamptz, NULL::uuid, NULL::text
       FROM public.customer_material_items ri
       JOIN public.customer_material_remittances rr ON rr.id = ri.remittance_id
      WHERE rr.enterprise_id = $1 AND rr.status::text <> 'CANCELADA'
@@ -172,8 +172,8 @@ WITH ap AS (
                        + CASE WHEN a.end_time < a.start_time THEN INTERVAL '24 hours' ELSE INTERVAL '0' END)) / 3600.0
                ELSE 0 END)::numeric(14,4) AS horas,
            COUNT(*)::int AS qtd,
-           MIN(a.appointment_date)::timestamptz AS primeiro,
-           MAX(a.appointment_date)::timestamptz AS ultimo
+           (MIN(a.appointment_date)::timestamp AT TIME ZONE COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo')) AS primeiro,
+           (MAX(a.appointment_date)::timestamp AT TIME ZONE COALESCE((SELECT NULLIF(timezone,'') FROM enterprise_notification_settings WHERE enterprise_id=$1),'America/Sao_Paulo')) AS ultimo
       FROM public.production_appointments a
      WHERE ($3::date IS NULL OR a.appointment_date >= $3::date)
        AND ($4::date IS NULL OR a.appointment_date <= $4::date)
