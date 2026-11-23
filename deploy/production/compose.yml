@@ -9,7 +9,7 @@
 #   api            (sempre)    5070    venturerp             api.venturerp.com
 #   api-usimac     usimac      5075    venturerp_usimac      usimac.api.venturerp.com
 #   api-truckparts truckparts  5076    venturerp_truckparts  truckparts.api.venturerp.com
-#   api-training   training    5071    venturerp_training    dev-api.venturerp.com
+#   api-training   training    5077    venturerp_training    treino.api.venturerp.com
 #
 # Para adicionar um cliente, copie o bloco `api-usimac`, troque nome do
 # contêiner, perfil, SERVER_ADDR e arquivo de env, e registre o tenant em
@@ -120,7 +120,7 @@ services:
     env_file:
       - ${VENTURERP_TRAINING_API_ENV:-/opt/venturerp/panossoerp/.env.training}
     environment:
-      SERVER_ADDR: "5071"
+      SERVER_ADDR: "5077"
       ENV: production
       DATA_ENVIRONMENT: training
       SYSTEM_UPDATE_DIR: /var/lib/venturerp-update

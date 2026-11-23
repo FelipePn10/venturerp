@@ -32,7 +32,7 @@ mesma senha. Uma empresa cliente **nunca** define essa variável.
 | Tecnofer | (sempre ativo) | 5070 | `venturerp` | `api.venturerp.com` |
 | Usimac | `usimac` | 5075 | `venturerp_usimac` | `usimac.api.venturerp.com` |
 | Truckparts (grupo Tecnofer) | `truckparts` | 5076 | `venturerp_truckparts` | `truckparts.api.venturerp.com` |
-| Treinamento | `training` | 5071 | `venturerp_training` | `dev-api.venturerp.com` |
+| Treinamento | `training` | 5077 | `venturerp_training` | `treino.api.venturerp.com` |
 
 Portal de instalação e catálogo de empresas: `app.venturerp.com`
 (`deploy/production/nginx/app.venturerp.com.conf`).
@@ -316,9 +316,8 @@ deles consegue mais derrubar a VPS.
   quentes e duas empresas, isso vira ruído de log e I/O sem valor diagnóstico.
   Considere desligar.
 - Há um segundo PostgreSQL (desenvolvimento, porta 5433) e uma API de
-  desenvolvimento nativa ocupando a **porta 5071** — a mesma que o perfil
-  `training` do compose usa. Ativar o treinamento hoje colide. A Usimac ficou em
-  5075 por isso.
+  desenvolvimento nativa ocupando a **porta 5071**. Por isso o treino (perfil
+  `training`) roda na **5077** desde a v1.19.13, e a Usimac ficou em 5075.
 
 ## Estado em produção (28/09/2026)
 
