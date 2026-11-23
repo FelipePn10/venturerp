@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(ficha da OF): "Início previsto" e "Entrega prevista" (e o prazo das ordens de
+  terceiro) saíam um dia antes na impressão — a data pura virava `timestamptz` no fuso do
+  banco (UTC) e o processo em São Paulo a lia como 21h do dia anterior. Teste de
+  integração com a sessão do banco em UTC.
+
 ### Implantação (pós v1.19.13, só arquivos do host)
 - fix(treino): API de treino na porta **5077** (a 5071 é da API de desenvolvimento
   nativa; o teste de saúde do treino respondia pela outra API).
