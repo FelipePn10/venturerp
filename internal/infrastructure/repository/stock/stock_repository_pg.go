@@ -167,6 +167,9 @@ func CreateMovementTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *ent
 	if err := conferirReservaDeOutraOFTx(ctx, tx, enterpriseID, m); err != nil {
 		return err
 	}
+	if err := reservarRetornoDaOSTx(ctx, tx, enterpriseID, m); err != nil {
+		return err
+	}
 	if m.LinhaDaOnda != nil {
 		if _, err := tx.Exec(ctx, `UPDATE stock_picking_wave_lines SET invoiced_qty = invoiced_qty + $3 WHERE id=$1 AND enterprise_id=$2`,
 			*m.LinhaDaOnda, enterpriseID, movementQuantity(m)); err != nil {

@@ -85,6 +85,10 @@ type VersaoDaEstrutura interface {
 	SituacaoParaProducao(ctx context.Context, itemCode int64, mask string) (controla, aprovada bool, err error)
 }
 
+type destinoDaFilhaReader interface {
+	DestinoDaOFFilha(ctx context.Context, plannedOrderID, itemCode int64) (*int64, error)
+}
+
 func (uc *CreateProductionOrderUseCase) Execute(
 	ctx context.Context,
 	dto request.CreateProductionOrderDTO,
@@ -188,6 +192,29 @@ func (uc *CreateProductionOrderUseCase) Execute(
 			if !daEmpresa {
 				return nil, errorsuc.NewValidationError(fmt.Sprintf("almoxarifado %d não é desta empresa", *dto.WarehouseID))
 			}
+		}
+	}
+	// Sem destino informado, a OF filha firmada pelo MRP entrega onde a OF pai
+	// baixa a peça; as demais (e a filha sem OF pai) usam o almoxarifado do
+	// cadastro do item. Antes a filha nascia sem destino, a peça era entregue em
+	// outro almoxarifado e a baixa na OF pai falhava.
+	if order.WarehouseID == nil && dto.PlannedOrderID != nil {
+		if r, ok := uc.Repo.(destinoDaFilhaReader); ok {
+			if order.WarehouseID, err = r.DestinoDaOFFilha(ctx, *dto.PlannedOrderID, itemCode); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if order.WarehouseID == nil && item.Warehouse.WarehouseCode > 0 {
+		padrao := int64(item.Warehouse.WarehouseCode)
+		usa := true
+		if conf, ok := uc.Repo.(warehouseChecker); ok {
+			if usa, err = conf.AlmoxarifadoDaEmpresa(ctx, padrao); err != nil {
+				return nil, err
+			}
+		}
+		if usa {
+			order.WarehouseID = &padrao
 		}
 	}
 

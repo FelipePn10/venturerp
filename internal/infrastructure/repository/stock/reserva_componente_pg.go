@@ -100,17 +100,109 @@ func ReservarParaOFPaiTx(ctx context.Context, tx pgx.Tx, enterpriseID, childOrde
 // baixa, abastecimento da linha) usa primeiro a peça reservada para ela, no
 // mesmo almoxarifado. Roda antes de o movimento baixar o saldo.
 func consumirReservaDoComponenteTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
-	if m.ReferenceType == nil || *m.ReferenceType != entity.ReferenceTypeProductionOrder || m.ReferenceCode == nil {
+	if m.ReferenceType == nil || m.ReferenceCode == nil || !entity.SignedQuantity(m.MovementType, m.Quantity).IsNegative() {
 		return nil
 	}
-	if !entity.SignedQuantity(m.MovementType, m.Quantity).IsNegative() {
-		return nil
+	of, ok, err := ofDonaDaSaida(ctx, tx, enterpriseID, m)
+	if err != nil || !ok {
+		return err
 	}
 	item, mask, almox := m.ItemCode, m.Mask, m.WarehouseID
 	q := m.Quantity.Abs()
-	_, err := liberarReservasTx(ctx, tx, enterpriseID, entity.ReferenceTypeComponenteDaOF, *m.ReferenceCode,
+	_, err = liberarReservasTx(ctx, tx, enterpriseID, entity.ReferenceTypeComponenteDaOF, of,
 		filtroDaReserva{almox: &almox, item: &item, mask: &mask}, &q, true)
 	return err
+}
+
+// ofDonaDaSaida: a OF cuja reserva a saída pode usar — a própria OF, ou a OF da
+// OS de terceiro na remessa (a peça vai ao terceiro para a etapa dessa OF; antes
+// a reserva barrava a remessa e era preciso liberá-la à mão).
+func ofDonaDaSaida(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) (int64, bool, error) {
+	switch *m.ReferenceType {
+	case entity.ReferenceTypeProductionOrder:
+		return *m.ReferenceCode, true, nil
+	case entity.ReferenceTypeOSTerceiro:
+		return ofDaOSTx(ctx, tx, enterpriseID, *m.ReferenceCode)
+	}
+	return 0, false, nil
+}
+
+func ofDaOSTx(ctx context.Context, tx pgx.Tx, enterpriseID, osCode int64) (int64, bool, error) {
+	var of *int64
+	err := tx.QueryRow(ctx, `SELECT production_order_id FROM third_party_service_orders WHERE enterprise_id = $1 AND code = $2`,
+		enterpriseID, osCode).Scan(&of)
+	if err == pgx.ErrNoRows || (err == nil && of == nil) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("lendo a OF da OS de terceiro %d: %w", osCode, err)
+	}
+	return *of, true, nil
+}
+
+// reservarRetornoDaOSTx: a peça que volta do terceiro para a fábrica fica de
+// novo reservada para a OF da OS, na linha de material dela, até o que falta
+// baixar. A entrada no almoxarifado do terceiro (a remessa) não reserva.
+func reservarRetornoDaOSTx(ctx context.Context, tx pgx.Tx, enterpriseID int64, m *entity.StockMovement) error {
+	if m.ReferenceType == nil || *m.ReferenceType != entity.ReferenceTypeOSTerceiro || m.ReferenceCode == nil ||
+		!entity.SignedQuantity(m.MovementType, m.Quantity).IsPositive() {
+		return nil
+	}
+	var doTerceiro bool
+	if err := tx.QueryRow(ctx, `SELECT supplier_code IS NOT NULL FROM warehouse WHERE id = $1 AND enterprise_id = $2`,
+		m.WarehouseID, enterpriseID).Scan(&doTerceiro); err != nil || doTerceiro {
+		return err
+	}
+	of, ok, err := ofDaOSTx(ctx, tx, enterpriseID, *m.ReferenceCode)
+	if err != nil || !ok {
+		return err
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT mat.id, GREATEST(mat.quantity - mat.attended_quantity
+		         - COALESCE((SELECT SUM(r.quantity) FROM stock_reservations r
+		                      WHERE r.enterprise_id = $1 AND r.reference_type = $6 AND r.reference_code = o.id
+		                        AND r.reference_item_code = mat.id AND r.status = 'ACTIVE'), 0), 0)
+		  FROM production_orders o
+		  JOIN production_order_materials mat ON mat.production_order_id = o.id AND mat.enterprise_id = o.enterprise_id
+		       AND mat.material_kind = 'DEMAND' AND mat.item_code = $3 AND COALESCE(mat.mask, '') = $4
+		 WHERE o.id = $2 AND o.enterprise_id = $1 AND o.is_active AND o.status IN ('OPEN', 'RELEASED', 'IN_PROGRESS')
+		 -- A linha do almoxarifado em que a peça voltou primeiro; voltando a outro,
+		 -- a peça segue reservada para a OF (é dela) até ser levada à linha.
+		 ORDER BY (mat.warehouse_id IS NOT DISTINCT FROM $5) DESC, mat.id`, enterpriseID, of, m.ItemCode, m.Mask, m.WarehouseID, entity.ReferenceTypeComponenteDaOF)
+	if err != nil {
+		return fmt.Errorf("lendo o material da OF %d: %w", of, err)
+	}
+	type linha struct {
+		id    int64
+		falta decimal.Decimal
+	}
+	var linhas []linha
+	for rows.Next() {
+		var l linha
+		if err := rows.Scan(&l.id, &l.falta); err != nil {
+			rows.Close()
+			return err
+		}
+		linhas = append(linhas, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	resta := m.Quantity.Abs()
+	for _, l := range linhas {
+		if !resta.IsPositive() {
+			break
+		}
+		material := l.id
+		feito, err := reservarNaLinhaTx(ctx, tx, enterpriseID, entity.ReferenceTypeComponenteDaOF, of, &material, m,
+			decimal.Min(l.falta, resta), fmt.Sprintf("Peça de volta do terceiro (OS %d) para a OF %d", *m.ReferenceCode, of), m.CreatedBy)
+		if err != nil {
+			return err
+		}
+		resta = resta.Sub(feito)
+	}
+	return nil
 }
 
 // conferirReservaDeOutraOFTx recusa a saída que deixaria no almoxarifado menos

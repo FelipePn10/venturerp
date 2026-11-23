@@ -161,7 +161,7 @@ func (uc *CreateFiscalExitFromLoadUseCase) ExecuteFromShipment(ctx context.Conte
 		return nil, err
 	}
 	if ship.FiscalExitID != nil {
-		return nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já tem a NF-e %d vinculada", shipmentCode, derefInt64(ship.NFeNumber)))
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já tem %s vinculada", shipmentCode, ship.NotaDoRomaneio()))
 	}
 	code := shipmentCode
 	created, err := uc.criarNota(ctx, []*shipentity.ShipmentLoadShipment{{ShipmentCode: shipmentCode}}, dto, "SHIPMENT", nil, &code, ship.ShippingCarrierID)
@@ -182,13 +182,6 @@ func numeroDoRomaneio(n *response.FiscalExitResponse) *int64 {
 	}
 	v := n.NumeroNF
 	return &v
-}
-
-func derefInt64(v *int64) int64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }
 
 func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(

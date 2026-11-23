@@ -343,8 +343,8 @@ func (uc *ShipmentUseCase) Cancel(ctx context.Context, code int64, actor uuid.UU
 	// Cancelar o romaneio deixava a NF-e dele viva e pronta para transmitir.
 	if ship.FiscalExitID != nil {
 		return errorsuc.NewValidationError(fmt.Sprintf(
-			"o romaneio %d tem a NF-e %d: descarte a nota (rascunho) ou cancele-a (autorizada) antes de cancelar o romaneio",
-			code, derefNum(ship.NFeNumber)))
+			"o romaneio %d tem %s: descarte a nota (rascunho) ou cancele-a (autorizada) antes de cancelar o romaneio",
+			code, ship.NotaDoRomaneio()))
 	}
 	return uc.emTransacao(ctx, func(r RomaneioRepos) error {
 		if err := releaseReservations(ctx, r.Estoque, ship.Code, false); err != nil {
@@ -726,11 +726,4 @@ func releaseReservations(ctx context.Context, estoque StockReserver, shipmentCod
 		}
 	}
 	return nil
-}
-
-func derefNum(v *int64) int64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }

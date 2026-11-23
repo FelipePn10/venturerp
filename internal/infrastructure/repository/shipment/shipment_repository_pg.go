@@ -1321,8 +1321,18 @@ func (r *ShipmentRepositoryPG) ReabrirPelaNotaCancelada(ctx context.Context, exi
 		  WHERE n.load_id = l.id AND l.enterprise_id = $1 AND n.fiscal_exit_id = $2`, enterpriseID, exitID); err != nil {
 		return fmt.Errorf("desligando a nota cancelada da carga: %w", err)
 	}
+	// O evento nomeia a nota pelo número fiscal; o rascunho descartado não tem.
+	var qualNota string
+	if err := r.pool.QueryRow(ctx, `SELECT CASE WHEN COALESCE(chave_acesso, '') <> '' THEN 'NF-e ' || numero_nf || ' cancelada'
+		ELSE 'NF-e em rascunho (id ' || id || ') descartada' END FROM public.fiscal_exits WHERE id = $1 AND enterprise_id = $2`,
+		exitID, enterpriseID).Scan(&qualNota); err != nil && err != pgx.ErrNoRows {
+		return fmt.Errorf("lendo a nota desligada do romaneio: %w", err)
+	}
+	if qualNota == "" {
+		qualNota = fmt.Sprintf("NF-e (id %d) cancelada", exitID)
+	}
 	for _, x := range lista {
-		nota := fmt.Sprintf("NF-e %d cancelada: romaneio desligado da nota", exitID)
+		nota := qualNota + ": romaneio desligado da nota"
 		if x.status == string(entity.ShipmentStatusShipped) {
 			nota += " e de volta a conferido"
 		}

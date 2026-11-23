@@ -1401,3 +1401,36 @@ func (r *ProductionOrderRepositoryPGX) BaixasDaOrdem(ctx context.Context, ordem 
 	}
 	return baixado, entregue, apontado, nil
 }
+
+// DestinoDaOFFilha: o almoxarifado em que a OF pai baixa a peça que a OF filha
+// (desta ordem planejada) vai produzir. É onde a filha deve entregar: entregue
+// em outro, a baixa na OF pai falhava. Sem OF pai com o material, nil.
+func (r *ProductionOrderRepositoryPGX) DestinoDaOFFilha(ctx context.Context, plannedOrderID, itemCode int64) (*int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var almox int64
+	err = r.pool.QueryRow(ctx, `
+		SELECT mat.warehouse_id
+		  FROM production_chain_links l
+		  JOIN planned_orders filha ON filha.id = l.child_planned_order_id AND filha.enterprise_id = l.enterprise_id
+		  JOIN production_orders pai ON pai.enterprise_id = l.enterprise_id
+		       AND (pai.id = l.parent_production_order_id
+		            OR (l.parent_production_order_id IS NULL AND pai.planned_order_id = l.parent_planned_order_id))
+		  JOIN production_order_materials mat ON mat.production_order_id = pai.id AND mat.enterprise_id = pai.enterprise_id
+		       AND mat.material_kind = 'DEMAND' AND mat.item_code = $3 AND mat.warehouse_id IS NOT NULL
+		       -- a linha da máscara que a filha produz (é a que a reserva da OF pai casa)
+		       AND COALESCE(mat.mask, '') = COALESCE(filha.mask, '')
+		  JOIN warehouse w ON w.id = mat.warehouse_id AND w.enterprise_id = l.enterprise_id
+		 WHERE l.enterprise_id = $1 AND l.child_planned_order_id = $2
+		 ORDER BY COALESCE(pai.start_date, 'infinity'::date), pai.id, mat.id
+		 LIMIT 1`, enterpriseID, plannedOrderID, itemCode).Scan(&almox)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo o almoxarifado da OF pai: %w", err)
+	}
+	return &almox, nil
+}

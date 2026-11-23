@@ -6,6 +6,17 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(terceiros): a remessa da OS usa a reserva da própria OF da OS (antes era recusada por "reservado
+  para a OF" e era preciso liberar à mão); a peça que volta do terceiro fica reservada de novo para a OF,
+  mesmo que volte a outro almoxarifado.
+- fix(OF): a OF criada sem almoxarifado de destino nasce com o destino certo — a OF filha firmada pelo MRP
+  entrega onde a OF pai baixa a peça; as demais usam o almoxarifado do cadastro do item. A migração 510
+  preenche as OFs que ficaram sem destino: as abertas pela mesma regra, as que já entregaram produção
+  pelo almoxarifado em que a produção entrou.
+- fix(romaneio): as mensagens e o histórico nomeiam o rascunho ("NF-e em rascunho (id X)") em vez de
+  "NF-e 0", e o descarte aparece como descarte.
+
 ## [v1.19.17] — 2026-11-23
 
 - fix(ficha da OF): inspeção final só pelo lote FINAL (revisão) (`e663b22c`)
