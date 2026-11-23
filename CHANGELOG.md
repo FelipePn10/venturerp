@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.15] — 2026-11-23
+
+- fix(OF): hoje pelo fuso da empresa, não pelo do processo (`6fb166c7`)
+- fix(OF): início a partir de hoje, ficha com a data real e datas puras no fuso da empresa (`840502e5`)
+
 ### Correções
 - fix(OF): a OF nasce com início a partir de hoje — início vazio ou no passado (prazo
   vencido do MRP, data digitada para trás) vira a data de hoje, e o término nunca fica
