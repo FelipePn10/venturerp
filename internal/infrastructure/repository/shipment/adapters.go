@@ -35,8 +35,15 @@ func (a *SalesOrderAdapter) GetByCode(ctx context.Context, code int64) (*shipmen
 		TotalNet:     so.TotalNet,
 	}
 	for _, it := range items {
+		// Linha cancelada não vai para o romaneio.
+		if !it.IsActive || it.Status == salesentity.SalesOrderItemStatusCancelled {
+			continue
+		}
 		h.Items = append(h.Items, shipment_uc.SalesOrderItemHeader{
+			LineCode:        it.Code,
 			ItemCode:        it.ItemCode,
+			WarehouseID:     it.WarehouseCode,
+			PendingQty:      it.RequestedQty.Sub(it.AttendedQty).Sub(it.CancelledQty),
 			RequestedQty:    it.RequestedQty,
 			UnitPrice:       it.UnitPrice,
 			TotalGross:      it.TotalGross,

@@ -7,11 +7,13 @@ type CreateProductionScanTokenDTO struct {
 }
 
 type ProductionScanDTO struct {
-	Token             string  `json:"token"`
-	Action            string  `json:"action"`
-	IdempotencyKey    string  `json:"idempotency_key"`
-	DeviceID          string  `json:"device_id"`
-	EmployeeID        *int64  `json:"employee_id,omitempty"`
+	Token          string `json:"token"`
+	Action         string `json:"action"`
+	IdempotencyKey string `json:"idempotency_key"`
+	DeviceID       string `json:"device_id"`
+	EmployeeID     *int64 `json:"employee_id,omitempty"`
+	// MachineID: a máquina do apontamento (opcional).
+	MachineID         *int64  `json:"machine_id,omitempty"`
 	GoodQuantity      string  `json:"good_quantity,omitempty"`
 	ScrapQuantity     string  `json:"scrap_quantity,omitempty"`
 	Hours             string  `json:"hours,omitempty"`

@@ -27,6 +27,9 @@ type EFDParams struct {
 	// ApuracaoIPI (E500/E510/E520): contribuinte do IPI (indústria).
 	ApuracaoIPI *EFDApuracaoIPI
 	Inventario  []EFDInventarioItem
+	// EstoqueK (Bloco K, leiaute restrito aos saldos de estoque — K010 = 2):
+	// o K200 no fim do período, com a posse. Vazio = Bloco K sem movimento.
+	EstoqueK []EFDK200
 	// MotivoInventario (H005): 01 final do período, 02 mudança de tributação...
 	MotivoInventario string
 }
@@ -288,6 +291,14 @@ type EFDApuracaoAjuste struct {
 	CodAjApur string
 	DescCompl string
 	VlAjApur  decimal.Decimal
+}
+
+// EFDK200 é o estoque escriturado no fim do período (|K200|DT_EST|COD_ITEM|QTD|IND_EST|COD_PART|).
+type EFDK200 struct {
+	CodItem string
+	Qtd     decimal.Decimal
+	IndEst  string // 0 próprio em nosso poder, 1 próprio em poder de terceiro, 2 de terceiro em nosso poder
+	CodPart string
 }
 
 type EFDInventarioItem struct {

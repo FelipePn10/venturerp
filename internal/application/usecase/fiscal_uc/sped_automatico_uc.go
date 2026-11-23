@@ -89,6 +89,8 @@ type SpedAutomaticoRequest struct {
 	// dos fiscos, 06 controle das mercadorias sujeitas à ST). Nil = bloco H sem movimento.
 	InventarioData   *time.Time
 	InventarioMotivo string
+	// BlocoK: entrega o Bloco K no leiaute restrito aos saldos (K200 no fim do período).
+	BlocoK bool
 }
 
 type SpedResumo struct {
@@ -207,6 +209,14 @@ func (uc *SpedAutomaticoUseCase) Gerar(ctx context.Context, req SpedAutomaticoRe
 				avisosInventario = append(avisosInventario, fmt.Sprintf("Item %s (%s) no inventário sem valor: confira o custo do item.", it.Item.Cod, it.Item.Desc))
 			}
 		}
+	}
+
+	if req.BlocoK {
+		itens, _, err := uc.Periodo.InventarioEFD(ctx, fim)
+		if err != nil {
+			return nil, err
+		}
+		d.EstoqueK = itens
 	}
 
 	dadosCIAP, avisosCIAP, err := uc.carregarCIAP(ctx, req.Ano, req.Mes)

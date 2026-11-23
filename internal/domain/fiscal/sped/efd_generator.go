@@ -241,9 +241,21 @@ func Generate(p EFDParams) string {
 	}
 	line("H990", fmt.Sprint(bloco("H")+1))
 
-	// ── Bloco K (produção e estoque): sem dados ──────────────────────────────
-	line("K001", "1")
-	line("K990", "2")
+	// ── Bloco K (produção e estoque) ─────────────────────────────────────────
+	// Leiaute restrito aos saldos de estoque (K010 = 2): K100 do período e o
+	// K200 com a posse — o próprio em poder de terceiro (industrialização por
+	// encomenda) sai com IND_EST 1 e o participante.
+	if len(p.EstoqueK) == 0 {
+		line("K001", "1")
+	} else {
+		line("K001", "0")
+		line("K010", "2")
+		line("K100", dtIni, dtFin)
+		for _, k := range p.EstoqueK {
+			line("K200", dtFin, k.CodItem, fmtQtd(k.Qtd), firstNonBlank(k.IndEst, "0"), k.CodPart)
+		}
+	}
+	line("K990", fmt.Sprint(bloco("K")+1))
 
 	// ── Bloco 1 ──────────────────────────────────────────────────────────────
 	line("1001", "0")

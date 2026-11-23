@@ -27,6 +27,13 @@ func (r *StockRepositorySQLC) ResumoDoFechamento(ctx context.Context, inv *entit
 	if err != nil {
 		return resumo, err
 	}
+	// Sem bloqueio de movimentos, zerar tira o saldo de AGORA (como o fechamento).
+	atual := map[int64]decimal.Decimal{}
+	if zerarNaoContados && !inv.BlocksMovements {
+		if atual, err = r.saldoAtualDosNaoContados(ctx, inv.ID); err != nil {
+			return resumo, err
+		}
+	}
 	for _, it := range itens {
 		dif := decimal.Zero
 		switch {
@@ -34,6 +41,9 @@ func (r *StockRepositorySQLC) ResumoDoFechamento(ctx context.Context, inv *entit
 			dif = *it.DifferenceQty
 		case zerarNaoContados:
 			dif = it.SystemQty.Neg()
+			if q, ok := atual[it.ID]; ok {
+				dif = q.Neg()
+			}
 		default:
 			resumo.NaoContados++
 			continue
@@ -423,4 +433,30 @@ func (r *StockRepositorySQLC) toleranciaDoInventario(ctx context.Context, inv *e
 		return nil, err
 	}
 	return func(item int64) *decimal.Decimal { return param.ToleranciaDaClasse(classes[item]) }, nil
+}
+
+// saldoAtualDosNaoContados: o saldo de agora de cada linha ainda sem contagem.
+func (r *StockRepositorySQLC) saldoAtualDosNaoContados(ctx context.Context, inventario int64) (map[int64]decimal.Decimal, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	const pii = "public.physical_inventory_items."
+	rows, err := r.pool.Query(ctx, `SELECT id, `+saldoDaLinhaDeInventario("$2", pii+"item_code", pii+"mask", pii+"warehouse_id", pii+"address", pii+"lot")+`
+		FROM public.physical_inventory_items WHERE inventory_id = $1 AND counted_qty IS NULL
+		  AND EXISTS (SELECT 1 FROM public.physical_inventories i WHERE i.id = $1 AND i.enterprise_id = $2)`, inventario, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o saldo atual dos itens não contados: %w", err)
+	}
+	defer rows.Close()
+	out := map[int64]decimal.Decimal{}
+	for rows.Next() {
+		var id int64
+		var q decimal.Decimal
+		if err := rows.Scan(&id, &q); err != nil {
+			return nil, err
+		}
+		out[id] = q
+	}
+	return out, rows.Err()
 }

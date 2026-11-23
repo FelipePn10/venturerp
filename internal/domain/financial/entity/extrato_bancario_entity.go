@@ -93,3 +93,19 @@ func (e ExtratoBancario) MovimentoLancadoPeloExtrato(f FluxoCaixa) bool {
 	return f.ExtratoHash != nil && *f.ExtratoHash == e.Hash &&
 		f.ContasPagarID == nil && f.ContasReceberID == nil
 }
+
+// PrevisaoDeCaixa é uma entrada ou saída prevista (título ou pedido em aberto).
+type PrevisaoDeCaixa struct {
+	Origem    string // RECEBER_TITULO, PAGAR_TITULO, RECEBER_PEDIDO, PAGAR_PEDIDO
+	Data      time.Time
+	Valor     decimal.Decimal
+	Documento string
+}
+
+// ContaDoResultado é uma conta do plano com o movimento do período.
+type ContaDoResultado struct {
+	ID, ParentID      int64
+	Numero, Nome      string
+	Analitica         bool
+	Debitos, Creditos decimal.Decimal
+}

@@ -175,6 +175,7 @@ func TestIntegration_EntregaNaoBaixaDeNovoOQueOApontamentoBaixou(t *testing.T) {
 		pool.Exec(ctx, "DELETE FROM production_deliveries WHERE production_order_id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM stock_movements WHERE enterprise_id=$1 AND item_code = ANY($2)", enterpriseID, []int64{produto, material})
 		pool.Exec(ctx, "DELETE FROM stock_balances WHERE enterprise_id=$1 AND item_code = ANY($2)", enterpriseID, []int64{produto, material})
+		pool.Exec(ctx, "DELETE FROM production_consumptions WHERE production_order_id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM production_order_materials WHERE production_order_id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM production_orders WHERE id=$1", ordem)
 		pool.Exec(ctx, "DELETE FROM item_structures WHERE parent_code=$1", produto)
@@ -214,6 +215,14 @@ func TestIntegration_EntregaNaoBaixaDeNovoOQueOApontamentoBaixou(t *testing.T) {
 	}
 	if !unit.Equal(decimal.NewFromInt(7)) {
 		t.Fatalf("o produto vale o material que a ordem gastou, incluindo a baixa desta entrega: %s", unit)
+	}
+	// Bug O: a baixa automática da entrega entra na lista de consumos da OF.
+	var consumido decimal.Decimal
+	if err := pool.QueryRow(ctx, `SELECT COALESCE(SUM(consumed_qty),0) FROM production_consumptions WHERE production_order_id=$1 AND item_code=$2`, ordem, material).Scan(&consumido); err != nil {
+		t.Fatal(err)
+	}
+	if !consumido.Equal(decimal.NewFromInt(1)) {
+		t.Fatalf("consumo registrado pela entrega = %s, quer 1", consumido)
 	}
 }
 

@@ -114,6 +114,8 @@ type DadosEFD struct {
 	// entregue na EFD de fevereiro). Vazio = bloco H sem movimento.
 	InventarioItens []ItemInventario
 	DataInventario  time.Time
+	// EstoqueK (Bloco K, K200): o estoque no fim do período, com a posse.
+	EstoqueK []ItemInventario
 	// ContaEstoque (H010/COD_CTA): a conta contábil analítica do estoque.
 	ContaEstoque string
 }
@@ -403,6 +405,14 @@ func Montar(d DadosEFD) EFDParams {
 		p.Inventario = append(p.Inventario, EFDInventarioItem{DtInv: d.DataInventario, CodItem: inv.Item.Cod, Unid: unid,
 			Qtd: vn(inv.Quantidade), VlUnit: valor.Div(inv.Quantidade).Round(6), VlItem: v2(valor), IndProp: firstNonBlank(inv.IndProp, "0"),
 			CodPart: codigoDaParte(cad, inv.Parte), CodCta: d.ContaEstoque})
+	}
+	// Bloco K: K200 no fim do período (cada item com o seu 0200).
+	for _, e := range d.EstoqueK {
+		if !e.Quantidade.IsPositive() {
+			continue
+		}
+		cad.item(e.Item, cad.uf(firstNonBlank(e.Item.UnidInv, "UN")), decimal.NewFromInt(1))
+		p.EstoqueK = append(p.EstoqueK, EFDK200{CodItem: e.Item.Cod, Qtd: vn(e.Quantidade), IndEst: firstNonBlank(e.IndProp, "0"), CodPart: codigoDaParte(cad, e.Parte)})
 	}
 	if len(p.Inventario) > 0 && p.MotivoInventario == "" {
 		p.MotivoInventario = "01"

@@ -95,7 +95,7 @@ func conferirDocumentoDaNota(exit *entity.FiscalExit, items []*entity.FiscalExit
 	// ── Transportadora e local de entrega: grupos opcionais, mas, se vão, a SEFAZ
 	// valida documento e endereço deles como os do destinatário.
 	if t := exit.Transportador; t != nil {
-		const naTransportadora = "corrija o fornecedor da transportadora (VSUP0100), descarte este rascunho e gere a nota novamente"
+		const naTransportadora = "corrija o fornecedor da transportadora (VSUP0500), descarte este rascunho e gere a nota novamente"
 		if doc := strings.TrimSpace(t.CNPJCPF); doc != "" && !validation.ValidateCNPJOrCPF(doc) {
 			impede("transportador.documento", fmt.Sprintf("o CNPJ ou CPF da transportadora %s não é válido", t.Nome), naTransportadora)
 		}

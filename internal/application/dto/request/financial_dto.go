@@ -153,6 +153,9 @@ type BaixarContaReceberDTO struct {
 	Desconto        decimal.Decimal `json:"desconto"`
 	DataRecebimento string          `json:"data_recebimento"`
 	Observacao      *string         `json:"observacao,omitempty"`
+	// EncargosInformados: juros/multa que o banco cobrou (retorno CNAB). Uso
+	// interno — com ele a baixa não recalcula pela configuração.
+	EncargosInformados *decimal.Decimal `json:"-"`
 }
 
 type GetFluxoCaixaDTO struct {

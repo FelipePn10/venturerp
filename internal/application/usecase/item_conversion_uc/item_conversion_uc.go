@@ -856,13 +856,27 @@ func (uc *ItemConversionUseCase) ConvertQuantityConfigured(ctx context.Context, 
 		return decimal.Zero, false, err
 	}
 	if fractional {
-		return converted, true, nil
+		return encostarNoInteiro(converted), true, nil
 	}
 	r, err := aplicarPolitica(*c, converted)
 	if err != nil {
 		return decimal.Zero, false, err
 	}
 	return r, true, nil
+}
+
+// poeiraDeConversao: sobra de arredondamento do fator, não quantidade real.
+var poeiraDeConversao = decimal.New(1, -5)
+
+// encostarNoInteiro leva ao inteiro a conversão que só difere dele pela poeira
+// do fator (1,0000014 UN → 1). A sobra ficava no estoque (0,000001 UN) e, com o
+// valor arredondado em 4 casas, dava um custo médio absurdo.
+func encostarNoInteiro(q decimal.Decimal) decimal.Decimal {
+	inteiro := q.Round(0)
+	if !inteiro.IsZero() && q.Sub(inteiro).Abs().LessThan(poeiraDeConversao) {
+		return inteiro
+	}
+	return q
 }
 
 // aplicarPolitica arredonda para o inteiro mais próximo se a sobra couber no

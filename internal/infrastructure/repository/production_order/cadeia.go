@@ -70,6 +70,9 @@ func (r *ProductionOrderRepositoryPGX) OrdensFilhasPendentes(ctx context.Context
 		            OR (l.parent_production_order_id IS NULL AND l.parent_planned_order_id = pai.planned_order_id))
 		  JOIN planned_orders filha ON filha.id = l.child_planned_order_id AND filha.enterprise_id = pai.enterprise_id
 		       AND filha.is_active AND filha.status::text <> 'CANCELLED'
+		       -- Só fabricação: a sugestão de compra firmada também entra na cadeia,
+		       -- e o material comprado aparecia como "componente ainda não tem OF".
+		       AND filha.order_type = 'PRODUCTION'
 		  LEFT JOIN LATERAL (SELECT o.id, o.order_number, o.status, o.planned_qty, o.produced_qty
 		                       FROM production_orders o
 		                      WHERE o.planned_order_id = filha.id AND o.enterprise_id = pai.enterprise_id AND o.is_active
@@ -215,6 +218,7 @@ func (r *ProductionOrderRepositoryPGX) CadeiaDaOF(ctx context.Context, orderID i
 		       AND (l.parent_production_order_id = pai.id
 		            OR (l.parent_production_order_id IS NULL AND l.parent_planned_order_id = pai.planned_order_id))
 		  JOIN planned_orders filha ON filha.id = l.child_planned_order_id AND filha.enterprise_id = pai.enterprise_id
+		       AND filha.order_type = 'PRODUCTION'
 		  LEFT JOIN LATERAL (SELECT x.id, x.order_number, x.status, x.planned_qty, x.produced_qty FROM production_orders x
 		                      WHERE x.planned_order_id = filha.id AND x.enterprise_id = pai.enterprise_id AND x.is_active
 		                      ORDER BY x.id DESC LIMIT 1) ofilha ON TRUE

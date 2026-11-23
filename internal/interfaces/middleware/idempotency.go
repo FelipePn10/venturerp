@@ -190,10 +190,10 @@ func Idempotency(store *IdempotencyStore) func(http.Handler) http.Handler {
 					// A resposta já foi enviada; sem o registro, a repetição da mesma
 					// chave fica recusada como "em andamento" até vencer.
 					if _, err := store.pool.Exec(r.Context(), `UPDATE http_idempotency_records SET status_code=$2,response_body=$3,completed=TRUE WHERE scope_key=$1`, fullKey, rec.status, rec.buf.Bytes()); err != nil {
-						slog.Error("falha ao concluir a chave de idempotência", "rota", r.URL.Path, "erro", err)
+						slog.Error("falha ao concluir a chave de idempotência", "rota", CaminhoSemSegredo(r.URL.Path), "erro", err)
 					}
 				} else if _, err := store.pool.Exec(r.Context(), `DELETE FROM http_idempotency_records WHERE scope_key=$1`, fullKey); err != nil {
-					slog.Error("falha ao liberar a chave de idempotência após erro", "rota", r.URL.Path, "erro", err)
+					slog.Error("falha ao liberar a chave de idempotência após erro", "rota", CaminhoSemSegredo(r.URL.Path), "erro", err)
 				}
 				return
 			}

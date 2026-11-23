@@ -129,6 +129,7 @@ var rotasPorModulo = []struct {
 	{"/api/financial/apuracao-impostos", acesso.Fiscal},
 	// Financeiro
 	{"/api/financial", acesso.Financeiro},
+	{"/api/integracoes/inter/webhook-registrar", acesso.Financeiro},
 	// A condição de pagamento é cadastrada na VFIN0110 (Financeiro); a rota mora no
 	// apoio do cliente. A leitura segue livre como referência (pedido, cliente…).
 	{"/api/customers/support/payment-conditions", acesso.Financeiro},
@@ -154,6 +155,7 @@ var rotasPorModulo = []struct {
 	{"/api/reports", acesso.Cadastros},
 	// Administração
 	{"/api/audit-log", acesso.Administracao},
+	{"/api/implantacao", acesso.Administracao},
 	{"/api/system", acesso.Administracao},
 	{"/api/password-change-requests", acesso.Administracao},
 	{"/api/acesso", acesso.Administracao},
@@ -194,6 +196,20 @@ var rotasLivres = []struct {
 	// módulo da área, conferida no caso de uso, não a da engenharia.
 	{http.MethodGet, regexp.MustCompile(`^/api/items/governanca/(pendentes|itens/[^/]+)$`)},
 	{http.MethodPost, regexp.MustCompile(`^/api/items/governanca/itens/[^/]+/(liberacoes|estorno)$`)},
+	// Central de pendências do dia: cada cartão é filtrado pelo módulo do perfil
+	// no caso de uso (pendencias_uc).
+	{http.MethodGet, regexp.MustCompile(`^/api/pendencias/dia$`)},
+	// Indicadores: cada bloco aparece para o perfil que lê o módulo dele (indicadores_uc).
+	{http.MethodGet, regexp.MustCompile(`^/api/indicadores$`)},
+	// O que está ligado: só booleanos, qualquer perfil (as telas escondem o resto).
+	{http.MethodGet, regexp.MustCompile(`^/api/integracoes/status$`)},
+	// Aviso de pagamento do Banco Inter: servidor a servidor, sem sessão; o
+	// segredo vai no caminho e a baixa depende da consulta ao banco.
+	{http.MethodPost, regexp.MustCompile(`^/api/integracoes/inter/webhook/[^/]+$`)},
+	// Portal do cliente: sem sessão de usuário; o token do link é a credencial.
+	{http.MethodGet, regexp.MustCompile(`^/api/portal/[^/]+$`)},
+	{http.MethodPost, regexp.MustCompile(`^/api/portal/[^/]+/pedidos/[0-9]+/repetir$`)},
+	{http.MethodGet, regexp.MustCompile(`^/api/portal/[^/]+/notas/[^/]+/[^/]+$`)},
 }
 
 // acoesEspeciais: rotas que não são inclusão comum — aprovar, autorizar na

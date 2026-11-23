@@ -232,8 +232,10 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 		t.Fatalf("item achado fora da foto entra no inventário: %+v", itens)
 	}
 	for _, it := range itens {
-		if it.ItemCode == e.item && (it.CountNumber != 2 || !it.PreviousCountedQty.Equal(decimal.NewFromFloat(9)) || !it.DifferenceQty.Equal(decimal.NewFromFloat(-3))) {
-			t.Fatalf("recontagem: contagem 2, anterior 9, diferença 7−10 = −3: %+v", it)
+		// Sem bloqueio de movimentos, a contagem compara com o saldo da hora dela
+		// (10 − 2 da saída depois da abertura = 8), não com a foto (10).
+		if it.ItemCode == e.item && (it.CountNumber != 2 || !it.PreviousCountedQty.Equal(decimal.NewFromFloat(9)) || !it.DifferenceQty.Equal(decimal.NewFromFloat(-1))) {
+			t.Fatalf("recontagem: contagem 2, anterior 9, diferença 7−8 = −1: %+v", it)
 		}
 		if it.ItemCode == e.outro && !it.DifferenceQty.Equal(decimal.NewFromFloat(4)) {
 			t.Fatalf("item fora da foto: diferença 4: %+v", it)
@@ -243,11 +245,11 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Ajustes != 2 || !res.Faltas.Equal(decimal.NewFromFloat(3)) || !res.Sobras.Equal(decimal.NewFromFloat(4)) {
+	if res.Ajustes != 2 || !res.Faltas.Equal(decimal.NewFromFloat(1)) || !res.Sobras.Equal(decimal.NewFromFloat(4)) {
 		t.Fatalf("resultado do fechamento: %+v", res)
 	}
-	if q, _ := e.saldo(t, e.item, e.almox); q != 5 {
-		t.Fatalf("saldo = 10 − 2 (saída depois da abertura) − 3 (falta) = 5, veio %v", q)
+	if q, _ := e.saldo(t, e.item, e.almox); q != 7 {
+		t.Fatalf("o saldo fica no que foi contado (7), veio %v", q)
 	}
 	if q, _ := e.saldo(t, e.outro, e.almox); q != 4 {
 		t.Fatalf("sobra do item fora da foto: 4, veio %v", q)
@@ -260,6 +262,57 @@ func TestIntegration_InventarioFisicoAjustaOSaldo(t *testing.T) {
 	}
 	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false, ""); !ehValidacao(err) {
 		t.Fatalf("fechar de novo deveria ser recusado: %v", err)
+	}
+}
+
+// Bug K: item incluído depois da abertura entrava com sistema 0 (contou 1 com
+// 0,5933 no sistema e o ajuste foi +1); com bloqueio de movimentos vale a foto.
+func TestIntegration_InventarioComparaComOSaldoDaContagem(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	_ = e.mover(t, e.item, e.almox, "IN", 18, 2, "")
+	_ = e.mover(t, e.outro, e.almox, "IN", 0.5933, 2, "")
+	inv, err := e.repo.CreateInventory(e.ctx, &stockentity.PhysicalInventory{
+		Code: testutil.UniqueCode() % 1_000_000, Description: "parcial", WarehouseID: e.almox,
+		StartDate: time.Now(), Status: "OPEN", CreatedBy: e.ator, ItemCodes: []int64{e.item},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for item, qtd := range map[int64]float64{e.item: 17, e.outro: 1} {
+		contada := decimal.NewFromFloat(qtd)
+		if err := e.repo.CountInventoryItem(e.ctx, &stockentity.PhysicalInventoryItem{
+			InventoryID: inv.ID, ItemCode: item, WarehouseID: e.almox, CountedQty: &contada, CountedBy: &e.ator,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.repo.FecharInventario(e.ctx, inv.ID, e.ator, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := e.saldo(t, e.outro, e.almox); q != 1 {
+		t.Fatalf("o item incluído depois da abertura fica no contado (1), veio %v", q)
+	}
+	if q, _ := e.saldo(t, e.item, e.almox); q != 17 {
+		t.Fatalf("o item fica no contado (17), veio %v", q)
+	}
+
+	// Com bloqueio de movimentos a foto vale: a contagem compara com ela.
+	inv2, err := e.repo.CreateInventory(e.ctx, &stockentity.PhysicalInventory{
+		Code: inv.Code + 1, Description: "bloqueado", WarehouseID: e.almox, BlocksMovements: true,
+		StartDate: time.Now(), Status: "OPEN", CreatedBy: e.ator, ItemCodes: []int64{e.item},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	contada := decimal.NewFromFloat(16)
+	if err := e.repo.CountInventoryItem(e.ctx, &stockentity.PhysicalInventoryItem{
+		InventoryID: inv2.ID, ItemCode: e.item, WarehouseID: e.almox, CountedQty: &contada, CountedBy: &e.ator,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	itens, _ := e.repo.ListInventoryItems(e.ctx, inv2.ID)
+	if len(itens) != 1 || !itens[0].SystemQty.Equal(decimal.NewFromFloat(17)) || !itens[0].DifferenceQty.Equal(decimal.NewFromFloat(-1)) {
+		t.Fatalf("com bloqueio: sistema 17 da foto, diferença −1: %+v", itens)
 	}
 }
 
@@ -349,4 +402,27 @@ func TestEstoqueDecimalSemDerivaIntegration(t *testing.T) {
 	if corte.TotalPrice.Round(4).String() != "6.9333" {
 		t.Fatalf("104 mm deveriam custar R$ 6,9333 (com 4 casas no custo davam 6,9368): %s", corte.TotalPrice)
 	}
+}
+
+// O resumo que decide a alçada usa, sem bloqueio, o saldo de agora para o "zerar
+// não contados" — o mesmo que o fechamento vai lançar.
+func TestIntegration_ResumoZeraPeloSaldoAtual(t *testing.T) {
+	e := novoAmbienteEstoque(t)
+	_ = e.mover(t, e.item, e.almox, "IN", 6, 2, "")
+	inv, err := e.repo.CreateInventory(e.ctx, &stockentity.PhysicalInventory{
+		Code: testutil.UniqueCode() % 1_000_000, Description: "resumo", WarehouseID: e.almox,
+		StartDate: time.Now(), Status: "OPEN", CreatedBy: e.ator, ItemCodes: []int64{e.item},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.mover(t, e.item, e.almox, "OUT", 2, 0, ""); err != nil {
+		t.Fatal(err)
+	}
+	r, err := e.repo.ResumoDoFechamento(e.ctx, inv, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Zera 4 (o saldo de agora) a custo 2 = 8; a foto (6) daria 12.
+	igual(t, "valor do ajuste estimado", r.ValorAbsoluto, "8")
 }

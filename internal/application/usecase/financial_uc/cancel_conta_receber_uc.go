@@ -14,6 +14,8 @@ import (
 type CancelContaReceberUseCase struct {
 	Repo repository.FinancialRepository
 	Auth ports.AuthService
+	// Banco: cancela antes a cobrança emitida no banco (opcional).
+	Banco *CobrancaNoBanco
 }
 
 func (uc *CancelContaReceberUseCase) Execute(ctx context.Context, id int64) error {
@@ -27,6 +29,9 @@ func (uc *CancelContaReceberUseCase) Execute(ctx context.Context, id int64) erro
 	}
 	if msg := impedeCancelarTitulo(string(cr.Status), cr.ValorRecebido, "recebido", "recebimento"); msg != "" {
 		return errorsuc.NewValidationError(msg)
+	}
+	if err := uc.Banco.Cancelar(ctx, id, "Titulo cancelado no ERP"); err != nil {
+		return errorsuc.NewValidationError(fmt.Sprintf("o título não foi cancelado porque a cobrança no banco continua ativa: %v. Tente de novo.", err))
 	}
 	return uc.Repo.CancelContaReceber(ctx, id)
 }

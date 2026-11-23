@@ -58,13 +58,13 @@ func contabilizarFechamento(ctx context.Context, tx pgx.Tx, empresa, closing int
 		}
 	}
 
-	if contas.producao {
-		producao, err := contabilizarProducao(ctx, tx, empresa, closing, janela, fim, contas, simular, res)
-		if err != nil {
-			return err
-		}
-		ls = append(ls, producao...)
+	// Desligada, a produção do mês é só apurada e mostrada: o fechamento dizia
+	// "consumida/entregue = 0" como se nada tivesse sido produzido.
+	producao, err := contabilizarProducao(ctx, tx, empresa, closing, janela, fim, contas, simular, res)
+	if err != nil {
+		return err
 	}
+	ls = append(ls, producao...)
 
 	provisao, err := contabilizarProvisao(ctx, tx, empresa, closing, fim, contas, res)
 	if err != nil {
@@ -145,6 +145,15 @@ func contabilizarProducao(ctx context.Context, tx pgx.Tx, empresa, closing int64
 		return nil, err
 	}
 	res.ProducaoConsumo, res.ProducaoEntrega, res.ProducaoAbsorvida, res.ProducaoVariacao = total.Consumo, total.Entrega, total.Absorvido, total.Variacao
+	if !contas.producao {
+		// Sem a contabilização não há histórico de meses anteriores: absorção e
+		// variação (que dependem dele) não são calculadas, e nada é lançado.
+		res.ProducaoAbsorvida, res.ProducaoVariacao = decimal.Zero, decimal.Zero
+		if len(linhas) > 0 {
+			res.Avisos = append(res.Avisos, "A contabilização da produção está desligada: consumo e entrega do mês são mostrados só para conferência; absorção e variação só são apuradas e lançadas com ela ligada (parâmetros contábeis).")
+		}
+		return nil, nil
+	}
 	if len(linhas) == 0 {
 		return nil, nil
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/pkg/datetime"
 	"github.com/shopspring/decimal"
 
+	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	appsecurity "github.com/FelipePn10/panossoerp/internal/application/security"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/shipment_uc"
@@ -27,6 +28,16 @@ type ShipmentHandler struct {
 	uc         *shipment_uc.ShipmentUseCase
 	autoFillUC *shipment_uc.ShipmentAutoFillUseCase
 	exportUC   *shipment_uc.ShipmentExportUseCase
+	// Fluxo e NFe: fluxo guiado da expedição e NF-e direto do romaneio (opcionais).
+	Fluxo *shipment_uc.FluxoDaExpedicaoUseCase
+	NFe   NFeDoRomaneio
+	// Frete: cotação no hub de frete e rastreio pela NF-e (opcional).
+	Frete *shipment_uc.FreteOnlineUseCase
+}
+
+// NFeDoRomaneio emite a NF-e direto do romaneio.
+type NFeDoRomaneio interface {
+	ExecuteFromShipment(ctx context.Context, shipmentCode int64, dto request.CreateFiscalExitFromLoadDTO) (*response.FiscalExitResponse, error)
 }
 
 func NewShipmentHandler(uc *shipment_uc.ShipmentUseCase) *ShipmentHandler {
@@ -952,4 +963,85 @@ func normalizeCatalogPage(limit, offset *int) {
 	if *offset < 0 {
 		*offset = 0
 	}
+}
+
+// FluxoDoPedido: GET /api/shipments/fluxo/pedido/{code} — pedido → separação →
+// conferência → NF-e → despacho, com a próxima ação de cada romaneio.
+func (h *ShipmentHandler) FluxoDoPedido(w http.ResponseWriter, r *http.Request) {
+	if h.Fluxo == nil {
+		jsonError(w, http.StatusNotImplemented, "o fluxo da expedição não está configurado")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "pedido inválido")
+		return
+	}
+	out, err := h.Fluxo.Fluxo(r.Context(), code)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
+}
+
+// EmitirNFe: POST /api/shipments/{code}/nfe — NF-e (rascunho) direto do romaneio.
+func (h *ShipmentHandler) EmitirNFe(w http.ResponseWriter, r *http.Request) {
+	if h.NFe == nil {
+		jsonError(w, http.StatusNotImplemented, "a NF-e do romaneio não está configurada")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "romaneio inválido")
+		return
+	}
+	var dto request.CreateFiscalExitFromLoadDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.NFe.ExecuteFromShipment(r.Context(), code, dto)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusCreated, out)
+}
+
+// CotacaoOnline: POST /api/shipments/{code}/cotacao-online — cota a carga no hub de frete.
+func (h *ShipmentHandler) CotacaoOnline(w http.ResponseWriter, r *http.Request) {
+	if h.Frete == nil {
+		jsonError(w, http.StatusNotImplemented, "a cotação de frete não está configurada")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "romaneio inválido")
+		return
+	}
+	out, err := h.Frete.Cotar(r.Context(), code)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
+}
+
+// Rastreio: GET /api/shipments/{code}/rastreio — ocorrências da carga pela NF-e.
+func (h *ShipmentHandler) Rastreio(w http.ResponseWriter, r *http.Request) {
+	if h.Frete == nil {
+		jsonError(w, http.StatusNotImplemented, "o rastreio de carga não está configurado")
+		return
+	}
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "romaneio inválido")
+		return
+	}
+	out, err := h.Frete.Rastrear(r.Context(), code)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
 }

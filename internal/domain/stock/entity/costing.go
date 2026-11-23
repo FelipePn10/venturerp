@@ -9,6 +9,8 @@ const CasasCusto = 10
 // CasasValor é a precisão do valor em dinheiro (total_cost, total_price).
 const CasasValor = 4
 
+var umCentavo = decimal.New(1, -2)
+
 // CostingState is the weighted-average-cost snapshot of an item's balance in a
 // warehouse: on-hand quantity, average unit cost, and total inventory value.
 type CostingState struct {
@@ -41,6 +43,12 @@ func ApplyMovementCosting(cur CostingState, delta, unitPrice decimal.Decimal) (n
 	next, lastCost = applyMovementCosting(cur, delta, unitPrice)
 	next.TotalCost = next.TotalCost.Round(CasasValor)
 	if next.Quantity.IsPositive() {
+		// Saída que deixa um resíduo de menos de um centavo: o médio não é
+		// recalculado sobre ele. 0,000001 UN com o valor em 4 casas dava R$ 400.
+		if delta.IsNegative() && next.TotalCost.LessThan(umCentavo) {
+			next.AvgCost = cur.AvgCost
+			return next, lastCost
+		}
 		next.AvgCost = next.TotalCost.DivRound(next.Quantity, CasasCusto)
 	}
 	return next, lastCost

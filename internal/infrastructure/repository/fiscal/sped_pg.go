@@ -325,6 +325,65 @@ func (r *FiscalRepositoryPG) inventarioConsignado(ctx context.Context, empresa i
 	return itens, nil
 }
 
+// inventarioEmPoderDeTerceiros separa no Bloco H o que está no almoxarifado
+// TERCEIRO (industrialização por encomenda): é nosso, em poder do fornecedor —
+// indicador 1, com o fornecedor como participante.
+func (r *FiscalRepositoryPG) inventarioEmPoderDeTerceiros(ctx context.Context, empresa int64, data time.Time, itens []sped.ItemInventario) ([]sped.ItemInventario, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT w.supplier_code, m.item_code, SUM(`+saldoEFDSQL+`)
+		   FROM stock_movements m JOIN warehouse w ON w.id = m.warehouse_id AND w.enterprise_id = m.enterprise_id
+		  WHERE m.enterprise_id=$1 AND m.movement_date <= $2::date AND w.supplier_code IS NOT NULL
+		  GROUP BY 1, 2 HAVING SUM(`+saldoEFDSQL+`) > 0 ORDER BY 1, 2`, empresa, data.Format("2006-01-02"))
+	if err != nil {
+		return nil, fmt.Errorf("estoque em poder de terceiros para o bloco H: %w", err)
+	}
+	type linha struct {
+		fornecedor, item int64
+		q                decimal.Decimal
+	}
+	var linhas []linha
+	for rows.Next() {
+		var l linha
+		if err := rows.Scan(&l.fornecedor, &l.item, &l.q); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		linhas = append(linhas, l)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, l := range linhas {
+		cod := fmt.Sprint(l.item)
+		pos := -1
+		for i := range itens {
+			if itens[i].Item.Cod == cod && itens[i].IndProp == "" {
+				pos = i
+				break
+			}
+		}
+		if pos < 0 || !itens[pos].Quantidade.IsPositive() {
+			continue
+		}
+		parte, err := r.parteDoFornecedor(ctx, empresa, l.fornecedor)
+		if err != nil {
+			return nil, err
+		}
+		q := decimal.Min(l.q, itens[pos].Quantidade)
+		valor := itens[pos].Valor.Mul(q).Div(itens[pos].Quantidade)
+		itens[pos].Quantidade = itens[pos].Quantidade.Sub(q)
+		itens[pos].Valor = itens[pos].Valor.Sub(valor)
+		itens = append(itens, sped.ItemInventario{Item: itens[pos].Item, Quantidade: q, Valor: valor, IndProp: "1", Parte: &parte})
+	}
+	return itens, nil
+}
+
+// saldoEFDSQL: quantidade com sinal do movimento m (o mesmo critério do inventário).
+const saldoEFDSQL = `CASE WHEN m.movement_type IN ('IN','TRANSFER_IN','EP','EPP','EPE','ENTRADA') THEN abs(m.quantity)
+		                WHEN m.movement_type IN ('OUT','TRANSFER_OUT','REP','SAIDA') THEN -abs(m.quantity)
+		                WHEN m.movement_type = 'ADJUSTMENT' THEN m.quantity ELSE 0 END`
+
 func (r *FiscalRepositoryPG) parteDaRemessa(ctx context.Context, empresa, nota int64) (sped.Participante, error) {
 	var doc, nome, ie string
 	var e enderecoXML
@@ -761,6 +820,9 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 	if out, err = r.inventarioConsignado(ctx, empresa, data, out); err != nil {
 		return nil, "", err
 	}
+	if out, err = r.inventarioEmPoderDeTerceiros(ctx, empresa, data, out); err != nil {
+		return nil, "", err
+	}
 	cadastro, err := r.cadastroEFD(ctx, empresa)
 	if err != nil {
 		return nil, "", err
@@ -776,4 +838,24 @@ func (r *FiscalRepositoryPG) InventarioEFD(ctx context.Context, data time.Time) 
 		return nil, "", err
 	}
 	return out, conta, nil
+}
+
+// FornecedorAtivoPorCNPJ diz se o CNPJ é de fornecedor ativo e desbloqueado da
+// empresa (pré-lançamento das NF-e recebidas).
+func (r *FiscalRepositoryPG) FornecedorAtivoPorCNPJ(ctx context.Context, cnpj string) (bool, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return false, err
+	}
+	d := soDigitosRepo(cnpj)
+	if d == "" {
+		return false, nil
+	}
+	var ok bool
+	err = r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM suppliers WHERE enterprise_id = $1 AND is_active AND NOT COALESCE(blocked, FALSE)
+		AND regexp_replace(COALESCE(document_number,''), '\D', '', 'g') = $2)`, empresa, d).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("conferindo o fornecedor da nota recebida: %w", err)
+	}
+	return ok, nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
 	"github.com/FelipePn10/panossoerp/internal/application/security"
+	fiscaluc "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	thirdpartyuc "github.com/FelipePn10/panossoerp/internal/application/usecase/third_party_service_uc"
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/export"
@@ -18,7 +19,11 @@ import (
 	"github.com/google/uuid"
 )
 
-type ThirdPartyServiceHandler struct{ uc *thirdpartyuc.UseCase }
+type ThirdPartyServiceHandler struct {
+	uc *thirdpartyuc.UseCase
+	// Remessa emite a NF-e de remessa para industrialização. Opcional.
+	Remessa *fiscaluc.RemessaIndustrializacaoUseCase
+}
 
 func NewThirdPartyServiceHandler(uc *thirdpartyuc.UseCase) *ThirdPartyServiceHandler {
 	return &ThirdPartyServiceHandler{uc: uc}
@@ -454,4 +459,48 @@ func (h *ThirdPartyServiceHandler) OrderHistory(w http.ResponseWriter, r *http.R
 		return
 	}
 	jsonResponse(w, 200, v)
+}
+
+// EmPoder: GET /api/third-party-services/em-poder?supplier_code=&only_overdue=true
+func (h *ThirdPartyServiceHandler) EmPoder(w http.ResponseWriter, r *http.Request) {
+	var f domain.FiltroEmPoder
+	if v := strings.TrimSpace(r.URL.Query().Get("supplier_code")); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			jsonError(w, 400, "fornecedor inválido")
+			return
+		}
+		f.SupplierCode = &n
+	}
+	f.OnlyOverdue = r.URL.Query().Get("only_overdue") == "true"
+	v, err := h.uc.EmPoder(r.Context(), f)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, 200, v)
+}
+
+// NFeRemessa: POST /api/third-party-services/orders/{id}/nfe-remessa — gera a
+// NF-e de remessa para industrialização (rascunho).
+func (h *ThirdPartyServiceHandler) NFeRemessa(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt(r, "id")
+	if !ok {
+		jsonError(w, 400, "código inválido")
+		return
+	}
+	if h.Remessa == nil {
+		jsonError(w, 501, "NF-e de remessa indisponível nesta instalação")
+		return
+	}
+	var d fiscaluc.RemessaIndustrializacaoDTO
+	if !body(w, r, &d) {
+		return
+	}
+	v, err := h.Remessa.Criar(r.Context(), id, d)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, 201, v)
 }

@@ -191,7 +191,7 @@ func (uc *FirmarSugestaoMRPUseCase) execute(ctx context.Context, suggestionCode 
 		DemandType:           mapMRPDemandType(sugg.DemandType),
 		NeedDate:             sugg.NeedDate,
 		StartDate:            sugg.StartDate,
-		EndDate:              sugg.EstimatedEndAt,
+		EndDate:              fimDaSugestao(sugg.EstimatedEndAt, sugg.NeedDate),
 		LLC:                  sugg.LLC,
 		WarehouseCode:        sugg.WarehouseCode,
 		InterFactory:         sugg.InterFactory,
@@ -327,4 +327,16 @@ func mergeNote(existing *string, extra string) *string {
 // GravaFornecedor: guarda o fornecedor do MRP na ordem planejada.
 type GravaFornecedor interface {
 	GravarFornecedor(ctx context.Context, code, supplier int64) error
+}
+
+// fimDaSugestao: o fim do agendamento das máquinas; sem ele (OF só com etapa
+// externa, sem máquina), a data de necessidade. A OF ficava sem data de fim.
+func fimDaSugestao(agendado *time.Time, necessidade time.Time) *time.Time {
+	if agendado != nil {
+		return agendado
+	}
+	if necessidade.IsZero() {
+		return nil
+	}
+	return &necessidade
 }

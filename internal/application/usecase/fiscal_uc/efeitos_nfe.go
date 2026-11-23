@@ -38,6 +38,57 @@ type EfeitosRepos struct {
 	Series SeriesNaNota
 	// Consignacao: remessa, venda consignada e transferência entre CNPJs.
 	Consignacao stockrepo.ConsignacaoEstoque
+	// Romaneios: os romaneios que a nota fatura (reserva e cancelamento). Opcional.
+	Romaneios RomaneiosDaNota
+}
+
+// RomaneiosDaNota liga a NF-e aos romaneios que ela fatura.
+type RomaneiosDaNota interface {
+	// RomaneiosDaNota devolve os códigos dos romaneios ligados à nota.
+	RomaneiosDaNota(ctx context.Context, exitID int64) ([]int64, error)
+	// ReabrirPelaNotaCancelada desliga a nota dos romaneios e volta o expedido
+	// para conferido: a mercadoria voltou ao estoque com o cancelamento.
+	ReabrirPelaNotaCancelada(ctx context.Context, exitID int64) error
+}
+
+// referenciaRomaneio é a reserva da separação do romaneio (shipment_uc).
+const referenciaRomaneio = "SHIPMENT"
+
+// consumirReservasDosRomaneios solta a reserva da separação dos romaneios da
+// nota, até o que ela faturou de cada item. Ficava ativa até o despacho, e o
+// disponível ficava negativo (saldo 0 com a reserva ainda lá).
+func consumirReservasDosRomaneios(ctx context.Context, r EfeitosRepos, exitID int64, items []*entity.FiscalExitItem, qtd func(*entity.FiscalExitItem) decimal.Decimal) error {
+	if r.Romaneios == nil || r.Estoque == nil {
+		return nil
+	}
+	codigos, err := r.Romaneios.RomaneiosDaNota(ctx, exitID)
+	if err != nil || len(codigos) == 0 {
+		return err
+	}
+	daNota := map[int64]bool{}
+	for _, c := range codigos {
+		daNota[c] = true
+	}
+	faturado := faturadoDaNota(items, qtd).produto
+	ativas, err := r.Estoque.ListActiveReservations(ctx)
+	if err != nil {
+		return fmt.Errorf("lendo as reservas dos romaneios: %w", err)
+	}
+	for _, res := range ativas {
+		if res.ReferenceType != referenciaRomaneio || !daNota[res.ReferenceCode] {
+			continue
+		}
+		q := decimal.Min(res.Quantity, faturado[res.ItemCode])
+		if !q.IsPositive() {
+			continue
+		}
+		consumido, err := r.Estoque.ConsumirReservaParcial(ctx, res.ID, q)
+		if err != nil {
+			return fmt.Errorf("consumindo a reserva %d do romaneio %d: %w", res.ID, res.ReferenceCode, err)
+		}
+		faturado[res.ItemCode] = faturado[res.ItemCode].Sub(consumido)
+	}
+	return nil
 }
 
 // SeriesNaNota: o efeito da nota sobre o número de série (pós-venda 3.1).
@@ -78,6 +129,14 @@ type EfeitosNFe struct {
 	Consignacao stockrepo.ConsignacaoEstoque
 	// Reservas repõe a reserva do pedido que a nota cancelada devolve à carteira.
 	Reservas ReservasDoPedido
+	// Remessas devolve à fábrica a peça da remessa para industrialização cuja
+	// NF-e foi cancelada (a peça não saiu). Opcional.
+	Remessas EstornoDaRemessa
+}
+
+// EstornoDaRemessa registra o retorno das remessas da OS de terceiro ligadas à nota.
+type EstornoDaRemessa interface {
+	EstornarRemessasDaNota(ctx context.Context, exitID int64) error
 }
 
 // ReservasDoPedido repõe, até o saldo em aberto de cada linha e limitada ao
@@ -504,6 +563,15 @@ func (e *EfeitosNFe) autorizacao(ctx context.Context, exitID int64, userID uuid.
 			if err := aplicarEstoque(ctx, r, exit, items, efeitos, depositos, quantidades, mascaras, userID); err != nil {
 				return err
 			}
+			qtd := func(it *entity.FiscalExitItem) decimal.Decimal {
+				if q, ok := quantidades[it.ID]; ok {
+					return q
+				}
+				return it.Quantity
+			}
+			if err := consumirReservasDosRomaneios(ctx, r, exitID, items, qtd); err != nil {
+				return err
+			}
 		}
 		if r.Series != nil {
 			if err := r.Series.SaidaPelaNota(ctx, exitID, exit.CustomerCode, exit.DataEmissao, atorOuNil(userID)); err != nil {
@@ -558,6 +626,12 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 				}
 			}
 		}
+		// O romaneio ficava "expedido" e ligado à nota cancelada.
+		if r.Romaneios != nil {
+			if err := r.Romaneios.ReabrirPelaNotaCancelada(ctx, exitID); err != nil {
+				return fmt.Errorf("reabrindo os romaneios da nota: %w", err)
+			}
+		}
 		resolvida = true
 		return r.Pendencias.Resolver(ctx, exitID, entity.PendenciaCancelamento)
 	})
@@ -568,6 +642,12 @@ func (e *EfeitosNFe) cancelamento(ctx context.Context, exitID int64) error {
 	// cancelamento normal ela volta logo depois, e o caso de uso repõe de novo
 	// (a reposição só completa o que falta).
 	reporReservasDoPedido(ctx, e.Reservas, exit)
+	if e.Remessas != nil && ehRemessaIndustrializacao(exit) {
+		if err := e.Remessas.EstornarRemessasDaNota(ctx, exitID); err != nil {
+			// A nota já caiu na SEFAZ: vira aviso no log, como a reserva.
+			slog.Error("NF-e de remessa cancelada sem o retorno da peça registrado na OS", "nota", exitID, "erro", err)
+		}
+	}
 	return nil
 }
 

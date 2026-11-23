@@ -208,7 +208,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 
 	// Depósito de saída de cada item conferido ANTES de transmitir: autorizada,
 	// a nota não volta, e a baixa de estoque precisa de depósito.
-	if uc.Efeitos != nil && exit.FiscalEntryID == nil {
+	if uc.Efeitos != nil && exit.FiscalEntryID == nil && !ehRemessaIndustrializacao(exit) {
 		if err := uc.Efeitos.PreConferirDepositos(ctx, exit, items); err != nil {
 			return nil, err
 		}
@@ -309,6 +309,11 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 			resp.Warnings = append(resp.Warnings, uc.DevolucaoVenda.AoAutorizar(ctx, updated, userID)...)
 		}
 		return resp, nil
+	}
+	// Remessa para industrialização: a peça vai ao almoxarifado do terceiro pela
+	// OS (não pela nota) e não há cobrança nem receita.
+	if ehRemessaIndustrializacao(updated) {
+		return toFiscalExitResponse(updated), nil
 	}
 	if updated.FiscalEntryID != nil {
 		resp := toFiscalExitResponse(updated)

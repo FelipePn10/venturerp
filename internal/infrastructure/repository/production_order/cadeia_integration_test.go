@@ -147,6 +147,15 @@ func TestCadeiaOFPaiFilha(t *testing.T) {
 	ofOutra, _ := of(rn, nil, "OPEN", hoje.AddDate(0, 0, 1))
 	material(ofOutra, bu)
 
+	// Bug G: sugestão de COMPRA firmada também entra na cadeia; material
+	// comprado não é "componente sem OF".
+	var compra int64
+	if err := pool.QueryRow(base, `INSERT INTO planned_orders(order_number,item_code,quantity,order_type,demand_type,need_date,created_by,demand_code,enterprise_id,is_firm)
+		VALUES($1,$2,5,'PURCHASE','SALES_ORDER',$3::date,$4,1,$5,TRUE) RETURNING id`, testutil.UniqueCode()%1_000_000, tp, hoje, actor, a.ID).Scan(&compra); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Exec(t, pool, `INSERT INTO production_chain_links(enterprise_id,child_planned_order_id,parent_planned_order_id,quantity,created_by) VALUES($1,$2,$3,5,$4)`, a.ID, compra, rnID, actor)
+
 	repo := productionrepo.NewProductionOrderRepositoryPGX(pool)
 	// Conferência do início: a OF da bucha está aberta, o tubo nem tem OF, e não
 	// há bucha no estoque.

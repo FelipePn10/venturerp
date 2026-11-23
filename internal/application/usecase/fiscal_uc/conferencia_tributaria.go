@@ -26,7 +26,7 @@ func conferirTributacao(exit *entity.FiscalExit, items []*entity.FiscalExitItem,
 	if exit == nil || cfg == nil || (exit.Finalidade != 0 && exit.Finalidade != 1) {
 		return nil
 	}
-	tributacaoPropria := exit.SourceType != nil && (*exit.SourceType == OrigemBeneficiamento || *exit.SourceType == SourceDevolucaoCompra)
+	tributacaoPropria := exit.SourceType != nil && (*exit.SourceType == OrigemBeneficiamento || *exit.SourceType == SourceDevolucaoCompra || *exit.SourceType == SourceRemessaIndustrializacao)
 
 	// ── Regra de ICMS/IPI por linha
 	if !tributacaoPropria {

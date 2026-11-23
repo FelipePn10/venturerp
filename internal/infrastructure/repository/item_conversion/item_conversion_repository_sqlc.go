@@ -656,3 +656,19 @@ func (r *ItemConversionRepositorySQLC) SincronizarSegundaUnidade(ctx context.Con
 	}
 	return antes, antes == nil || !antes.Equal(novo), nil
 }
+
+// DefinirLoteMultiplo grava o lote múltiplo do planejamento do item da empresa.
+func (r *ItemConversionRepositorySQLC) DefinirLoteMultiplo(ctx context.Context, itemCode int64, lote decimal.Decimal) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE items SET planning_multiple_lot = $1 WHERE code = $2 AND enterprise_id = $3`, lote, itemCode, empresa)
+	if err != nil {
+		return fmt.Errorf("gravando o lote múltiplo do item: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError("item não encontrado nesta empresa")
+	}
+	return nil
+}

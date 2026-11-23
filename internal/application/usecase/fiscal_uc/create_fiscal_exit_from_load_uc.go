@@ -54,58 +54,8 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 		return nil, errorsuc.NewValidationError(fmt.Sprintf("carga %d já possui nota fiscal vinculada", dto.LoadCode))
 	}
 
-	overrides := fiscalLoadOverrides(dto.ItemOverrides)
-	items, salesOrderCode, err := uc.itemsFromLoad(ctx, load.Shipments, dto, overrides)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := uc.completarDoCadastro(ctx, items, dto, overrides); err != nil {
-		return nil, err
-	}
-
-	numeroNF, err := uc.FiscalRepo.GetNextNFNumber(ctx)
-	if err != nil {
-		return nil, err
-	}
-	source := "LOAD"
 	loadCode := dto.LoadCode
-	createDTO := request.CreateFiscalExitDTO{
-		NumeroNF:                numeroNF,
-		Serie:                   dto.Serie,
-		DataEmissao:             dto.DataEmissao,
-		DataSaida:               dto.DataSaida,
-		CnpjDestinatario:        documentoSoDigitos(dto.CnpjDestinatario),
-		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
-		IEDestinatario:          inscricaoEstadual(dto.IEDestinatario),
-		UFDestinatario:          dto.UFDestinatario,
-		TipoPessoa:              dto.TipoPessoa,
-		CustomerCode:            dto.CustomerCode,
-		Cfop:                    dto.Cfop,
-		NaturezaOperacao:        dto.NaturezaOperacao,
-		ValorProdutos:           sumFiscalExitItems(items),
-		ValorFrete:              dto.ValorFrete,
-		ValorSeguro:             dto.ValorSeguro,
-		ValorDesconto:           dto.ValorDesconto,
-		SalesOrderCode:          salesOrderCode,
-		SourceType:              &source,
-		ShipmentLoadCode:        &loadCode,
-		// Quem leva a carga é a transportadora da NF-e; sem ela, a do cliente.
-		ShippingCarrierID: load.ShippingCarrierID,
-		Itens:             items,
-	}
-
-	// Carga de um pedido só: a nota segue o tipo de NF do pedido e das linhas,
-	// como no faturamento pelo pedido. Carga de vários pedidos sai sem tipo.
-	if salesOrderCode != nil && uc.SalesOrderRepo != nil {
-		tipo, err := uc.tipoNotaDaCarga(ctx, *salesOrderCode, items)
-		if err != nil {
-			return nil, err
-		}
-		createDTO.InvoiceTypeID = tipo
-	}
-
-	created, err := uc.CreateUC.Execute(ctx, createDTO)
+	created, err := uc.criarNota(ctx, load.Shipments, dto, "LOAD", &loadCode, nil, load.ShippingCarrierID)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +82,100 @@ func (uc *CreateFiscalExitFromLoadUseCase) Execute(ctx context.Context, dto requ
 	}
 
 	return created, nil
+}
+
+// criarNota monta e cria a NF-e dos romaneios (da carga ou de um romaneio só).
+func (uc *CreateFiscalExitFromLoadUseCase) criarNota(ctx context.Context, links []*shipentity.ShipmentLoadShipment, dto request.CreateFiscalExitFromLoadDTO,
+	source string, loadCode, shipmentCode, carrier *int64) (*response.FiscalExitResponse, error) {
+	overrides := fiscalLoadOverrides(dto.ItemOverrides)
+	items, salesOrderCode, err := uc.itemsFromLoad(ctx, links, dto, overrides)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := uc.completarDoCadastro(ctx, items, dto, overrides); err != nil {
+		return nil, err
+	}
+
+	numeroNF, err := uc.FiscalRepo.GetNextNFNumber(ctx)
+	if err != nil {
+		return nil, err
+	}
+	createDTO := request.CreateFiscalExitDTO{
+		NumeroNF:                numeroNF,
+		Serie:                   dto.Serie,
+		DataEmissao:             dto.DataEmissao,
+		DataSaida:               dto.DataSaida,
+		CnpjDestinatario:        documentoSoDigitos(dto.CnpjDestinatario),
+		RazaoSocialDestinatario: dto.RazaoSocialDestinatario,
+		IEDestinatario:          inscricaoEstadual(dto.IEDestinatario),
+		UFDestinatario:          dto.UFDestinatario,
+		TipoPessoa:              dto.TipoPessoa,
+		CustomerCode:            dto.CustomerCode,
+		Cfop:                    dto.Cfop,
+		NaturezaOperacao:        dto.NaturezaOperacao,
+		ValorProdutos:           sumFiscalExitItems(items),
+		ValorFrete:              dto.ValorFrete,
+		ValorSeguro:             dto.ValorSeguro,
+		ValorDesconto:           dto.ValorDesconto,
+		SalesOrderCode:          salesOrderCode,
+		SourceType:              &source,
+		ShipmentLoadCode:        loadCode,
+		ShipmentCode:            shipmentCode,
+		// Quem leva a carga é a transportadora da NF-e; sem ela, a do cliente.
+		ShippingCarrierID: carrier,
+		Itens:             items,
+	}
+
+	// Carga de um pedido só: a nota segue o tipo de NF do pedido e das linhas,
+	// como no faturamento pelo pedido. Carga de vários pedidos sai sem tipo.
+	if salesOrderCode != nil && uc.SalesOrderRepo != nil {
+		tipo, err := uc.tipoNotaDaCarga(ctx, *salesOrderCode, items)
+		if err != nil {
+			return nil, err
+		}
+		createDTO.InvoiceTypeID = tipo
+		// Sem destinatário informado, o cliente do pedido.
+		if createDTO.CustomerCode == nil && createDTO.CnpjDestinatario == nil {
+			if so, err := uc.SalesOrderRepo.GetByCode(ctx, *salesOrderCode); err == nil && so != nil {
+				createDTO.CustomerCode = so.CustomerCode
+			}
+		}
+	}
+
+	return uc.CreateUC.Execute(ctx, createDTO)
+}
+
+// ExecuteFromShipment emite a NF-e direto do romaneio (fluxo guiado da
+// expedição): mesma montagem da nota da carga, para um romaneio só.
+func (uc *CreateFiscalExitFromLoadUseCase) ExecuteFromShipment(ctx context.Context, shipmentCode int64, dto request.CreateFiscalExitFromLoadDTO) (*response.FiscalExitResponse, error) {
+	if uc.CreateUC == nil || uc.FiscalRepo == nil || uc.ShipmentRepo == nil {
+		return nil, fmt.Errorf("dependências de faturamento do romaneio não configuradas")
+	}
+	ship, err := uc.ShipmentRepo.GetByCode(ctx, shipmentCode)
+	if err != nil {
+		return nil, err
+	}
+	if ship.FiscalExitID != nil {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o romaneio %d já tem a NF-e %d vinculada", shipmentCode, derefInt64(ship.NFeNumber)))
+	}
+	code := shipmentCode
+	created, err := uc.criarNota(ctx, []*shipentity.ShipmentLoadShipment{{ShipmentCode: shipmentCode}}, dto, "SHIPMENT", nil, &code, ship.ShippingCarrierID)
+	if err != nil {
+		return nil, err
+	}
+	nfNumber := created.NumeroNF
+	if err := uc.ShipmentRepo.SetFiscalExit(ctx, shipmentCode, &created.ID, &nfNumber, created.ChaveAcesso, nil); err != nil {
+		return nil, fmt.Errorf("vinculando NF-e ao romaneio %d: %w", shipmentCode, err)
+	}
+	return created, nil
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(

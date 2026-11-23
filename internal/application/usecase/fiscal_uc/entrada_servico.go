@@ -202,6 +202,13 @@ func (s *EntradaServico) Preparar(ctx context.Context, e *entity.FiscalEntry) er
 			it.GeraCreditoCOFINS = it.ValorCOFINS.IsPositive()
 			finalidade = finalidadeDaCompra(it, linhaPorCodigo, cadastro)
 			entrada.CreditosDaFinalidade(finalidade, it)
+			// Retorno da NOSSA peça industrializada pelo terceiro (o fornecedor
+			// emite 5902/5903): não é compra. A peça volta ao estoque pela OS de
+			// terceiro e o que se paga é a linha do serviço (5124). Sem isto a
+			// peça entrava de novo no estoque e virava título a pagar.
+			if entity.RetornoDeIndustrializacao(it.Cfop) {
+				it.MovimentaEstoque, it.GeraFinanceiro = false, false
+			}
 		}
 		// O regime restringe: Simples não toma crédito; Presumido não toma
 		// PIS/COFINS. A conferência explica o que ficou sem crédito.

@@ -38,6 +38,8 @@ type spedAutomaticoRequest struct {
 	// Bloco H: data do inventário (AAAA-MM-DD) e motivo (01 a 06); vazio = sem inventário.
 	InventarioData   string `json:"inventario_data"`
 	InventarioMotivo string `json:"inventario_motivo"`
+	// BlocoK: entrega o Bloco K (K200 com a posse no fim do período).
+	BlocoK bool `json:"bloco_k"`
 }
 
 type spedResumoResponse struct {
@@ -76,7 +78,7 @@ func (h *SpedAutomaticoHandler) Gerar(w http.ResponseWriter, r *http.Request) {
 		IndAtividade: req.IndAtividade, ContribuinteIPI: req.ContribuinteIPI, ContabilistaNome: req.ContabilistaNome,
 		ContabilistaCPF: req.ContabilistaCPF, ContabilistaCRC: req.ContabilistaCRC, ContabilistaCNPJ: req.ContabilistaCNPJ,
 		SaldoCredorAnteriorICMS: req.SaldoCredorAnteriorICMS, SaldoCredorAnteriorIPI: req.SaldoCredorAnteriorIPI,
-		CodReceitaICMS: req.CodReceitaICMS, InventarioMotivo: req.InventarioMotivo}
+		CodReceitaICMS: req.CodReceitaICMS, InventarioMotivo: req.InventarioMotivo, BlocoK: req.BlocoK}
 	if req.InventarioData != "" {
 		v, err := time.Parse("2006-01-02", req.InventarioData)
 		if err != nil {

@@ -41,7 +41,31 @@ type Config struct {
 	OTELServiceName    string `mapstructure:"OTEL_SERVICE_NAME"`
 	OTELNamespace      string `mapstructure:"OTEL_SERVICE_NAMESPACE"`
 	SystemUpdateDir    string `mapstructure:"SYSTEM_UPDATE_DIR"`
-	BackendReleaseURL  string `mapstructure:"BACKEND_RELEASE_URL"`
+	// SimulationDir: a fila do pedido de cópia para o treino (modo simulação),
+	// uma por empresa e gravável pela API. Vazio desliga o recurso.
+	SimulationDir string `mapstructure:"SIMULATION_DIR"`
+	// Integrações externas (docs/dev/integracoes-provedores.md). Vazio = desligada.
+	InterClientID        string `mapstructure:"INTER_CLIENT_ID"`
+	InterClientSecret    string `mapstructure:"INTER_CLIENT_SECRET"`
+	InterCertFile        string `mapstructure:"INTER_CERT_FILE"`
+	InterKeyFile         string `mapstructure:"INTER_KEY_FILE"`
+	InterContaCorrente   string `mapstructure:"INTER_CONTA_CORRENTE"`
+	InterSandbox         bool   `mapstructure:"INTER_SANDBOX"`
+	InterContaBancariaID int64  `mapstructure:"INTER_CONTA_BANCARIA_ID"`
+	InterWebhookToken    string `mapstructure:"INTER_WEBHOOK_TOKEN"`
+	InterEmpresaID       int64  `mapstructure:"INTER_EMPRESA_ID"`
+	WhatsAppToken        string `mapstructure:"WHATSAPP_TOKEN"`
+	WhatsAppPhoneID      string `mapstructure:"WHATSAPP_PHONE_NUMBER_ID"`
+	WhatsAppTemplate     string `mapstructure:"WHATSAPP_TEMPLATE"`
+	WhatsAppTemplateLang string `mapstructure:"WHATSAPP_TEMPLATE_LANG"`
+	FreteRapidoToken     string `mapstructure:"FRETERAPIDO_TOKEN"`
+	FreteRapidoPlatform  string `mapstructure:"FRETERAPIDO_PLATFORM_CODE"`
+	// PortalBaseURL: endereço do portal do cliente (o link sai como <base>/#/portal/<token>).
+	PortalBaseURL string `mapstructure:"PORTAL_BASE_URL"`
+	// PortalEmpresa: id desta empresa no catálogo tenants.json (ex.: "usimac").
+	// Vai no link para a página do portal saber qual API chamar.
+	PortalEmpresa     string `mapstructure:"PORTAL_EMPRESA"`
+	BackendReleaseURL string `mapstructure:"BACKEND_RELEASE_URL"`
 
 	// Pool de conexões com o banco. Existe porque o padrão do pgxpool é
 	// max(4, NumCPU): numa VPS de 3 vCPU isso dá QUATRO conexões para a empresa
@@ -75,7 +99,11 @@ func Load() (*Config, error) {
 		"TRUSTED_PROXY_CIDRS",
 		"METRICS_ENABLED", "METRICS_TOKEN", "SHUTDOWN_TIMEOUT_SEC",
 		"OTEL_SERVICE_NAME", "OTEL_SERVICE_NAMESPACE",
-		"SYSTEM_UPDATE_DIR", "BACKEND_RELEASE_URL",
+		"SYSTEM_UPDATE_DIR", "BACKEND_RELEASE_URL", "SIMULATION_DIR",
+		"INTER_CLIENT_ID", "INTER_CLIENT_SECRET", "INTER_CERT_FILE", "INTER_KEY_FILE", "INTER_CONTA_CORRENTE", "INTER_SANDBOX",
+		"INTER_CONTA_BANCARIA_ID", "INTER_WEBHOOK_TOKEN", "INTER_EMPRESA_ID",
+		"WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_TEMPLATE", "WHATSAPP_TEMPLATE_LANG",
+		"FRETERAPIDO_TOKEN", "FRETERAPIDO_PLATFORM_CODE", "PORTAL_BASE_URL", "PORTAL_EMPRESA",
 		"DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME_MIN", "DB_MAX_CONN_IDLE_MIN",
 	} {
 		if err := viper.BindEnv(key); err != nil {
@@ -110,6 +138,8 @@ func Load() (*Config, error) {
 	viper.SetDefault("OTEL_SERVICE_NAME", "venturerp-api")
 	viper.SetDefault("OTEL_SERVICE_NAMESPACE", "venturerp")
 	viper.SetDefault("SYSTEM_UPDATE_DIR", "/tmp/venturerp-update")
+	viper.SetDefault("INTER_EMPRESA_ID", 1)
+	viper.SetDefault("WHATSAPP_TEMPLATE_LANG", "pt_BR")
 	viper.SetDefault("BACKEND_RELEASE_URL", "https://api.github.com/repos/FelipePn10/venturerp/releases/latest")
 	// 20 cabe com folga em duas empresas mais o treinamento sobre max_connections=100,
 	// e é cinco vezes o que o padrão do pgxpool daria na VPS atual.

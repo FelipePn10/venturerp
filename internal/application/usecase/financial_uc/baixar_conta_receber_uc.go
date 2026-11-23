@@ -3,6 +3,7 @@ package financial_uc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"time"
 
@@ -21,6 +22,9 @@ type BaixarContaReceberUseCase struct {
 	FiscalRepo fiscalrepo.FiscalRepository
 	// Contabil, quando presente, contabiliza o recebimento na mesma transação.
 	Contabil Contabil
+	// Banco: na baixa manual que quita o título, cancela a cobrança emitida no
+	// banco para o cliente não pagar de novo (opcional).
+	Banco *CobrancaNoBanco
 }
 
 func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto request.BaixarContaReceberDTO) error {
@@ -76,7 +80,10 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 	}
 
 	var jurosDec, multaDec decimal.Decimal
-	if dataRecebimento.After(cr.DataVencimento) {
+	if dto.EncargosInformados != nil {
+		// O banco já cobrou e creditou: vale o que ele informou.
+		jurosDec = decimal.Max(*dto.EncargosInformados, decimal.Zero)
+	} else if dataRecebimento.After(cr.DataVencimento) {
 		daysLate := int(math.Ceil(dataRecebimento.Sub(cr.DataVencimento).Hours() / 24))
 		monthsLate := float64(daysLate) / 30.0
 		// Juros e multa sobre o que está sendo quitado agora: na baixa parcial o
@@ -107,7 +114,7 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		return err
 	}
 
-	return uc.Repo.BaixarContaReceberAtomico(ctx, id, params, entity.FluxoCaixa{
+	if err := uc.Repo.BaixarContaReceberAtomico(ctx, id, params, entity.FluxoCaixa{
 		Data:            dataRecebimento,
 		Tipo:            entity.FluxoCaixaTipoEntrada,
 		Valor:           totalFluxo,
@@ -115,5 +122,16 @@ func (uc *BaixarContaReceberUseCase) Execute(ctx context.Context, id int64, dto 
 		ContasReceberID: &id,
 		Descricao:       dto.Observacao,
 		Conciliado:      false,
-	}, valorOriginal, dto.ContaBancariaID, lote)
+	}, valorOriginal, dto.ContaBancariaID, lote); err != nil {
+		return err
+	}
+	// Baixa que veio do banco (aviso ou retorno) traz os encargos dele: ali a
+	// cobrança já está paga. Na baixa manual que quita, a do banco é cancelada;
+	// a falha não desfaz o recebimento, só fica registrada.
+	if dto.EncargosInformados == nil && !valorOriginal.Sub(valorRecebido).Sub(desconto).IsPositive() {
+		if err := uc.Banco.Cancelar(ctx, id, "Recebido por outro meio"); err != nil {
+			slog.Warn("título baixado à mão, mas a cobrança no banco continua ativa", "titulo", id, "erro", err)
+		}
+	}
+	return nil
 }

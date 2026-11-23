@@ -68,8 +68,8 @@ func TestAutoFillFromSalesOrder_Success(t *testing.T) {
 			TotalVolumes: 3,
 			TotalWeight:  decimal.NewFromFloat(75.0),
 			Items: []SalesOrderItemHeader{
-				{ItemCode: 1, RequestedQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(25)},
-				{ItemCode: 2, RequestedQty: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(50)},
+				{ItemCode: 1, RequestedQty: decimal.NewFromFloat(10), PendingQty: decimal.NewFromFloat(10), UnitPrice: decimal.NewFromFloat(25)},
+				{ItemCode: 2, RequestedQty: decimal.NewFromFloat(5), PendingQty: decimal.NewFromFloat(5), UnitPrice: decimal.NewFromFloat(50)},
 			},
 		},
 	}
@@ -272,7 +272,7 @@ func TestAutoFill_ReturnsFullShipment(t *testing.T) {
 			TotalVolumes: 2,
 			TotalWeight:  decimal.NewFromFloat(80),
 			Items: []SalesOrderItemHeader{
-				{ItemCode: 100, RequestedQty: decimal.NewFromFloat(5)},
+				{ItemCode: 100, RequestedQty: decimal.NewFromFloat(5), PendingQty: decimal.NewFromFloat(5)},
 			},
 		},
 	}

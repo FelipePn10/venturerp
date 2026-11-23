@@ -282,3 +282,33 @@ func (h *ItemConversionHandler) Convert(w http.ResponseWriter, r *http.Request) 
 		ConvertedQty:   converted.InexactFloat64(),
 	})
 }
+
+// Assistente: POST /api/item-conversions/assistente — peso pela geometria e as
+// conversões sugeridas, comparadas com as do cadastro (não grava nada).
+func (h *ItemConversionHandler) Assistente(w http.ResponseWriter, r *http.Request) {
+	var dto item_conversion_uc.AssistenteConversaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	res, err := h.uc.Assistente(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
+
+// AplicarAssistente: POST /api/item-conversions/assistente/aplicar — grava as
+// conversões que faltam e, pedindo, o lote múltiplo 1.
+func (h *ItemConversionHandler) AplicarAssistente(w http.ResponseWriter, r *http.Request) {
+	var dto item_conversion_uc.AssistenteConversaoDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	res, err := h.uc.AplicarAssistente(r.Context(), dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, res)
+}
