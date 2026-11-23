@@ -1414,11 +1414,14 @@ func (r *ProductionOrderRepositoryPGX) DestinoDaOFFilha(ctx context.Context, pla
 	err = r.pool.QueryRow(ctx, `
 		SELECT mat.warehouse_id
 		  FROM production_chain_links l
+		  JOIN planned_orders filha ON filha.id = l.child_planned_order_id AND filha.enterprise_id = l.enterprise_id
 		  JOIN production_orders pai ON pai.enterprise_id = l.enterprise_id
 		       AND (pai.id = l.parent_production_order_id
 		            OR (l.parent_production_order_id IS NULL AND pai.planned_order_id = l.parent_planned_order_id))
 		  JOIN production_order_materials mat ON mat.production_order_id = pai.id AND mat.enterprise_id = pai.enterprise_id
 		       AND mat.material_kind = 'DEMAND' AND mat.item_code = $3 AND mat.warehouse_id IS NOT NULL
+		       -- a linha da máscara que a filha produz (é a que a reserva da OF pai casa)
+		       AND COALESCE(mat.mask, '') = COALESCE(filha.mask, '')
 		  JOIN warehouse w ON w.id = mat.warehouse_id AND w.enterprise_id = l.enterprise_id
 		 WHERE l.enterprise_id = $1 AND l.child_planned_order_id = $2
 		 ORDER BY COALESCE(pai.start_date, 'infinity'::date), pai.id, mat.id

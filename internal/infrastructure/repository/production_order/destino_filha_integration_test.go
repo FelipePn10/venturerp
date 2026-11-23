@@ -42,9 +42,17 @@ func TestDestinoDaOFFilhaEOndeAPaiBaixa(t *testing.T) {
 		VALUES($1,$2,10,'OPEN',$3::date,$4,$5,$6) RETURNING id`, testutil.UniqueCode()%1_000_000, pai, hoje, actor, a.ID, paiPlan).Scan(&ofPai); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(base, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,mask,quantity,attended_quantity,warehouse_id,created_by)
-		VALUES($1,$2,'DEMAND',$3,'',10,0,$4,$5)`, ofPai, a.ID, filho, almox, actor); err != nil {
-		t.Fatal(err)
+	// Linha do mesmo item em outra máscara e outro almoxarifado, gravada antes:
+	// não é a que a filha (sem máscara) abastece.
+	outroAlmox := testutil.NovoAlmoxarifado(t, pool, a.ID)
+	for _, l := range []struct {
+		mask  string
+		almox int64
+	}{{"AZUL", outroAlmox}, {"", almox}} {
+		if _, err := pool.Exec(base, `INSERT INTO production_order_materials(production_order_id,enterprise_id,material_kind,item_code,mask,quantity,attended_quantity,warehouse_id,created_by)
+			VALUES($1,$2,'DEMAND',$3,$4,10,0,$5,$6)`, ofPai, a.ID, filho, l.mask, l.almox, actor); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		pool.Exec(base, `DELETE FROM production_order_materials WHERE production_order_id=$1`, ofPai)

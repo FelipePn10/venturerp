@@ -18,6 +18,7 @@ UPDATE production_orders po
                     OR (l.parent_production_order_id IS NULL AND pai.planned_order_id = l.parent_planned_order_id))
           JOIN production_order_materials mat ON mat.production_order_id = pai.id AND mat.enterprise_id = pai.enterprise_id
                AND mat.material_kind = 'DEMAND' AND mat.item_code = filha.item_code AND mat.warehouse_id IS NOT NULL
+               AND COALESCE(mat.mask, '') = COALESCE(filha.mask, '')
           JOIN warehouse w ON w.id = mat.warehouse_id AND w.enterprise_id = filha.enterprise_id
          WHERE filha.warehouse_id IS NULL AND filha.status IN ('OPEN', 'RELEASED', 'IN_PROGRESS')
          ORDER BY filha.id, COALESCE(pai.start_date, 'infinity'::date), pai.id, mat.id) x
