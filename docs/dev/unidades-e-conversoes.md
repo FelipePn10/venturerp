@@ -292,3 +292,8 @@ Diferenciais:
 | `purchase_order_uc/unidade_interna_test.go` | Sinônimo da unidade de compra traduzido (BMB → BOMBONA); unidade fora do catálogo recusada. |
 | `fiscal_uc/unidade_fiscal_nfe_test.go`, `fiscal/sped/unidade_fiscal_test.go` | Código fiscal da unidade em uCom/uTrib e na EFD. |
 | `fiscal/frete/frete_test.go` | Peso em KG a partir de MG e TONELADA. |
+
+## Rodada de validação (22/11/2026)
+
+- **Assistente**: `POST /api/item-conversions/assistente` e `/assistente/aplicar` — peso pela geometria (chapa, barras, tubos, kg/m) e as conversões UN→KG e UN→MM/M2, mais o lote múltiplo 1.
+- **Poeira de conversão**: a conversão para a unidade de estoque encosta no inteiro quando a sobra é menor que 0,00001.

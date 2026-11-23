@@ -6,6 +6,110 @@ pipeline de release.
 
 ## Unreleased
 
+Rodada de validação (`.ai/tasks/rodada-validacao-bugs-e-melhorias.md`) e Portal do Cliente
+fase 0 (`.ai/tasks/portal-do-cliente.md`). Migrações **507** (industrialização por
+terceiros) e **508** (portal do cliente e cobrança bancária).
+
+### Correções — bugs reportados
+- fix(expedição) J: romaneio montado do pedido usa o saldo pendente, a linha, a máscara e o
+  depósito do pedido; a separação completa a reserva do pedido em vez de reservar de novo.
+- fix(estoque) K: item incluído no inventário entra com o saldo da hora da contagem; sem
+  bloqueio, a contagem compara com o saldo atual; "zerar não contados" zera o saldo atual.
+- fix(produção) O: a baixa automática do apontamento e da entrega grava o consumo na OF.
+- feat(terceiros) I: NF-e de remessa para industrialização (5901/6901) e estoque em poder de
+  terceiros por fornecedor (almoxarifado TERCEIRO, Bloco H com posse 1, Bloco K opcional).
+- fix(cadeia) G: material comprado não acusa "componente ainda não tem OF".
+- fix(fiscal) M: cancelar a NF-e reabre o romaneio (volta a conferido) e desliga a nota.
+- fix(fiscal) L: a NF-e autorizada consome as reservas do romaneio.
+- fix(mrp) F: OF só com etapa externa nasce com data de fim (a de necessidade).
+- fix(estoque) H: conversão kg→UN encosta no inteiro quando a sobra é poeira; a poeira não
+  recalcula o custo médio.
+- fix(contabilidade) P: fechamento com contabilização desligada mostra o consumo/entrega do
+  mês com aviso.
+
+### Correções — achadas no caminho
+- fix(estoque): inventário — linha incluída gravava diferença = contado; "zerar não
+  contados" sem bloqueio zerava contra a foto.
+- fix(produção): baixa automática da ENTREGA (REP) também não gravava consumo; leitura
+  APONTAR do coletor não fazia a baixa automática.
+- fix(financeiro): DRE com CMV usava preço × 0,6 e o médio de hoje; agora o CMV da NF-e.
+  Retorno CNAB baixa com os encargos que o banco informou.
+- fix(expedição): separação de linha sem depósito ia para o depósito 0 e sempre falhava;
+  usa o depósito padrão do item. Mensagem de falta aponta a linha e a quantidade.
+- fix(terceiros): retorno pela nota reaprovada não recebe duas vezes (chave por linha);
+  5903 (devolução sem uso) é devolução, não recebimento; cancelar a NF-e de remessa
+  registra o retorno da remessa.
+- fix(comercial): repetir pedido usa a tabela de preço da linha.
+- fix(indicadores): receita/margem eram dos 30 maiores produtos; agora o total do período.
+- fix(integrações): valor recebido do Inter aceito como número; WhatsApp com DDI 55; emitir
+  a cobrança de novo não cria outra no banco; título cancelado ou quitado à mão cancela o
+  boleto/PIX no banco (falha do banco impede o cancelamento); baixa concorrente pelo aviso
+  do banco não vira erro.
+- fix(cadastros): telas apontadas erradas nos catálogos de pendências e implantação;
+  nome do item vazio quando só há a descrição técnica.
+- fix(fiscal): DANFE/XML já gravados baixam sem token da Focus (o token só é exigido para
+  consultar a emissora).
+- fix(segurança): token do portal e segredo do webhook do Inter fora do log, da auditoria
+  e dos rastros (`CaminhoSemSegredo`, filtro do OpenTelemetry).
+- fix(atualizador): cada base usa o seu servidor PostgreSQL no backup, na restauração e
+  na migração (`TRAINING_DATABASE_CONTAINER`); antes o treino fora do servidor de produção
+  faria o backup falhar e desfazer a atualização inteira. O agente do modo simulação lê a
+  origem na produção e grava o treino no servidor dele.
+
+### Melhorias
+1. Painel de implantação — `GET /api/implantacao/painel` (13 verificações com a tela que corrige).
+2. Modo simulação — `POST /api/system/simulacao` + agente `scripts/refresh-training.sh`
+   (cópia saneada para o banco de treino: NF-e em homologação, envios cancelados, empresa
+   marcada `[TREINO]`); nginx `treino.api.venturerp.com`.
+3. Assistente de conversão por medidas — `/api/item-conversions/assistente` (+ `/aplicar`).
+4. Industrialização por terceiros — remessa (NF-e 5901/6901), retorno automático pela nota
+   do terceiro (5902/5903), saldo em poder com prazo legal, Bloco H/K.
+5. Custo industrial — variações padrão × real, margem do pedido, apuração de todos os itens.
+6. Expedição guiada — `/api/shipments/fluxo/pedido/{code}` e NF-e direto do romaneio.
+7. Chão de fábrica — leitura APONTAR baixa o material, aceita máquina e devolve `auto_issues`.
+8. Central de pendências — `GET /api/pendencias/dia` por perfil (inclui pedidos do portal).
+9. Promessa de entrega — `POST /api/delivery-promise/simular` (CTP pela estrutura e lead time).
+10. Financeiro — retorno CNAB 240 com baixa automática, fluxo projetado com pedidos, DRE pelo
+    plano de contas, cobrança Inter com baixa pelo webhook.
+11. Entrada sem digitação — pré-lançamento das NF-e recebidas de fornecedor cadastrado.
+12. Indicadores — `GET /api/indicadores` (vendas, OEE, giro, pontualidade, promessa).
+13. Integrações e B2B — Banco Inter, WhatsApp Cloud API, Frete Rápido, repetir pedido e
+    Portal do Cliente.
+
+### Integrações
+- Banco Inter (API Cobrança v3, OAuth2 + mTLS): boleto + PIX numa cobrança, consultar,
+  cancelar, webhook `POST /api/integracoes/inter/webhook/{token}` (dispara a consulta; a
+  baixa segue o que o banco responde) e cadastro do webhook pela API.
+- WhatsApp Cloud API (Meta, modelo utility): aviso de cobrança e resumo do pedido de compra.
+- Frete Rápido: cotação online e rastreio pela chave da NF-e.
+- `GET /api/integracoes/status`. Treino nunca liga integração externa.
+
+### Portal do Cliente (fase 0)
+- Link por cliente (token de 32 bytes, só o hash no banco, validade, revogação, auditoria).
+- `GET /api/portal/{token}`: pedidos com andamento, itens e preços, condição, frete,
+  transportadora, entrega, parcelas (saldo, PIX, linha digitável), romaneios e notas.
+- `GET /api/portal/{token}/notas/{id}/{danfe|xml}`: DANFE e XML OFICIAIS da Focus (o mesmo
+  arquivo do botão DANFE da VFIS0200), só da nota do próprio cliente; o arquivo é conferido
+  (PDF/XML de NF-e) antes de chegar ao cliente.
+- `POST /api/portal/{token}/pedidos/{code}/repetir`: rascunho de origem PORTAL que nunca se
+  perde (sem tabela de preço vira a lista do que o cliente pediu); alerta
+  `COMERCIAL_PEDIDO_PORTAL`, e-mail ao representante e cartão na central de pendências.
+- Segurança: cliente vem do token; só pedido confirmado/em análise/faturado se repete; o
+  mesmo pedido não se repete enquanto aguarda; até 5 aguardando por cliente; trava contra
+  clique duplo; cliente inativo perde o acesso; cancelado aparece como "Não confirmado";
+  limite de taxa próprio (60/min por IP); `PORTAL_EMPRESA` leva a empresa do catálogo no link.
+
+### Testes
+- Integração com duas empresas em todo módulo novo (portal com dois clientes, cobrança,
+  terceiros, repetir pedido), unitários de Inter/WhatsApp/Frete Rápido/CNAB e do atualizador
+  (treino em outro servidor), `scripts/test-rodada-validacao.sh` (49 cenários ponta a ponta
+  contra uma cópia) e ataque de caixa-preta ao portal (34 verificações).
+
+### Configuração nova
+`INTER_*`, `WHATSAPP_*`, `FRETERAPIDO_*`, `PORTAL_BASE_URL`, `PORTAL_EMPRESA`,
+`SIMULATION_DIR`; no `update.env`: `SIMULATION_*`, `TRAINING_DATABASE_CONTAINER`,
+`TRAINING_DB_SUPERUSER(_PASSWORD)` (ver `docs/dev/integracoes-provedores.md`).
+
 ## [v1.19.9] — 2026-11-19
 
 - feat(producao): OF com cliente/projeto, execução por etapas e custo sempre automático (`702f8826`)

@@ -3723,3 +3723,11 @@ valor total, gera resumo) e a tabela `special_adjustment_note_items`, 56 da
 (o down devolve, conferido por diff de esquema); nas bases de produção nenhuma
 delas tinha valor preenchido. A API ignora campo desconhecido, então o desktop
 antigo que ainda manda esses campos continua funcionando.
+
+## Rodada de validação (22/11/2026)
+
+- **DF-e**: a sincronização pré-lança (ciência + XML + entrada PENDENTE) até 50 NF-e de fornecedor ativo cadastrado por rodada.
+- **SPED**: Bloco H separa o saldo do almoxarifado TERCEIRO (IND_PROP 1); Bloco K opcional (`bloco_k: true`) no leiaute restrito aos saldos (K010=2, K100, K200 com a posse).
+- **DRE com CMV**: usa o valor que a NF-e autorizada baixou (antes, custo médio de hoje ou preço × 0,6).
+- **Cobrança**: `POST /api/financial/retorno-bancario` (CNAB 240 T/U; baixa pelo nosso número com os encargos do banco; repetir não duplica); `POST /api/financial/contas-receber/{id}/pix` (porta `CobrancaBancaria`, adaptador desligado); `POST .../{id}/aviso` (e-mail ou WhatsApp).
+- **Projeções**: `GET /api/financial/fluxo-projetado-pedidos` (títulos + pedidos abertos, por semana) e `GET /api/financial/dre-gerencial` (lançamentos por conta do plano).

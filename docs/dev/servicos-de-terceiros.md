@@ -179,3 +179,10 @@ histórico, conversões, CSV/PDF e autorização `USER` versus `ADMIN`.
 | Remessa, retorno, recebimento, saldo, idempotência e histórico | `/movements`, `/history` e invariantes transacionais |
 | Relatório com histórico e exportação imprimível | `/orders/report` em JSON/CSV/XLSX/PDF/DOCX |
 | Segurança, tenant, concorrência e carga | middleware de papel, filtros tenant, testes concorrentes e k6 |
+
+## Rodada de validação (22/11/2026)
+
+- **Remessa de estoque**: com almoxarifado informado, a remessa transfere a peça para o almoxarifado TERCEIRO do fornecedor; retorno/recebimento traz de volta (até o que foi remetido do estoque). Sem almoxarifado (peça em processo), só a OS controla.
+- **NF-e de remessa**: `POST /api/third-party-services/orders/{id}/nfe-remessa` — rascunho 5901/6901, sem cobrança; tributação padrão ICMS 50 (CSOSN 900)/IPI 55/PIS-COFINS 49, sobreposta por `cst_icms`, `cst_ipi`, `cst_pis_cofins`, `cbenef`, `texto_legal`. A autorização não baixa estoque nem gera título; o cancelamento registra o retorno da remessa ligada.
+- **Saldo em poder**: `GET /api/third-party-services/em-poder` (prazo da OS e prazo legal de 180 dias, alerta a 30); também na central de pendências.
+- **Entrada do retorno** (5902/5903 do terceiro) sem TES: não entra no estoque nem gera título.

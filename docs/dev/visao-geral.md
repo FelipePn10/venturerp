@@ -993,3 +993,7 @@ Todos os endpoints sob `/api/*` exigem:
 `GET /health` — endpoint público (sem autenticação), retorna `{"status": "ok", "timestamp": "...", "mask": "core-api"}`.
 
 ---
+
+## Rodada de validação (22/11/2026)
+
+- **Painel de implantação** `GET /api/implantacao/painel`, **central de pendências** `GET /api/pendencias/dia` e **indicadores** `GET /api/indicadores` (os dois últimos filtrados pelo módulo do perfil).

@@ -432,3 +432,9 @@ Integração: `make test-romaneio` / `./scripts/test-romaneio.sh`.
 - [ ] Envio do romaneio por e-mail ao cliente/transportadora
 - [ ] Integração CT-e (vincular ao Conhecimento de Transporte)
 - [ ] Foto do produto (`PhotoURL` já existe em `RomaneioItem`)
+
+## Rodada de validação (22/11/2026)
+
+- **Romaneio do pedido**: leva a linha do pedido, o almoxarifado e só o pendente (pedido − atendido − cancelado). A separação aproveita a reserva do pedido e só completa o que falta, como reserva do PEDIDO.
+- **NF-e × romaneio**: a autorização consome a reserva SHIPMENT dos romaneios da nota; o cancelamento desliga a nota e volta o expedido para conferido (evento NFE_CANCELLED).
+- **Fluxo guiado**: `GET /api/shipments/fluxo/pedido/{code}` (etapas e próxima ação) e `POST /api/shipments/{code}/nfe` (NF-e direto do romaneio, mesma montagem da nota da carga).

@@ -445,3 +445,9 @@ Migração 465. `POST /api/inventory/{id}/notebooks` com `lines_per_notebook` di
 ## Reposição por máscara
 
 Migração 465. `stock_replenishment_policies.mask`: vazia é o item. Máscara com política calcula só com o saldo e as chegadas dela; as demais seguem no item. A sugestão leva a máscara à requisição de compra, ao pedido, à transferência e à ordem planejada.
+
+## Rodada de validação (22/11/2026)
+
+- **Inventário sem bloqueio de movimentos**: a contagem compara com o saldo do endereço/lote NA HORA DA CONTAGEM (a foto é atualizada ao contar); com bloqueio vale a foto. Item incluído depois da abertura entra com o saldo atual (antes, 0). "Zerar não contados" e o resumo da alçada usam o saldo atual. O ajuste continua datado na abertura.
+- **Custo médio**: saída que deixa resíduo de menos de um centavo não recalcula o médio sobre ele.
+- **Almoxarifado TERCEIRO** (migração 507): um por fornecedor, criado na primeira remessa da OS de terceiro; não conta para promessa nem aceita reserva.
