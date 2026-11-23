@@ -1,2 +1,3 @@
--- Não volta a VARCHAR(20) com remessa gravada: a conversão falharia.
-ALTER TABLE public.fiscal_exits ALTER COLUMN source_type TYPE VARCHAR(20);
+-- A coluna fica larga: estreitar para VARCHAR(20) falharia (ou truncaria) as
+-- NF-e de remessa já gravadas com REMESSA_INDUSTRIALIZACAO. Nada a desfazer.
+SELECT 1;

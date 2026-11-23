@@ -234,8 +234,14 @@ func (uc *CreateFiscalExitFromLoadUseCase) itemsFromLoad(
 				return nil, nil, liberar, fmt.Errorf("lendo os itens do pedido do romaneio %d: %w", ship.Code, errItens)
 			}
 			for _, it := range items {
-				orderItems[it.ItemCode] = it
 				orderItemsByCode[it.Code] = it
+				// O produto em mais de uma linha (máscaras, entregas) não serve de
+				// atalho: a linha fica nil e o item do romaneio precisa apontá-la.
+				if _, repetido := orderItems[it.ItemCode]; repetido {
+					orderItems[it.ItemCode] = nil
+				} else {
+					orderItems[it.ItemCode] = it
+				}
 			}
 			if uc.Faturamento != nil && !lidos[*ship.SalesOrderCode] {
 				lidos[*ship.SalesOrderCode] = true
@@ -330,7 +336,11 @@ func fiscalItemFromShipmentItem(
 		orderItem = orderItemsByCode[*si.SalesOrderItemCode]
 	}
 	if orderItem == nil {
-		orderItem = orderItems[si.ItemCode]
+		var ok bool
+		if orderItem, ok = orderItems[si.ItemCode]; ok && orderItem == nil {
+			return request.CreateFiscalExitItemDTO{}, errorsuc.NewValidationError(fmt.Sprintf(
+				"o item %d do romaneio %d está em mais de uma linha do pedido: informe no romaneio a linha do pedido que ele atende", si.ItemCode, shipmentCode))
+		}
 	}
 
 	unitPrice := decimal.Zero

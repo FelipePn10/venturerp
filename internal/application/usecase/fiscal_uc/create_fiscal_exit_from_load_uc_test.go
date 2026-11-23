@@ -342,3 +342,27 @@ func TestCreateFiscalExitFromShipment_LigaLinhaEConfereSaldo(t *testing.T) {
 		t.Fatalf("os 20 já em outra NF-e foram faturados de novo: %v", err)
 	}
 }
+
+// Item do romaneio sem a linha do pedido, num pedido com o produto em duas
+// linhas: ligar a qualquer uma baixaria a linha errada — é recusado.
+func TestCreateFiscalExitFromShipment_LinhaAmbiguaERecusada(t *testing.T) {
+	fiscal := &loadFiscalRepo{nextNF: 10}
+	shipment := &loadShipmentRepo{shipments: map[int64]*shipentity.Shipment{
+		5001: {ID: 1, Code: 5001, Status: shipentity.ShipmentStatusConferred, SalesOrderCode: i64p(7001),
+			Items: []*shipentity.ShipmentItem{{ItemCode: 1001, Quantity: decimal.NewFromInt(2)}}},
+	}}
+	sales := loadSalesRepo{items: []*salesentity.SalesOrderItem{
+		{Code: 3, ItemCode: 1001, Mask: "A", UnitPrice: decimal.NewFromInt(5), RequestedQty: decimal.NewFromInt(2)},
+		{Code: 4, ItemCode: 1001, Mask: "B", UnitPrice: decimal.NewFromInt(7), RequestedQty: decimal.NewFromInt(2)},
+	}}
+	uc := &CreateFiscalExitFromLoadUseCase{
+		CreateUC:       &CreateFiscalExitUseCase{Repo: fiscal, Auth: loadFiscalAuth{uid: uuid.New()}, Transportadoras: transportadoraFake{}},
+		FiscalRepo:     fiscal,
+		ShipmentRepo:   shipment,
+		SalesOrderRepo: sales,
+	}
+	_, err := uc.ExecuteFromShipment(context.Background(), 5001, request.CreateFiscalExitFromLoadDTO{Serie: "1", DataEmissao: "2026-11-23", Cfop: "5102", NaturezaOperacao: "Venda", UFDestinatario: strp("SP")})
+	if err == nil || !strings.Contains(err.Error(), "mais de uma linha") || len(fiscal.items) != 0 {
+		t.Fatalf("linha ambígua foi aceita: %v itens=%d", err, len(fiscal.items))
+	}
+}
