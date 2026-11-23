@@ -46,6 +46,15 @@ func (uc *StartProductionOrderUseCase) Execute(
 	if dto.ID == 0 {
 		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
+	// O UPDATE do início só pega OF aberta: a que está em outra situação
+	// ouviria "registro não encontrado" (ou a falta de etapas) — dizer qual.
+	atual, err := uc.Repo.GetByCode(ctx, dto.ID)
+	if err != nil {
+		return nil, err
+	}
+	if atual.Status != entity.StatusOpen {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("a OF %d já está %s; só OF aberta pode ser iniciada", atual.OrderNumber, situacaoDaOF(atual.Status)))
+	}
 	if checker, ok := uc.Repo.(productionOperationsChecker); ok {
 		hasOperations, err := checker.HasProductionOperations(ctx, dto.ID)
 		if err != nil {
@@ -77,11 +86,6 @@ func (uc *StartProductionOrderUseCase) Execute(
 
 	order, err := uc.Repo.Start(ctx, dto.ID, startDate)
 	if err != nil {
-		// O UPDATE só pega OF aberta: sem linha, a OF pode existir em outra
-		// situação — dizer qual em vez de "registro não encontrado".
-		if atual, errLeitura := uc.Repo.GetByCode(ctx, dto.ID); errLeitura == nil && atual != nil && atual.Status != entity.StatusOpen {
-			return nil, errorsuc.NewConflictError(fmt.Sprintf("a OF %d já está %s; só OF aberta pode ser iniciada", atual.OrderNumber, situacaoDaOF(atual.Status)))
-		}
 		return nil, err
 	}
 	order.AvisosDoInicio = avisos
