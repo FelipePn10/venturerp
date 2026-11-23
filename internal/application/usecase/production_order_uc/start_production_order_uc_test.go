@@ -2,11 +2,13 @@ package production_order_uc
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
+	"github.com/FelipePn10/panossoerp/internal/domain/domainerr"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/repository"
 )
@@ -19,6 +21,9 @@ type inicioRepo struct {
 	conferida bool
 }
 
+func (*inicioRepo) GetByCode(_ context.Context, id int64) (*entity.ProductionOrder, error) {
+	return &entity.ProductionOrder{ID: id, Status: entity.StatusOpen}, nil
+}
 func (*inicioRepo) HasProductionOperations(context.Context, int64) (bool, error) { return true, nil }
 func (r *inicioRepo) ModoConferenciaInicio(context.Context) (string, error)      { return r.modo, nil }
 func (r *inicioRepo) PendenciasDoInicio(context.Context, int64) (entity.PendenciasDoInicio, error) {
@@ -79,5 +84,27 @@ func TestDisponivelSomaAReservaDaOF(t *testing.T) {
 	if entity.ModoConferenciaDoParametro(" bloquear ") != entity.ConferenciaInicioBloquear ||
 		entity.ModoConferenciaDoParametro("talvez") != entity.ConferenciaInicioAvisar {
 		t.Fatal("leitura do parâmetro 52 errada")
+	}
+}
+
+type inicioRepetidoRepo struct{ inicioRepo }
+
+func (*inicioRepetidoRepo) HasProductionOperations(context.Context, int64) (bool, error) {
+	return false, nil // OF sem etapas: a situação tem de vir antes dessa recusa
+}
+func (*inicioRepetidoRepo) GetByCode(_ context.Context, id int64) (*entity.ProductionOrder, error) {
+	return &entity.ProductionOrder{ID: id, OrderNumber: 1201, Status: entity.StatusInProgress}, nil
+}
+
+// Iniciar de novo a OF em andamento diz que ela já foi iniciada, não 404.
+func TestIniciarOFJaIniciadaExplicaASituacao(t *testing.T) {
+	uc := &StartProductionOrderUseCase{Repo: &inicioRepetidoRepo{inicioRepo{modo: entity.ConferenciaInicioBloquear}}, Auth: scannerAuth{}}
+	_, err := uc.Execute(context.Background(), request.StartProductionOrderDTO{ID: 5})
+	var conflito *domainerr.ConflictError
+	if !errors.As(err, &conflito) || !strings.Contains(err.Error(), "OF 1201 já está em andamento") {
+		t.Fatalf("erro = %v, esperado conflito dizendo que a OF 1201 já está em andamento", err)
+	}
+	if uc.Repo.(*inicioRepetidoRepo).iniciada {
+		t.Fatal("não deveria tentar iniciar")
 	}
 }

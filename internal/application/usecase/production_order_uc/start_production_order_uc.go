@@ -2,6 +2,7 @@ package production_order_uc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/request"
@@ -45,6 +46,15 @@ func (uc *StartProductionOrderUseCase) Execute(
 	if dto.ID == 0 {
 		return nil, errorsuc.NewValidationError("informe o identificador")
 	}
+	// O UPDATE do início só pega OF aberta: a que está em outra situação
+	// ouviria "registro não encontrado" (ou a falta de etapas) — dizer qual.
+	atual, err := uc.Repo.GetByCode(ctx, dto.ID)
+	if err != nil {
+		return nil, err
+	}
+	if atual.Status != entity.StatusOpen {
+		return nil, errorsuc.NewConflictError(fmt.Sprintf("a OF %d já está %s; só OF aberta pode ser iniciada", atual.OrderNumber, situacaoDaOF(atual.Status)))
+	}
 	if checker, ok := uc.Repo.(productionOperationsChecker); ok {
 		hasOperations, err := checker.HasProductionOperations(ctx, dto.ID)
 		if err != nil {
@@ -80,6 +90,20 @@ func (uc *StartProductionOrderUseCase) Execute(
 	}
 	order.AvisosDoInicio = avisos
 	return order, nil
+}
+
+func situacaoDaOF(s entity.ProductionOrderStatus) string {
+	switch s {
+	case entity.StatusInProgress:
+		return "em andamento (já foi iniciada)"
+	case entity.StatusCompleted:
+		return "concluída"
+	case entity.StatusClosed:
+		return "encerrada"
+	case entity.StatusCancelled:
+		return "cancelada"
+	}
+	return "na situação " + string(s)
 }
 
 // conferirInicio aplica o parâmetro 52: BLOQUEAR com pendência recusa o

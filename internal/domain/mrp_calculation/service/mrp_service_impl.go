@@ -237,7 +237,7 @@ func (s *MRPServiceImpl) Calculate(ctx context.Context, planCode, initialOrderNu
 			if err != nil {
 				errs["load_sales_order_item"] = err.Error()
 			} else {
-				errs["load_sales_order_item"] = "sales order item is not an open demand for this enterprise"
+				errs["load_sales_order_item"] = fmt.Sprintf("o plano %d está preso ao item de pedido %d, que não é mais demanda em aberto (pedido faturado, encerrado, cancelado, bloqueado ou item já atendido): edite o plano e tire o item de pedido — sem ele o plano considera todos os pedidos em aberto — ou crie um plano para outro item", planCode, *plan.OrderItemCode)
 			}
 			return s.MRPRepo.FinishCalculation(ctx, log.Code, "ERROR", errs, 0, 0)
 		}

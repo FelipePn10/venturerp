@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+### Correções
+- fix(OF): iniciar uma OF que já está em andamento (ou concluída, encerrada, cancelada) diz a situação
+  dela, em vez de responder "registro não encontrado".
+- fix(MRP): plano preso a um item de pedido que já foi faturado, encerrado ou atendido explica o motivo
+  em português e orienta a editar o plano (tirar o item de pedido) ou criar um plano para outro item.
+
 ## [v1.19.18] — 2026-11-23
 
 - fix(OF): destino da filha pela linha da máscara que ela produz (revisão) (`39e9cb5c`)
