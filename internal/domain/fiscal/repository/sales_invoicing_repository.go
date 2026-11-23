@@ -10,7 +10,7 @@ import (
 // pedido de venda para faturar total ou parcialmente sem faturar duas vezes.
 type SalesOrderInvoicingRepository interface {
 	// QuantidadesEmNota devolve, por linha do pedido, quanto já está em nota
-	// ainda não autorizada (rascunho ou aguardando a SEFAZ). O que já foi
+	// ainda não autorizada (rascunho, rejeitada ou aguardando a SEFAZ). O que já foi
 	// autorizado está no atendido da linha.
 	QuantidadesEmNota(ctx context.Context, salesOrderCode int64) (map[int64]decimal.Decimal, error)
 	// RegistrarFaturamento soma (ou, no estorno, subtrai) ao atendido das

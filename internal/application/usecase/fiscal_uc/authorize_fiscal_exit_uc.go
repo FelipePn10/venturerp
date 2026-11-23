@@ -147,11 +147,13 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 		return nil, err
 	}
 
-	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o na tela Configuração Fiscal (VFIS0100) antes de transmitir a nota")
-	}
+	// O que a nota tem de errado vem antes do token: sem rede, quem corrige a
+	// nota já sabe o que falta (cBenef, CFOP, CST).
 	if err := recusarPendenciasTributarias(exit, items, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o na tela Configuração Fiscal (VFIS0100) antes de transmitir a nota")
 	}
 	rt, err := resolverReformaDaNota(ctx, uc.Reforma, exit, items, cfg)
 	if err != nil {

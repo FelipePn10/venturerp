@@ -120,7 +120,7 @@ func TestAutoFillFromSalesOrder_NoVolumesDefaultsToOne(t *testing.T) {
 		resp: &SalesOrderHeader{
 			Code:         101,
 			TotalVolumes: 0,
-			Items:        []SalesOrderItemHeader{},
+			Items:        []SalesOrderItemHeader{{LineCode: 1, ItemCode: 10, PendingQty: decimal.NewFromInt(2)}},
 		},
 	}
 	uc := newAutoFillUC(shipRepo, salesR, nil, nil)
@@ -292,4 +292,25 @@ func TestAutoFill_ReturnsFullShipment(t *testing.T) {
 
 func refPtr(t entity.ShipmentReferenceType) *entity.ShipmentReferenceType {
 	return &t
+}
+
+// Bug U: o saldo que já está em outro romaneio aberto não entra de novo.
+func TestAutoFillFromSalesOrder_DescontaRomaneioAberto(t *testing.T) {
+	pedido := func() *fakeSalesReader {
+		return &fakeSalesReader{resp: &SalesOrderHeader{Code: 7, Items: []SalesOrderItemHeader{
+			{LineCode: 1, ItemCode: 10, PendingQty: decimal.NewFromInt(20)},
+		}}}
+	}
+	cheio := &fakeShipmentRepo{nextCode: 3, emRomaneio: map[int64]decimal.Decimal{1: decimal.NewFromInt(20)}}
+	if _, err := newAutoFillUC(cheio, pedido(), nil, nil).AutoFillFromSalesOrder(context.Background(), 7, uuid.New()); err == nil {
+		t.Fatal("o 2º romaneio com os mesmos 20 foi aceito")
+	}
+	parcial := &fakeShipmentRepo{nextCode: 4, emRomaneio: map[int64]decimal.Decimal{1: decimal.NewFromInt(15)},
+		getByCodeResp: &entity.Shipment{Code: 4, Status: entity.ShipmentStatusOpen}}
+	if _, err := newAutoFillUC(parcial, pedido(), nil, nil).AutoFillFromSalesOrder(context.Background(), 7, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	if !parcial.addedItem.Quantity.Equal(decimal.NewFromInt(5)) {
+		t.Fatalf("o romaneio levou %s, esperado 5", parcial.addedItem.Quantity)
+	}
 }

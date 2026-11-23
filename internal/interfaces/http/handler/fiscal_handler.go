@@ -13,6 +13,8 @@ import (
 )
 
 type FiscalHandler struct {
+	// Descartar: NF-e em rascunho/rejeitada que não vai ser transmitida.
+	Descartar            *fiscal_uc.DescartarNotaUseCase
 	createEntryUC        *fiscal_uc.CreateFiscalEntryUseCase
 	uploadNFEUC          *fiscal_uc.UploadNFEEntryUseCase
 	approveEntryUC       *fiscal_uc.ApproveFiscalEntryUseCase
@@ -251,6 +253,30 @@ func (h *FiscalHandler) CancelExit(w http.ResponseWriter, r *http.Request) {
 		ID:     code,
 		Motivo: motivo,
 	})
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+func (h *FiscalHandler) DescartarExit(w http.ResponseWriter, r *http.Request) {
+	code, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	var body struct {
+		Motivo string `json:"motivo"`
+	}
+	// Corpo opcional: sem motivo, fica "rascunho descartado".
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			security.RespondError(w, http.StatusBadRequest, "conteúdo da requisição inválido")
+			return
+		}
+	}
+	result, err := h.Descartar.Execute(r.Context(), code, body.Motivo)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

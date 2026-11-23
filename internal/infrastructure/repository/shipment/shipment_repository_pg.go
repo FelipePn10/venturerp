@@ -1313,6 +1313,14 @@ func (r *ShipmentRepositoryPG) ReabrirPelaNotaCancelada(ctx context.Context, exi
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	// A carga também solta a nota: sem isso ela seguia "já possui nota fiscal
+	// vinculada" e não podia ser faturada de novo.
+	if _, err := r.pool.Exec(ctx,
+		`DELETE FROM public.shipment_load_fiscal_notes n
+		  USING public.shipment_loads l
+		  WHERE n.load_id = l.id AND l.enterprise_id = $1 AND n.fiscal_exit_id = $2`, enterpriseID, exitID); err != nil {
+		return fmt.Errorf("desligando a nota cancelada da carga: %w", err)
+	}
 	for _, x := range lista {
 		nota := fmt.Sprintf("NF-e %d cancelada: romaneio desligado da nota", exitID)
 		if x.status == string(entity.ShipmentStatusShipped) {
@@ -1321,6 +1329,61 @@ func (r *ShipmentRepositoryPG) ReabrirPelaNotaCancelada(ctx context.Context, exi
 		if err := r.AddEvent(ctx, &entity.ShipmentEvent{ShipmentID: x.id, Event: "NFE_CANCELLED", Note: &nota}); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (r *ShipmentRepositoryPG) EmRomaneioAberto(ctx context.Context, salesOrderCode int64) (map[int64]decimal.Decimal, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT si.sales_order_item_code,
+		        SUM(CASE WHEN si.is_conferred THEN si.conferred_qty ELSE si.quantity END)
+		   FROM public.shipment_items si
+		   JOIN public.shipments s ON s.id = si.shipment_id
+		   LEFT JOIN public.fiscal_exits fe ON fe.id = s.fiscal_exit_id AND fe.enterprise_id = s.enterprise_id
+		  WHERE s.enterprise_id = $1 AND s.sales_order_code = $2
+		    AND s.status <> 'CANCELLED'
+		    AND si.sales_order_item_code IS NOT NULL
+		    AND (fe.id IS NULL OR fe.status <> 'AUTHORIZED')
+		  GROUP BY si.sales_order_item_code`, enterpriseID, salesOrderCode)
+	if err != nil {
+		return nil, fmt.Errorf("somando o que o pedido %d já tem em romaneio: %w", salesOrderCode, err)
+	}
+	defer rows.Close()
+	out := map[int64]decimal.Decimal{}
+	for rows.Next() {
+		var linha int64
+		var qtd decimal.Decimal
+		if err := rows.Scan(&linha, &qtd); err != nil {
+			return nil, err
+		}
+		out[linha] = qtd
+	}
+	return out, rows.Err()
+}
+
+func (r *ShipmentRepositoryPG) NumerarPelaNotaAutorizada(ctx context.Context, exitID int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE public.shipments s SET nfe_number = f.numero_nf, nfe_key = f.chave_acesso, updated_at = NOW()
+		   FROM public.fiscal_exits f
+		  WHERE f.id = $2 AND f.enterprise_id = $1 AND s.enterprise_id = $1 AND s.fiscal_exit_id = f.id`,
+		enterpriseID, exitID); err != nil {
+		return fmt.Errorf("numerando os romaneios da nota: %w", err)
+	}
+	if _, err := r.pool.Exec(ctx,
+		`UPDATE public.shipment_load_fiscal_notes n SET nfe_number = f.numero_nf, nfe_key = f.chave_acesso
+		   FROM public.fiscal_exits f, public.shipment_loads l
+		  WHERE f.id = $2 AND f.enterprise_id = $1 AND n.fiscal_exit_id = f.id
+		    AND l.id = n.load_id AND l.enterprise_id = $1`,
+		enterpriseID, exitID); err != nil {
+		return fmt.Errorf("numerando a nota na carga: %w", err)
 	}
 	return nil
 }

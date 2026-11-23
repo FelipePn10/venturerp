@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/FelipePn10/panossoerp/internal/application/dto/response"
+	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/shipment/repository"
 	"github.com/google/uuid"
@@ -130,6 +131,19 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 		return nil, fmt.Errorf("sales order %d: %w", salesOrderCode, err)
 	}
 
+	// O que já está em outro romaneio aberto não entra de novo: sem isso, dois
+	// romaneios do mesmo saldo viravam duas NF-e.
+	emRomaneio, err := uc.ShipmentRepo.EmRomaneioAberto(ctx, salesOrderCode)
+	if err != nil {
+		return nil, err
+	}
+	for i := range so.Items {
+		so.Items[i].PendingQty = so.Items[i].PendingQty.Sub(emRomaneio[so.Items[i].LineCode])
+	}
+	if !temSaldo(so.Items) {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d não tem saldo a expedir fora dos romaneios já abertos", salesOrderCode))
+	}
+
 	code, err := uc.ShipmentRepo.NextCode(ctx)
 	if err != nil {
 		return nil, err
@@ -188,6 +202,15 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 	}
 
 	return uc.getShipment(ctx, code)
+}
+
+func temSaldo(itens []SalesOrderItemHeader) bool {
+	for _, it := range itens {
+		if it.PendingQty.IsPositive() {
+			return true
+		}
+	}
+	return false
 }
 
 func (uc *ShipmentAutoFillUseCase) AutoFillFromPurchaseOrder(ctx context.Context, purchaseOrderCode int64, createdBy uuid.UUID) (*response.ShipmentResponse, error) {

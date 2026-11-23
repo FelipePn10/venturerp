@@ -53,3 +53,14 @@ func TestPrazoDoRoteiroEscalaComOLote(t *testing.T) {
 		t.Fatalf("1 peça = 5 dias e 60 peças = 6 dias; veio %d e %d", um, lote)
 	}
 }
+
+// A promessa de entrega usa o mesmo prazo: o maior entre o do cadastro e o do lote.
+func TestPrazoDeFabricacaoDaPromessa(t *testing.T) {
+	s := &MRPServiceImpl{RoutingRepo: roteiroPorPeca{}}
+	for _, c := range []struct{ qtd, quer int64 }{{1, 5}, {60, 6}} {
+		got, err := s.PrazoDeFabricacao(context.Background(), 1, decimal.NewFromInt(c.qtd))
+		if err != nil || got != int(c.quer) {
+			t.Fatalf("%d peças: %d (%v), quer %d", c.qtd, got, err, c.quer)
+		}
+	}
+}

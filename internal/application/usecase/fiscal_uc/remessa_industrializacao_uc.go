@@ -192,6 +192,17 @@ func (uc *RemessaIndustrializacaoUseCase) Criar(ctx context.Context, osID int64,
 	if err != nil {
 		return nil, err
 	}
+	// A suspensão (CST 50) leva cBenef no PR e nas outras UFs que o exigem: a
+	// SEFAZ rejeita sem ele (930). Sem o da tela, vale o da configuração fiscal.
+	cbenef := strings.ToUpper(strings.TrimSpace(dto.CBenef))
+	if cbenef == "" && cst == cstICMSRemessa && cfg.CBenefSuspensao != nil {
+		cbenef = strings.ToUpper(strings.TrimSpace(*cfg.CBenefSuspensao))
+	}
+	if cbenef == "" && cstComBeneficio[cst] && ufExigeBeneficioFiscal[strings.ToUpper(strings.TrimSpace(cfg.UFEmpresa))] {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf(
+			"no %s a remessa com CST %s exige o código de benefício fiscal (cBenef): informe-o na remessa ou cadastre o cBenef da suspensão em VFIS0100 — Configuração Fiscal (confira o código com a contabilidade)",
+			strings.ToUpper(cfg.UFEmpresa), cst))
+	}
 	if exit.NumeroNF, err = uc.Repo.GetNextNFNumber(ctx); err != nil {
 		return nil, err
 	}
@@ -206,7 +217,7 @@ func (uc *RemessaIndustrializacaoUseCase) Criar(ctx context.Context, osID int64,
 		Quantity: qtd, UnitPrice: valor, TotalPrice: total,
 		CstICMS: &cst, CstIPI: &cstIPI, CstPIS: &cstPIS, CstCOFINS: &cstPIS, OrigemMercadoria: "0",
 		Description: opt(os.Descricao), UnidadeComercial: opt(os.Unidade), CodigoProduto: &cod,
-		CodigoBeneficioFiscal: opt(dto.CBenef),
+		CodigoBeneficioFiscal: opt(cbenef),
 	}
 	if _, err := uc.Repo.CreateExitItem(ctx, linha); err != nil {
 		return nil, err

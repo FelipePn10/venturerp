@@ -111,3 +111,32 @@ func TestRemessaNaoLigaNotaParcial(t *testing.T) {
 		}
 	}
 }
+
+type repoFiscalPR struct {
+	*loadFiscalRepo
+	cbenef *string
+}
+
+func (r repoFiscalPR) GetFiscalConfig(context.Context) (*fiscalentity.FiscalConfig, error) {
+	return &fiscalentity.FiscalConfig{UFEmpresa: "PR", CBenefSuspensao: r.cbenef}, nil
+}
+
+// Bug S: no PR a suspensão (CST 50) exige cBenef. Sem o da tela vale o da
+// configuração fiscal; sem nenhum, a remessa é recusada antes de criar a nota.
+func TestRemessaNoPRLevaOCBenef(t *testing.T) {
+	dto := RemessaIndustrializacaoDTO{Quantity: "1", DataEmissao: "2026-11-23"}
+	semCodigo := repoFiscalPR{loadFiscalRepo: &loadFiscalRepo{nextNF: 10}}
+	uc := &RemessaIndustrializacaoUseCase{Repo: semCodigo, Auth: loadFiscalAuth{uid: uuid.New()}, Leitor: &leitorDaRemessaFake{uf: "PR"}}
+	if _, err := uc.Criar(context.Background(), 5, dto); err == nil || !strings.Contains(err.Error(), "cBenef") || semCodigo.created != nil {
+		t.Fatalf("remessa sem cBenef no PR foi aceita: %v", err)
+	}
+	cfg := "PR840007"
+	comConfig := repoFiscalPR{loadFiscalRepo: &loadFiscalRepo{nextNF: 10}, cbenef: &cfg}
+	uc.Repo = comConfig
+	if _, err := uc.Criar(context.Background(), 5, dto); err != nil {
+		t.Fatal(err)
+	}
+	if got := comConfig.items[0].CodigoBeneficioFiscal; got == nil || *got != cfg {
+		t.Fatalf("cBenef da linha = %v, quer o da configuração", got)
+	}
+}

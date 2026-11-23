@@ -27,12 +27,16 @@ func (r *Repository) SituacaoParaPromessa(ctx context.Context, item int64) (serv
 	var fab, compra, fornecedor *int
 	err = r.pool.QueryRow(ctx, `
 		SELECT i.engineering_type, i.planning_manufacturing_lead_time_days, i.planning_purchase_lead_time_days,
-		       (SELECT MIN(p.lead_time_days) FROM item_preferred_suppliers p WHERE p.enterprise_id = $1 AND p.item_code = i.code AND p.is_active AND NOT p.blocked),
+		       -- O fornecedor vigente, na ordem do MRP (PrazoDeCompra).
+		       (SELECT p.lead_time_days FROM item_preferred_suppliers p
+		         WHERE p.enterprise_id = $1 AND p.item_code = i.code AND p.is_active AND NOT p.blocked
+		           AND (p.valid_from IS NULL OR p.valid_from <= $3::date) AND (p.valid_until IS NULL OR p.valid_until >= $3::date)
+		         ORDER BY p.is_preferred DESC, p.ranking, p.id LIMIT 1),
 		       COALESCE((SELECT SUM(GREATEST(b.quantity - b.reserved_qty, 0)) FROM stock_balances b
 		                   JOIN warehouse w ON w.id = b.warehouse_id AND w.enterprise_id = b.enterprise_id
 		                  WHERE b.enterprise_id = $1 AND b.item_code = i.code AND w.disposition
 		                    AND w.location::text NOT IN ('INSPECAO','REJEICAO','TRANSITO','TERCEIRO')), 0)
-		  FROM items i WHERE i.code = $2 AND i.enterprise_id = $1`, id, item).Scan(&tipo, &fab, &compra, &fornecedor, &s.Livre)
+		  FROM items i WHERE i.code = $2 AND i.enterprise_id = $1`, id, item, time.Now().Format("2006-01-02")).Scan(&tipo, &fab, &compra, &fornecedor, &s.Livre)
 	if err != nil {
 		return s, fmt.Errorf("lendo o item %d para a promessa: %w", item, err)
 	}
@@ -40,7 +44,9 @@ func (r *Repository) SituacaoParaPromessa(ctx context.Context, item int64) (serv
 	if fab != nil {
 		s.PrazoFabricacaoDias = *fab
 	}
-	if fornecedor != nil {
+	// Como no MRP: prazo zero do fornecedor é "não informado" e vale o do item.
+	// Antes o 0 vencia e a promessa saía para amanhã.
+	if fornecedor != nil && *fornecedor > 0 {
 		s.PrazoCompraDias = *fornecedor
 	} else if compra != nil {
 		s.PrazoCompraDias = *compra
@@ -108,6 +114,20 @@ func (r *Repository) SituacaoParaPromessa(ctx context.Context, item int64) (serv
 			return s, fmt.Errorf("lendo a fila de capacidade do item %d: %w", item, err)
 		}
 		s.FilaDias = int(fila.IntPart())
+		// Dias corridos nas etapas de terceiro do roteiro vigente (a TRATE),
+		// como o MRP conta: viram dias úteis na proporção de 5 por 7.
+		var corridos int
+		if err := r.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(COALESCE(ro.lead_time_days, op.lead_time_days, 0)), 0)
+			  FROM route_operations ro
+			  JOIN operations op ON op.id = ro.operation_id AND op.origin IN ('EXTERNA','TERCEIROS')
+			 WHERE ro.route_id = erp_roteiro_vigente($1, $2, '', $3::date, NULL)
+			   AND ro.is_active AND ro.situation NOT IN ('INATIVA','FANTASMA')`, id, item, hoje).Scan(&corridos); err != nil {
+			return s, fmt.Errorf("lendo as etapas de terceiro do item %d: %w", item, err)
+		}
+		if corridos > 0 {
+			s.DiasNoTerceiro = (corridos*5 + 6) / 7
+		}
 	}
 	return s, nil
 }

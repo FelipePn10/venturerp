@@ -194,3 +194,24 @@ func TestSaidaQueDeixaPoeiraMantemOMedio(t *testing.T) {
 		t.Fatalf("médio = %s, quer 150", next.AvgCost)
 	}
 }
+
+// Bug H: a saída que só difere do saldo pela poeira leva o saldo inteiro.
+func TestSaidaSemPoeira(t *testing.T) {
+	d := decimal.RequireFromString
+	for _, c := range []struct {
+		saldo, delta, quer string
+		ajustou            bool
+	}{
+		{"1", "-0.999999", "-1", true}, // sobraria 0,000001
+		{"5", "-5.000002", "-5", true}, // faltaria 0,000002
+		{"1", "-0.5", "-0.5", false},   // sobra de verdade
+		{"1", "-1", "-1", false},       // exata
+		{"0.000001", "2", "2", false},  // entrada não mexe
+		{"0", "-0.000001", "-0.000001", false},
+	} {
+		got, ok := SaidaSemPoeira(d(c.saldo), d(c.delta))
+		if !got.Equal(d(c.quer)) || ok != c.ajustou {
+			t.Errorf("saldo %s, saída %s: %s/%v, quer %s/%v", c.saldo, c.delta, got, ok, c.quer, c.ajustou)
+		}
+	}
+}

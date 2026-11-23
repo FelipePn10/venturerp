@@ -30,19 +30,21 @@ func (r *Repo) RemessaDaOS(ctx context.Context, osID int64, movimento *int64) (*
 	var x fiscaluc.RemessaParaIndustrializar
 	var fornecedor *int64
 	var status string
+	var ambiguo bool
 	err = r.db.QueryRow(ctx, `
-		SELECT o.id, o.code, o.item_code, o.mask, COALESCE(i.name,''),
+		SELECT o.id, o.code, COALESCE(rem.item_code, o.item_code), COALESCE(rem.mask, o.mask), COALESCE(i.name,''),
 		       COALESCE((SELECT fc.ncm FROM fiscal_classifications fc
 		                  WHERE fc.enterprise_id = i.enterprise_id
 		                    AND fc.code::text = COALESCE(NULLIF(i.accounting_sale_fiscal_classification_code,''), i.accounting_purchase_fiscal_classification_code)
 		                  LIMIT 1), ''),
 		       COALESCE(i.warehouse_unit_of_measurement::text, o.uom), o.supplier_code, o.status, o.due_date,
-		       COALESCE((SELECT b.avg_cost FROM stock_balances b WHERE b.enterprise_id = o.enterprise_id AND b.item_code = o.item_code
-		                  ORDER BY b.quantity DESC LIMIT 1), 0)
-		  FROM third_party_service_orders o
-		  LEFT JOIN items i ON i.code = o.item_code AND i.enterprise_id = o.enterprise_id
+		       COALESCE((SELECT b.avg_cost FROM stock_balances b WHERE b.enterprise_id = o.enterprise_id AND b.item_code = COALESCE(rem.item_code, o.item_code)
+		                  AND b.avg_cost > 0 ORDER BY b.quantity DESC LIMIT 1), 0),
+		       `+remAmbiguoSQL+`
+		  FROM third_party_service_orders o`+itemRemetidoSQL+`
+		  LEFT JOIN items i ON i.code = COALESCE(rem.item_code, o.item_code) AND i.enterprise_id = o.enterprise_id
 		 WHERE o.id = $1 AND o.enterprise_id = $2`, osID, eid).
-		Scan(&x.OSID, &x.OSCode, &x.ItemCode, &x.Mask, &x.Descricao, &x.NCM, &x.Unidade, &fornecedor, &status, &x.PrevisaoRetorno, &x.CustoMedio)
+		Scan(&x.OSID, &x.OSCode, &x.ItemCode, &x.Mask, &x.Descricao, &x.NCM, &x.Unidade, &fornecedor, &status, &x.PrevisaoRetorno, &x.CustoMedio, &ambiguo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError("ordem de serviço de terceiro não encontrada")
 	}
@@ -51,6 +53,9 @@ func (r *Repo) RemessaDaOS(ctx context.Context, osID int64, movimento *int64) (*
 	}
 	if status == "CANCELLED" {
 		return nil, errorsuc.NewValidationError("a OS de terceiro está cancelada")
+	}
+	if ambiguo {
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("a OF da OS de terceiro %d tem vários materiais e nenhum ligado à etapa externa: informe na estrutura do item (etapa do componente) qual peça vai ao terceiro", x.OSCode))
 	}
 	if fornecedor == nil {
 		return nil, errorsuc.NewValidationError("informe o fornecedor da OS antes de emitir a remessa")

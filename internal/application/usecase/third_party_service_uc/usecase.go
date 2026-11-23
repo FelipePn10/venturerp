@@ -323,3 +323,17 @@ func (u *UseCase) EmPoder(ctx context.Context, f domain.FiltroEmPoder) ([]domain
 	}
 	return out, err
 }
+
+type correcaoDeRemessaRepo interface {
+	CorrigirRemessasDoItemErrado(ctx context.Context, ator uuid.UUID, gravar bool) ([]domain.CorrecaoDeRemessa, error)
+}
+
+// CorrigirRemessas desfaz as remessas que levaram o item da OF no lugar da peça
+// da etapa (antes da correção do bug Q). Sem gravar, só lista o que faria.
+func (u *UseCase) CorrigirRemessas(ctx context.Context, ator uuid.UUID, gravar bool) ([]domain.CorrecaoDeRemessa, error) {
+	r, ok := u.repo.(correcaoDeRemessaRepo)
+	if !ok {
+		return nil, errors.New("correção de remessas indisponível")
+	}
+	return r.CorrigirRemessasDoItemErrado(ctx, ator, gravar)
+}

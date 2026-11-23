@@ -481,6 +481,23 @@ func (h *ThirdPartyServiceHandler) EmPoder(w http.ResponseWriter, r *http.Reques
 	jsonResponse(w, 200, v)
 }
 
+// CorrigirRemessas: POST /api/third-party-services/corrigir-remessas?gravar=true
+// — refaz as remessas que levaram o item da OF no lugar da peça. Sem gravar=true
+// só simula.
+func (h *ThirdPartyServiceHandler) CorrigirRemessas(w http.ResponseWriter, r *http.Request) {
+	by, ok := actor(r)
+	if !ok {
+		jsonError(w, 401, "usuário não identificado")
+		return
+	}
+	v, err := h.uc.CorrigirRemessas(r.Context(), by, r.URL.Query().Get("gravar") == "true")
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, 200, v)
+}
+
 // NFeRemessa: POST /api/third-party-services/orders/{id}/nfe-remessa — gera a
 // NF-e de remessa para industrialização (rascunho).
 func (h *ThirdPartyServiceHandler) NFeRemessa(w http.ResponseWriter, r *http.Request) {

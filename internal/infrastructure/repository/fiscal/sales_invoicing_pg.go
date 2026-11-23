@@ -31,7 +31,8 @@ func (r *FiscalRepositoryPG) QuantidadesEmNota(ctx context.Context, salesOrderCo
 		   FROM fiscal_exit_items i
 		   JOIN fiscal_exits e ON e.id = i.fiscal_exit_id
 		  WHERE e.enterprise_id = $1 AND e.sales_order_code = $2 AND e.is_active
-		    AND e.status IN ('DRAFT','AGUARDANDO_AUTORIZACAO')
+		    -- A rejeitada continua viva (é corrigida e retransmitida) até ser descartada.
+		    AND e.status IN ('DRAFT','AGUARDANDO_AUTORIZACAO','REJECTED')
 		    AND i.sales_order_item_code IS NOT NULL
 		  GROUP BY i.sales_order_item_code`, empresa, salesOrderCode)
 	if err != nil {

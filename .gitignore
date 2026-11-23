@@ -53,6 +53,7 @@ scripts/*
 # Simulação ponta a ponta da rodada de validação: credenciais por variável de
 # ambiente e recusa banco que pareça produção.
 !scripts/test-rodada-validacao.sh
+!scripts/test-romaneio-nfe-remessa.sh
 !scripts/test-mrp-manufacturing.sh
 !scripts/audit-mrp-manufacturing.sh
 # Conferência das regras do beneficiamento contra o levantamento da Usimac. Só lê
