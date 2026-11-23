@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.19] — 2026-11-23
+
+- fix(OF): situação da OF conferida antes das etapas e pendências (revisão) (`2e6afe84`)
+- fix: OF já iniciada explica a situação e MRP de item de pedido encerrado orienta (bugs AD AE) (`5f095733`)
+
 ### Correções
 - fix(OF): iniciar uma OF que já está em andamento (ou concluída, encerrada, cancelada) diz a situação
   dela, em vez de responder "registro não encontrado".
