@@ -6,6 +6,17 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.13] — 2026-11-23
+
+- fix: apontamentos da revisão — scripts do treino versionados, CNAB por conta, remessa inteira (`ae4e2e27`)
+- docs: CHANGELOG, provedores, portal, treino e tasks da rodada de validação (`093f60c4`)
+- chore(deploy): treino em outro servidor PostgreSQL e saneamento sem segredo (`97ec9f67`)
+- feat: rodada de validação — bugs J..P, 13 melhorias, integrações e portal do cliente (`e2892397`)
+- test(ciclo-contabil): IRRF pago em dia, sem depender do dia do mês (`00507d8b`)
+- docs(multiempresa): domínio real da Truckparts e escolha por domínio no login (`6ebaf69a`)
+- fix(seed-tenant): empresa nova nasce com id igual ao código (`85ec5e6c`)
+- feat(multi-empresa): Truckparts como terceira empresa, no grupo Tecnofer (`c302f8f6`)
+
 Rodada de validação (`.ai/tasks/rodada-validacao-bugs-e-melhorias.md`) e Portal do Cliente
 fase 0 (`.ai/tasks/portal-do-cliente.md`). Migrações **507** (industrialização por
 terceiros) e **508** (portal do cliente e cobrança bancária).
