@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.14] — 2026-11-23
+
+- fix(ficha da OF): datas impressas um dia antes (`27c11d90`)
+- fix(simulação): extensão com hífen (uuid-ossp) é criada entre aspas antes de sair da lista (`59cff9fc`)
+- fix(deploy): treino na porta 5077, vigia do modo simulação, extensões e aspas do update.env (`21834e75`)
+
 ### Correções
 - fix(ficha da OF): "Início previsto" e "Entrega prevista" (e o prazo das ordens de
   terceiro) saíam um dia antes na impressão — a data pura virava `timestamptz` no fuso do
