@@ -54,6 +54,13 @@ echo "provision: instalando scripts e compose"
 install -m 0755 "${SCRIPT_DIR}/../../scripts/self-update.sh" "${UPDATER_DIR}/self-update.sh"
 install -m 0755 "${SCRIPT_DIR}/bootstrap-cutover.sh" "${UPDATER_DIR}/bootstrap-cutover.sh"
 install -m 0644 "${SCRIPT_DIR}/compose.yml" "${UPDATER_DIR}/compose.yml"
+# Modo simulação: o agente que copia o banco de uma empresa para o treino.
+install -m 0755 "${SCRIPT_DIR}/../../scripts/refresh-training.sh" "${UPDATER_DIR}/refresh-training.sh"
+install -m 0644 "${SCRIPT_DIR}/../../scripts/simulacao-saneamento.sql" "${UPDATER_DIR}/simulacao-saneamento.sql"
+# Uma fila por empresa, gravável pela API (appuser 10001 no contêiner).
+for empresa in principal usimac truckparts; do
+  install -d -m 0750 -o 10001 -g 10001 "/var/lib/venturerp-simulacao/${empresa}"
+done
 
 if [[ -f "${CONFIG_DIR}/update.env" ]]; then
   echo "provision: ${CONFIG_DIR}/update.env já existe — preservando"
@@ -85,6 +92,15 @@ install -m 0644 "${SCRIPT_DIR}/systemd/venturerp-update.path" /etc/systemd/syste
 # A unit de serviço aponta para /opt/venturerp/updater/self-update.sh (já instalado).
 systemctl daemon-reload
 systemctl enable --now venturerp-update.path
+# O agente do treino só liga quando o host diz o que pode copiar (update.env).
+install -m 0644 "${SCRIPT_DIR}/systemd/venturerp-simulacao.service" /etc/systemd/system/venturerp-simulacao.service
+install -m 0644 "${SCRIPT_DIR}/systemd/venturerp-simulacao.path" /etc/systemd/system/venturerp-simulacao.path
+systemctl daemon-reload
+if grep -q '^SIMULATION_SOURCES=' "${CONFIG_DIR}/update.env" && grep -q '^TRAINING_DATABASE_URL=' "${CONFIG_DIR}/update.env"; then
+  systemctl enable --now venturerp-simulacao.path
+else
+  echo "provision: modo simulação desligado — defina SIMULATION_SOURCES e TRAINING_DATABASE_URL em ${CONFIG_DIR}/update.env"
+fi
 
 echo "provision: concluído."
 echo "  updater : ${UPDATER_DIR}"

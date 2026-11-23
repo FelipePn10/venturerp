@@ -65,6 +65,7 @@ TENANT_COMPOSE_VARS=()
 TENANT_DB_USERS=()
 TENANT_DB_NAMES=()
 TENANT_DB_PASSWORDS=()
+TENANT_DB_CONTAINERS=()
 TENANT_BACKUPS=()
 
 url_part() { # $1=url $2=user|password|database
@@ -84,6 +85,8 @@ url_part() { # $1=url $2=user|password|database
 register_tenant() {
   local name="$1" url="$2" env_file="$3" health="$4" profile="$5" compose_var="$6"
   local db_user="${7:-}" db_name="${8:-}" db_password="${9:-}" require_password="${10:-1}"
+  # Servidor PostgreSQL da base: o treino pode morar no de desenvolvimento.
+  local db_container="${11:-${DATABASE_CONTAINER}}"
 
   [[ -n "${url}" ]]      || { printf 'update: tenant %s sem DATABASE_URL\n' "${name}" >&2; return 1; }
   [[ -n "${env_file}" ]] || { printf 'update: tenant %s sem API_ENV_FILE\n' "${name}" >&2; return 1; }
@@ -105,6 +108,7 @@ register_tenant() {
   TENANT_DB_USERS+=("${db_user}")
   TENANT_DB_NAMES+=("${db_name}")
   TENANT_DB_PASSWORDS+=("${db_password}")
+  TENANT_DB_CONTAINERS+=("${db_container}")
 }
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -118,7 +122,8 @@ if [[ -n "${TRAINING_DATABASE_URL:-}" ]] && [[ " ${VENTURERP_TENANTS:-} " != *" 
   : "${TRAINING_API_ENV_FILE:?TRAINING_API_ENV_FILE is required when TRAINING_DATABASE_URL is set}"
   register_tenant training "${TRAINING_DATABASE_URL}" "${TRAINING_API_ENV_FILE}" \
     "${TRAINING_HEALTH_URL:-http://127.0.0.1:5071/health/ready}" training VENTURERP_TRAINING_API_ENV \
-    "${TRAINING_DATABASE_USER:-}" "${TRAINING_DATABASE_NAME:-}" "${TRAINING_DATABASE_PASSWORD:-}"
+    "${TRAINING_DATABASE_USER:-}" "${TRAINING_DATABASE_NAME:-}" "${TRAINING_DATABASE_PASSWORD:-}" 1 \
+    "${TRAINING_DATABASE_CONTAINER:-${DATABASE_CONTAINER}}"
 fi
 
 for tenant in ${VENTURERP_TENANTS:-}; do
@@ -213,20 +218,20 @@ status() {
 
 backup_tenant() { # índice
   local i="$1"
-  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${TENANT_DB_CONTAINERS[i]}" \
     pg_dump -U "${TENANT_DB_USERS[i]}" -d "${TENANT_DB_NAMES[i]}" \
     --format=custom --no-owner --no-acl >"${TENANT_BACKUPS[i]}"
   [[ -s "${TENANT_BACKUPS[i]}" ]]
-  docker exec -i "${DATABASE_CONTAINER}" pg_restore --list <"${TENANT_BACKUPS[i]}" >/dev/null
+  docker exec -i "${TENANT_DB_CONTAINERS[i]}" pg_restore --list <"${TENANT_BACKUPS[i]}" >/dev/null
 }
 
 restore_tenant() { # índice
   local i="$1"
   [[ -s "${TENANT_BACKUPS[i]}" ]] || return 1
-  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+  docker exec -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${TENANT_DB_CONTAINERS[i]}" \
     psql -U "${TENANT_DB_USERS[i]}" -d postgres -v ON_ERROR_STOP=1 \
     -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${TENANT_DB_NAMES[i]}' AND pid <> pg_backend_pid();" >/dev/null
-  docker exec -i -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${DATABASE_CONTAINER}" \
+  docker exec -i -e PGPASSWORD="${TENANT_DB_PASSWORDS[i]}" "${TENANT_DB_CONTAINERS[i]}" \
     pg_restore -U "${TENANT_DB_USERS[i]}" -d "${TENANT_DB_NAMES[i]}" \
     --clean --if-exists --no-owner --no-acl <"${TENANT_BACKUPS[i]}"
 }
