@@ -125,3 +125,33 @@ func (o *ServiceOrder) Pending() decimal.Decimal {
 	}
 	return v
 }
+
+// PrazoLegalDeRetorno: a suspensão do ICMS na remessa para industrialização vale
+// por 180 dias (prorrogáveis pela SEFAZ); passado isso, a remessa vira saída tributada.
+const PrazoLegalDeRetorno = 180
+
+// EmPoder é o que uma OS de terceiro deixou com o fornecedor.
+type EmPoder struct {
+	SupplierCode                          int64
+	SupplierName                          string
+	ServiceOrderID, ServiceOrderCode      int64
+	ProductionOrderID                     int64
+	ItemCode                              int64
+	ItemBusinessCode, ItemName            string
+	Remitted, Returned, Received, InHands decimal.Decimal
+	// Valor do que está com o terceiro, pelo custo médio do item.
+	Value               decimal.Decimal
+	FirstRemittance     time.Time
+	DueDate             time.Time
+	DaysInHands         int
+	Overdue             bool // passou da data prevista da OS
+	LegalDeadline       time.Time
+	LegalDeadlineNear   bool // faltam 30 dias ou menos para o prazo legal
+	LegalDeadlinePassed bool
+}
+
+// FiltroEmPoder filtra o saldo em poder de terceiros.
+type FiltroEmPoder struct {
+	SupplierCode *int64
+	OnlyOverdue  bool
+}

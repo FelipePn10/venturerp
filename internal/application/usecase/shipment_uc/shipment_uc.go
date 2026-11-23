@@ -246,7 +246,14 @@ func (uc *ShipmentUseCase) Separate(ctx context.Context, code int64, actor uuid.
 				return err
 			}
 		}
-		jaBaixado, err := reserveStock(ctx, r.Estoque, ship, actor, baixa)
+		mascaras, err := uc.mascarasDasLinhas(ctx, ship)
+		if err != nil {
+			return err
+		}
+		if err := uc.completarDepositos(ctx, ship); err != nil {
+			return err
+		}
+		jaBaixado, err := reserveStock(ctx, r.Estoque, ship, actor, baixa, mascaras)
 		if err != nil {
 			return err
 		}
@@ -524,13 +531,65 @@ func guardTransition(ship *entity.Shipment, next entity.ShipmentStatus) error {
 // autorizada já baixou não está mais no estoque: reservar de novo pedia um
 // saldo que não existe, e o romaneio feito depois da nota não separava.
 // Devolve quantas linhas ficaram (total ou parcialmente) sem reserva por isso.
-func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipment, actor uuid.UUID, baixa repository.BaixaPelaNFe) (int, error) {
+// completarDepositos: linha do romaneio sem depósito separa no depósito padrão
+// do item — a mesma regra da baixa pela NF-e. Sem isto a reserva ia para o
+// depósito 0, onde nunca há saldo, e a separação sempre falhava.
+func (uc *ShipmentUseCase) completarDepositos(ctx context.Context, ship *entity.Shipment) error {
+	d, ok := uc.Regras.(interface {
+		DepositosPadrao(ctx context.Context, itens []int64) (map[int64]int64, error)
+	})
+	if !ok || uc.Regras == nil {
+		return nil
+	}
+	var itens []int64
+	for _, it := range ship.Items {
+		if it.WarehouseID == nil || *it.WarehouseID == 0 {
+			itens = append(itens, it.ItemCode)
+		}
+	}
+	if len(itens) == 0 {
+		return nil
+	}
+	padrao, err := d.DepositosPadrao(ctx, itens)
+	if err != nil {
+		return err
+	}
+	for _, it := range ship.Items {
+		if dep, ok := padrao[it.ItemCode]; ok && (it.WarehouseID == nil || *it.WarehouseID == 0) {
+			it.WarehouseID = &dep
+		}
+	}
+	return nil
+}
+
+// mascarasDasLinhas lê a máscara das linhas de pedido do romaneio (opcional).
+func (uc *ShipmentUseCase) mascarasDasLinhas(ctx context.Context, ship *entity.Shipment) (map[int64]string, error) {
+	m, ok := uc.Regras.(interface {
+		MascarasDasLinhas(ctx context.Context, linhas []int64) (map[int64]string, error)
+	})
+	if !ok || uc.Regras == nil {
+		return nil, nil
+	}
+	var linhas []int64
+	for _, it := range ship.Items {
+		if it.SalesOrderItemCode != nil {
+			linhas = append(linhas, *it.SalesOrderItemCode)
+		}
+	}
+	return m.MascarasDasLinhas(ctx, linhas)
+}
+
+func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipment, actor uuid.UUID, baixa repository.BaixaPelaNFe, mascaras ...map[int64]string) (int, error) {
 	if estoque == nil {
 		return 0, nil
 	}
 	faturado := make(map[int64]decimal.Decimal, len(baixa.PorLinhaDoPedido))
 	for linha, qtd := range baixa.PorLinhaDoPedido {
 		faturado[linha] = qtd
+	}
+	doPedido, err := reservasDoPedido(ctx, estoque, ship)
+	if err != nil {
+		return 0, err
 	}
 	jaBaixado := 0
 	for _, it := range ship.Items {
@@ -558,7 +617,7 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 		if !qty.IsPositive() {
 			continue
 		}
-		if _, err := estoque.CreateReservation(ctx, &stockentity.StockReservation{
+		res := &stockentity.StockReservation{
 			ItemCode:          it.ItemCode,
 			WarehouseID:       wh,
 			Quantity:          qty,
@@ -568,15 +627,73 @@ func reserveStock(ctx context.Context, estoque StockReserver, ship *entity.Shipm
 			ReservationDate:   time.Now(),
 			Status:            "ACTIVE",
 			CreatedBy:         actor,
-		}); err != nil {
+		}
+		// Linha do pedido: a reserva que o pedido já fez vale para a separação;
+		// só o que faltar entra como reserva do PEDIDO (a NF-e a consome, e o
+		// romaneio cancelado não tira do pedido o que ele ainda vai expedir).
+		// Antes reservava tudo de novo sobre o saldo já reservado pelo pedido.
+		if it.SalesOrderItemCode != nil && ship.SalesOrderCode != nil {
+			r := doPedido[*it.SalesOrderItemCode]
+			coberto := decimal.Min(qty, r.qtd)
+			r.qtd = r.qtd.Sub(coberto)
+			doPedido[*it.SalesOrderItemCode] = r
+			if res.Quantity = qty.Sub(coberto); !res.Quantity.IsPositive() {
+				continue
+			}
+			res.ReferenceType, res.ReferenceCode, res.Mask = stockentity.ReferenceTypeSalesOrder, *ship.SalesOrderCode, r.mask
+			// Sem reserva anterior do pedido, a máscara vem da linha do pedido.
+			if res.Mask == "" && len(mascaras) > 0 {
+				res.Mask = mascaras[0][*it.SalesOrderItemCode]
+			}
+			if it.WarehouseID == nil && r.almox != 0 {
+				res.WarehouseID = r.almox
+			}
+		}
+		if _, err := estoque.CreateReservation(ctx, res); err != nil {
 			// Depósito que não aceita reservas: o romaneio segue sem reservar.
 			if errors.Is(err, stockrepository.ErrAlmoxSemReserva) {
 				continue
+			}
+			// O erro tipado chega ao usuário só pela mensagem dele: sem isto a
+			// tela dizia "estoque insuficiente" sem dizer de qual item nem quanto.
+			if errors.Is(err, stockrepository.ErrInsufficientStock) {
+				// A linha, não o código interno do item: a tela mostra a linha com o
+				// código comercial, que quase nunca é igual ao interno.
+				return 0, errorsuc.NewValidationError(fmt.Sprintf("a linha %d do romaneio %d não tem saldo livre para separar %s: reduza a quantidade dela (entrega parcial) ou aguarde a entrada do material",
+					it.Sequence, ship.Code, res.Quantity.String()))
 			}
 			return 0, fmt.Errorf("reservando o item %d do romaneio: %w", it.ItemCode, err)
 		}
 	}
 	return jaBaixado, nil
+}
+
+type reservaDaLinha struct {
+	qtd   decimal.Decimal
+	mask  string
+	almox int64
+}
+
+// reservasDoPedido soma, por linha do pedido, o que o pedido do romaneio tem
+// reservado e ainda ativo.
+func reservasDoPedido(ctx context.Context, estoque StockReserver, ship *entity.Shipment) (map[int64]reservaDaLinha, error) {
+	out := map[int64]reservaDaLinha{}
+	if ship.SalesOrderCode == nil {
+		return out, nil
+	}
+	ativas, err := estoque.ListActiveReservations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lendo as reservas do pedido %d: %w", *ship.SalesOrderCode, err)
+	}
+	for _, r := range ativas {
+		if r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != *ship.SalesOrderCode || r.ReferenceItemCode == nil {
+			continue
+		}
+		l := out[*r.ReferenceItemCode]
+		l.qtd, l.mask, l.almox = l.qtd.Add(r.Quantity), r.Mask, r.WarehouseID
+		out[*r.ReferenceItemCode] = l
+	}
+	return out, nil
 }
 
 // releaseReservations baixa (no despacho) ou cancela (no cancelamento) as

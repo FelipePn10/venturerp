@@ -1245,3 +1245,82 @@ func (r *ShipmentRepositoryPG) LogisticPanel(ctx context.Context) (*repository.L
 	}
 	return &s, nil
 }
+
+// romaneiosDaNotaSQL: os romaneios ligados à nota $2 — pelo vínculo gravado no
+// romaneio ou pelo romaneio que a própria nota aponta.
+const romaneiosDaNotaSQL = `SELECT s.id, s.code, s.status FROM public.shipments s
+	 WHERE s.enterprise_id = $1 AND s.status <> 'CANCELLED'
+	   AND (s.fiscal_exit_id = $2
+	        OR s.code = (SELECT f.shipment_code FROM public.fiscal_exits f WHERE f.id = $2 AND f.enterprise_id = $1))`
+
+// RomaneiosDaNota devolve os códigos dos romaneios que a nota fatura.
+func (r *ShipmentRepositoryPG) RomaneiosDaNota(ctx context.Context, exitID int64) ([]int64, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, romaneiosDaNotaSQL, enterpriseID, exitID)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os romaneios da nota: %w", err)
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id, code int64
+		var status string
+		if err := rows.Scan(&id, &code, &status); err != nil {
+			return nil, fmt.Errorf("lendo os romaneios da nota: %w", err)
+		}
+		out = append(out, code)
+	}
+	return out, rows.Err()
+}
+
+// ReabrirPelaNotaCancelada desliga a nota cancelada dos romaneios e volta o
+// expedido para conferido (a mercadoria voltou ao estoque com o cancelamento),
+// registrando o evento.
+func (r *ShipmentRepositoryPG) ReabrirPelaNotaCancelada(ctx context.Context, exitID int64) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	rows, err := r.pool.Query(ctx,
+		`WITH alvo AS (`+romaneiosDaNotaSQL+` FOR UPDATE)
+		 UPDATE public.shipments s
+		    SET fiscal_exit_id = NULL, nfe_number = NULL, nfe_key = NULL,
+		        status = CASE WHEN alvo.status = 'SHIPPED' THEN 'CONFERRED' ELSE s.status END,
+		        shipped_at = CASE WHEN alvo.status = 'SHIPPED' THEN NULL ELSE s.shipped_at END,
+		        updated_at = NOW()
+		   FROM alvo WHERE s.id = alvo.id
+		 RETURNING s.id, alvo.status`, enterpriseID, exitID)
+	if err != nil {
+		return fmt.Errorf("reabrindo os romaneios da nota cancelada: %w", err)
+	}
+	type reaberto struct {
+		id     int64
+		status string
+	}
+	var lista []reaberto
+	for rows.Next() {
+		var x reaberto
+		if err := rows.Scan(&x.id, &x.status); err != nil {
+			rows.Close()
+			return fmt.Errorf("reabrindo os romaneios da nota cancelada: %w", err)
+		}
+		lista = append(lista, x)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, x := range lista {
+		nota := fmt.Sprintf("NF-e %d cancelada: romaneio desligado da nota", exitID)
+		if x.status == string(entity.ShipmentStatusShipped) {
+			nota += " e de volta a conferido"
+		}
+		if err := r.AddEvent(ctx, &entity.ShipmentEvent{ShipmentID: x.id, Event: "NFE_CANCELLED", Note: &nota}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -81,6 +81,7 @@ func TestSalesOrderAdapter(t *testing.T) {
 					UnitWeightNet:   decimal.NewFromFloat(2.5),
 					UnitWeightGross: decimal.NewFromFloat(3.0),
 					DeliveryDate:    &delivery,
+					IsActive:        true,
 				},
 			},
 		},

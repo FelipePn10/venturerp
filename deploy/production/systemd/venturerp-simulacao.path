@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch VentureERP training-copy requests (modo simulação)
+
+[Path]
+PathExistsGlob=/var/lib/venturerp-simulacao/*/request.json
+Unit=venturerp-simulacao.service
+
+[Install]
+WantedBy=multi-user.target

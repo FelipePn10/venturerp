@@ -304,3 +304,22 @@ func movementResponse(v *domain.Movement) response.ThirdPartyMovementResponse {
 	}
 	return response.ThirdPartyMovementResponse{ID: v.ID, ServiceOrderID: v.ServiceOrderID, MovementType: v.MovementType, Quantity: v.Quantity.StringFixed(6), OccurredAt: v.OccurredAt, ReferenceType: v.ReferenceType, ReferenceCode: v.ReferenceCode, Notes: v.Notes, IdempotencyKey: v.IdempotencyKey, WarehouseID: v.WarehouseID, Lot: v.Lot}
 }
+
+// emPoderRepo é o saldo em poder de terceiros (repositório PG).
+type emPoderRepo interface {
+	EmPoder(ctx context.Context, f domain.FiltroEmPoder) ([]domain.EmPoder, error)
+}
+
+// EmPoder lista o que as OS de terceiro deixaram com cada fornecedor, com o
+// prazo previsto e o prazo legal da suspensão do ICMS.
+func (u *UseCase) EmPoder(ctx context.Context, f domain.FiltroEmPoder) ([]domain.EmPoder, error) {
+	r, ok := u.repo.(emPoderRepo)
+	if !ok {
+		return nil, errors.New("saldo em poder de terceiros indisponível")
+	}
+	out, err := r.EmPoder(ctx, f)
+	if out == nil {
+		out = []domain.EmPoder{}
+	}
+	return out, err
+}

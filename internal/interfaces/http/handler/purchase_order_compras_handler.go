@@ -221,3 +221,21 @@ func (h *PurchaseOrderComprasHandler) PrevisaoGeral(w http.ResponseWriter, r *ht
 	}
 	security.RespondJSON(w, http.StatusOK, out)
 }
+
+// EnviarWhatsApp: POST /api/purchase-order/{code}/enviar-whatsapp {para, mensagem}
+func (h *PurchaseOrderComprasHandler) EnviarWhatsApp(w http.ResponseWriter, r *http.Request) {
+	code, ok := codigoPedido(w, r)
+	if !ok {
+		return
+	}
+	var dto purchase_order_uc.EnviarWhatsAppDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.Documento.EnviarWhatsApp(r.Context(), code, dto)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, out)
+}

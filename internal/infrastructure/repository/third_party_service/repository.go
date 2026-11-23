@@ -11,12 +11,15 @@ import (
 	"errors"
 	"fmt"
 	errorsuc "github.com/FelipePn10/panossoerp/internal/application/usecase/errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	domain "github.com/FelipePn10/panossoerp/internal/domain/third_party_service"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	stockpg "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/uomgraph"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
@@ -992,6 +995,9 @@ func (r *Repo) AddMovement(ctx context.Context, id int64, v domain.Movement) (*d
 		return nil, e
 	}
 	v.ServiceOrderID = id
+	if e = estoqueDaOS(ctx, tx, eid, id, &v); e != nil {
+		return nil, e
+	}
 	nextStatus := status
 	if done.GreaterThanOrEqual(qty) {
 		nextStatus = "COMPLETED"
@@ -1159,4 +1165,188 @@ func (r *Repo) OrderHistory(ctx context.Context, id int64) ([]domain.OrderHistor
 		out = append(out, v)
 	}
 	return out, rows.Err()
+}
+
+// referenciaOSTerceiro marca no kardex a transferência da OS de terceiro.
+const referenciaOSTerceiro = "OS_TERCEIRO"
+
+// estoqueDaOS leva a peça ao almoxarifado do terceiro na remessa e a traz de
+// volta no retorno ou no recebimento. Só mexe no estoque a remessa que informa
+// o almoxarifado de onde a peça sai: a peça em processo na OF não está no
+// estoque e segue controlada só pela OS. Antes a remessa era só um registro —
+// a peça continuava no almoxarifado como se nunca tivesse saído.
+func estoqueDaOS(ctx context.Context, tx pgx.Tx, eid, osID int64, v *domain.Movement) error {
+	if v.MovementType != "REMITTANCE" && v.MovementType != "RETURN" && v.MovementType != "RECEIPT" {
+		return nil
+	}
+	var item, codigo int64
+	var mask string
+	var fornecedor *int64
+	if err := tx.QueryRow(ctx, `SELECT item_code, mask, supplier_code, code FROM third_party_service_orders WHERE id=$1 AND enterprise_id=$2`,
+		osID, eid).Scan(&item, &mask, &fornecedor, &codigo); err != nil {
+		return fmt.Errorf("lendo a OS de terceiro: %w", err)
+	}
+	var lote *string
+	if l := strings.TrimSpace(v.Lot); l != "" {
+		lote = &l
+	}
+	ref := referenciaOSTerceiro
+	nota := fmt.Sprintf("OS de terceiro %d", codigo)
+	transferir := func(de, para int64, q decimal.Decimal) error {
+		if _, err := stockpg.TransferirTx(ctx, tx, eid, stockentity.TransferenciaEstoque{ItemCode: item, Mask: mask, DeAlmox: de, ParaAlmox: para, Quantidade: q,
+			Lote: lote, Notas: &nota, Ator: v.CreatedBy, ReferenciaTipo: &ref, ReferenciaCodigo: &codigo}); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE third_party_service_movements SET moved_stock=TRUE WHERE id=$1`, v.ID)
+		return err
+	}
+	if v.MovementType == "REMITTANCE" {
+		if v.WarehouseID == nil {
+			return nil
+		}
+		if fornecedor == nil {
+			return errorsuc.NewValidationError("informe o fornecedor da OS antes de remeter peças do estoque")
+		}
+		almox, err := stockpg.AlmoxDoTerceiroTx(ctx, tx, eid, *fornecedor, v.CreatedBy)
+		if err != nil {
+			return err
+		}
+		return transferir(*v.WarehouseID, almox, v.Quantity)
+	}
+	// Retorno/recebimento: volta só o que foi remetido do estoque por esta OS.
+	var emPoder decimal.Decimal
+	var origem *int64
+	if err := tx.QueryRow(ctx,
+		`SELECT COALESCE(SUM(quantity) FILTER (WHERE movement_type='REMITTANCE'),0)
+		      - COALESCE(SUM(quantity) FILTER (WHERE movement_type IN ('RETURN','RECEIPT')),0),
+		        (SELECT warehouse_id FROM third_party_service_movements
+		          WHERE enterprise_id=$1 AND service_order_id=$2 AND movement_type='REMITTANCE' AND moved_stock ORDER BY id DESC LIMIT 1)
+		   FROM third_party_service_movements
+		  WHERE enterprise_id=$1 AND service_order_id=$2 AND moved_stock AND id<>$3`, eid, osID, v.ID).Scan(&emPoder, &origem); err != nil {
+		return fmt.Errorf("lendo o que está com o terceiro: %w", err)
+	}
+	q := decimal.Min(v.Quantity, emPoder)
+	if !q.IsPositive() || fornecedor == nil {
+		return nil
+	}
+	destino := origem
+	if v.WarehouseID != nil {
+		destino = v.WarehouseID
+	}
+	if destino == nil {
+		return nil
+	}
+	var almox int64
+	if err := tx.QueryRow(ctx, `SELECT id FROM warehouse WHERE enterprise_id=$1 AND supplier_code=$2`, eid, *fornecedor).Scan(&almox); err != nil {
+		return fmt.Errorf("lendo o almoxarifado do terceiro: %w", err)
+	}
+	return transferir(almox, *destino, q)
+}
+
+// EmPoder lista, por OS, o que está com o fornecedor (remetido − retornado −
+// recebido), com o prazo previsto da OS e o prazo legal da suspensão do ICMS.
+func (r *Repo) EmPoder(ctx context.Context, f domain.FiltroEmPoder) ([]domain.EmPoder, error) {
+	eid, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.Query(ctx, `
+		WITH mov AS (
+		    SELECT m.service_order_id,
+		           COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type='REMITTANCE'),0) remetido,
+		           COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type='RETURN'),0) retornado,
+		           COALESCE(SUM(m.quantity) FILTER (WHERE m.movement_type='RECEIPT'),0) recebido,
+		           MIN(m.occurred_at) FILTER (WHERE m.movement_type='REMITTANCE') primeira
+		      FROM third_party_service_movements m
+		     WHERE m.enterprise_id=$1
+		     GROUP BY 1)
+		SELECT o.supplier_code, COALESCE(s.name,''), o.id, o.code, o.production_order_id, o.item_code,
+		       COALESCE(i.business_code::text,''), COALESCE(NULLIF(i.name,''), i.pdm_description_technique, ''),
+		       mov.remetido, mov.retornado, mov.recebido,
+		       GREATEST(mov.remetido - mov.retornado - mov.recebido, 0),
+		       COALESCE((SELECT b.avg_cost FROM stock_balances b WHERE b.enterprise_id=o.enterprise_id AND b.item_code=o.item_code
+		                  ORDER BY b.quantity DESC LIMIT 1), 0),
+		       mov.primeira, o.due_date
+		  FROM third_party_service_orders o
+		  JOIN mov ON mov.service_order_id = o.id
+		  LEFT JOIN suppliers s ON s.code = o.supplier_code AND s.enterprise_id = o.enterprise_id
+		  LEFT JOIN items i ON i.code = o.item_code AND i.enterprise_id = o.enterprise_id
+		 WHERE o.enterprise_id=$1 AND o.supplier_code IS NOT NULL AND o.status <> 'CANCELLED'
+		   AND mov.remetido - mov.retornado - mov.recebido > 0
+		   AND ($2::bigint IS NULL OR o.supplier_code = $2)
+		 ORDER BY o.supplier_code, mov.primeira, o.code`, eid, f.SupplierCode)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o saldo em poder de terceiros: %w", err)
+	}
+	defer rows.Close()
+	hoje := time.Now()
+	var out []domain.EmPoder
+	for rows.Next() {
+		var x domain.EmPoder
+		var custo decimal.Decimal
+		if err := rows.Scan(&x.SupplierCode, &x.SupplierName, &x.ServiceOrderID, &x.ServiceOrderCode, &x.ProductionOrderID, &x.ItemCode,
+			&x.ItemBusinessCode, &x.ItemName, &x.Remitted, &x.Returned, &x.Received, &x.InHands, &custo, &x.FirstRemittance, &x.DueDate); err != nil {
+			return nil, fmt.Errorf("lendo o saldo em poder de terceiros: %w", err)
+		}
+		x.Value = x.InHands.Mul(custo).Round(2)
+		x.DaysInHands = int(hoje.Sub(x.FirstRemittance).Hours() / 24)
+		x.Overdue = hoje.After(x.DueDate.AddDate(0, 0, 1))
+		x.LegalDeadline = x.FirstRemittance.AddDate(0, 0, domain.PrazoLegalDeRetorno)
+		x.LegalDeadlinePassed = hoje.After(x.LegalDeadline)
+		x.LegalDeadlineNear = !x.LegalDeadlinePassed && hoje.AddDate(0, 0, 30).After(x.LegalDeadline)
+		if f.OnlyOverdue && !x.Overdue && !x.LegalDeadlinePassed && !x.LegalDeadlineNear {
+			continue
+		}
+		out = append(out, x)
+	}
+	return out, rows.Err()
+}
+
+// ReceberRetornoDaNota registra o RECEBIMENTO (5902, peça industrializada) ou a
+// DEVOLUÇÃO (5903, peça não usada) nas OS em aberto do fornecedor
+// para o item da nota de retorno (5902/6902), a mais antiga primeiro, até a
+// quantidade da nota ou o que está com o terceiro. A peça volta ao almoxarifado
+// de onde saiu (estoqueDaOS). A chave de duplicidade é a linha da nota: aprovar
+// de novo não recebe duas vezes.
+func (r *Repo) ReceberRetornoDaNota(ctx context.Context, fornecedor, item int64, qtd decimal.Decimal, entrada int64, linha int, ator uuid.UUID, tipo string) (decimal.Decimal, []int64, error) {
+	if tipo != "RETURN" {
+		tipo = "RECEIPT"
+	}
+	lista, err := r.EmPoder(ctx, domain.FiltroEmPoder{SupplierCode: &fornecedor})
+	if err != nil {
+		return decimal.Zero, nil, err
+	}
+	sort.SliceStable(lista, func(i, j int) bool { return lista[i].FirstRemittance.Before(lista[j].FirstRemittance) })
+	// O que esta linha da nota já recebeu (aprovação repetida) não recebe de novo.
+	eid, err := tenant.ID(ctx)
+	if err != nil {
+		return decimal.Zero, nil, err
+	}
+	prefixo := fmt.Sprintf("NFE-%d-%d-", entrada, linha)
+	var ja decimal.Decimal
+	var feitas []int64
+	if err := r.db.QueryRow(ctx, `SELECT COALESCE(SUM(quantity),0), COALESCE(array_agg(service_order_id) FILTER (WHERE service_order_id IS NOT NULL), '{}')
+		FROM third_party_service_movements WHERE enterprise_id=$1 AND movement_type IN ('RECEIPT','RETURN') AND left(idempotency_key, length($2)) = $2`, eid, prefixo).Scan(&ja, &feitas); err != nil {
+		return decimal.Zero, nil, fmt.Errorf("lendo o retorno já registrado da nota: %w", err)
+	}
+	resta := qtd.Sub(ja)
+	recebido := ja
+	var oss []int64
+	for _, os := range lista {
+		if !resta.IsPositive() {
+			break
+		}
+		if os.ItemCode != item || !os.InHands.IsPositive() || slices.Contains(feitas, os.ServiceOrderID) {
+			continue
+		}
+		q := decimal.Min(resta, os.InHands)
+		if _, err := r.AddMovement(ctx, os.ServiceOrderID, domain.Movement{MovementType: tipo, Quantity: q, OccurredAt: time.Now(),
+			ReferenceType: "NF_ENTRADA", ReferenceCode: fmt.Sprint(entrada), Notes: fmt.Sprintf("retorno pela nota de entrada %d (linha %d)", entrada, linha),
+			IdempotencyKey: fmt.Sprintf("NFE-%d-%d-%d", entrada, linha, os.ServiceOrderID), CreatedBy: ator}); err != nil {
+			return recebido, oss, fmt.Errorf("recebendo na OS %d: %w", os.ServiceOrderCode, err)
+		}
+		resta, recebido = resta.Sub(q), recebido.Add(q)
+		oss = append(oss, os.ServiceOrderCode)
+	}
+	return recebido, oss, nil
 }

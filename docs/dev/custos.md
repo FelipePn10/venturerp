@@ -181,3 +181,8 @@ Enquanto o **Custo Padrão** (§1) é o custo *planejado* do item, a OF apura o 
 
 > Relatórios de custo (histórico, ficha técnica, produtos produzidos) ficam no módulo
 > financeiro — ver [`fiscal-financeiro.md`](fiscal-financeiro.md).
+
+## Rodada de validação (22/11/2026)
+
+- `GET /api/standard-cost/variacoes`, `GET /api/standard-cost/margem/pedido/{code}`, `POST /api/standard-cost/rollup/todos` (ADMIN).
+- **Fechamento**: com a contabilização da produção desligada, consumo e entrega do mês aparecem com aviso (absorção/variação só com ela ligada).

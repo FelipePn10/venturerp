@@ -217,6 +217,16 @@ func (r *ProductionOrderRepositoryPGX) RegisterDeliveryWithMovements(ctx context
 		if err := stockrepository.CreateMovementTx(ctx, tx, enterpriseID, movement); err != nil {
 			return nil, err
 		}
+		// A baixa automática da entrega é consumo da OF (lista de consumos e
+		// "atendido" do material, pelo gatilho da migração 479).
+		if movement.ItemCode != locked.ItemCode && (movement.MovementType == stockentity.MovementTypePlannedRequisition || movement.MovementType == stockentity.MovementTypeOut) {
+			if _, err := tx.Exec(ctx, `INSERT INTO public.production_consumptions
+				(production_order_id, item_code, consumed_qty, warehouse_id, lot, consumption_date, notes, created_by)
+				VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,'Baixa automática da entrega',$6)`,
+				d.ProductionOrderID, movement.ItemCode, movement.Quantity, movement.WarehouseID, movement.Lot, d.CreatedBy); err != nil {
+				return nil, fmt.Errorf("registrando o consumo automático do material %d: %w", movement.ItemCode, err)
+			}
+		}
 	}
 	var planejado, entregue decimal.Decimal
 	if err := tx.QueryRow(ctx,

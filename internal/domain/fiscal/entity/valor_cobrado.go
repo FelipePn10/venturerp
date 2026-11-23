@@ -19,6 +19,13 @@ func RetornoDeIndustrializacao(cfop string) bool {
 	return c[1:] == "902" || c[1:] == "903"
 }
 
+// RemessaParaIndustrializacao diz se o CFOP é a remessa da NOSSA peça para o
+// terceiro industrializar (x.901): ela volta, não é venda nem cobrança.
+func RemessaParaIndustrializacao(cfop string) bool {
+	c := strings.ReplaceAll(strings.TrimSpace(cfop), ".", "")
+	return len(c) == 4 && (c[0] == '5' || c[0] == '6') && c[1:] == "901"
+}
+
 // ValorCobrado é o que o cliente PAGA pela nota: o total do documento menos o
 // material dele que está voltando.
 //
@@ -33,7 +40,7 @@ func ValorCobrado(exit *FiscalExit, items []*FiscalExitItem) decimal.Decimal {
 	}
 	total := exit.ValorTotal
 	for _, it := range items {
-		if it != nil && RetornoDeIndustrializacao(it.Cfop) {
+		if it != nil && (RetornoDeIndustrializacao(it.Cfop) || RemessaParaIndustrializacao(it.Cfop)) {
 			total = total.Sub(it.TotalPrice)
 		}
 	}

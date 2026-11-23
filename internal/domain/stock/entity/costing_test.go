@@ -183,3 +183,14 @@ func TestApplyEntryReversalCosting(t *testing.T) {
 		})
 	}
 }
+
+// Bug H: a saída que deixa poeira (0,000001 UN) não recalcula o médio sobre o
+// valor arredondado em 4 casas.
+func TestSaidaQueDeixaPoeiraMantemOMedio(t *testing.T) {
+	d := decimal.RequireFromString
+	cur := CostingState{Quantity: d("1.000001"), AvgCost: d("150"), TotalCost: d("150.0002")}
+	next, _ := ApplyMovementCosting(cur, d("-1"), decimal.Zero)
+	if !next.AvgCost.Equal(d("150")) {
+		t.Fatalf("médio = %s, quer 150", next.AvgCost)
+	}
+}

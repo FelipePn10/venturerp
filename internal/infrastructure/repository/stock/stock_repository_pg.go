@@ -1791,9 +1791,10 @@ func (r *StockRepositorySQLC) FecharInventario(ctx context.Context, id int64, at
 	var codigo, almox int64
 	var status string
 	var dataDaFoto time.Time
+	var bloqueia bool
 	err = tx.QueryRow(ctx,
-		`SELECT code, warehouse_id, status, start_date FROM public.physical_inventories WHERE id=$1 AND enterprise_id=$2 FOR UPDATE`,
-		id, enterpriseID).Scan(&codigo, &almox, &status, &dataDaFoto)
+		`SELECT code, warehouse_id, status, start_date, blocks_movements FROM public.physical_inventories WHERE id=$1 AND enterprise_id=$2 FOR UPDATE`,
+		id, enterpriseID).Scan(&codigo, &almox, &status, &dataDaFoto, &bloqueia)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("inventário %d não encontrado", id))
 	}
@@ -1806,11 +1807,17 @@ func (r *StockRepositorySQLC) FecharInventario(ctx context.Context, id int64, at
 
 	res := &entity.ResultadoFechamentoInventario{}
 	if zerarNaoContados {
+		// Sem bloqueio de movimentos, zerar é tirar o saldo de AGORA, não o da foto.
+		saldo := "system_qty"
+		if !bloqueia {
+			const pii = "public.physical_inventory_items."
+			saldo = saldoDaLinhaDeInventario("$3", pii+"item_code", pii+"mask", pii+"warehouse_id", pii+"address", pii+"lot")
+		}
 		tag, err := tx.Exec(ctx,
 			`UPDATE public.physical_inventory_items
-			    SET counted_qty = 0, difference_qty = -system_qty, counted_at = NOW(), counted_by = $2,
+			    SET system_qty = `+saldo+`, counted_qty = 0, difference_qty = -`+saldo+`, counted_at = NOW(), counted_by = $2,
 			        adjustment_reason = COALESCE(adjustment_reason, 'não contado: zerado no fechamento')
-			  WHERE inventory_id = $1 AND counted_qty IS NULL`, id, ator)
+			  WHERE inventory_id = $1 AND counted_qty IS NULL`, id, ator, enterpriseID)
 		if err != nil {
 			return nil, fmt.Errorf("zeroing uncounted items: %w", err)
 		}
@@ -1988,9 +1995,16 @@ func (r *StockRepositorySQLC) ListInventoryItems(ctx context.Context, inventoryI
 	return scanInventoryItems(rows)
 }
 
-// CountInventoryItem grava a contagem e calcula a diferença contra a foto da
-// abertura. Item que não estava na foto (achado no almoxarifado) entra com saldo
-// do sistema zero. Contar de novo é recontagem: a anterior fica guardada.
+// CountInventoryItem grava a contagem e calcula a diferença contra o saldo do
+// sistema. Contar de novo é recontagem: a anterior fica guardada.
+//
+// O saldo do sistema da linha é o do endereço/lote NA HORA DA CONTAGEM quando a
+// linha não estava na foto (item incluído depois da abertura) ou quando o
+// inventário não bloqueia movimentos — a contagem retrata a prateleira daquele
+// momento. Antes a linha nova entrava com sistema 0 (contou 1 com 0,5933 no
+// sistema e ajustou +1) e, sem bloqueio, a comparação era com a foto da
+// abertura: o que entrou depois some do ajuste (18 no estoque, contou 17, nada
+// ajustado). Com bloqueio, vale a foto (nada se moveu desde ela).
 //
 // Antes era um UPDATE numa linha que nunca era criada — não gravava nada e
 // respondia sucesso.
@@ -2011,26 +2025,32 @@ func (r *StockRepositorySQLC) CountInventoryItem(ctx context.Context, item *enti
 	if !existe {
 		return errorsuc.NewNotFoundError("item não encontrado nesta empresa")
 	}
+	var bloqueia bool
+	if err := tx.QueryRow(ctx, `SELECT COALESCE((SELECT blocks_movements FROM public.physical_inventories WHERE id=$1 AND enterprise_id=$2), FALSE)`,
+		item.InventoryID, enterpriseID).Scan(&bloqueia); err != nil {
+		return fmt.Errorf("reading inventory movement block: %w", err)
+	}
 	tag, err := tx.Exec(ctx,
 		`INSERT INTO public.physical_inventory_items
 			(inventory_id, item_code, mask, warehouse_id, address, lot, system_qty, unit_cost,
 			 counted_qty, difference_qty, counted_by, counted_at, count_number)
-		 SELECT $1::bigint, $2::bigint, $3::text, $4::bigint, $8::text, $9::text, 0,
+		 SELECT $1::bigint, $2::bigint, $3::text, $4::bigint, $8::text, $9::text, `+saldoDaLinhaDeInventarioSQL+`,
 		        COALESCE((SELECT CASE WHEN SUM(b.quantity) > 0 THEN SUM(b.total_cost)/SUM(b.quantity) ELSE MAX(b.avg_cost) END
 		                    FROM public.stock_balances b
 		                   WHERE b.enterprise_id=$7 AND b.item_code=$2::bigint AND b.mask=$3::text AND b.warehouse_id=$4::bigint), 0),
-		        $5::numeric, $5::numeric, $6::uuid, NOW(), 1
+		        $5::numeric, $5::numeric - `+saldoDaLinhaDeInventarioSQL+`, $6::uuid, NOW(), 1
 		  WHERE EXISTS (SELECT 1 FROM public.physical_inventories inv WHERE inv.id=$1 AND inv.enterprise_id=$7 AND inv.status='OPEN')
 		 ON CONFLICT (inventory_id, item_code, mask, warehouse_id, address, lot) DO UPDATE SET
 		     previous_counted_qty = public.physical_inventory_items.counted_qty,
 		     needs_recount  = FALSE,
+		     system_qty     = CASE WHEN $10::boolean THEN public.physical_inventory_items.system_qty ELSE EXCLUDED.system_qty END,
 		     counted_qty    = EXCLUDED.counted_qty,
-		     difference_qty = EXCLUDED.counted_qty - public.physical_inventory_items.system_qty,
+		     difference_qty = EXCLUDED.counted_qty - CASE WHEN $10::boolean THEN public.physical_inventory_items.system_qty ELSE EXCLUDED.system_qty END,
 		     counted_by     = EXCLUDED.counted_by,
 		     counted_at     = NOW(),
 		     count_number   = public.physical_inventory_items.count_number + 1,
 		     is_adjusted    = FALSE`,
-		item.InventoryID, item.ItemCode, item.Mask, item.WarehouseID, item.CountedQty, item.CountedBy, enterpriseID, item.Address, item.Lot)
+		item.InventoryID, item.ItemCode, item.Mask, item.WarehouseID, item.CountedQty, item.CountedBy, enterpriseID, item.Address, item.Lot, bloqueia)
 	if err != nil {
 		return fmt.Errorf("counting inventory item: %w", err)
 	}
@@ -2055,6 +2075,24 @@ func (r *StockRepositorySQLC) CountInventoryItem(ctx context.Context, item *enti
 	}
 	return tx.Commit(ctx)
 }
+
+// saldoDaLinhaDeInventario é o SQL do saldo atual de uma linha do inventário,
+// como a foto da abertura o calcula: a linha com lote é o saldo do lote no
+// endereço; a sem lote é o do endereço menos o que está em lote. Os argumentos
+// são expressões SQL (parâmetros ou colunas).
+func saldoDaLinhaDeInventario(empresa, item, mask, almox, endereco, lote string) string {
+	filtro := func(t string) string {
+		return fmt.Sprintf(`%s.enterprise_id=%s AND %s.item_code=%s AND %s.mask=%s AND %s.warehouse_id=%s AND %s.address=%s`,
+			t, empresa, t, item, t, mask, t, almox, t, endereco)
+	}
+	return fmt.Sprintf(`(CASE WHEN %[1]s <> '' THEN
+		     (SELECT COALESCE(SUM(l.quantity), 0) FROM public.stock_lot_balances l WHERE %[2]s AND l.lot=%[1]s)
+		 ELSE (SELECT COALESCE(SUM(b.quantity), 0) FROM public.stock_balances b WHERE %[3]s)
+		    - (SELECT COALESCE(SUM(l.quantity), 0) FROM public.stock_lot_balances l WHERE %[2]s)
+		 END)`, lote, filtro("l"), filtro("b"))
+}
+
+var saldoDaLinhaDeInventarioSQL = saldoDaLinhaDeInventario("$7", "$2::bigint", "$3::text", "$4::bigint", "$8::text", "$9::text")
 
 func (r *StockRepositorySQLC) AdjustInventoryItem(ctx context.Context, item *entity.PhysicalInventoryItem) error {
 	enterpriseID, err := tenant.ID(ctx)

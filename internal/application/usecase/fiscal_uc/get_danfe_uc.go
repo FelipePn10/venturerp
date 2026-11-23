@@ -41,11 +41,14 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 	if err != nil {
 		return nil, err
 	}
-	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
-		return nil, errorsuc.NewValidationError(tokenFocusAusente)
+	// Com a DANFE e o XML já gravados basta montar o endereço: o token só é
+	// preciso para consultar a emissora (antes a falta dele barrava até a nota
+	// que já tinha os arquivos — o portal do cliente não baixava nada).
+	token := ""
+	if cfg.FocusNfeToken != nil {
+		token = *cfg.FocusNfeToken
 	}
-
-	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
+	cli := focusnfe.NewClient(token, cfg.FocusNfeAmbiente)
 	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
 		if errLog := uc.Repo.SaveFocusLog(ctx, exitID, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
 			// A chamada à Focus já aconteceu: não dá para desfazê-la, mas a falha
@@ -72,6 +75,9 @@ func (uc *GetDANFEUseCase) Execute(ctx context.Context, exitID int64) (*DANFERes
 	// Paths not stored — refresh from FocusNFE and persist.
 	if exit.FocusRef == nil {
 		return nil, errorsuc.NewValidationError("esta nota não foi transmitida à SEFAZ por este sistema, então não tem DANFE")
+	}
+	if token == "" {
+		return nil, errorsuc.NewValidationError(tokenFocusAusente)
 	}
 
 	resp, err := cli.ConsultarNFe(ctx, *exit.FocusRef)

@@ -63,7 +63,7 @@ func RequestLoggerMiddleware(base *applogger.Logger) func(http.Handler) http.Han
 				"request",
 				slog.String("request_id", applogger.CorrelationIDFromContext(r.Context())),
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				slog.String("path", CaminhoSemSegredo(r.URL.Path)),
 				slog.String("query", r.URL.RawQuery),
 				slog.Int("status", status),
 				slog.Int64("latency_ms", time.Since(start).Milliseconds()),

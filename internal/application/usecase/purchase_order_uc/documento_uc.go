@@ -2,6 +2,7 @@ package purchase_order_uc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"net/mail"
@@ -22,8 +23,10 @@ type DocumentoPedidoUseCase struct {
 	Previsao  *PrevisaoPagamentosUseCase
 	Gerador   GeradorPDFPedido
 	Email     ports.EmailProvider
-	Auth      ports.AuthService
-	Agora     func() time.Time
+	// Mensageiro: o envio do pedido por WhatsApp (opcional).
+	Mensageiro ports.Mensageiro
+	Auth       ports.AuthService
+	Agora      func() time.Time
 }
 
 func (uc *DocumentoPedidoUseCase) agora() time.Time {
@@ -217,4 +220,93 @@ func validarEmails(lista []string) ([]string, error) {
 		return nil, errorsuc.NewValidationError("no máximo 10 destinatários por envio")
 	}
 	return out, nil
+}
+
+// EnviarWhatsAppDTO: os celulares (DDD + número) e uma observação opcional.
+type EnviarWhatsAppDTO struct {
+	Para     []string `json:"para"`
+	Mensagem string   `json:"mensagem"`
+}
+
+// TextoDoPedidoWhatsApp: o resumo que vai no modelo aprovado da Meta (uma
+// variável, sem anexo). O PDF continua indo por e-mail.
+func TextoDoPedidoWhatsApp(empresa string, d *DocumentoPedido, obs string) string {
+	t := fmt.Sprintf("Pedido de compra nº %d de %s. Valor líquido: R$ %s.", d.Numero, empresa, strings.Replace(d.Liquido.StringFixed(2), ".", ",", 1))
+	if d.Entrega != nil {
+		t += " Entrega: " + d.Entrega.Format("02/01/2006") + "."
+	}
+	t += " Pedimos que confirme o recebimento e a data de entrega."
+	if obs = strings.TrimSpace(obs); obs != "" {
+		t += " " + obs
+	}
+	return t
+}
+
+// EnviarWhatsApp manda o resumo do pedido aprovado ao fornecedor pelo WhatsApp
+// e registra o envio no mesmo histórico do e-mail.
+func (uc *DocumentoPedidoUseCase) EnviarWhatsApp(ctx context.Context, code int64, dto EnviarWhatsAppDTO) (*Envio, error) {
+	if !uc.Auth.CanUpdatePurchaseOrder(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	if uc.Mensageiro == nil {
+		return nil, errorsuc.NewValidationError("o WhatsApp não está configurado neste servidor")
+	}
+	po, d, err := uc.montar(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	switch po.Status {
+	case entity.PurchaseOrderStatusAPPROVED, entity.PurchaseOrderStatusPARTIAL:
+	default:
+		return nil, errorsuc.NewValidationError(fmt.Sprintf("o pedido %d está %s: só pedido aprovado vai ao fornecedor", po.Code, entity.RotuloSituacao(po.Status)))
+	}
+	var fones []string
+	for _, p := range dto.Para {
+		for _, parte := range strings.FieldsFunc(p, func(r rune) bool { return r == ',' || r == ';' || r == '\n' }) {
+			dig := strings.Map(func(r rune) rune {
+				if r >= '0' && r <= '9' {
+					return r
+				}
+				return -1
+			}, parte)
+			if dig == "" {
+				continue
+			}
+			if len(dig) < 10 {
+				return nil, errorsuc.NewValidationError(fmt.Sprintf("celular inválido: %s (use DDD + número)", strings.TrimSpace(parte)))
+			}
+			fones = append(fones, dig)
+		}
+	}
+	if len(fones) == 0 {
+		return nil, errorsuc.NewValidationError("informe o celular do fornecedor (DDD + número)")
+	}
+	por, err := uc.Auth.UserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	empresa := strings.TrimSpace(d.Dados.Empresa.Nome)
+	texto := TextoDoPedidoWhatsApp(empresa, d, dto.Mensagem)
+	envio := Envio{PurchaseOrderCode: po.Code, EnviadoEm: uc.agora(), EnviadoPor: &por, Destinatarios: strings.Join(fones, ", "),
+		Assunto: fmt.Sprintf("WhatsApp — pedido de compra nº %d", po.OrderNumber), Situacao: "ENVIADO"}
+	var sendErr error
+	for _, f := range fones {
+		if sendErr = uc.Mensageiro.Enviar(ctx, ports.MensagemCurta{Para: f, Texto: texto}); sendErr != nil {
+			break
+		}
+	}
+	if errors.Is(sendErr, ports.ErrIntegracaoDesligada) {
+		return nil, errorsuc.NewValidationError("o WhatsApp (Cloud API da Meta) não está configurado: o administrador precisa ligar a integração")
+	}
+	if sendErr != nil {
+		envio.Situacao, envio.Erro = "FALHOU", sendErr.Error()
+	}
+	gravado, err := uc.Consultas.RegistrarEnvio(ctx, envio)
+	if err != nil {
+		return nil, err
+	}
+	if sendErr != nil {
+		return gravado, errorsuc.NewValidationError("o WhatsApp não foi enviado: " + sendErr.Error())
+	}
+	return gravado, nil
 }

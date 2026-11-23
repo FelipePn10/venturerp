@@ -285,3 +285,29 @@ func TestDFeManifestacaoAceitaGrafiaAntiga(t *testing.T) {
 		t.Fatalf("tipos enviados: %+v", fonte.manifestos)
 	}
 }
+
+type fornecedoresFixos bool
+
+func (f fornecedoresFixos) FornecedorAtivoPorCNPJ(context.Context, string) (bool, error) {
+	return bool(f), nil
+}
+
+// Melhoria 11: a sincronização já tenta lançar a nota de fornecedor cadastrado;
+// a de quem não é fornecedor fica só na caixa de entrada.
+func TestDFePreLancaNotaDeFornecedor(t *testing.T) {
+	for _, c := range []struct {
+		fornecedor bool
+		tentativas int
+	}{{true, 3}, {false, 0}} {
+		uc, _ := novoDFe(&fonteFake{total: 3})
+		uc.Fornecedores = fornecedoresFixos(c.fornecedor)
+		out, err := uc.Sincronizar(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Sem a importação por chave montada, cada tentativa volta como falha.
+		if len(out.Falhas) != c.tentativas || out.PreLancadas != 0 {
+			t.Fatalf("fornecedor=%v: %+v", c.fornecedor, out)
+		}
+	}
+}

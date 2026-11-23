@@ -18,6 +18,27 @@ import (
 
 type DeliveryPromiseHandler struct {
 	uc *delivery_promise_uc.DeliveryPromiseUseCase
+	// Promessa: data capaz de prometer e cenários (melhoria 9). Opcional.
+	Promessa *delivery_promise_uc.PromessaUseCase
+}
+
+// Simular: POST /api/delivery-promise/simular — a data que dá para prometer a
+// cada linha (estoque, entradas, capacidade e prazos), sem gravar nada.
+func (h *DeliveryPromiseHandler) Simular(w http.ResponseWriter, r *http.Request) {
+	if h.Promessa == nil {
+		jsonError(w, http.StatusNotImplemented, "a promessa de entrega não está configurada")
+		return
+	}
+	var dto delivery_promise_uc.CenarioDTO
+	if !security.DecodeBody(w, r, &dto) {
+		return
+	}
+	out, err := h.Promessa.Simular(r.Context(), dto)
+	if err != nil {
+		respondErr(w, err)
+		return
+	}
+	jsonResponse(w, http.StatusOK, out)
 }
 
 func NewDeliveryPromiseHandler(uc *delivery_promise_uc.DeliveryPromiseUseCase) *DeliveryPromiseHandler {

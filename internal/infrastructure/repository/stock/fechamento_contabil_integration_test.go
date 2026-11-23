@@ -154,9 +154,14 @@ func TestFechamento_ProducaoDesligadaNaoLanca(t *testing.T) {
 	inicio, _ := mesPassado()
 	exigir(t, e.moverEm(t, inicio.AddDate(0, 0, 1), "IN", 10, 10))
 	e.moverDaOrdem(t, e.novaOrdem(t, "IN_PROGRESS"), e.item, inicio.AddDate(0, 0, 2), "OUT", 1, 0)
-	_, err := e.repo.FecharMes(e.ctx, inicio, e.ator, false)
+	res, err := e.repo.FecharMes(e.ctx, inicio, e.ator, false)
 	exigir(t, err)
 	igual(t, "nada lançado", e.somar(t, `SELECT COUNT(*) FROM accounting_journal_entries WHERE empresa_id=$1`, e.empresa), "0")
+	// Bug P: desligada, a produção do mês aparece (com aviso), não como zero.
+	igual(t, "consumo mostrado", res.ProducaoConsumo, "10")
+	if len(res.Avisos) == 0 {
+		t.Fatal("faltou o aviso de que a contabilização da produção está desligada")
+	}
 }
 
 func TestFechamento_ProvisaoLancaAVariacaoDoMes(t *testing.T) {

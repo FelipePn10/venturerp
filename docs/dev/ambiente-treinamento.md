@@ -54,3 +54,21 @@ homologação. Nesse caso, a operação deve falhar e ser configurada antes do u
 A segunda API está limitada a 0,5 CPU, 256 MiB de memória e tmpfs de 32 MiB.
 Não existe um segundo servidor PostgreSQL: apenas outra base no cluster já
 existente.
+
+## Rodada de validação (22/11/2026)
+
+- **Modo simulação**: o ADMIN da produção pede `POST /api/system/simulacao`; o agente `refresh-training.sh` copia o banco da empresa para o treino, saneia (`simulacao-saneamento.sql`) e sobe a API de treino. Ver releases-e-atualizacoes.md.
+
+## Instalação na VPS (23/11/2026)
+
+- Empresa do treino: **Tecnofer** (`SIMULATION_SOURCES=venturerp`; a identidade do treino é a
+  da Tecnofer — usuários da Usimac/Truckparts não entram).
+- Banco: `venturerp_training` no **PostgreSQL de desenvolvimento**
+  (`venturerp-postgres-development`, 127.0.0.1:5433), fora do servidor de produção. O
+  `update.env` traz `TRAINING_DATABASE_CONTAINER`, e o atualizador faz backup, migração e
+  restauração do treino nesse servidor; o agente lê a origem na produção.
+- Acesso: `https://treino.api.venturerp.com` (nginx → 127.0.0.1:5071) e, no catálogo
+  `tenants.json`, a empresa **Tecnofer — Treino** no grupo da Tecnofer: no login, quem é da
+  Tecnofer escolhe entrar na produção, na Truckparts ou no treino.
+- No desktop, a sessão de treino mostra a faixa laranja "TREINO" em todas as telas (lida do
+  `environment` do token).

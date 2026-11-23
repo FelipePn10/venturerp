@@ -55,3 +55,29 @@ func TestNotaConsomePrimeiroAReservaDaLinhaFaturada(t *testing.T) {
 		t.Fatalf("consumos = %v", estoque.consumos)
 	}
 }
+
+type romaneiosFixos []int64
+
+func (r romaneiosFixos) RomaneiosDaNota(context.Context, int64) ([]int64, error) { return r, nil }
+func (romaneiosFixos) ReabrirPelaNotaCancelada(context.Context, int64) error     { return nil }
+
+// Bug L: a NF-e baixava o estoque e a reserva da separação do romaneio ficava
+// ativa até o despacho (saldo 0 com 2 reservados). Consome só a do romaneio da
+// nota e só até o faturado.
+func TestNotaConsomeAReservaDoRomaneio(t *testing.T) {
+	prod := int64(1001)
+	d := decimal.NewFromInt
+	estoque := &reservasComSaldo{consumos: map[int64]decimal.Decimal{}, ativas: []*stockentity.StockReservation{
+		{ID: 1, ItemCode: prod, Quantity: d(2), ReferenceType: referenciaRomaneio, ReferenceCode: 40},
+		{ID: 2, ItemCode: prod, Quantity: d(5), ReferenceType: referenciaRomaneio, ReferenceCode: 41}, // outro romaneio
+		{ID: 3, ItemCode: prod, Quantity: d(3), ReferenceType: referenciaRomaneio, ReferenceCode: 40},
+	}}
+	itens := []*entity.FiscalExitItem{{ItemCode: &prod, Quantity: d(4)}}
+	r := EfeitosRepos{Estoque: estoque, Romaneios: romaneiosFixos{40}}
+	if err := consumirReservasDosRomaneios(context.Background(), r, 9, itens, func(it *entity.FiscalExitItem) decimal.Decimal { return it.Quantity }); err != nil {
+		t.Fatal(err)
+	}
+	if !estoque.consumos[1].Equal(d(2)) || !estoque.consumos[3].Equal(d(2)) || !estoque.consumos[2].IsZero() {
+		t.Fatalf("consumos = %v", estoque.consumos)
+	}
+}

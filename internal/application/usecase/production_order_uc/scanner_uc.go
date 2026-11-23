@@ -106,7 +106,7 @@ func (uc *ProductionScannerUseCase) Scan(ctx context.Context, dto request.Produc
 	payload, _ := json.Marshal(dto)
 	fingerprint := sha256.Sum256(payload)
 	tokenHash := sha256.Sum256([]byte(dto.Token))
-	res, err := uc.Repo.ExecuteScan(ctx, entity.ScanCommand{EnterpriseID: enterpriseID, UserID: userID, TokenHash: tokenHash[:], Action: action, IdempotencyKey: dto.IdempotencyKey, DeviceID: dto.DeviceID, Fingerprint: fingerprint[:], EmployeeID: dto.EmployeeID, GoodQuantity: good, ScrapQuantity: scrap, Hours: hours, ScrapReason: dto.ScrapReason, CompleteOperation: dto.CompleteOperation})
+	res, err := uc.Repo.ExecuteScan(ctx, entity.ScanCommand{EnterpriseID: enterpriseID, UserID: userID, TokenHash: tokenHash[:], Action: action, IdempotencyKey: dto.IdempotencyKey, DeviceID: dto.DeviceID, Fingerprint: fingerprint[:], EmployeeID: dto.EmployeeID, MachineID: dto.MachineID, GoodQuantity: good, ScrapQuantity: scrap, Hours: hours, ScrapReason: dto.ScrapReason, CompleteOperation: dto.CompleteOperation})
 	// A leitura que aponta mexe no custo como o apontamento da tela: material
 	// da baixa automática, peças e horas da etapa. Repetição não muda nada.
 	if err == nil && res != nil && !res.Replayed && action == entity.ScanAppoint {

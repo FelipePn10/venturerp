@@ -412,3 +412,10 @@ uma única transação. Uma entrega que cruza o planejado é dividida (por exemp
 `1 EPP + 2 EPE`) sem perder a chave idempotente. O encadeamento
 OF → requisição de serviço → OCS é persistido e usado pelo bloqueio de
 encerramento com OCS pendente.
+
+## Rodada de validação (22/11/2026)
+
+- **Baixa automática grava consumo**: apontamento da tela, leitura do coletor (APONTAR) e entrega gravam `production_consumptions` junto com a saída; o atendido do material sobe pelo gatilho da 479. O custo real não dobra (só lê consumo sem almoxarifado).
+- **Leitura do coletor**: passou a fazer a baixa automática (antes só gravava o apontamento), aceita `machine_id` e devolve `auto_issues`. Regra única em `entity.BaixasAutomaticas`.
+- **Início da OF**: material comprado (sugestão de compra firmada na cadeia) não é mais "componente sem OF" — só `order_type = PRODUCTION`.
+- **OF só com etapa externa**: sem fim do agendamento, a data de fim é a de necessidade.

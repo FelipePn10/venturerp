@@ -28,7 +28,13 @@ type SalesOrderHeader struct {
 }
 
 type SalesOrderItemHeader struct {
-	ItemCode        int64
+	// LineCode é a linha do pedido (sales_order_items.code): é por ela que a
+	// separação acha a reserva do pedido e a NF-e baixa o atendido.
+	LineCode    int64
+	ItemCode    int64
+	WarehouseID *int64
+	// PendingQty é o que falta expedir: pedido − atendido − cancelado.
+	PendingQty      decimal.Decimal
 	RequestedQty    decimal.Decimal
 	UnitPrice       decimal.Decimal
 	TotalGross      decimal.Decimal
@@ -109,7 +115,7 @@ func (uc *ShipmentAutoFillUseCase) volumesDoPedido(ctx context.Context, so *Sale
 	total := 0
 	for _, it := range so.Items {
 		if n := porUnidade[it.ItemCode]; n.IsPositive() {
-			total += int(it.RequestedQty.Mul(n).Ceil().IntPart())
+			total += int(it.PendingQty.Mul(n).Ceil().IntPart())
 		}
 	}
 	if total == 0 {
@@ -154,14 +160,24 @@ func (uc *ShipmentAutoFillUseCase) AutoFillFromSalesOrder(ctx context.Context, s
 		return nil, err
 	}
 
-	for i, it := range so.Items {
+	// Vai o que falta expedir de cada linha, com a linha e o almoxarifado do
+	// pedido: sem eles a separação não achava a reserva do pedido nem o depósito.
+	seq := 0
+	for _, it := range so.Items {
+		if !it.PendingQty.IsPositive() {
+			continue
+		}
+		seq++
+		linha := it.LineCode
 		item := &entity.ShipmentItem{
-			ShipmentID:      created.ID,
-			Sequence:        i + 1,
-			ItemCode:        it.ItemCode,
-			Quantity:        it.RequestedQty,
-			UnitNetWeight:   it.UnitWeightNet,
-			UnitGrossWeight: it.UnitWeightGross,
+			ShipmentID:         created.ID,
+			Sequence:           seq,
+			ItemCode:           it.ItemCode,
+			SalesOrderItemCode: &linha,
+			WarehouseID:        it.WarehouseID,
+			Quantity:           it.PendingQty,
+			UnitNetWeight:      it.UnitWeightNet,
+			UnitGrossWeight:    it.UnitWeightGross,
 		}
 		if _, err := uc.ShipmentRepo.AddItem(ctx, item); err != nil {
 			return nil, fmt.Errorf("adding auto-fill item %d: %w", it.ItemCode, err)

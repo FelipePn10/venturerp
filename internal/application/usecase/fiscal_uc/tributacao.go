@@ -277,7 +277,7 @@ func exigeRegraNaNota(cfg *entity.FiscalConfig, exit *entity.FiscalExit) bool {
 	if exit.Finalidade != 0 && exit.Finalidade != 1 {
 		return false
 	}
-	if exit.SourceType != nil && (*exit.SourceType == OrigemBeneficiamento || *exit.SourceType == SourceDevolucaoCompra) {
+	if exit.SourceType != nil && (*exit.SourceType == OrigemBeneficiamento || *exit.SourceType == SourceDevolucaoCompra || *exit.SourceType == SourceRemessaIndustrializacao) {
 		return false
 	}
 	return true

@@ -31,8 +31,11 @@ services:
       SERVER_ADDR: "5070"
       ENV: production
       SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+      # Modo simulação: pedido de cópia para o treino (scripts/refresh-training.sh).
+      SIMULATION_DIR: /var/lib/venturerp-simulacao
     volumes:
       - /var/lib/venturerp-update:/var/lib/venturerp-update
+      - /var/lib/venturerp-simulacao/principal:/var/lib/venturerp-simulacao
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -58,10 +61,13 @@ services:
       ENV: production
       DATA_ENVIRONMENT: production
       SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+      # Modo simulação: pedido de cópia para o treino (scripts/refresh-training.sh).
+      SIMULATION_DIR: /var/lib/venturerp-simulacao
     # Somente leitura: a fila de atualização é do tenant principal, que é quem
     # dispara o update da VPS. A Usimac acompanha o status, não o solicita.
     volumes:
       - /var/lib/venturerp-update:/var/lib/venturerp-update:ro
+      - /var/lib/venturerp-simulacao/usimac:/var/lib/venturerp-simulacao
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -88,8 +94,11 @@ services:
       ENV: production
       DATA_ENVIRONMENT: production
       SYSTEM_UPDATE_DIR: /var/lib/venturerp-update
+      # Modo simulação: pedido de cópia para o treino (scripts/refresh-training.sh).
+      SIMULATION_DIR: /var/lib/venturerp-simulacao
     volumes:
       - /var/lib/venturerp-update:/var/lib/venturerp-update:ro
+      - /var/lib/venturerp-simulacao/truckparts:/var/lib/venturerp-simulacao
     security_opt:
       - no-new-privileges:true
     cap_drop:

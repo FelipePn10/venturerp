@@ -133,6 +133,17 @@ func (uc *AddAppointmentUseCase) executar(
 			if _, err := r.Estoque.CreateMovement(ctx, mov); err != nil {
 				return fmt.Errorf("baixando o material %d da OF: %w", mov.ItemCode, err)
 			}
+			// A baixa automática é consumo da OF: sem a linha, a lista de
+			// consumos ficava vazia e o material "atendido 0" — e a tela
+			// convidava a uma segunda baixa manual.
+			almox := mov.WarehouseID
+			if _, err := r.Ordens.AddConsumption(ctx, &entity.ProductionConsumption{
+				ProductionOrderID: dto.ProductionOrderID, AppointmentID: &saved.ID, ItemCode: mov.ItemCode,
+				ConsumedQty: mov.Quantity, WarehouseID: &almox, Lot: mov.Lot, ConsumptionDate: appointmentDate,
+				Notes: &notaBaixaAutomatica, CreatedBy: dto.CreatedBy,
+			}); err != nil {
+				return fmt.Errorf("registrando o consumo automático do material %d: %w", mov.ItemCode, err)
+			}
 		}
 		return nil
 	})
@@ -141,6 +152,8 @@ func (uc *AddAppointmentUseCase) executar(
 	}
 	return saved, nil
 }
+
+var notaBaixaAutomatica = "Baixa automática do apontamento"
 
 func (uc *AddAppointmentUseCase) shouldBackflush(dto request.AddAppointmentDTO) bool {
 	return uc.StockRepo != nil && dto.ProducedQty.IsPositive()

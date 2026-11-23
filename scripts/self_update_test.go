@@ -133,6 +133,7 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			mainEnv := filepath.Join(root, ".env")
 			usimacEnv := filepath.Join(root, ".env.usimac")
 			truckpartsEnv := filepath.Join(root, ".env.truckparts")
+			trainingEnv := filepath.Join(root, ".env.training")
 			mustMkdir(t, bin)
 			mustMkdir(t, updateDir)
 			mustWrite(t, filepath.Join(updateDir, "request.json"), `{"version":"1.2.3","requested_at":"2026-07-15T12:00:00Z"}`, 0o600)
@@ -140,6 +141,7 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			mustWrite(t, mainEnv, "", 0o600)
 			mustWrite(t, usimacEnv, "", 0o600)
 			mustWrite(t, truckpartsEnv, "", 0o600)
+			mustWrite(t, trainingEnv, "", 0o600)
 			mustWrite(t, filepath.Join(bin, "systemctl"), "#!/bin/sh\n[ \"$1\" = is-active ] && exit 1\nexit 0\n", 0o755)
 			mustWrite(t, filepath.Join(bin, "curl"), "#!/bin/sh\nexit 0\n", 0o755)
 			mustWrite(t, filepath.Join(bin, "docker"), dockerMock, 0o755)
@@ -159,6 +161,10 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 				"TENANT_TRUCKPARTS_DATABASE_URL=postgres://venturerp_truckparts:tp@127.0.0.1:5432/venturerp_truckparts?sslmode=disable\n" +
 				"TENANT_TRUCKPARTS_API_ENV_FILE=" + truckpartsEnv + "\n" +
 				"TENANT_TRUCKPARTS_HEALTH_URL=http://127.0.0.1:5076/health/ready\n" +
+				// Treino noutro servidor PostgreSQL (o de desenvolvimento).
+				"TRAINING_DATABASE_URL=postgres://venturerp_training:tr@127.0.0.1:5433/venturerp_training?sslmode=disable\n" +
+				"TRAINING_API_ENV_FILE=" + trainingEnv + "\n" +
+				"TRAINING_DATABASE_CONTAINER=devdb\n" +
 				"LEGACY_SERVICE=legacy.service\nHEALTH_ATTEMPTS=1\nHEALTH_INTERVAL_SECONDS=0\n"
 			configPath := filepath.Join(root, "update.env")
 			mustWrite(t, configPath, config, 0o600)
@@ -195,6 +201,10 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			assertBackupExists(t, backupDir, "pre-update-usimac-1.2.3-")
 			assertLoggedCall(t, logged, "pg_dump -U venturerp_truckparts", "-d venturerp_truckparts ")
 			assertBackupExists(t, backupDir, "pre-update-truckparts-1.2.3-")
+			// O backup do treino sai do servidor dele, não do da produção (antes o
+			// pg_dump ia ao de produção, falhava e desfazia a atualização inteira).
+			assertLoggedCall(t, logged, "exec", " devdb pg_dump -U venturerp_training", "-d venturerp_training ")
+			assertLoggedCall(t, logged, "exec", " db pg_dump -U user", "-d erp ")
 
 			if !test.failRun {
 				// Migration precisa rodar contra as duas bases, não só a principal.
@@ -202,7 +212,7 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 				assertLoggedCall(t, logged, "migrate/migrate", "-database=postgres://venturerp_usimac:outra@127.0.0.1:5432/venturerp_usimac?sslmode=disable")
 				assertLoggedCall(t, logged, "migrate/migrate", "-database=postgres://venturerp_truckparts:tp@127.0.0.1:5432/venturerp_truckparts?sslmode=disable")
 				// Os contêineres só sobem se perfis e env files chegarem ao compose.
-				if !strings.Contains(logged, "composeenv profiles=usimac,truckparts main="+mainEnv+" usimac="+usimacEnv+" truckparts="+truckpartsEnv) {
+				if !strings.Contains(logged, "composeenv profiles=training,usimac,truckparts main="+mainEnv+" usimac="+usimacEnv+" truckparts="+truckpartsEnv) {
 					t.Fatalf("compose não recebeu perfis/env de Usimac e Truckparts:\n%s", logged)
 				}
 				return
@@ -212,6 +222,7 @@ func TestSelfUpdateMultiTenant(t *testing.T) {
 			assertLoggedCall(t, logged, "pg_restore -U user", "-d erp ")
 			assertLoggedCall(t, logged, "pg_restore -U venturerp_usimac", "-d venturerp_usimac ")
 			assertLoggedCall(t, logged, "pg_restore -U venturerp_truckparts", "-d venturerp_truckparts ")
+			assertLoggedCall(t, logged, " devdb pg_restore -U venturerp_training", "-d venturerp_training ")
 		})
 	}
 }

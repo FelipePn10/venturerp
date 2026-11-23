@@ -307,3 +307,13 @@ func TestPrevisaoPelaCondicao(t *testing.T) {
 		t.Fatalf("sem condição: %+v", p)
 	}
 }
+
+func TestTextoDoPedidoWhatsApp(t *testing.T) {
+	entrega := time.Date(2026, 12, 3, 0, 0, 0, 0, time.UTC)
+	d := &DocumentoPedido{Numero: 42, Liquido: decimal.RequireFromString("1234.5"), Entrega: &entrega}
+	got := TextoDoPedidoWhatsApp("Tecnofer", d, "Urgente.")
+	want := "Pedido de compra nº 42 de Tecnofer. Valor líquido: R$ 1234,50. Entrega: 03/12/2026. Pedimos que confirme o recebimento e a data de entrega. Urgente."
+	if got != want {
+		t.Fatalf("texto:\n%s\nquer\n%s", got, want)
+	}
+}

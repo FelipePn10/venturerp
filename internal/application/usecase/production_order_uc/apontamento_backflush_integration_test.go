@@ -82,6 +82,7 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 		_, _ = pool.Exec(bg, `DELETE FROM production_appointments WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM stock_movements WHERE enterprise_id=$1`, empresaID)
 		_, _ = pool.Exec(bg, `DELETE FROM stock_balances WHERE enterprise_id=$1`, empresaID)
+		_, _ = pool.Exec(bg, `DELETE FROM production_consumptions WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM production_order_materials WHERE production_order_id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM production_orders WHERE id=$1`, of)
 		_, _ = pool.Exec(bg, `DELETE FROM employees WHERE id=$1`, operador)
@@ -167,5 +168,17 @@ func TestApontamentoComBackflushTudoOuNada(t *testing.T) {
 	}
 	if a, b := quanto(filhoA), quanto(filhoB); a != "20.0000" || b != "10.0000" {
 		t.Fatalf("depois de 10 de 10: A=%s B=%s, quer 20 / 10", a, b)
+	}
+	// Bug O: a baixa automática é consumo da OF — aparece na lista de consumos
+	// (ligada ao apontamento) e no atendido do material.
+	if n := contar(`SELECT count(*) FROM production_consumptions WHERE production_order_id=$1 AND appointment_id IS NOT NULL`); n != 4 {
+		t.Fatalf("consumos = %d, quer 4 (2 materiais × 2 apontamentos)", n)
+	}
+	var atendidoA string
+	if err := pool.QueryRow(bg, `SELECT attended_quantity::numeric(18,4)::text FROM production_order_materials WHERE production_order_id=$1 AND item_code=$2`, of, filhoA).Scan(&atendidoA); err != nil {
+		t.Fatal(err)
+	}
+	if atendidoA != "20.0000" {
+		t.Fatalf("atendido do material A = %s, quer 20", atendidoA)
 	}
 }

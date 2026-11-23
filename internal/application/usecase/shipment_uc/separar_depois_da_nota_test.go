@@ -104,3 +104,107 @@ func TestFaturadoDaLinhaDoPedidoSeRepartePelasLinhasDoRomaneio(t *testing.T) {
 		t.Fatalf("linhas sem reserva=%d reservas=%+v", n, estoque.reservas)
 	}
 }
+
+// reservasDoPedidoAtivas devolve as reservas que o pedido já fez.
+type reservasDoPedidoAtivas struct {
+	reservasAnotadas
+	ativas []*stockentity.StockReservation
+}
+
+func (r *reservasDoPedidoAtivas) ListActiveReservations(context.Context) ([]*stockentity.StockReservation, error) {
+	return r.ativas, nil
+}
+
+// Bug J: o romaneio do pedido reservava tudo de novo sobre o saldo que o
+// pedido já tinha reservado, e a separação recusava por falta de disponível.
+func TestSepararAproveitaAReservaDoPedido(t *testing.T) {
+	d := decimal.RequireFromString
+	pedido := int64(77)
+	l501, l502 := int64(501), int64(502)
+	estoque := &reservasDoPedidoAtivas{ativas: []*stockentity.StockReservation{
+		{ItemCode: 7, Mask: "M1", WarehouseID: 3, Quantity: d("10"), ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: pedido, ReferenceItemCode: &l501},
+		{ItemCode: 8, WarehouseID: 3, Quantity: d("1"), ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: pedido, ReferenceItemCode: &l502},
+		// Reserva de outro pedido não conta.
+		{ItemCode: 8, WarehouseID: 3, Quantity: d("50"), ReferenceType: stockentity.ReferenceTypeSalesOrder, ReferenceCode: 99, ReferenceItemCode: &l502},
+	}}
+	ship := &entity.Shipment{Code: 1, SalesOrderCode: &pedido, Items: []*entity.ShipmentItem{linha(1, 7, 501, "10"), linha(2, 8, 502, "4")}}
+	if _, err := reserveStock(context.Background(), estoque, ship, uuid.New(), repository.BaixaPelaNFe{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(estoque.reservas) != 1 {
+		t.Fatalf("reservas novas = %+v, esperado só o que falta da linha 502", estoque.reservas)
+	}
+	r := estoque.reservas[0]
+	if !r.Quantity.Equal(d("3")) || r.ReferenceType != stockentity.ReferenceTypeSalesOrder || r.ReferenceCode != pedido ||
+		r.ReferenceItemCode == nil || *r.ReferenceItemCode != 502 || r.WarehouseID != 3 {
+		t.Fatalf("reserva = %+v", r)
+	}
+}
+
+// O romaneio montado do pedido leva a linha, o almoxarifado e só o pendente.
+func TestAutoFillLevaLinhaAlmoxarifadoEPendente(t *testing.T) {
+	d := decimal.RequireFromString
+	almox := int64(4)
+	repo := &fakeShipmentRepo{nextCode: 1, getByCodeResp: &entity.Shipment{Code: 1}}
+	sales := &fakeSalesReader{resp: &SalesOrderHeader{Code: 100, TotalVolumes: 1, Items: []SalesOrderItemHeader{
+		{LineCode: 7, ItemCode: 1, WarehouseID: &almox, RequestedQty: d("10"), PendingQty: d("3")},
+		{LineCode: 8, ItemCode: 2, RequestedQty: d("5"), PendingQty: d("0")},
+	}}}
+	if _, err := newAutoFillUC(repo, sales, nil, nil).AutoFillFromSalesOrder(context.Background(), 100, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	it := repo.addedItem
+	if it == nil || it.SalesOrderItemCode == nil || *it.SalesOrderItemCode != 7 || it.WarehouseID == nil || *it.WarehouseID != 4 || !it.Quantity.Equal(d("3")) {
+		t.Fatalf("item do romaneio = %+v", it)
+	}
+}
+
+// Item configurado sem reserva do pedido: a reserva completada leva a máscara da linha.
+func TestReservaCompletadaLevaAMascaraDaLinha(t *testing.T) {
+	pedido := int64(77)
+	almox := int64(3)
+	estoque := &reservasDoPedidoAtivas{}
+	it := linha(1, 7, 501, "2")
+	it.WarehouseID = &almox
+	ship := &entity.Shipment{Code: 1, SalesOrderCode: &pedido, Items: []*entity.ShipmentItem{it}}
+	if _, err := reserveStock(context.Background(), estoque, ship, uuid.New(), repository.BaixaPelaNFe{}, map[int64]string{501: "AZUL-2M"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(estoque.reservas) != 1 || estoque.reservas[0].Mask != "AZUL-2M" {
+		t.Fatalf("reserva: %+v", estoque.reservas)
+	}
+}
+
+type regrasComDeposito struct{ padrao map[int64]int64 }
+
+func (regrasComDeposito) ItensQueExigemVolume(context.Context, []int64) ([]string, error) {
+	return nil, nil
+}
+func (regrasComDeposito) VolumesPorUnidade(context.Context, []int64) (map[int64]decimal.Decimal, error) {
+	return nil, nil
+}
+func (regrasComDeposito) Embalagens(context.Context, []int64) (map[int64]EmbalagemDoItem, error) {
+	return nil, nil
+}
+func (regrasComDeposito) SaldoDaEmbalagem(context.Context, EmbalagemDoItem) (decimal.Decimal, error) {
+	return decimal.Zero, nil
+}
+func (r regrasComDeposito) DepositosPadrao(context.Context, []int64) (map[int64]int64, error) {
+	return r.padrao, nil
+}
+
+// Linha do romaneio sem depósito separa no depósito padrão do item (a regra da
+// NF-e); a que já tem depósito fica com o dela. Antes a reserva ia para o 0.
+func TestSeparacaoUsaODepositoPadraoDoItem(t *testing.T) {
+	proprio := int64(9)
+	semDep, comDep := linha(1, 7, 501, "2"), linha(2, 8, 502, "1")
+	comDep.WarehouseID = &proprio
+	ship := &entity.Shipment{Code: 1, Items: []*entity.ShipmentItem{semDep, comDep}}
+	uc := &ShipmentUseCase{Regras: regrasComDeposito{padrao: map[int64]int64{7: 2, 8: 3}}}
+	if err := uc.completarDepositos(context.Background(), ship); err != nil {
+		t.Fatal(err)
+	}
+	if semDep.WarehouseID == nil || *semDep.WarehouseID != 2 || *comDep.WarehouseID != 9 {
+		t.Fatalf("depósitos: %v / %v", semDep.WarehouseID, *comDep.WarehouseID)
+	}
+}

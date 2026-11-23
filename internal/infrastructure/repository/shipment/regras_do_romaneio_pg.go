@@ -103,3 +103,59 @@ func (r *RegrasDoRomaneioPG) SaldoDaEmbalagem(ctx context.Context, e shipment_uc
 	}
 	return saldo, nil
 }
+
+// MascarasDasLinhas: a máscara (item configurado) de cada linha do pedido de
+// venda — o romaneio não a guarda, e a reserva completada pela separação precisa dela.
+func (r *RegrasDoRomaneioPG) MascarasDasLinhas(ctx context.Context, linhas []int64) (map[int64]string, error) {
+	out := map[int64]string{}
+	if len(linhas) == 0 {
+		return out, nil
+	}
+	codigo, err := tenant.Code(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT l.code, COALESCE(l.mask,'') FROM sales_order_items l
+		JOIN sales_orders so ON so.code = l.sales_order_code AND so.enterprise_code = $2
+		WHERE l.code = ANY($1)`, linhas, codigo)
+	if err != nil {
+		return nil, fmt.Errorf("lendo a máscara das linhas do pedido: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var m string
+		if err := rows.Scan(&id, &m); err != nil {
+			return nil, err
+		}
+		out[id] = m
+	}
+	return out, rows.Err()
+}
+
+// DepositosPadrao: o depósito padrão de cada item (cadastro do item). A NF-e já
+// baixa por ele quando a linha do pedido não tem depósito; a separação também.
+func (r *RegrasDoRomaneioPG) DepositosPadrao(ctx context.Context, itens []int64) (map[int64]int64, error) {
+	out := map[int64]int64{}
+	if len(itens) == 0 {
+		return out, nil
+	}
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `SELECT code, warehouse_code FROM items
+		WHERE code = ANY($1) AND enterprise_id = $2 AND warehouse_code IS NOT NULL AND warehouse_code > 0`, itens, empresa)
+	if err != nil {
+		return nil, fmt.Errorf("lendo o depósito padrão dos itens: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item, dep int64
+		if err := rows.Scan(&item, &dep); err != nil {
+			return nil, err
+		}
+		out[item] = dep
+	}
+	return out, rows.Err()
+}

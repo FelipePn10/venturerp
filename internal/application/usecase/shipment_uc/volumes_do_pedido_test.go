@@ -25,9 +25,9 @@ func (r regrasFixas) Embalagens(context.Context, []int64) (map[int64]EmbalagemDo
 
 func TestVolumesDoPedidoVemDoCadastro(t *testing.T) {
 	so := &SalesOrderHeader{Items: []SalesOrderItemHeader{
-		{ItemCode: 1, RequestedQty: decimal.NewFromInt(2)},
-		{ItemCode: 2, RequestedQty: decimal.RequireFromString("1.5")},
-		{ItemCode: 3, RequestedQty: decimal.NewFromInt(10)},
+		{ItemCode: 1, RequestedQty: decimal.NewFromInt(2), PendingQty: decimal.NewFromInt(2)},
+		{ItemCode: 2, RequestedQty: decimal.RequireFromString("1.5"), PendingQty: decimal.RequireFromString("1.5")},
+		{ItemCode: 3, RequestedQty: decimal.NewFromInt(10), PendingQty: decimal.NewFromInt(10)},
 	}}
 	uc := &ShipmentAutoFillUseCase{Regras: regrasFixas{1: decimal.NewFromInt(3), 2: decimal.NewFromInt(2)}}
 	total, err := uc.volumesDoPedido(context.Background(), so)

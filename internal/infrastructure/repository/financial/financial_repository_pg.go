@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/entity"
 	"github.com/FelipePn10/panossoerp/internal/domain/financial/repository"
+	"github.com/FelipePn10/panossoerp/internal/domain/financial/retorno"
 	fiscalEntity "github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/tenant"
 	"github.com/google/uuid"
@@ -2057,14 +2060,15 @@ func (r *FinancialRepositoryPG) GetDREComCMV(ctx context.Context, startDate, end
 		return nil, fmt.Errorf("DRE receita: %w", err)
 	}
 
-	// CMV: qty sold × avg_cost at time of sale (uses current avg_cost as best approximation)
+	// CMV: o valor que as NF-e autorizadas do período baixaram do estoque. Antes
+	// usava o custo médio de hoje e, sem ele, inventava 60% do preço.
 	var cmv decimal.Decimal
 	if err := r.pool.QueryRow(ctx,
-		`SELECT COALESCE(SUM(fei.quantity * COALESCE(c.custo, fei.unit_price * 0.6)), 0)
-		 FROM fiscal_exit_items fei
-		 JOIN fiscal_exits fe ON fe.id = fei.fiscal_exit_id
-		 LEFT JOIN LATERAL (SELECT (SELECT SUM(sb.total_cost) / NULLIF(SUM(sb.quantity),0) FROM stock_balances sb WHERE sb.item_code = fei.item_code AND sb.enterprise_id = $3) AS custo) c ON TRUE
-		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED' AND fe.enterprise_id = $3`,
+		`SELECT COALESCE(SUM(ABS(m.total_price)), 0)
+		 FROM stock_movements m
+		 JOIN fiscal_exits fe ON fe.id = m.reference_code AND fe.enterprise_id = m.enterprise_id
+		 WHERE fe.data_emissao BETWEEN $1 AND $2 AND fe.status = 'AUTHORIZED' AND fe.enterprise_id = $3
+		   AND m.reference_type = 'NF_SAIDA' AND m.movement_type = 'OUT' AND m.reversed_by_movement_id IS NULL`,
 		startDate, endDate, empresa).Scan(&cmv); err != nil {
 		return nil, fmt.Errorf("DRE CMV: %w", err)
 	}
@@ -2199,4 +2203,201 @@ func (r *FinancialRepositoryPG) RecebiveisDoPedidoDeVenda(ctx context.Context, p
 		return 0, fmt.Errorf("cancelando os títulos do pedido %d: %w", pedido, err)
 	}
 	return len(ids), tx.Commit(ctx)
+}
+
+// ContaReceberPorNossoNumero acha o título da empresa pelo nosso número do
+// boleto (sem os zeros à esquerda) na conta do arquivo de retorno — título de
+// OUTRA conta não entra (o mesmo número pode existir em dois bancos) — e diz se
+// ele ainda está em aberto. Título sem conta definida vale para qualquer conta.
+func (r *FinancialRepositoryPG) ContaReceberPorNossoNumero(ctx context.Context, nossoNumero string, conta int64) (int64, bool, decimal.Decimal, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, false, decimal.Zero, err
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, UPPER(status), valor_bruto - COALESCE(valor_recebido,0) - COALESCE(desconto,0),
+		        (conta_bancaria_id = $3) AS da_conta
+		   FROM contas_receber
+		  WHERE enterprise_id = $1 AND is_active AND LTRIM(COALESCE(nosso_numero,''), '0') = LTRIM($2, '0') AND LTRIM($2, '0') <> ''
+		    AND (conta_bancaria_id = $3 OR conta_bancaria_id IS NULL)
+		  ORDER BY (conta_bancaria_id = $3) DESC NULLS LAST, id DESC LIMIT 2`, empresa, nossoNumero, conta)
+	if err != nil {
+		return 0, false, decimal.Zero, fmt.Errorf("procurando o título do nosso número %s: %w", nossoNumero, err)
+	}
+	type achado struct {
+		id      int64
+		status  string
+		saldo   decimal.Decimal
+		daConta *bool
+	}
+	var lista []achado
+	for rows.Next() {
+		var a achado
+		if err := rows.Scan(&a.id, &a.status, &a.saldo, &a.daConta); err != nil {
+			rows.Close()
+			return 0, false, decimal.Zero, err
+		}
+		lista = append(lista, a)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, false, decimal.Zero, err
+	}
+	if len(lista) == 0 {
+		return 0, false, decimal.Zero, nil
+	}
+	mesmo := func(b *bool) bool { return b != nil && *b }
+	if len(lista) == 2 && mesmo(lista[0].daConta) == mesmo(lista[1].daConta) {
+		return 0, false, decimal.Zero, retorno.ErrNossoNumeroAmbiguo
+	}
+	a := lista[0]
+	return a.id, a.status != "RECEBIDO" && a.status != "CANCELADO", a.saldo, nil
+}
+
+// SalvarCobrancaDoTitulo grava o que o banco devolveu: PIX copia e cola,
+// nosso número, linha digitável e código de barras (o que vier vazio mantém o atual).
+func (r *FinancialRepositoryPG) SalvarCobrancaDoTitulo(ctx context.Context, id int64, g *ports.PixGerado) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE contas_receber SET
+		chave_pix_gerada = COALESCE(NULLIF($3,''), chave_pix_gerada),
+		nosso_numero     = COALESCE(NULLIF($4,''), nosso_numero),
+		linha_digitavel  = COALESCE(NULLIF($5,''), linha_digitavel),
+		codigo_barras    = COALESCE(NULLIF($6,''), codigo_barras),
+		cobranca_externa_id = COALESCE(NULLIF($7,''), cobranca_externa_id),
+		updated_at = NOW()
+		WHERE id = $1 AND enterprise_id = $2`, id, empresa, g.CopiaECola, g.NossoNumero, g.LinhaDigitavel, g.CodigoBarras, g.IDExterno)
+	if err != nil {
+		return fmt.Errorf("gravando a cobrança do título: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError("título não encontrado nesta empresa")
+	}
+	return nil
+}
+
+// PagadorDoCliente: nome, documento, e-mail de cobrança e o endereço principal do cliente.
+func (r *FinancialRepositoryPG) PagadorDoCliente(ctx context.Context, cliente int64) (*ports.Pagador, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var p ports.Pagador
+	err = r.pool.QueryRow(ctx, `SELECT COALESCE(c.name,''), COALESCE(c.document_number,''), COALESCE(c.billing_email,''),
+		COALESCE(a.street,''), COALESCE(a.number,''), COALESCE(a.complement,''), COALESCE(a.neighborhood,''),
+		COALESCE(a.city,''), COALESCE(a.uf,''), COALESCE(a.zip_code,'')
+		FROM customers c
+		LEFT JOIN LATERAL (SELECT * FROM customer_addresses x WHERE x.customer_id = c.id ORDER BY x.is_default DESC, x.id LIMIT 1) a ON TRUE
+		WHERE c.code = $1 AND c.enterprise_id = $2`, cliente, empresa).
+		Scan(&p.Nome, &p.Documento, &p.Email, &p.Logradouro, &p.Numero, &p.Complemento, &p.Bairro, &p.Cidade, &p.UF, &p.CEP)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errorsuc.NewNotFoundError(fmt.Sprintf("cliente %d não encontrado nesta empresa", cliente))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lendo o pagador do título: %w", err)
+	}
+	return &p, nil
+}
+
+// TituloPorSeuNumero: o título do "seu número" que o ERP mandou ao banco (CR<id>).
+func (r *FinancialRepositoryPG) TituloPorSeuNumero(ctx context.Context, seuNumero string) (int64, bool, decimal.Decimal, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return 0, false, decimal.Zero, err
+	}
+	n := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(seuNumero)), "CR")
+	id, err := strconv.ParseInt(n, 10, 64)
+	if err != nil {
+		return 0, false, decimal.Zero, nil
+	}
+	var status string
+	var saldo decimal.Decimal
+	err = r.pool.QueryRow(ctx, `SELECT UPPER(status), valor_bruto - COALESCE(valor_recebido,0) - COALESCE(desconto,0)
+		FROM contas_receber WHERE id = $1 AND enterprise_id = $2 AND is_active`, id, empresa).Scan(&status, &saldo)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, decimal.Zero, nil
+	}
+	if err != nil {
+		return 0, false, decimal.Zero, fmt.Errorf("lendo o título %s: %w", seuNumero, err)
+	}
+	return id, status != "RECEBIDO" && status != "CANCELADO", saldo, nil
+}
+
+// ContatosDeCobranca: o e-mail de cobrança (ou o principal dos contatos) e o
+// celular do cliente do título.
+func (r *FinancialRepositoryPG) ContatosDeCobranca(ctx context.Context, clienteID int64) (emails []string, celular string, err error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	var billing *string
+	err = r.pool.QueryRow(ctx, `SELECT NULLIF(TRIM(c.billing_email),''),
+		COALESCE((SELECT NULLIF(TRIM(COALESCE(k.mobile, k.phone)),'') FROM customer_contacts k WHERE k.customer_id = c.id AND k.is_active ORDER BY k.is_primary DESC, k.id LIMIT 1), '')
+		FROM customers c WHERE c.code = $1 AND c.enterprise_id = $2`, clienteID, empresa).Scan(&billing, &celular)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", nil
+	}
+	if err != nil {
+		return nil, "", fmt.Errorf("lendo os contatos de cobrança: %w", err)
+	}
+	if billing != nil {
+		for _, e := range strings.FieldsFunc(*billing, func(r rune) bool { return r == ';' || r == ',' }) {
+			if e = strings.TrimSpace(e); e != "" {
+				emails = append(emails, e)
+			}
+		}
+	}
+	if len(emails) == 0 {
+		rows, err := r.pool.Query(ctx, `SELECT k.email FROM customer_contacts k JOIN customers c ON c.id = k.customer_id
+			WHERE c.code = $1 AND c.enterprise_id = $2 AND k.is_active AND COALESCE(TRIM(k.email),'') <> '' ORDER BY k.is_primary DESC, k.id LIMIT 3`, clienteID, empresa)
+		if err != nil {
+			return nil, "", fmt.Errorf("lendo os contatos de cobrança: %w", err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var e string
+			if err := rows.Scan(&e); err != nil {
+				return nil, "", err
+			}
+			emails = append(emails, strings.TrimSpace(e))
+		}
+	}
+	return emails, celular, nil
+}
+
+// SessaoDoSistema monta a sessão das rotinas sem usuário (aviso do banco): o
+// código da empresa e um ADMIN ativo dela como autor dos lançamentos.
+func (r *FinancialRepositoryPG) SessaoDoSistema(ctx context.Context, empresa int64) (int64, uuid.UUID, error) {
+	var code int64
+	var ator *uuid.UUID
+	err := r.pool.QueryRow(ctx, `SELECT e.code,
+		(SELECT u.id FROM users u JOIN user_enterprises ue ON ue.user_id = u.id AND ue.enterprise_id = e.id
+		  WHERE u.is_active AND (UPPER(u.role) = 'ADMIN' OR UPPER(COALESCE(ue.role,'')) = 'ADMIN') ORDER BY u.created_at LIMIT 1)
+		FROM enterprise e WHERE e.id = $1`, empresa).Scan(&code, &ator)
+	if err != nil {
+		return 0, uuid.Nil, fmt.Errorf("lendo a empresa %d do aviso do banco: %w", empresa, err)
+	}
+	if ator == nil {
+		return 0, uuid.Nil, fmt.Errorf("a empresa %d não tem ADMIN ativo para assinar a baixa automática", empresa)
+	}
+	return code, *ator, nil
+}
+
+// CobrancaDoTitulo: o identificador da cobrança do título no banco (vazio = nenhuma).
+func (r *FinancialRepositoryPG) CobrancaDoTitulo(ctx context.Context, id int64) (string, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return "", err
+	}
+	var ext *string
+	err = r.pool.QueryRow(ctx, `SELECT cobranca_externa_id FROM contas_receber WHERE id = $1 AND enterprise_id = $2`, id, empresa).Scan(&ext)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", errorsuc.NewNotFoundError("título não encontrado nesta empresa")
+	}
+	if err != nil || ext == nil {
+		return "", err
+	}
+	return *ext, nil
 }

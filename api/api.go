@@ -5,20 +5,28 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"github.com/FelipePn10/panossoerp/internal/application/ports"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/margin_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_policy_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/portal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/project_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/setor_uc"
 	productionentity "github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/custoof"
 	pedidocompraExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/pedidocompra"
+	freteRapidoAdapter "github.com/FelipePn10/panossoerp/internal/infrastructure/integracoes/freterapido"
+	interAdapter "github.com/FelipePn10/panossoerp/internal/infrastructure/integracoes/inter"
+	whatsappAdapter "github.com/FelipePn10/panossoerp/internal/infrastructure/integracoes/whatsapp"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/materiaisof"
 	marginRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/margin"
 	planningPolicyRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_policy"
+	portalRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/portal"
 	setorRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/setor"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -46,6 +54,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_center_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cost_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/crp_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/custo_industrial_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_material_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/customer_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/cutting_plan_uc"
@@ -66,9 +75,11 @@ import (
 	fiscalUC "github.com/FelipePn10/panossoerp/internal/application/usecase/fiscal_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/group_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/ibpt_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/implantacao_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/impressao_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/independent_demand_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/indicadores_pv_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/indicadores_uc"
 	industrial_calendar_uc "github.com/FelipePn10/panossoerp/internal/application/usecase/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_calendar_promise_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/item_classification_uc"
@@ -93,6 +104,7 @@ import (
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/overhead_allocation_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/parametros_comerciais_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/pdm_uc"
+	"github.com/FelipePn10/panossoerp/internal/application/usecase/pendencias_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planned_order_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_params_uc"
 	"github.com/FelipePn10/panossoerp/internal/application/usecase/planning_uc"
@@ -146,6 +158,7 @@ import (
 	dfesched "github.com/FelipePn10/panossoerp/internal/infrastructure/dfe"
 	documentosExport "github.com/FelipePn10/panossoerp/internal/infrastructure/export/documentos"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/fiscalefeitos"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/integracoes"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/itemrevisoes"
 	applogger "github.com/FelipePn10/panossoerp/internal/infrastructure/logger"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/nesting"
@@ -165,6 +178,7 @@ import (
 	contratoVendaRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/contratovenda"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cost_center"
 	crpRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/crp"
+	custoIndustrialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/custo_industrial"
 	customerRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer"
 	customerMaterialRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/customer_material"
 	cuttingPlanRepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/cutting_plan"
@@ -182,8 +196,10 @@ import (
 	fiscalClassRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/fiscal_classification"
 	group "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/group"
 	ibptRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/ibpt"
+	implantacaoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/implantacao"
 	impressaoRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/impressao"
 	independentDemand "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/independent_demand"
+	indicadoresRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/indicadores"
 	indicadoresPVRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/indicadorespv"
 	industrialCalendar "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/industrial_calendar"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/item"
@@ -207,6 +223,7 @@ import (
 	over "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/overhead_allocation"
 	parametrosComerciaisRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/parametroscomerciais"
 	pdmRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/pdm"
+	pendenciasRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/pendencias"
 	planned "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planned_order"
 	planningParams "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_params"
 	planningrunrepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/planning_run"
@@ -294,7 +311,7 @@ func (app *application) mount() chi.Router {
 			"esta operação não é permitida para o endereço solicitado")
 	})
 
-	r.Use(otelhttp.NewMiddleware("panossoerp-api"))
+	r.Use(otelhttp.NewMiddleware("panossoerp-api", otelhttp.WithFilter(httpmw.RastrearRequisicao)))
 
 	r.Use(httpmw.CorrelationMiddleware)
 	trustedProxies, _ := app.config.TrustedProxyPrefixes() // validated during config load
@@ -572,6 +589,7 @@ func (app *application) mount() chi.Router {
 		Linhas:          deliveryPromiseReservationRepo,
 	}
 	deliveryPromiseHandler := handler.NewDeliveryPromiseHandler(deliveryPromiseUC)
+	deliveryPromiseHandler.Promessa = &delivery_promise_uc.PromessaUseCase{Repo: deliveryPromiseReservationRepo, Items: itemRepo}
 
 	// delivery reschedule
 	deliveryRescheduleRepo := deliveryReschedule.NewDeliveryRescheduleRepositorySQLC(queries, app.db.Pool)
@@ -667,6 +685,7 @@ func (app *application) mount() chi.Router {
 	routingHandler := handler.NewRoutingHandler(routingOperationUC, routingRouteUC, routingLeadTimeUC, routingReadinessUC).
 		WithMateriaisEDesempenho(&routing_uc.MateriaisEDesempenhoUseCase{Repo: rRepo.(*routingRepo.RoutingRepositorySQLC)})
 	thirdPartyServiceRepository := thirdPartyServiceRepo.New(app.db.Pool)
+	implantacaoHandler := &handler.ImplantacaoHandler{Painel: &implantacao_uc.PainelUseCase{Repo: implantacaoRepo.New(app.db.Pool)}}
 	thirdPartyServiceHandler := handler.NewThirdPartyServiceHandler(thirdPartyServiceUC.New(thirdPartyServiceRepository, itemRepo))
 
 	// tooling with useful-life tracking (R3)
@@ -739,6 +758,7 @@ func (app *application) mount() chi.Router {
 	scRepo := standardCostRepo.New(queries, app.db.Pool)
 	standardCostUC := cost_uc.New(scRepo).WithRouting(rRepo).WithThirdPartyPrices(thirdPartyServiceUC.New(thirdPartyServiceRepository, itemRepo)).WithWorkCenters(machineRepo)
 	standardCostHandler := handler.NewStandardCostHandler(standardCostUC)
+	custoIndustrialHandler := &handler.CustoIndustrialHandler{UC: &custo_industrial_uc.UseCase{Repo: custoIndustrialRepo.New(app.db.Pool), Apurador: standardCostUC, Auth: authService}}
 
 	// CRP
 	crpRepository := crpRepo.New(queries, app.db.Pool)
@@ -1119,6 +1139,10 @@ func (app *application) mount() chi.Router {
 	createSalesOrderUC := &sales_order_uc.CreateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
 	updateSalesOrderUC := &sales_order_uc.UpdateSalesOrderUseCase{Repo: soRepo, Auth: authService, Representatives: representativeRepository}
 	createSalesOrderItemUC := &sales_order_uc.CreateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo, Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool)}
+	repetirPedidoUC := &sales_order_uc.RepetirPedidoUseCase{Pedido: createSalesOrderUC, Linha: createSalesOrderItemUC}
+	repetirPedidoHandler := &handler.RepetirPedidoHandler{UC: repetirPedidoUC}
+	// Portal do Cliente, fase 0 (.ai/tasks/portal-do-cliente.md).
+	portalHandler := &handler.PortalHandler{UC: &portal_uc.UseCase{Repo: portalRepo.New(app.db.Pool), Auth: authService, Repetir: repetirPedidoUC, BaseURL: app.config.PortalBaseURL, Empresa: app.config.PortalEmpresa}}
 	updateSalesOrderItemUC := &sales_order_uc.UpdateSalesOrderItemUseCase{Repo: soRepo, Auth: authService, Items: itemRepo}
 	salesOrderHandler := handler.NewSalesOrderHandler(
 		createSalesOrderUC,
@@ -1326,6 +1350,8 @@ func (app *application) mount() chi.Router {
 	// financial
 	fRepo := financialRepo.NewFinancialRepositoryPG(app.db.Pool)
 	fiscalRepository := fiscalRepo.NewFiscalRepositoryPG(app.db.Pool)
+	// NF-e de remessa para industrialização (OS de terceiro, CFOP 5901/6901).
+	thirdPartyServiceHandler.Remessa = &fiscalUC.RemessaIndustrializacaoUseCase{Repo: fiscalRepository, Auth: authService, Leitor: thirdPartyServiceRepository.(*thirdPartyServiceRepo.Repo)}
 	// Ordem de fabricação impressa: o timbre vem da configuração fiscal.
 	prodOrderHandler.WithFicha(&productionOrderUc.FichaDaOrdemUseCase{Repo: prodOrderRepo, Marca: fiscalRepository, Auth: authService})
 	prodOrderHandler.WithCadastrosDoPosto(&productionOrderUc.CadastrosDoPostoUseCase{Repo: prodOrderRepo, Auth: authService})
@@ -1394,6 +1420,51 @@ func (app *application) mount() chi.Router {
 		UpdateCentro: &financial_uc.UpdateCentroCustoUseCase{Repo: fRepo, Auth: authService},
 		DeleteCentro: &financial_uc.DeleteCentroCustoUseCase{Repo: fRepo, Auth: authService},
 	}
+	// Integrações externas (docs/dev/integracoes-provedores.md): cada adaptador
+	// só entra com a configuração completa; sem ela, a porta fica desligada.
+	// No treino (cópia do banco de produção) nada sai para banco, WhatsApp ou
+	// transportadora, mesmo que alguém preencha as variáveis: a cópia tem clientes
+	// e títulos reais.
+	externas := !app.config.IsTraining()
+	var cobrancaBancaria ports.CobrancaBancaria = integracoes.CobrancaDesligada{}
+	if cfg := (interAdapter.Config{ClientID: app.config.InterClientID, ClientSecret: app.config.InterClientSecret, CertFile: app.config.InterCertFile,
+		KeyFile: app.config.InterKeyFile, ContaCorrente: app.config.InterContaCorrente, Sandbox: app.config.InterSandbox}); externas && cfg.Configurado() {
+		if c, err := interAdapter.New(cfg); err != nil {
+			slog.Error("Banco Inter não configurado: certificado inválido", "erro", err)
+		} else {
+			cobrancaBancaria = c
+		}
+	}
+	var mensageiro ports.Mensageiro = integracoes.MensageiroDesligado{}
+	if cfg := (whatsappAdapter.Config{Token: app.config.WhatsAppToken, PhoneNumberID: app.config.WhatsAppPhoneID, Template: app.config.WhatsAppTemplate,
+		Idioma: app.config.WhatsAppTemplateLang}); externas && cfg.Configurado() {
+		mensageiro = whatsappAdapter.New(cfg)
+	}
+	var cotacaoDeFrete ports.CotacaoDeFrete = integracoes.CotacaoDesligada{}
+	var rastreioDeCarga ports.RastreioDeCarga = integracoes.RastreioDesligado{}
+	if cfg := (freteRapidoAdapter.Config{Token: app.config.FreteRapidoToken, PlatformCode: app.config.FreteRapidoPlatform}); externas && cfg.Configurado() {
+		fr := freteRapidoAdapter.New(cfg)
+		cotacaoDeFrete, rastreioDeCarga = fr, fr
+	}
+	// Cobrança (melhoria 10): retorno CNAB com baixa automática e PIX pela porta
+	// (adaptador desligado até haver PSP contratado).
+	fRepoPG := fRepo.(*financialRepo.FinancialRepositoryPG)
+	cobrancaHandler := &handler.CobrancaHandler{
+		Retorno: &financial_uc.RetornoBancarioUseCase{Titulos: fRepoPG, Baixa: &financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil}},
+		Pix:     &financial_uc.CobrancaPixUseCase{Repo: fRepo, Auth: authService, Cobranca: cobrancaBancaria, Gravar: fRepoPG},
+		Fluxo:   &financial_uc.FluxoComPedidosUseCase{Repo: fRepoPG},
+		DRE:     &financial_uc.DREGerencialUseCase{Repo: fRepoPG},
+	}
+	cobrancaNoBanco := &financial_uc.CobrancaNoBanco{Cobranca: cobrancaBancaria, Titulos: fRepoPG}
+	_, bancoLigado := cobrancaBancaria.(integracoes.CobrancaDesligada)
+	_, zapLigado := mensageiro.(integracoes.MensageiroDesligado)
+	_, freteLigado := cotacaoDeFrete.(integracoes.CotacaoDesligada)
+	integracoesHandler := &handler.IntegracoesHandler{Banco: !bancoLigado, WhatsApp: !zapLigado, Frete: !freteLigado, Portal: app.config.PortalBaseURL != "",
+		Treino: app.config.IsTraining(), WebhookToken: app.config.InterWebhookToken, Cobranca: cobrancaBancaria}
+	interWebhookHandler := &handler.InterWebhookHandler{Token: app.config.InterWebhookToken, EmpresaID: app.config.InterEmpresaID, Sessao: fRepoPG.SessaoDoSistema,
+		UC: &financial_uc.AvisoDoBancoUseCase{Cobranca: cobrancaBancaria, Titulos: fRepoPG, ContaBancariaID: app.config.InterContaBancariaID,
+			Baixa: &financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil}}}
+
 	financialHandler := handler.NewFinancialHandler(
 		&financial_uc.CreateContaBancariaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasBancariasUseCase{Repo: fRepo, Auth: authService},
@@ -1413,8 +1484,8 @@ func (app *application) mount() chi.Router {
 		&financial_uc.CreateContaReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.ListContasReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetContaReceberUseCase{Repo: fRepo, Auth: authService},
-		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil},
-		&financial_uc.CancelContaReceberUseCase{Repo: fRepo, Auth: authService},
+		&financial_uc.BaixarContaReceberUseCase{Repo: fRepo, Auth: authService, FiscalRepo: fiscalRepository, Contabil: saidaContabil, Banco: cobrancaNoBanco},
+		&financial_uc.CancelContaReceberUseCase{Repo: fRepo, Auth: authService, Banco: cobrancaNoBanco},
 		&financial_uc.GetAgingReceberUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetFluxoCaixaUseCase{Repo: fRepo, Auth: authService},
 		&financial_uc.GetFluxoProjetadoUseCase{Repo: fRepo, Auth: authService},
@@ -1493,6 +1564,8 @@ func (app *application) mount() chi.Router {
 		Recebida: recebidasRepo,
 		ByKey:    &fiscalUC.ImportNFeByKeyUseCase{Upload: uploadNFeEntryUC},
 		Auth:     authService,
+		// Pré-lançamento das NF-e de fornecedor cadastrado (melhoria 11).
+		Fornecedores: fiscalRepository.(fiscalUC.FornecedoresDaEmpresa),
 	}
 	sugestaoItemEntradaHandler := handler.NewSugestaoItemEntradaHandler(&fiscalUC.SugestaoItemEntradaUseCase{Docs: fiscalEntryDocs, Fiscal: fiscalRepository, Auth: authService})
 	fiscalEntryEnterpriseHandler := handler.NewFiscalEntryEnterpriseHandler(
@@ -1577,34 +1650,50 @@ func (app *application) mount() chi.Router {
 				Pendencias:  fiscalRepo.NewPendenciasTx(tx),
 				Series:      serieRepo.NewTx(tx),
 				Consignacao: stockRepo.NewStockRepositoryTx(tx),
+				Romaneios:   shipmentRepo.NewShipmentRepositoryTx(tx),
 			}); err != nil {
 				return err
 			}
 			return tx.Commit(ctx)
 		},
 	}
+	// Cancelar a NF-e de remessa devolve a peça na OS de terceiro.
+	efeitosNFe.Remessas = thirdPartyServiceRepository.(*thirdPartyServiceRepo.Repo)
 	// A prévia confere a conversão de unidade que a baixa de estoque vai precisar.
 	efeitosNFe.Consignacao = stockRepository
 	previaNFeUC.Efeitos = efeitosNFe
 	previaNFeUC.Saldos = stockRepository
 	app.efeitosNFeScheduler = fiscalefeitos.NewScheduler(efeitosNFe, app.logger)
 	pendenciasNFeHandler := handler.NewPendenciasNFeHandler(efeitosNFe, authService)
+	notaDaCargaUC := &fiscalUC.CreateFiscalExitFromLoadUseCase{
+		CreateUC:       createFiscalExitUC,
+		FiscalRepo:     fiscalRepository,
+		ShipmentRepo:   shipmentRepoPG,
+		SalesOrderRepo: soRepo,
+		Itens:          fiscalEntryDocs,
+	}
+	// Fluxo guiado da expedição (melhoria 6): NF-e direto do romaneio e o estado
+	// amarrado pedido → romaneio → nota → despacho.
+	shipmentHandler.NFe = notaDaCargaUC
+	shipmentHandler.Frete = &shipment_uc.FreteOnlineUseCase{Repo: shipmentRepoPG, Cotacao: cotacaoDeFrete, Rastreio: rastreioDeCarga}
+	shipmentHandler.Fluxo = &shipment_uc.FluxoDaExpedicaoUseCase{Repo: shipmentRepoPG, Pedidos: &shipmentRepo.SalesOrderAdapter{Repo: soRepo},
+		Notas: shipment_uc.SituacaoDaNotaFunc(func(ctx context.Context, id int64) (string, error) {
+			n, err := fiscalRepository.GetExitByID(ctx, id)
+			if err != nil {
+				return "", err
+			}
+			return string(n.Status), nil
+		})}
 	fiscalHandler := handler.NewFiscalHandler(
 		&fiscalUC.CreateFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Auth: authService, PurchaseOrders: poRepo, Tolerances: purchaseToleranceUC, SupplierItems: itemSupplierUC},
 		uploadNFeEntryUC,
 		// Inspecao: o mesmo portão do recebimento físico (FINS0212) — material com
 		// roteiro de inspeção ativo entra no depósito de inspeção e abre a ordem.
-		&fiscalUC.ApproveFiscalEntryUseCase{Regras: fiscalRepository.(fiscalUC.RegrasDaEntrada), FiscalRepo: fiscalRepository, Docs: fiscalEntryDocs, FinancialRepo: fRepo, Tolerancias: purchaseToleranceUC, Inspecao: loteUC, Auth: authService},
+		&fiscalUC.ApproveFiscalEntryUseCase{Regras: fiscalRepository.(fiscalUC.RegrasDaEntrada), FiscalRepo: fiscalRepository, Docs: fiscalEntryDocs, FinancialRepo: fRepo, Tolerancias: purchaseToleranceUC, Inspecao: loteUC, Auth: authService, Terceiros: thirdPartyServiceRepository.(*thirdPartyServiceRepo.Repo)},
 		&fiscalUC.ListFiscalEntriesUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetFiscalEntryUseCase{Repo: fiscalRepository, Docs: fiscalEntryDocs, Tolerancias: purchaseToleranceUC, Auth: authService},
 		createFiscalExitUC,
-		&fiscalUC.CreateFiscalExitFromLoadUseCase{
-			CreateUC:       createFiscalExitUC,
-			FiscalRepo:     fiscalRepository,
-			ShipmentRepo:   shipmentRepoPG,
-			SalesOrderRepo: soRepo,
-			Itens:          fiscalEntryDocs,
-		},
+		notaDaCargaUC,
 		&fiscalUC.AuthorizeFiscalExitUseCase{ConferenciaEstoque: previaNFeUC, Identificacao: fiscalRepository.(fiscalUC.IdentificacaoFiscalDosItens), Unidades: unitOfMeasureRepo.NewCatalogo(app.db.Pool), TiposNota: fiscalRepo.NewCadastroTributarioPG(app.db.Pool), CFOPs: cfopCatalogo, Efeitos: efeitosNFe, Repo: fiscalRepository, FinancialRepo: fRepo, Auth: authService, StockRepo: stockRepository, SalesOrderRepo: soRepo, CustomerRepo: custRepo, BeneficiamentoGuard: customerMaterialUC, Faturamento: faturamentoDoPedido, Contabil: saidaContabil, Devolucao: devolucaoUC, DevolucaoVenda: devolucaoVendaUC, Reforma: reformaRepo, Series: serieRepository},
 		// BeneficiamentoEstorno: cancelar a nota de retorno devolve ao saldo do
 		// cliente o material que ela havia baixado (documento 6 da Usimac).
@@ -1662,9 +1751,12 @@ func (app *application) mount() chi.Router {
 	// histórico de preço, notas por linha e previsão de pagamentos.
 	poConsultas := purchaseOrderRepo.NewConsultasPG(app.db.Pool, fiscalRepository)
 	poPrevisaoUC := &purchase_order_uc.PrevisaoPagamentosUseCase{Repo: poRepo, Condicoes: custRepo, Auth: authService}
+	// Portal: DANFE/XML pela mesma consulta da tela fiscal e e-mail ao representante.
+	portalHandler.UC.Documentos = &fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService}
+	portalHandler.UC.Email = notification.NewCentralEmailProvider(emailSvc)
 	poComprasHandler := &handler.PurchaseOrderComprasHandler{
 		Documento: &purchase_order_uc.DocumentoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Previsao: poPrevisaoUC,
-			Gerador: pedidocompraExport.Gerador{}, Email: notification.NewCentralEmailProvider(emailSvc), Auth: authService},
+			Gerador: pedidocompraExport.Gerador{}, Email: notification.NewCentralEmailProvider(emailSvc), Mensageiro: mensageiro, Auth: authService},
 		AcompanhamentoUC: &purchase_order_uc.AcompanhamentoUseCase{Repo: poRepo, Consultas: poConsultas, Auth: authService},
 		Historico:        &purchase_order_uc.HistoricoPrecoUseCase{Consultas: poConsultas, Auth: authService},
 		NotasUC:          &purchase_order_uc.NotasDoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Auth: authService},
@@ -1826,12 +1918,16 @@ func (app *application) mount() chi.Router {
 	auditHandler := handler.NewAuditHandler(audit.NewReader(app.db.Pool))
 	systemUpdateManager := system_update_uc.NewManager(app.config.SystemUpdateDir, app.config.BackendReleaseURL, nil)
 	systemUpdateHandler := handler.NewSystemUpdateHandler(systemUpdateManager)
+	// Modo simulação (melhoria 2): o pedido de cópia do banco para o treino.
+	simulacaoHandler := &handler.SimulacaoHandler{M: system_update_uc.NewSimulacaoManager(app.config.SimulationDir, nomeDoBanco(app.config.DatabaseURL), app.config.IsTraining())}
 	notificationHandler := handler.NewNotificationHandler(notification_uc.New(notificationRepository))
 	workerOwner := os.Getenv("HOSTNAME")
 	if workerOwner == "" {
 		workerOwner = "venturerp-api"
 	}
 	app.notificationWorker = notification.NewWorker(notificationRepository, notification.NewCentralEmailProvider(emailSvc), workerOwner)
+	cobrancaHandler.Aviso = &financial_uc.AvisoDeCobrancaUseCase{Repo: fRepo, Auth: authService, Contatos: fRepoPG,
+		Email: notification.NewCentralEmailProvider(emailSvc), Mensageiro: mensageiro}
 
 	// routes
 	idempotencyStore := httpmw.NewIdempotencyStore(24*time.Hour, app.db.Pool)
@@ -1839,6 +1935,9 @@ func (app *application) mount() chi.Router {
 	// já permite. Usuário sem perfil segue só com o papel.
 	acessoRepository := acessoRepo.New(app.db.Pool)
 	controleDeAcesso := httpmw.NewControleDeAcesso(acessoRepository)
+	indicadoresHandler := &handler.IndicadoresHandler{UC: &indicadores_uc.UseCase{Repo: indicadoresRepo.New(app.db.Pool), Acesso: controleDeAcesso}}
+	pendenciasHandler := &handler.PendenciasHandler{Central: &pendencias_uc.CentralUseCase{Repo: pendenciasRepo.New(app.db.Pool),
+		Terceiros: thirdPartyServiceRepository.(*thirdPartyServiceRepo.Repo), Acesso: controleDeAcesso}}
 	acessoHandler := handler.NewAcessoHandler(&acesso_uc.UseCase{Repo: acessoRepository, Auth: authService, Cache: controleDeAcesso}, controleDeAcesso)
 	// Fase 4: governança do cadastro de item (cada área libera a sua visão).
 	app.revisoesScheduler = itemrevisoes.NewScheduler(itemGovernancaRepo.New(app.db.Pool), app.logger)
@@ -1894,6 +1993,8 @@ func (app *application) mount() chi.Router {
 		if !app.config.IsTraining() {
 			r.With(httpmw.RequireRole("ADMIN")).Post("/api/system/update", systemUpdateHandler.Request)
 			r.With(httpmw.RequireRole("ADMIN")).Get("/api/system/update/status", systemUpdateHandler.Status)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/api/system/simulacao", simulacaoHandler.Pedir)
+			r.With(httpmw.RequireRole("ADMIN")).Get("/api/system/simulacao/status", simulacaoHandler.Status)
 		}
 		r.Route("/api/notifications", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/events", notificationHandler.ListEvents)
@@ -2023,6 +2124,7 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/delivery-promise", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/occupation", deliveryPromiseHandler.Occupation)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/simular", deliveryPromiseHandler.Simular)
 			r.With(httpmw.RequireRole("ADMIN", "USER", "OPERATOR")).Get("/lines", deliveryPromiseHandler.ListarLinhas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/lines", deliveryPromiseHandler.SalvarLinha)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/tank-reservations", deliveryPromiseHandler.ReserveTank)
@@ -2356,6 +2458,7 @@ func (app *application) mount() chi.Router {
 		})
 
 		r.Route("/api/sales-order", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/repetir", repetirPedidoHandler.Repetir)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/create", salesOrderHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Patch("/{code}/customer-po", handler.SalesOrderCustomerPO(&sales_order_uc.SetCustomerPOUseCase{Repo: salesOrderRepo.NewPedidoCompraRepo(app.db.Pool), Auth: authService}))
 			// Sugestão de IPI/ICMS/ST para orçamento e pedido (mesmo cálculo da nota).
@@ -2618,6 +2721,7 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/destinatarios", poComprasHandler.Destinatarios)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/envios", poComprasHandler.Envios)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/enviar", poComprasHandler.Enviar)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/enviar-whatsapp", poComprasHandler.EnviarWhatsApp)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/notas", poComprasHandler.Notas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/previsao-pagamentos", poComprasHandler.PrevisaoDoPedido)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/items/{lineCode}/followups", poComprasHandler.Followups)
@@ -3124,10 +3228,15 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber/list", financialHandler.ListContasReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber/{id}", financialHandler.GetContaReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-receber/{id}/baixar", financialHandler.BaixarContaReceber)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-receber/{id}/pix", cobrancaHandler.GerarPix)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-receber/{id}/aviso", cobrancaHandler.EnviarAviso)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/retorno-bancario", cobrancaHandler.ProcessarRetorno)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/contas-receber/{id}/cancel", financialHandler.CancelContaReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/contas-receber/aging", financialHandler.GetAgingReceber)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fluxo-caixa", financialHandler.GetFluxoCaixa)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fluxo-projetado", financialHandler.GetFluxoProjetado)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fluxo-projetado-pedidos", cobrancaHandler.FluxoComPedidos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/dre-gerencial", cobrancaHandler.DREGerencial)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/saldo-contas", financialHandler.GetSaldoContas)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/apuracao-impostos", financialHandler.ApurarImpostos)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/apuracao-impostos/{competencia}", financialHandler.GetTaxAssessment)
@@ -3240,6 +3349,11 @@ func (app *application) mount() chi.Router {
 				r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{id}/serials", toolHandler.ListSerials)
 			})
 		})
+		r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/api/implantacao/painel", implantacaoHandler.GetPainel)
+		r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/api/pendencias/dia", pendenciasHandler.DoDia)
+		r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/api/indicadores", indicadoresHandler.Calcular)
+		r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/api/integracoes/status", integracoesHandler.Status)
+		r.With(httpmw.RequireRole("ADMIN")).Post("/api/integracoes/inter/webhook-registrar", integracoesHandler.RegistrarWebhookInter)
 		r.Route("/api/third-party-services", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices", thirdPartyServiceHandler.ListPrices)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/prices/resolve", thirdPartyServiceHandler.ResolvePrice)
@@ -3257,6 +3371,8 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}", thirdPartyServiceHandler.GetOrder)
 			r.With(httpmw.RequireRole("ADMIN")).Patch("/orders/{id}/status", thirdPartyServiceHandler.UpdateOrderStatus)
 			r.With(httpmw.RequireRole("ADMIN")).Post("/orders/{id}/movements", thirdPartyServiceHandler.AddMovement)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/orders/{id}/nfe-remessa", thirdPartyServiceHandler.NFeRemessa)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/em-poder", thirdPartyServiceHandler.EmPoder)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/movements", thirdPartyServiceHandler.ListMovements)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/orders/{id}/history", thirdPartyServiceHandler.OrderHistory)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/global-conversions", thirdPartyServiceHandler.ListGlobalConversions)
@@ -3534,6 +3650,10 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/volumes", shipmentHandler.ListVolumes)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/{code}/volumes/{volumeID}", shipmentHandler.DeleteVolume)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/nfe-link", shipmentHandler.LinkFiscalExit)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/nfe", shipmentHandler.EmitirNFe)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/cotacao-online", shipmentHandler.CotacaoOnline)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/rastreio", shipmentHandler.Rastreio)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/fluxo/pedido/{code}", shipmentHandler.FluxoDoPedido)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/events", shipmentHandler.ListEvents)
 
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/auto-fill/sales-order", shipmentHandler.AutoFillFromSalesOrder)
@@ -3566,6 +3686,9 @@ func (app *application) mount() chi.Router {
 		})
 		r.Route("/api/standard-cost", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/rollup", standardCostHandler.RollUp)
+			r.With(httpmw.RequireRole("ADMIN")).Post("/rollup/todos", custoIndustrialHandler.ApurarTodos)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/variacoes", custoIndustrialHandler.Variacoes)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/margem/pedido/{code}", custoIndustrialHandler.MargemDoPedido)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/items/{itemCode}", standardCostHandler.GetStandardCost)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/work-centers", standardCostHandler.ListWorkCenters)
 			r.Route("/work-center-costs", func(r chi.Router) {
@@ -3766,6 +3889,9 @@ func (app *application) mount() chi.Router {
 			})
 		})
 		r.Route("/api/customers", func(r chi.Router) {
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/{code}/portal-links", portalHandler.CriarLink)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/{code}/portal-links", portalHandler.ListarLinks)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Delete("/portal-links/{id}", portalHandler.RevogarLink)
 			// ── Support tables (cadastros de apoio) ──────────────────────────
 			r.Route("/support", func(r chi.Router) {
 				r.Route("/regions", func(r chi.Router) {
@@ -3962,6 +4088,8 @@ func (app *application) mount() chi.Router {
 		r.Route("/api/item-conversions", func(r chi.Router) {
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/", itemConversionHandler.Create)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/convert", itemConversionHandler.Convert)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/assistente", itemConversionHandler.Assistente)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/assistente/aplicar", itemConversionHandler.AplicarAssistente)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/simulate", itemConversionHandler.Simulate)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}", itemConversionHandler.ListByItem)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/item/{itemCode}/versions", itemConversionHandler.Versions)
@@ -4071,6 +4199,19 @@ func (app *application) mount() chi.Router {
 	r.Get("/health/ready", app.readinessHandler)
 	// Public compatibility contract used before desktop authentication.
 	r.Get("/api/version", versionHandler)
+	// Aviso de pagamento do Banco Inter (servidor a servidor, segredo no caminho).
+	r.Post("/api/integracoes/inter/webhook/{token}", interWebhookHandler.Receber)
+	// Portal do cliente: público, autenticado pelo token do link. Limite próprio
+	// por IP: o do login (20/min) barrava o cliente baixando as notas, e dividir a
+	// cota deixava o tráfego do portal travar o login da empresa no mesmo IP. O
+	// token tem 256 bits: o limite segura carga, não adivinhação.
+	portalLimiter := httpmw.NewRateLimiter(60.0/60.0, 30)
+	r.Group(func(r chi.Router) {
+		r.Use(portalLimiter.Middleware)
+		r.Get("/api/portal/{token}", portalHandler.Resumo)
+		r.Post("/api/portal/{token}/pedidos/{code}/repetir", portalHandler.PedirDeNovo)
+		r.Get("/api/portal/{token}/notas/{id}/{tipo}", portalHandler.Documento)
+	})
 
 	// Prometheus metrics, optionally guarded by a bearer token.
 	if app.metrics != nil && app.config.MetricsEnabled && app.config.MetricsToken != "" {
@@ -4240,4 +4381,13 @@ func (app *application) run(r chi.Router) error {
 		app.logger.Info("server stopped cleanly")
 		return nil
 	}
+}
+
+// nomeDoBanco tira o nome do banco do DATABASE_URL (sem credenciais).
+func nomeDoBanco(databaseURL string) string {
+	u, err := url.Parse(databaseURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(u.Path, "/")
 }

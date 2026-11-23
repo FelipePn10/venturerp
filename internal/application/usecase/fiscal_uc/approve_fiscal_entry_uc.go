@@ -3,6 +3,7 @@ package fiscal_uc
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -48,7 +49,51 @@ type ApproveFiscalEntryUseCase struct {
 	Inspecao      InspecaoDeRecebimento
 	// Regras lê o roteiro de recebimento do cadastro do item. Opcional.
 	Regras RegrasDaEntrada
-	Auth   ports.AuthService
+	// Terceiros recebe nas OS de terceiro o retorno de industrialização da nota. Opcional.
+	Terceiros RetornoNaOS
+	Auth      ports.AuthService
+}
+
+// RetornoNaOS: o retorno de industrialização (5902/6902) da nota do terceiro
+// vira recebimento nas OS dele (repositório de serviços de terceiros).
+type RetornoNaOS interface {
+	ReceberRetornoDaNota(ctx context.Context, fornecedor, item int64, qtd decimal.Decimal, entrada int64, linha int, ator uuid.UUID, tipo string) (decimal.Decimal, []int64, error)
+}
+
+// retornarIndustrializacao: a peça que o terceiro devolveu industrializada volta
+// pela OS (a nota não movimenta estoque nessas linhas). O que não acha OS vira
+// aviso: alguém registra o retorno à mão.
+func (uc *ApproveFiscalEntryUseCase) retornarIndustrializacao(ctx context.Context, doc *entity.FiscalEntry, ator uuid.UUID) []string {
+	if uc.Terceiros == nil || doc.SupplierCode == nil {
+		return nil
+	}
+	var avisos []string
+	for _, it := range doc.Itens {
+		if it.ItemCode == nil || !entity.RetornoDeIndustrializacao(it.Cfop) {
+			continue
+		}
+		q := it.Quantity
+		if it.QuantidadeEstoque != nil && it.QuantidadeEstoque.IsPositive() {
+			q = *it.QuantidadeEstoque
+		}
+		// x902: volta industrializada (recebimento); x903: volta sem uso (devolução).
+		tipo := "RECEIPT"
+		if strings.HasSuffix(strings.ReplaceAll(strings.TrimSpace(it.Cfop), ".", ""), "903") {
+			tipo = "RETURN"
+		}
+		rec, oss, err := uc.Terceiros.ReceberRetornoDaNota(ctx, *doc.SupplierCode, *it.ItemCode, q, doc.ID, it.Sequence, ator, tipo)
+		switch {
+		case err != nil:
+			avisos = append(avisos, fmt.Sprintf("linha %d (retorno de industrialização): %v — registre o retorno na OS de terceiro", it.Sequence, err))
+		case rec.IsZero():
+			avisos = append(avisos, fmt.Sprintf("linha %d é retorno de industrialização, mas não há OS deste fornecedor com o item em poder dele: registre o retorno à mão", it.Sequence))
+		case rec.LessThan(q):
+			avisos = append(avisos, fmt.Sprintf("linha %d: %s recebido(s) nas OS %v; %s ficou sem OS em aberto", it.Sequence, rec.String(), oss, q.Sub(rec).String()))
+		default:
+			avisos = append(avisos, fmt.Sprintf("linha %d: retorno recebido nas OS de terceiro %v", it.Sequence, oss))
+		}
+	}
+	return avisos
 }
 
 // RegrasDaEntrada lê o cadastro do item na empresa da sessão.
@@ -201,6 +246,7 @@ func (uc *ApproveFiscalEntryUseCase) Execute(ctx context.Context, dto request.Ap
 	// (estão em outro agregado); uma falha aqui não desfaz a nota aprovada, mas
 	// é devolvida como aviso para alguém lançar o crédito.
 	avisos = append(avisos, uc.lancarCreditos(ctx, doc, decimal.NewFromInt(1))...)
+	avisos = append(avisos, uc.retornarIndustrializacao(ctx, doc, userID)...)
 
 	aprovado, err := uc.Docs.GetEntryDocument(ctx, doc.ID)
 	if err != nil {

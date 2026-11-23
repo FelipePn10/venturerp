@@ -57,7 +57,7 @@ func Audit(sink audit.Sink) func(http.Handler) http.Handler {
 				UserRole:     role,
 				Method:       r.Method,
 				Route:        route,
-				Path:         r.URL.Path,
+				Path:         CaminhoSemSegredo(r.URL.Path),
 				Query:        r.URL.RawQuery,
 				Status:       status,
 				IP:           realIP(r),

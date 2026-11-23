@@ -32,6 +32,7 @@ type ScanCommand struct {
 	IdempotencyKey, DeviceID           string
 	Fingerprint                        []byte
 	EmployeeID                         *int64
+	MachineID                          *int64
 	GoodQuantity, ScrapQuantity, Hours decimal.Decimal
 	ScrapReason                        *string
 	CompleteOperation                  bool
@@ -46,4 +47,14 @@ type ScanResult struct {
 	Status            string  `json:"status"`
 	OperationStatus   *string `json:"operation_status,omitempty"`
 	Replayed          bool    `json:"replayed"`
+	// Baixas: o material que a leitura baixou do estoque (baixa automática),
+	// para o operador ver na hora.
+	Baixas []BaixaDaLeitura `json:"auto_issues,omitempty"`
+}
+
+// BaixaDaLeitura é um material baixado pela leitura que apontou peças.
+type BaixaDaLeitura struct {
+	ItemCode    int64           `json:"item_code"`
+	Quantidade  decimal.Decimal `json:"quantity"`
+	WarehouseID int64           `json:"warehouse_id"`
 }

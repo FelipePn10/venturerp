@@ -12,8 +12,12 @@ import (
 	"time"
 
 	"github.com/FelipePn10/panossoerp/internal/domain/production_order/entity"
+	stockentity "github.com/FelipePn10/panossoerp/internal/domain/stock/entity"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/database/sqlc"
+	stockrepository "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/stock"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 )
 
 func (r *ProductionOrderRepositoryPGX) CreateScanToken(ctx context.Context, token *entity.ScanToken) error {
@@ -92,6 +96,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		return nil, errorsuc.NewValidationError("código de apontamento inválido ou expirado")
 	}
 	operationStatus := (*string)(nil)
+	var baixas []entity.BaixaDaLeitura
 	nextAction, message := "", ""
 	switch command.Action {
 	case entity.ScanResolve:
@@ -148,9 +153,18 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 			}
 		}
 
-		_, err = tx.Exec(ctx, `INSERT INTO production_appointments(production_order_id,operation_id,employee_id,appointment_date,produced_qty,scrapped_qty,scrap_reason,created_by) VALUES($1,$2,$3,CURRENT_DATE,$4::numeric,$5::numeric,$6,$7)`, orderID, operationID, command.EmployeeID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.ScrapReason, command.UserID)
+		var apontamento int64
+		err = tx.QueryRow(ctx, `INSERT INTO production_appointments(production_order_id,operation_id,employee_id,machine_id,appointment_date,produced_qty,scrapped_qty,scrap_reason,created_by) VALUES($1,$2,$3,$8,CURRENT_DATE,$4::numeric,$5::numeric,$6,$7) RETURNING id`, orderID, operationID, command.EmployeeID, command.GoodQuantity.String(), command.ScrapQuantity.String(), command.ScrapReason, command.UserID, command.MachineID).Scan(&apontamento)
 		if err != nil {
 			return nil, err
+		}
+		// A leitura que aponta peças boas baixa o material automático, como o
+		// apontamento da tela. Antes ela só gravava o apontamento: o material
+		// ficava no estoque e a OF sem consumo.
+		if command.GoodQuantity.IsPositive() {
+			if baixas, err = baixarNaLeituraTx(ctx, tx, command.EnterpriseID, orderID, apontamento, command.UserID); err != nil {
+				return nil, err
+			}
 		}
 		finalOperation := true
 		if operationID != nil {
@@ -250,7 +264,7 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 	if status == "COMPLETED" {
 		status = "CONCLUIDA"
 	}
-	result = &entity.ScanResult{ProductionOrderID: orderID, OperationID: operationID, OrderNumber: orderNumber, Status: status, OperationStatus: operationStatus, NextAction: nextAction, Message: message}
+	result = &entity.ScanResult{ProductionOrderID: orderID, OperationID: operationID, OrderNumber: orderNumber, Status: status, OperationStatus: operationStatus, NextAction: nextAction, Message: message, Baixas: baixas}
 	responseJSON, _ := json.Marshal(result)
 	_, err = tx.Exec(ctx, `INSERT INTO production_scan_events(enterprise_id,token_id,production_order_id,operation_id,user_id,device_id,action,result,idempotency_key,request_fingerprint,response) VALUES($1,$2,$3,$4,$5,$6,$7,'SUCESSO',$8,$9,$10)`, command.EnterpriseID, tokenID, orderID, operationID, command.UserID, command.DeviceID, string(command.Action), command.IdempotencyKey, command.Fingerprint, responseJSON)
 	if err != nil {
@@ -260,4 +274,48 @@ func (r *ProductionOrderRepositoryPGX) ExecuteScan(ctx context.Context, command 
 		return nil, err
 	}
 	return result, nil
+}
+
+// baixarNaLeituraTx: a baixa automática do apontamento pela leitura, na
+// transação dela — a mesma regra do apontamento da tela (entity.BaixasAutomaticas),
+// com o consumo gravado na OF (lista de consumos e atendido do material).
+func baixarNaLeituraTx(ctx context.Context, tx pgx.Tx, empresa, ordem, apontamento int64, ator uuid.UUID) ([]entity.BaixaDaLeitura, error) {
+	repo := NewProductionOrderRepositoryPGX(tx)
+	lista, err := repo.ListMaterials(ctx, ordem, entity.MaterialDemand)
+	if err != nil {
+		return nil, fmt.Errorf("lendo os materiais da OF para a baixa automática: %w", err)
+	}
+	var materiais []*entity.ProductionOrderMaterial
+	for _, m := range lista {
+		if m.AutomaticIssue && m.Quantity.IsPositive() {
+			materiais = append(materiais, m)
+		}
+	}
+	if len(materiais) == 0 {
+		return nil, nil
+	}
+	baixado, _, apontado, err := repo.BaixasDaOrdem(ctx, ordem)
+	if err != nil {
+		return nil, err
+	}
+	var planejado decimal.Decimal
+	if err := tx.QueryRow(ctx, `SELECT planned_qty FROM production_orders WHERE id=$1 AND enterprise_id=$2`, ordem, empresa).Scan(&planejado); err != nil {
+		return nil, fmt.Errorf("lendo a quantidade da OF: %w", err)
+	}
+	// O apontado já inclui esta leitura (mesma transação).
+	movs := entity.BaixasAutomaticas(materiais, baixado, entity.FracaoProduzida(apontado, planejado), nil, stockentity.MovementTypeOut, nil, ordem, ator)
+	out := make([]entity.BaixaDaLeitura, 0, len(movs))
+	for _, m := range movs {
+		if err := stockrepository.CreateMovementTx(ctx, tx, empresa, m); err != nil {
+			return nil, fmt.Errorf("baixando o material %d da OF: %w", m.ItemCode, err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO production_consumptions
+			(production_order_id, appointment_id, item_code, consumed_qty, warehouse_id, lot, consumption_date, notes, created_by)
+			VALUES ($1,$2,$3,$4,$5,$6,CURRENT_DATE,'Baixa automática da leitura do coletor',$7)`,
+			ordem, apontamento, m.ItemCode, m.Quantity, m.WarehouseID, m.Lot, ator); err != nil {
+			return nil, fmt.Errorf("registrando o consumo automático do material %d: %w", m.ItemCode, err)
+		}
+		out = append(out, entity.BaixaDaLeitura{ItemCode: m.ItemCode, Quantidade: m.Quantity, WarehouseID: m.WarehouseID})
+	}
+	return out, nil
 }

@@ -35,6 +35,15 @@ type DFeUseCase struct {
 	Fonte func(token, ambiente string) RecebidasFonte
 	// Agora, quando nulo, é time.Now (os testes fixam a data).
 	Agora func() time.Time
+	// Fornecedores, quando presente, liga o pré-lançamento: a sincronização já
+	// importa (ciência + XML + nota de entrada pendente, amarrada ao pedido) as
+	// notas de fornecedor cadastrado — a entrada sem digitação (melhoria 11).
+	Fornecedores FornecedoresDaEmpresa
+}
+
+// FornecedoresDaEmpresa diz se o CNPJ é de fornecedor ativo da empresa.
+type FornecedoresDaEmpresa interface {
+	FornecedorAtivoPorCNPJ(ctx context.Context, cnpj string) (bool, error)
 }
 
 func (uc *DFeUseCase) hoje() time.Time {
@@ -67,6 +76,45 @@ type SincronizacaoDFe struct {
 	Recebidas int   `json:"recebidas"`
 	Novas     int   `json:"novas"`
 	Versao    int64 `json:"versao"`
+	// PreLancadas: notas já importadas como entrada pendente (conferir e aprovar).
+	PreLancadas int      `json:"pre_lancadas"`
+	Falhas      []string `json:"falhas_pre_lancamento,omitempty"`
+}
+
+// limitePreLancamento por sincronização: o resto vai na próxima.
+const limitePreLancamento = 50
+
+// preLancar importa as notas pendentes de fornecedor cadastrado. Falha numa
+// nota não para as outras nem a sincronização: fica na lista para conferir.
+func (uc *DFeUseCase) preLancar(ctx context.Context, out *SincronizacaoDFe) error {
+	if uc.Fornecedores == nil {
+		return nil
+	}
+	docs, err := uc.Recebida.ListReceivedDocuments(ctx, repository.ReceivedDocumentsFilter{SomentePendentes: true, Hoje: uc.hoje(), Limite: 500})
+	if err != nil {
+		return err
+	}
+	for _, d := range docs {
+		if out.PreLancadas >= limitePreLancamento {
+			break
+		}
+		if d.FiscalEntryID != nil || d.Situacao == "cancelada" || (d.Manifestacao != nil && (*d.Manifestacao == "desconhecimento" || *d.Manifestacao == "nao_realizada")) {
+			continue
+		}
+		ok, err := uc.Fornecedores.FornecedorAtivoPorCNPJ(ctx, d.CNPJEmitente)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
+		if _, err := uc.Importar(ctx, d.ChaveAcesso); err != nil {
+			out.Falhas = append(out.Falhas, fmt.Sprintf("%s (%s): %v", d.ChaveAcesso, d.NomeEmitente, err))
+			continue
+		}
+		out.PreLancadas++
+	}
+	return nil
 }
 
 // Sincronizar busca na SEFAZ (via Focus) as notas novas desde a última versão.
@@ -78,6 +126,9 @@ func (uc *DFeUseCase) Sincronizar(ctx context.Context) (*SincronizacaoDFe, error
 		return nil, errorsuc.ErrUnauthorized
 	}
 	out, err := uc.sincronizar(ctx)
+	if err == nil {
+		err = uc.preLancar(ctx, out)
+	}
 	var msg *string
 	if err != nil {
 		m := err.Error()

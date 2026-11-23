@@ -106,3 +106,22 @@ Consulte `journalctl -u venturerp-update.service`, `/var/lib/venturerp-update/st
 ## Segurança
 
 A API roda sem privilégios, sem socket Docker e sem credenciais do registry. A configuração root é `0600`. Versões aceitam SemVer estrito e conteúdo da fila nunca é avaliado como shell. Mantenha branch protection e aprovação do ambiente de produção.
+
+## Modo simulação (cópia de uma empresa para o treino)
+
+O ADMIN pede pelo painel (`POST /api/system/simulacao`; situação em
+`GET /api/system/simulacao/status`). A API grava `request.json` em
+`/var/lib/venturerp-simulacao/<empresa>/` (fila própria de cada empresa, gravável
+pelo appuser; `SIMULATION_DIR` no contêiner) e não toca em Docker nem no banco de
+treino. O `venturerp-simulacao.path` chama `refresh-training.sh` (root, `flock`):
+
+1. confere o banco de origem contra `SIMULATION_SOURCES` do `update.env`;
+2. `pg_dump` da origem → recria `venturerp_training` → `pg_restore` com o role do treino;
+3. roda `simulacao-saneamento.sql` (NF-e em homologação, DF-e automática desligada,
+   fila de e-mail cancelada, nome da empresa com `[TREINO]`);
+4. sobe `venturerp-api-training` e espera `/health/ready`.
+
+A instância de treino (`DATA_ENVIRONMENT=training`) já recusa a Focus em produção e
+marca os e-mails. A cópia **substitui** o treino anterior. A identidade do treino
+precisa ser a da mesma empresa de origem. Diagnóstico: `journalctl -u
+venturerp-simulacao.service` e o `status.json` da fila da empresa.

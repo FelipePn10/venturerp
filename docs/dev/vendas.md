@@ -1826,3 +1826,8 @@ no pedido, depois de incluir ou alterar uma linha.
 
 Testes: `sales_order_uc/politica_pedido_integration_test.go` e o trecho de
 preço travado em `contrato_venda_uc/contrato_venda_integration_test.go`.
+
+## Rodada de validação (22/11/2026)
+
+- **Promessa**: `POST /api/delivery-promise/simular` (estoque → entradas abertas → nova produção/compra com fila e componentes; cenário sem gravar).
+- **Repetir pedido** (B2B): `POST /api/sales-order/{code}/repetir` — rascunho com as mesmas linhas e o preço de hoje.
