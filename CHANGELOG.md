@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.20] — 2026-11-25
+
+- fix(focus): recusa arquivo da nota acima do limite em vez de cortá-lo (revisão) (`7b204799`)
+- feat(fiscal): XML das notas emitidas para conferir e repassar (`cea591ee`)
+
 ### Novidades
 - feat(fiscal): XML das notas emitidas disponível para conferir e repassar — NF-e e NFS-e autorizadas ou
   canceladas mostram o XML com a chave de acesso e o protocolo (copiar e baixar). O ERP guarda a cópia do
