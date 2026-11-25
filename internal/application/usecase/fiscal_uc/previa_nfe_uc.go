@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 	"strings"
 	"time"
 
@@ -18,8 +17,10 @@ import (
 	customerrepo "github.com/FelipePn10/panossoerp/internal/domain/customer/repository"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/engine"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/entity"
+	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/reforma"
 	"github.com/FelipePn10/panossoerp/internal/domain/fiscal/repository"
 	salesrepo "github.com/FelipePn10/panossoerp/internal/domain/sales_order/repository"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/focusnfe"
 )
 
 const (
@@ -94,10 +95,44 @@ type SaldoParaSaida interface {
 	SaldoParaSaida(ctx context.Context, itemCode int64, warehouseID int64) (decimal.Decimal, bool, error)
 }
 
-func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
+// XML é a prévia no layout da NF-e: o XML que corresponde ao que seria enviado
+// à Focus, marcado como prévia (homologação, sem assinatura nem protocolo).
+func (uc *PreviaNFeUseCase) XML(ctx context.Context, id int64) (string, []byte, error) {
 	if !uc.Auth.CanCreateFiscalExit(ctx) {
-		return nil, errorsuc.ErrUnauthorized
+		return "", nil, errorsuc.ErrUnauthorized
 	}
+	m, err := uc.montar(ctx, id)
+	if err != nil {
+		return "", nil, err
+	}
+	// Série e número só existem depois da autorização (a Focus define): no
+	// rascunho a série gravada é valor de controle, como na prévia da tela.
+	numero, serie := numeroDefinitivo(m.exit), serieDefinitiva(m.exit)
+	nome := fmt.Sprintf("previa-nfe-%d.xml", m.exit.ID)
+	if numero > 0 {
+		nome = fmt.Sprintf("previa-nfe-%d-serie-%s.xml", numero, serie)
+	}
+	return nome, focusnfe.XMLDaPrevia(m.payload, focusnfe.DadosDaPrevia{
+		Serie: serie, Numero: numero, IE: derefStr(m.cfg.IEEmpresa), CodigoMunicipio: m.cfg.CodigoMunicipio,
+		NomeFantasia: m.cfg.TradeName, Complemento: derefStr(m.cfg.Complemento),
+	}), nil
+}
+
+// montagemDaPrevia: a nota, as linhas, a configuração e o payload que seria
+// enviado à Focus — a mesma montagem para a tela, o PDF e o XML da prévia.
+type montagemDaPrevia struct {
+	exit        *entity.FiscalExit
+	items       []*entity.FiscalExitItem
+	cfg         *entity.FiscalConfig
+	plano       PlanoDaNota
+	efeitosTipo entity.EfeitosDoTipoNota
+	rt          TributacaoReforma
+	errReforma  error
+	payload     focusnfe.NFEPayload
+	retrato     []reforma.RetratoItem
+}
+
+func (uc *PreviaNFeUseCase) montar(ctx context.Context, id int64) (*montagemDaPrevia, error) {
 	exit, err := uc.Repo.GetExitByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -143,6 +178,20 @@ func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.Pr
 	if err := referenciarDevolucaoDeVenda(ctx, uc.Repo, exit, items, &payload); err != nil {
 		return nil, err
 	}
+	return &montagemDaPrevia{exit: exit, items: items, cfg: cfg, plano: plano, efeitosTipo: efeitosTipo,
+		rt: rt, errReforma: errReforma, payload: payload, retrato: retrato}, nil
+}
+
+func (uc *PreviaNFeUseCase) Execute(ctx context.Context, id int64) (*response.PreviaNFeResponse, error) {
+	if !uc.Auth.CanCreateFiscalExit(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	m, err := uc.montar(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	exit, items, cfg, payload := m.exit, m.items, m.cfg, m.payload
+	plano, efeitosTipo, rt, errReforma, retrato := m.plano, m.efeitosTipo, m.rt, m.errReforma, m.retrato
 	payloadJSON, _ := json.MarshalIndent(payload, "", "  ")
 
 	out := &response.PreviaNFeResponse{
