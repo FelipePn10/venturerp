@@ -822,6 +822,9 @@ func (c *Client) DocumentURL(path string) string {
 // consulta devolve. O token só vai para a própria Focus: o caminho absoluto
 // pode apontar para o armazenamento externo dela (S3), que não deve recebê-lo.
 // Não passa pelo registro de comunicação: o corpo é o arquivo inteiro.
+// limiteArquivo: teto de um arquivo da nota (o XML real tem poucos KB). Variável para o teste.
+var limiteArquivo = 20 << 20
+
 func (c *Client) BaixarArquivo(ctx context.Context, path string) ([]byte, error) {
 	if c.configErr != nil {
 		return nil, c.configErr
@@ -842,9 +845,13 @@ func (c *Client) BaixarArquivo(ctx context.Context, path string) ([]byte, error)
 		return nil, fmt.Errorf("http request: %w", err)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limiteArquivo)+1))
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
+	}
+	// Cortado no limite, o arquivo seria guardado incompleto para sempre.
+	if len(body) > limiteArquivo {
+		return nil, fmt.Errorf("o arquivo %s passa de %d MiB", path, limiteArquivo>>20)
 	}
 	if resp.StatusCode != http.StatusOK {
 		corpo := strings.TrimSpace(string(body[:min(len(body), 300)]))

@@ -34,3 +34,22 @@ func TestBaixarArquivo_TokenSoParaAFocus(t *testing.T) {
 		t.Fatalf("token enviado: %v", comToken)
 	}
 }
+
+// Acima do limite, o download é recusado em vez de cortado.
+func TestBaixarArquivo_RecusaAcimaDoLimite(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<xml>0123456789</xml>"))
+	}))
+	defer srv.Close()
+	t.Setenv("FOCUSNFE_BASE_URL", srv.URL)
+	antes := limiteArquivo
+	defer func() { limiteArquivo = antes }()
+	limiteArquivo = 10
+	if _, err := NewClient("tok", "homologacao").BaixarArquivo(context.Background(), "/arquivos/a.xml"); err == nil {
+		t.Fatal("arquivo acima do limite foi aceito")
+	}
+	limiteArquivo = 21
+	if b, err := NewClient("tok", "homologacao").BaixarArquivo(context.Background(), "/arquivos/a.xml"); err != nil || len(b) != 21 {
+		t.Fatalf("arquivo no limite: %d %v", len(b), err)
+	}
+}
