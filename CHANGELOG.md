@@ -6,6 +6,11 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.21] — 2026-11-25
+
+- fix(fiscal): totais do XML da prévia em decimal e sem série até a autorização (revisão) (`93ebe494`)
+- feat(fiscal): XML da prévia da NF-e (`795d9ff2`)
+
 ### Novidades
 - feat(fiscal): XML da prévia da NF-e — antes de transmitir, a prévia entrega o XML no layout da NF-e com o
   que seria enviado (mesmos dados da transmissão), marcado como prévia sem validade fiscal.
