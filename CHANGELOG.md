@@ -6,6 +6,15 @@ pipeline de release.
 
 ## Unreleased
 
+### Novidades
+- feat(estrutura): validações completas de indicadores, vigência e fórmulas de perda na estrutura de produto,
+  cobertura dos 28 campos com rótulos em português no histórico de alterações e fallback para `name` na descrição
+  de componentes sem descrição técnica de PDM.
+
+### Correções
+- fix(estrutura): atualização de componente passa a gravar `inherit` (herdar máscara do pai) e a checagem de
+  posição (`SequenceExists`) respeita a máscara do pai e o isolamento por `enterprise_id`.
+
 ## [v1.19.21] — 2026-11-25
 
 - fix(fiscal): totais do XML da prévia em decimal e sem série até a autorização (revisão) (`93ebe494`)

@@ -54,6 +54,9 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	if dto.Position < 1 {
 		return nil, errorsuc.NewValidationError("a posição do componente é obrigatória e deve ser positiva")
 	}
+	if err := validarIndicadoresECustos(dto.IsCoproduct, dto.IsFixedQty, dto.CustomerSupplied, dto.SetupLoss, dto.CostLoss, dto.CostLossType); err != nil {
+		return nil, err
+	}
 
 	parentCode, err := resolveItemCode(ctx, uc.Items, dto.ParentCode)
 	if err != nil {
@@ -103,6 +106,7 @@ func (uc *UpdateStructureComponentUseCase) Execute(
 	}
 	structure.IsCoproduct = dto.IsCoproduct
 	structure.IsFixedQty = dto.IsFixedQty
+	structure.Inherit = dto.Inherit
 	structure.SetSubstitute(dto.SubstituteGroup, dto.SubstitutePriority)
 	structure.WarehouseCode = dto.WarehouseCode
 	structure.LineWarehouseCode = dto.LineWarehouseCode

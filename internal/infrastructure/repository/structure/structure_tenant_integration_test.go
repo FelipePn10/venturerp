@@ -82,4 +82,36 @@ func TestStructureIsIsolatedByTenant(t *testing.T) {
 	if l, err := consulta.GetWhereUsed(a.Ctx, filho, 0); err != nil || len(l) != 1 {
 		t.Fatalf("empresa A não achou onde o próprio item é usado: %d (%v)", len(l), err)
 	}
+
+	// Update preserva Inherit e permanece isolado por empresa.
+	comp.Inherit = true
+	comp.Quantity = decimal.NewFromFloat(5)
+	comp.Sequence = 10
+	if _, err := repo.Update(a.Ctx, comp); err != nil {
+		t.Fatalf("empresa A não atualizou o componente: %v", err)
+	}
+	if l, err := repo.GetAllDirectChildren(a.Ctx, pai); err != nil || len(l) != 1 || !l[0].Inherit {
+		t.Fatalf("Update não persistiu Inherit=true: %+v (%v)", l, err)
+	}
+
+	// SequenceExists isola por máscara e por empresa.
+	m1, m2 := "MASC-A", "MASC-B"
+	filhoM := pai + 10
+	testutil.SeedItem(t, pool, a.Ctx, filhoM, actor)
+	defer func() { _, _ = pool.Exec(base, `DELETE FROM items WHERE code=$1`, filhoM) }()
+	if _, err := repo.Create(a.Ctx, &entity.ItemStructure{
+		ParentCode: pai, ChildCode: filhoM, ParentMask: &m1,
+		Quantity: decimal.NewFromFloat(1), UnitOfMeasurement: "UN", Health: "ATIVO", Sequence: 15, CreatedBy: actor,
+	}); err != nil {
+		t.Fatalf("criando componente com máscara A: %v", err)
+	}
+	if ok, err := repo.SequenceExists(a.Ctx, pai, 15, &m1); err != nil || !ok {
+		t.Fatalf("SequenceExists deveria detectar sequência 15 na mesma máscara A: ok=%v err=%v", ok, err)
+	}
+	if ok, err := repo.SequenceExists(a.Ctx, pai, 15, &m2); err != nil || ok {
+		t.Fatalf("SequenceExists não deve bloquear sequência 15 em outra máscara B: ok=%v err=%v", ok, err)
+	}
+	if ok, err := repo.SequenceExists(b.Ctx, pai, 15, &m1); err != nil || ok {
+		t.Fatalf("empresa B enxergou sequência da empresa A: ok=%v err=%v", ok, err)
+	}
 }

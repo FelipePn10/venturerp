@@ -69,6 +69,7 @@ type UpdateStructureComponentDTO struct {
 	EndDate             *time.Time                      `json:"end_date,omitempty"`
 	IsCoproduct         bool                            `json:"is_coproduct"`
 	IsFixedQty          bool                            `json:"is_fixed_qty"`
+	Inherit             bool                            `json:"inherit"`
 	SubstituteGroup     int16                           `json:"substitute_group"`
 	SubstitutePriority  int16                           `json:"substitute_priority"`
 	WarehouseCode       *int64                          `json:"warehouse_code,omitempty"`

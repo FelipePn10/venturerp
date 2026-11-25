@@ -55,7 +55,7 @@ SELECT
     s.id,
     s.parent_code,
     s.child_code,
-    i.pdm_description_technique AS child_description,
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS child_description,
     i.warehouse_unit_of_measurement AS child_stock_uom,
     s.parent_mask,
     s.quantity,
@@ -127,7 +127,7 @@ SELECT
     s.quantity_scale,
     s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection,
     s.quantity_stock_uom, s.conversion_factor, s.customer_supplied,
-    i.pdm_description_technique AS child_description,
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS child_description,
     i.warehouse_unit_of_measurement AS child_stock_uom
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -173,6 +173,7 @@ SET
     quantity_stock_uom   = $28,
     conversion_factor    = $29,
     customer_supplied    = $31,
+    inherit              = $32,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -212,7 +213,7 @@ WHERE structure.parent_code = $1
 -- name: GetItemCodeAndDescription :one
 SELECT
     i.code::BIGINT AS code,
-    i.pdm_description_technique AS description
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS description
 FROM items i
 WHERE i.code = $1 AND i.enterprise_id = $2
     LIMIT 1;
@@ -233,6 +234,7 @@ SELECT EXISTS (
     FROM item_structures
     WHERE parent_code = $1
       AND sequence    = $2
+      AND parent_mask IS NOT DISTINCT FROM sqlc.narg(parent_mask)::text
       AND is_active   = TRUE
       AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $3)
 ) AS "exists";
