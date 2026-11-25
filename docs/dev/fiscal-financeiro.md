@@ -1079,6 +1079,22 @@ diretamente do CDN do Focus.
 
 ---
 
+### `GET /api/fiscal/exits/{id}/previa/xml`
+
+XML da **prévia** da NF-e, antes de transmitir: `{"arquivo": "previa-nfe-<id>.xml", "xml": "..."}`.
+Montado (`focusnfe.XMLDaPrevia`) a partir do MESMO payload que a prévia e a
+transmissão enviam à Focus, no layout 4.00. A Focus não oferece XML antes da
+autorização (a prévia dela devolve só PDF), e o XML oficial só nasce na
+transmissão, assinado pela emissora. Por isso o da prévia sai marcado: tpAmb 2,
+sem `Id`/chave, assinatura nem protocolo, `nNF` 0 até a autorização e o aviso em
+`infCpl` e num comentário no topo. Não traz o que a Focus acrescenta (cNF/cDV,
+autXML, infRespTec) nem o que ela completa pelo próprio cadastro (telefone e nome
+fantasia do emitente, código do município do destinatário quando a nota não tem).
+
+Conferido contra a NF-e 75 da Tecnofer autorizada em homologação: 116 campos
+idênticos (itens, ICMS/IPI/PIS/COFINS/IBS/CBS, bases, alíquotas e totais); as 3
+diferenças são as do parágrafo acima.
+
 ### `GET /api/fiscal/exits/{id}/xml` e `GET /api/fiscal/nfse/{code}/xml`
 
 Devolvem o **conteúdo** do XML autorizado (não a URL) com o que identifica a

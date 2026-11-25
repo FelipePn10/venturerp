@@ -55,6 +55,23 @@ func (h *PreviaNFeHandler) PreviaPDF(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(pdf)
 }
 
+// PreviaXML devolve o XML da prévia (layout da NF-e, marcado como prévia sem
+// validade fiscal) com o nome do arquivo, para a tela mostrar, copiar e baixar.
+// GET /api/fiscal/exits/{id}/previa/xml
+func (h *PreviaNFeHandler) PreviaXML(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "nota de saída inválida")
+		return
+	}
+	nome, xml, err := h.previaUC.XML(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, map[string]string{"arquivo": nome, "xml": string(xml)})
+}
+
 // DestinatarioNotaHandler entrega à nota avulsa os dados do cliente já cadastrados.
 type DestinatarioNotaHandler struct {
 	uc *fiscal_uc.DestinatarioDaNotaUseCase

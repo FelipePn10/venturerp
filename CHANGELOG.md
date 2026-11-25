@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+### Novidades
+- feat(fiscal): XML da prévia da NF-e — antes de transmitir, a prévia entrega o XML no layout da NF-e com o
+  que seria enviado (mesmos dados da transmissão), marcado como prévia sem validade fiscal.
+
 ## [v1.19.20] — 2026-11-25
 
 - fix(focus): recusa arquivo da nota acima do limite em vez de cortá-lo (revisão) (`7b204799`)

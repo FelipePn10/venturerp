@@ -3053,6 +3053,7 @@ func (app *application) mount() chi.Router {
 			// pendências, sem transmitir nada.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa", previaNFeHandler.Previa)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa/pdf", previaNFeHandler.PreviaPDF)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa/xml", previaNFeHandler.PreviaXML)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Put("/exits/{id}/itens/{itemId}/cclass-trib", reformaTributariaHandler.DefinirClassTribDaLinha)
 			// Número de série das linhas de item que controla série.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/series", serieHandler.LinhasDaNota)
