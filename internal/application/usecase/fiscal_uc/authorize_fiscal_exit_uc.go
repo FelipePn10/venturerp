@@ -294,6 +294,7 @@ func (uc *AuthorizeFiscalExitUseCase) Execute(ctx context.Context, id int64) (*r
 	if err != nil {
 		return nil, err
 	}
+	guardarXMLDaNota(ctx, uc.Repo, focusCli, id, focusResp.PathXML, focusResp.Chave())
 
 	// Títulos do contas a receber, um por parcela da condição de pagamento.
 	//

@@ -14,7 +14,9 @@ import (
 
 type FiscalHandler struct {
 	// Descartar: NF-e em rascunho/rejeitada que não vai ser transmitida.
-	Descartar            *fiscal_uc.DescartarNotaUseCase
+	Descartar *fiscal_uc.DescartarNotaUseCase
+	// XMLDaSaida: XML autorizado da NF-e, com chave e protocolo, para copiar.
+	XMLDaSaida           *fiscal_uc.GetExitXMLUseCase
 	createEntryUC        *fiscal_uc.CreateFiscalEntryUseCase
 	uploadNFEUC          *fiscal_uc.UploadNFEEntryUseCase
 	approveEntryUC       *fiscal_uc.ApproveFiscalEntryUseCase
@@ -113,6 +115,22 @@ func (h *FiscalHandler) GetDANFE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.getDANFEUC.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// GetExitXML devolve o XML autorizado da NF-e emitida com a chave e o protocolo.
+// GET /api/fiscal/exits/{id}/xml
+func (h *FiscalHandler) GetExitXML(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "nota de saída inválida")
+		return
+	}
+	result, err := h.XMLDaSaida.Execute(r.Context(), id)
 	if err != nil {
 		security.RespondUseCaseError(w, err)
 		return

@@ -170,6 +170,13 @@ type UseCase struct {
 	// representante não acontecem (a pendência e o alerta continuam).
 	Documentos Documentos
 	Email      ports.EmailProvider
+	// XMLGuardado: a cópia do XML autorizado que o ERP guarda. Opcional: sem
+	// ela o XML vem da emissora, como a DANFE.
+	XMLGuardado XMLGuardado
+}
+
+type XMLGuardado interface {
+	ExitXML(ctx context.Context, id int64) (autorizado, cancelamento string, err error)
 }
 
 var travas sync.Map // "empresa:cliente" -> *sync.Mutex
@@ -360,6 +367,27 @@ func (uc *UseCase) PedirDeNovo(ctx context.Context, s *Sessao, code int64, obser
 		}
 	}
 	return res, nil
+}
+
+// XMLDaNota devolve a cópia guardada do XML autorizado da nota do cliente;
+// conteúdo vazio quando ainda não há cópia (o XML então vem da emissora).
+func (uc *UseCase) XMLDaNota(ctx context.Context, s *Sessao, nota int64, ip, agente string) (string, string, error) {
+	if uc.XMLGuardado == nil {
+		return "", "", nil
+	}
+	numero, ok, err := uc.Repo.NotaDoCliente(ctx, s, nota)
+	if err != nil {
+		return "", "", err
+	}
+	if !ok {
+		return "", "", ErrNaoEncontrado
+	}
+	xml, _, err := uc.XMLGuardado.ExitXML(ctx, nota)
+	if err != nil || xml == "" {
+		return "", "", err
+	}
+	_ = uc.Repo.Evento(ctx, s, "DOWNLOAD_XML", fmt.Sprintf("NF-e %d", numero), nil, nil, ip, agente)
+	return xml, fmt.Sprintf("NF-e %d.xml", numero), nil
 }
 
 // Documento devolve o endereço da DANFE (pdf) ou do XML da nota do cliente.

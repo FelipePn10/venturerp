@@ -146,6 +146,24 @@ func (h *PortalHandler) Documento(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "documento inválido")
 		return
 	}
+	if tipo == "xml" {
+		xml, nome, err := h.UC.XMLDaNota(ctx, s, nota, r.RemoteAddr, r.UserAgent())
+		if errors.Is(err, portal_uc.ErrNaoEncontrado) {
+			jsonError(w, http.StatusNotFound, "nota não encontrada")
+			return
+		}
+		if err != nil {
+			respondErr(w, err)
+			return
+		}
+		if xml != "" {
+			w.Header().Set("Content-Type", "application/xml")
+			w.Header().Set("Content-Disposition", `attachment; filename="`+strings.ReplaceAll(nome, `"`, "")+`"`)
+			w.Header().Set("Cache-Control", "no-store")
+			_, _ = io.WriteString(w, xml)
+			return
+		}
+	}
 	url, nome, err := h.UC.Documento(ctx, s, nota, tipo, r.RemoteAddr, r.UserAgent())
 	if err != nil {
 		if errors.Is(err, portal_uc.ErrNaoEncontrado) {

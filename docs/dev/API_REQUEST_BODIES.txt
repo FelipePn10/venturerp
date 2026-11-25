@@ -2206,6 +2206,14 @@ GET /api/fiscal/exits/{id}/danfe
 -- Sem corpo de requisição
 -- Resposta: { "exit_id": 1, "danfe_url": "https://...", "xml_url": "https://...", "status": "autorizada" }
 
+GET /api/fiscal/exits/{id}/xml
+-- XML autorizado da NF-e (conteúdo), guardado no banco na autorização ou na 1ª consulta
+-- Resposta: { "exit_id": 1, "numero_nf": 987, "serie": "1", "chave_acesso": "...", "protocolo": "...", "status": "AUTHORIZED", "xml": "<?xml ..." }
+
+GET /api/fiscal/nfse/{code}/xml
+-- XML autorizado da NFS-e (conteúdo)
+-- Resposta: { "id": 1, "numero_nfse": "55", "codigo_verificacao": "...", "url": "...", "status": "AUTORIZADA", "xml": "<?xml ..." }
+
 --- CONFIGURAÇÃO FISCAL ---
 
 GET /api/fiscal/config

@@ -139,9 +139,11 @@ func (uc *CancelFiscalExitUseCase) Execute(ctx context.Context, params CancelFis
 				slog.Error("falha ao gravar o registro da comunicação com a Focus", "documento", params.ID, "endpoint", endpoint, "erro", errLog)
 			}
 		})
-		if _, err := cli.CancelarNFe(ctx, *exit.FocusRef, params.Motivo); err != nil {
+		respCancel, err := cli.CancelarNFe(ctx, *exit.FocusRef, params.Motivo)
+		if err != nil {
 			return nil, erroDaEmissora(ctx, "o cancelamento", params.ID, err)
 		}
+		guardarXMLDoCancelamento(ctx, uc.Repo, cli, params.ID, respCancel.PathXMLCancel, derefStr(exit.ChaveAcesso))
 	}
 
 	updated, err := uc.Repo.CancelExitWithMotivo(ctx, params.ID, params.Motivo, userID)

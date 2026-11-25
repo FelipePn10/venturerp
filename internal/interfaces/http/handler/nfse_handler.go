@@ -17,6 +17,8 @@ type NFSeHandler struct {
 	cancelUC    *nfse_uc.CancelNFSeUseCase
 	listUC      *nfse_uc.ListNFSeUseCase
 	getUC       *nfse_uc.GetNFSeUseCase
+	// XML: XML autorizado da NFS-e para copiar.
+	XML *nfse_uc.GetNFSeXMLUseCase
 }
 
 func NewNFSeHandler(
@@ -92,6 +94,21 @@ func (h *NFSeHandler) Get(w http.ResponseWriter, r *http.Request) {
 	result, err := h.getUC.Execute(r.Context(), id)
 	if err != nil {
 		respondErrStatus(w, http.StatusNotFound, err)
+		return
+	}
+	security.RespondJSON(w, http.StatusOK, result)
+}
+
+// GetXML devolve o XML autorizado da NFS-e. GET /api/fiscal/nfse/{code}/xml
+func (h *NFSeHandler) GetXML(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "code"), 10, 64)
+	if err != nil || id <= 0 {
+		security.RespondError(w, http.StatusBadRequest, "código inválido")
+		return
+	}
+	result, err := h.XML.Execute(r.Context(), id)
+	if err != nil {
+		security.RespondUseCaseError(w, err)
 		return
 	}
 	security.RespondJSON(w, http.StatusOK, result)

@@ -1391,3 +1391,108 @@ func (r *FiscalRepositoryPG) DescartarRascunho(ctx context.Context, id int64, mo
 	}
 	return tag.RowsAffected() == 1, nil
 }
+
+func (r *FiscalRepositoryPG) ExitXML(ctx context.Context, id int64) (string, string, error) {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	var aut, can string
+	err = r.db.QueryRow(ctx,
+		`SELECT COALESCE(xml_content, ''), COALESCE(xml_cancelamento, '') FROM public.fiscal_exits WHERE id = $1 AND enterprise_id = $2`,
+		id, enterpriseID).Scan(&aut, &can)
+	if err == pgx.ErrNoRows {
+		return "", "", errorsuc.NewNotFoundError(fmt.Sprintf("NF-e de saída %d não encontrada", id))
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("lendo o XML da NF-e %d: %w", id, err)
+	}
+	return aut, can, nil
+}
+
+func (r *FiscalRepositoryPG) SaveExitXML(ctx context.Context, id int64, xml string) error {
+	return r.gravarXMLDaSaida(ctx, id, "xml_content", xml)
+}
+
+func (r *FiscalRepositoryPG) SaveExitCancelXML(ctx context.Context, id int64, xml string) error {
+	return r.gravarXMLDaSaida(ctx, id, "xml_cancelamento", xml)
+}
+
+// gravarXMLDaSaida: coluna vem só das duas funções acima, nunca de fora.
+func (r *FiscalRepositoryPG) gravarXMLDaSaida(ctx context.Context, id int64, coluna, xml string) error {
+	enterpriseID, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.db.Exec(ctx,
+		`UPDATE public.fiscal_exits SET `+coluna+` = $1 WHERE id = $2 AND enterprise_id = $3`,
+		xml, id, enterpriseID)
+	if err != nil {
+		return fmt.Errorf("gravando o XML da NF-e %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("NF-e de saída %d não encontrada", id))
+	}
+	return nil
+}
+
+// NotaSemXML: nota transmitida pela Focus sem a cópia do XML no banco.
+type NotaSemXML struct {
+	Tipo           string // NFE ou NFSE
+	ID             int64
+	EnterpriseID   int64
+	EnterpriseCode int64
+	Actor          uuid.UUID
+}
+
+// NotasSemXML lista, de todas as empresas com token da Focus, as notas
+// transmitidas que ainda não têm a cópia do XML (ou, cancelada, a do
+// cancelamento) e marca a tentativa: cada nota é tentada no máximo uma vez por
+// dia, e a que a Focus não tem mais não trava a fila.
+func (r *FiscalRepositoryPG) NotasSemXML(ctx context.Context, max int) ([]NotaSemXML, error) {
+	rows, err := r.db.Query(ctx, `
+		WITH alvos AS (
+			SELECT 'NFE' AS tipo, f.id, f.enterprise_id, f.created_by, f.xml_tentativa_em
+			  FROM public.fiscal_exits f
+			 WHERE f.focus_ref IS NOT NULL
+			   AND ((f.status = 'AUTHORIZED' AND f.xml_content IS NULL)
+			     OR (f.status = 'CANCELLED' AND (f.xml_content IS NULL OR f.xml_cancelamento IS NULL)))
+			   AND (f.xml_tentativa_em IS NULL OR f.xml_tentativa_em < NOW() - INTERVAL '1 day')
+			UNION ALL
+			SELECT 'NFSE', n.id, n.enterprise_id, n.created_by, n.xml_tentativa_em
+			  FROM public.nfse n
+			 WHERE n.focus_ref IS NOT NULL AND n.status IN ('AUTORIZADA', 'CANCELADA') AND n.xml_content IS NULL
+			   AND (n.xml_tentativa_em IS NULL OR n.xml_tentativa_em < NOW() - INTERVAL '1 day')
+		)
+		SELECT a.tipo, a.id, a.enterprise_id, e.code, a.created_by
+		  FROM alvos a
+		  JOIN public.enterprise e ON e.id = a.enterprise_id
+		  JOIN public.fiscal_configs c ON c.enterprise_id = a.enterprise_id AND COALESCE(c.focus_nfe_token, '') <> ''
+		 ORDER BY a.xml_tentativa_em NULLS FIRST, a.id DESC
+		 LIMIT $1`, max)
+	if err != nil {
+		return nil, fmt.Errorf("listando notas sem XML: %w", err)
+	}
+	defer rows.Close()
+	var out []NotaSemXML
+	for rows.Next() {
+		var n NotaSemXML
+		if err := rows.Scan(&n.Tipo, &n.ID, &n.EnterpriseID, &n.EnterpriseCode, &n.Actor); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, n := range out {
+		tabela := "public.fiscal_exits"
+		if n.Tipo == "NFSE" {
+			tabela = "public.nfse"
+		}
+		if _, err := r.db.Exec(ctx, `UPDATE `+tabela+` SET xml_tentativa_em = NOW() WHERE id = $1 AND enterprise_id = $2`, n.ID, n.EnterpriseID); err != nil {
+			return nil, fmt.Errorf("marcando a tentativa do XML: %w", err)
+		}
+	}
+	return out, nil
+}

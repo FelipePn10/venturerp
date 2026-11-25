@@ -206,6 +206,7 @@ func (uc *AuthorizeNFSeUseCase) Execute(ctx context.Context, id int64) (*respons
 	if err != nil {
 		return nil, err
 	}
+	guardarXMLDaNFSe(ctx, uc.Repo, cli, id, resp.CaminhoXML)
 	// O título vem DEPOIS de gravar a autorização: se ele falhar, a nota já
 	// está autorizada na prefeitura e não pode ser transmitida de novo.
 	if uc.Titulos != nil && authorized.CustomerCode != nil {
@@ -320,6 +321,91 @@ func (uc *GetNFSeUseCase) Execute(ctx context.Context, id int64) (*response.NFSe
 		return nil, err
 	}
 	return toNFSeResponse(n), nil
+}
+
+// NFSeXMLResult: o XML autorizado da NFS-e com o que identifica a nota.
+type NFSeXMLResult struct {
+	ID                int64  `json:"id"`
+	NumeroNFSe        string `json:"numero_nfse"`
+	CodigoVerificacao string `json:"codigo_verificacao"`
+	URL               string `json:"url"`
+	Status            string `json:"status"`
+	XML               string `json:"xml"`
+}
+
+// GetNFSeXMLUseCase devolve o XML autorizado da NFS-e. Guarda a cópia no banco
+// na primeira consulta: as seguintes não dependem da Focus.
+type GetNFSeXMLUseCase struct {
+	Repo   repository.NFSeRepository
+	Config ConfigProvider
+	Auth   ports.AuthService
+}
+
+func (uc *GetNFSeXMLUseCase) Execute(ctx context.Context, id int64) (*NFSeXMLResult, error) {
+	if !uc.Auth.CanGetFiscalExit(ctx) {
+		return nil, errorsuc.ErrUnauthorized
+	}
+	n, err := uc.Repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if n.Status != entity.NFSeStatusAutorizada && n.Status != entity.NFSeStatusCancelada {
+		return nil, errorsuc.NewValidationError("só NFS-e autorizada ou cancelada tem XML")
+	}
+	res := &NFSeXMLResult{ID: id, NumeroNFSe: deref(n.NumeroNFSe), CodigoVerificacao: deref(n.CodigoVerificacao), URL: deref(n.URL), Status: string(n.Status)}
+	if res.XML, err = uc.Repo.XML(ctx, id); err != nil {
+		return nil, err
+	}
+	if res.XML != "" {
+		return res, nil
+	}
+	if n.FocusRef == nil || *n.FocusRef == "" {
+		return nil, errorsuc.NewValidationError("esta NFS-e não foi transmitida à prefeitura por este sistema, então o XML dela não está aqui")
+	}
+	cfg, err := uc.Config.GetFiscalConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.FocusNfeToken == nil || *cfg.FocusNfeToken == "" {
+		return nil, errorsuc.NewValidationError("o token da Focus NF-e não está configurado: informe-o nos Parâmetros Fiscais (VFIS0100)")
+	}
+	cli := focusnfe.NewClient(*cfg.FocusNfeToken, cfg.FocusNfeAmbiente)
+	cli.WithLogger(func(endpoint, method, reqBody, respBody string, statusCode, durationMs int) {
+		if errLog := uc.Repo.SaveFocusLog(ctx, endpoint, method, reqBody, respBody, statusCode, durationMs); errLog != nil {
+			slog.Error("falha ao gravar o registro da comunicação com a Focus", "endpoint", endpoint, "erro", errLog)
+		}
+	})
+	resp, err := cli.ConsultarNFSe(ctx, *n.FocusRef)
+	if err != nil {
+		return nil, fiscal_uc.ErroDaEmissora(ctx, "a prefeitura", "a consulta do XML", id, err)
+	}
+	if resp == nil || resp.CaminhoXML == "" {
+		return nil, errorsuc.NewValidationError("a Focus NF-e ainda não disponibilizou o XML desta NFS-e: tente de novo em instantes")
+	}
+	xml, err := fiscal_uc.BaixarXMLDaNota(ctx, cli, resp.CaminhoXML, "")
+	if err != nil {
+		return nil, fiscal_uc.ErroDaEmissora(ctx, "a prefeitura", "o download do XML", id, err)
+	}
+	if err := uc.Repo.SaveXML(ctx, id, xml); err != nil {
+		return nil, err
+	}
+	res.XML = xml
+	return res, nil
+}
+
+// guardarXMLDaNFSe guarda a cópia do XML na autorização. Falhar aqui não
+// desfaz a autorização: a primeira consulta do XML tenta de novo.
+func guardarXMLDaNFSe(ctx context.Context, repo repository.NFSeRepository, cli *focusnfe.Client, id int64, caminho string) {
+	if caminho == "" {
+		return
+	}
+	xml, err := fiscal_uc.BaixarXMLDaNota(ctx, cli, caminho, "")
+	if err == nil {
+		err = repo.SaveXML(ctx, id, xml)
+	}
+	if err != nil {
+		slog.WarnContext(ctx, "XML da NFS-e autorizada não foi guardado agora; será baixado na primeira consulta", "documento", id, "erro", err)
+	}
 }
 
 func deref(p *string) string {

@@ -1076,6 +1076,53 @@ diretamente do CDN do Focus.
 - `"NF-e deve estar autorizada para consultar DANFE"` → NF-e em rascunho ou cancelada
 - `"token Focus NF-e não configurado"` → execute `PUT /api/fiscal/config` primeiro
 
+
+---
+
+### `GET /api/fiscal/exits/{id}/xml` e `GET /api/fiscal/nfse/{code}/xml`
+
+Devolvem o **conteúdo** do XML autorizado (não a URL) com o que identifica a
+nota, para o usuário conferir os impostos e repassar o arquivo (janela "XML"
+nas telas VFIS0200 e VNFS0100). Valem para nota autorizada ou cancelada.
+
+A cópia fica em `fiscal_exits.xml_content` / `nfse.xml_content` (migração
+000511): o manual da Focus não diz por quanto tempo guarda os arquivos, e o
+emitente tem de guardá-los por 5 anos. O XML é baixado na autorização (falha
+ali só gera aviso no log) ou, para notas antigas, na primeira consulta; depois
+sai do banco sem falar com a Focus. O download confere que o arquivo é XML e
+contém a chave da nota antes de gravar. O token vai só para a Focus — caminho
+absoluto em outro host (S3) é baixado sem ele.
+
+**Resposta NF-e (`200 OK`):**
+```json
+{ "exit_id": 1, "numero_nf": 987, "serie": "1", "chave_acesso": "4125…9876",
+  "protocolo": "141250000012345", "status": "AUTHORIZED", "xml": "<?xml …" }
+```
+**Resposta NFS-e:** `id`, `numero_nfse`, `codigo_verificacao`, `url`, `status`, `xml`.
+
+**Erros comuns:** nota em rascunho/rejeitada (422); nota que não foi
+transmitida por este sistema, sem `focus_ref` (422); Focus ainda sem o arquivo
+(422, tente de novo); Focus fora do ar (502).
+
+**Cancelamento:** a NF-e cancelada também guarda o XML do evento de
+cancelamento (`fiscal_exits.xml_cancelamento`, migração 000512), baixado no
+cancelamento ou na consulta de status; a resposta traz `xml_cancelamento`. Sem
+ele na Focus, a consulta ainda devolve o XML autorizado.
+
+**Notas antigas:** a rotina `xmlnotas` (a cada 10 min, até 30 notas por ciclo,
+1 s entre elas) guarda o XML das notas transmitidas que ainda não têm cópia, de
+todas as empresas com token, na sessão da empresa da nota. Cada nota é tentada
+no máximo uma vez por dia (`xml_tentativa_em`): a que a Focus não tem mais não
+trava a fila.
+
+**Portal do cliente:** o download do XML sai da cópia do banco quando ela existe;
+sem cópia, continua vindo da Focus como a DANFE.
+
+**Focus (conferido na homologação em 25/11/2026):** o arquivo em `/arquivos/...`
+é público (não pede o token) e chega depois de dois redirecionamentos
+(`/arquivos/...` → `/notas_fiscais/NFe<chave>.xml` → arquivo); chave
+inexistente devolve 404.
+
 ---
 
 ### Devolução de compra (migração 000381)

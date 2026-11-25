@@ -267,6 +267,7 @@ import (
 	unitOfMeasureRepo "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/unit_of_measure"
 	"github.com/FelipePn10/panossoerp/internal/infrastructure/repository/user"
 	warehouse "github.com/FelipePn10/panossoerp/internal/infrastructure/repository/warehouse"
+	"github.com/FelipePn10/panossoerp/internal/infrastructure/xmlnotas"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler"
 	"github.com/FelipePn10/panossoerp/internal/interfaces/http/handler/security"
 	httpmw "github.com/FelipePn10/panossoerp/internal/interfaces/middleware"
@@ -292,6 +293,8 @@ type application struct {
 	revisoesScheduler   *itemrevisoes.Scheduler
 	// clienteReceitaScheduler reconsulta a situação cadastral dos clientes.
 	clienteReceitaScheduler *clientereceita.Scheduler
+	// xmlNotasScheduler guarda o XML das notas emitidas que ainda não o têm.
+	xmlNotasScheduler *xmlnotas.Scheduler
 	// creditoRevisaoScheduler revê o limite de crédito no intervalo da política.
 	creditoRevisaoScheduler *creditorevisao.Scheduler
 }
@@ -1723,6 +1726,7 @@ func (app *application) mount() chi.Router {
 		&fiscalUC.ListCartasCorrecaoUseCase{Repo: fiscalRepository, Auth: authService},
 		&fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService},
 	)
+	fiscalHandler.XMLDaSaida = &fiscalUC.GetExitXMLUseCase{Repo: fiscalRepository, Auth: authService}
 	fiscalHandler.Descartar = &fiscalUC.DescartarNotaUseCase{Auth: authService, Notas: fiscalRepository.(fiscalUC.NotasDescartaveis), Romaneios: shipmentRepoPG, Beneficiamento: customerMaterialUC}
 
 	// company branding (report letterhead logo + brand colour)
@@ -1760,6 +1764,7 @@ func (app *application) mount() chi.Router {
 	poPrevisaoUC := &purchase_order_uc.PrevisaoPagamentosUseCase{Repo: poRepo, Condicoes: custRepo, Auth: authService}
 	// Portal: DANFE/XML pela mesma consulta da tela fiscal e e-mail ao representante.
 	portalHandler.UC.Documentos = &fiscalUC.GetDANFEUseCase{Repo: fiscalRepository, Auth: authService}
+	portalHandler.UC.XMLGuardado = fiscalRepository
 	portalHandler.UC.Email = notification.NewCentralEmailProvider(emailSvc)
 	poComprasHandler := &handler.PurchaseOrderComprasHandler{
 		Documento: &purchase_order_uc.DocumentoPedidoUseCase{Repo: poRepo, Consultas: poConsultas, Previsao: poPrevisaoUC,
@@ -1784,6 +1789,8 @@ func (app *application) mount() chi.Router {
 		&nfse_uc.ListNFSeUseCase{Repo: nfseRepository, Auth: authService},
 		&nfse_uc.GetNFSeUseCase{Repo: nfseRepository, Auth: authService},
 	)
+	nfseHandler.XML = &nfse_uc.GetNFSeXMLUseCase{Repo: nfseRepository, Config: fiscalRepository, Auth: authService}
+	app.xmlNotasScheduler = xmlnotas.NewScheduler(fiscalRepository.(*fiscalRepo.FiscalRepositoryPG), fiscalHandler.XMLDaSaida, nfseHandler.XML, app.logger)
 
 	// fiscal: manifestação do destinatário + inutilização de numeração
 	fiscalManifestHandler := handler.NewFiscalManifestHandler(
@@ -3034,12 +3041,14 @@ func (app *application) mount() chi.Router {
 			r.With(httpmw.RequirePermission(httpmw.PermFiscalAuthorize)).Post("/nfse/{code}/cancel", nfseHandler.Cancel)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/list", nfseHandler.List)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/{code}", nfseHandler.Get)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/nfse/{code}/xml", nfseHandler.GetXML)
 			// NF-e status consultation, CC-e list, DANFE PDF URL
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/status", fiscalHandler.ConsultarNFe)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/pendencias", pendenciasNFeHandler.Listar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Post("/exits/{id}/reprocessar-efeitos", pendenciasNFeHandler.Reprocessar)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/cartas-correcao", fiscalHandler.ListCartasCorrecao)
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/danfe", fiscalHandler.GetDANFE)
+			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/xml", fiscalHandler.GetExitXML)
 			// Prévia da nota: monta o documento que iria para a SEFAZ e lista as
 			// pendências, sem transmitir nada.
 			r.With(httpmw.RequireRole("ADMIN", "USER")).Get("/exits/{id}/previa", previaNFeHandler.Previa)
@@ -4332,6 +4341,9 @@ func (app *application) run(r chi.Router) error {
 	}
 	if app.clienteReceitaScheduler != nil {
 		go app.clienteReceitaScheduler.Run(ctx)
+	}
+	if app.xmlNotasScheduler != nil {
+		go app.xmlNotasScheduler.Run(ctx)
 	}
 	if app.revisoesScheduler != nil {
 		go app.revisoesScheduler.Run(ctx)
