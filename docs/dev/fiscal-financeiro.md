@@ -1086,7 +1086,7 @@ Montado (`focusnfe.XMLDaPrevia`) a partir do MESMO payload que a prévia e a
 transmissão enviam à Focus, no layout 4.00. A Focus não oferece XML antes da
 autorização (a prévia dela devolve só PDF), e o XML oficial só nasce na
 transmissão, assinado pela emissora. Por isso o da prévia sai marcado: tpAmb 2,
-sem `Id`/chave, assinatura nem protocolo, `nNF` 0 até a autorização e o aviso em
+sem `Id`/chave, assinatura nem protocolo, sem série e com `nNF` 0 até a autorização (a Focus define os dois), totais somados em decimal, e o aviso em
 `infCpl` e num comentário no topo. Não traz o que a Focus acrescenta (cNF/cDV,
 autXML, infRespTec) nem o que ela completa pelo próprio cadastro (telefone e nome
 fantasia do emitente, código do município do destinatário quando a nota não tem).

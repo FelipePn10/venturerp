@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // DadosDaPrevia completa o payload com o que a Focus tira do cadastro do
@@ -134,57 +136,57 @@ func XMLDaPrevia(p NFEPayload, d DadosDaPrevia) []byte {
 
 	b.open("total")
 	b.open("ICMSTot")
-	b.leaf("vBC", v2(t.vBC))
-	b.leaf("vICMS", v2(t.vICMS))
-	b.leaf("vICMSDeson", v2(t.vDeson))
+	b.leaf("vBC", vd(t.vBC))
+	b.leaf("vICMS", vd(t.vICMS))
+	b.leaf("vICMSDeson", vd(t.vDeson))
 	if t.temUFDest {
-		b.leaf("vFCPUFDest", v2(t.vFCPUFDest))
-		b.leaf("vICMSUFDest", v2(t.vICMSUFDest))
+		b.leaf("vFCPUFDest", vd(t.vFCPUFDest))
+		b.leaf("vICMSUFDest", vd(t.vICMSUFDest))
 		b.leaf("vICMSUFRemet", v2(0))
 	}
 	b.leaf("vFCP", v2(0))
-	b.leaf("vBCST", v2(t.vBCST))
-	b.leaf("vST", v2(t.vST))
+	b.leaf("vBCST", vd(t.vBCST))
+	b.leaf("vST", vd(t.vST))
 	b.leaf("vFCPST", v2(0))
 	b.leaf("vFCPSTRet", v2(0))
-	b.leaf("vProd", v2(t.vProd))
-	b.leaf("vFrete", v2(t.vFrete))
-	b.leaf("vSeg", v2(t.vSeg))
-	b.leaf("vDesc", v2(t.vDesc))
+	b.leaf("vProd", vd(t.vProd))
+	b.leaf("vFrete", vd(t.vFrete))
+	b.leaf("vSeg", vd(t.vSeg))
+	b.leaf("vDesc", vd(t.vDesc))
 	b.leaf("vII", v2(0))
-	b.leaf("vIPI", v2(t.vIPI))
+	b.leaf("vIPI", vd(t.vIPI))
 	b.leaf("vIPIDevol", v2(0))
-	b.leaf("vPIS", v2(t.vPIS))
-	b.leaf("vCOFINS", v2(t.vCOFINS))
+	b.leaf("vPIS", vd(t.vPIS))
+	b.leaf("vCOFINS", vd(t.vCOFINS))
 	b.leaf("vOutro", v2(0))
-	vNF := p.ValorTotal
-	if vNF <= 0 {
-		vNF = t.vProd - t.vDesc + t.vST + t.vFrete + t.vSeg + t.vIPI - t.vDeson
+	vNF := decimal.NewFromFloat(p.ValorTotal).Round(2)
+	if !vNF.IsPositive() {
+		vNF = t.vProd.Sub(t.vDesc).Add(t.vST).Add(t.vFrete).Add(t.vSeg).Add(t.vIPI).Sub(t.vDeson)
 	}
-	b.leaf("vNF", v2(vNF))
+	b.leaf("vNF", vd(vNF))
 	b.close("ICMSTot")
 	if t.temIBSCBS {
 		b.open("IBSCBSTot")
-		b.leaf("vBCIBSCBS", v2(t.vBCIBSCBS))
+		b.leaf("vBCIBSCBS", vd(t.vBCIBSCBS))
 		b.open("gIBS")
 		b.open("gIBSUF")
 		b.leaf("vDif", v2(0))
 		b.leaf("vDevTrib", v2(0))
-		b.leaf("vIBSUF", v2(t.vIBSUF))
+		b.leaf("vIBSUF", vd(t.vIBSUF))
 		b.close("gIBSUF")
 		b.open("gIBSMun")
 		b.leaf("vDif", v2(0))
 		b.leaf("vDevTrib", v2(0))
-		b.leaf("vIBSMun", v2(t.vIBSMun))
+		b.leaf("vIBSMun", vd(t.vIBSMun))
 		b.close("gIBSMun")
-		b.leaf("vIBS", v2(t.vIBS))
+		b.leaf("vIBS", vd(t.vIBS))
 		b.leaf("vCredPres", v2(0))
 		b.leaf("vCredPresCondSus", v2(0))
 		b.close("gIBS")
 		b.open("gCBS")
 		b.leaf("vDif", v2(0))
 		b.leaf("vDevTrib", v2(0))
-		b.leaf("vCBS", v2(t.vCBS))
+		b.leaf("vCBS", vd(t.vCBS))
 		b.leaf("vCredPres", v2(0))
 		b.leaf("vCredPresCondSus", v2(0))
 		b.close("gCBS")
@@ -247,12 +249,25 @@ func XMLDaPrevia(p NFEPayload, d DadosDaPrevia) []byte {
 	return []byte(b.String())
 }
 
+// totaisPrevia soma em decimal (centavos exatos): float perde centavo em nota
+// grande ou com muitas linhas.
 type totaisPrevia struct {
-	vBC, vICMS, vDeson, vBCST, vST, vProd, vFrete, vSeg, vDesc, vIPI, vPIS, vCOFINS float64
+	vBC, vICMS, vDeson, vBCST, vST, vProd, vFrete, vSeg, vDesc, vIPI, vPIS, vCOFINS decimal.Decimal
 	temUFDest                                                                       bool
-	vFCPUFDest, vICMSUFDest                                                         float64
+	vFCPUFDest, vICMSUFDest                                                         decimal.Decimal
 	temIBSCBS                                                                       bool
-	vBCIBSCBS, vIBSUF, vIBSMun, vIBS, vCBS                                          float64
+	vBCIBSCBS, vIBSUF, vIBSMun, vIBS, vCBS                                          decimal.Decimal
+}
+
+// soma acumula o valor da linha já arredondado em centavos, como sai no XML.
+func soma(d *decimal.Decimal, f float64) { *d = d.Add(decimal.NewFromFloat(f).Round(2)) }
+
+// vd: total em decimal, no mesmo formato de v2.
+func vd(d decimal.Decimal) string {
+	if d.Round(2).IsZero() {
+		return "0"
+	}
+	return d.StringFixed(2)
 }
 
 func (b *xmlb) detPrevia(it NFEItem, t *totaisPrevia) {
@@ -317,13 +332,13 @@ func (b *xmlb) detPrevia(it NFEItem, t *totaisPrevia) {
 			b.close("IPINT")
 		}
 		b.close("IPI")
-		t.vIPI += it.ValorIPI
+		soma(&t.vIPI, it.ValorIPI)
 	}
 	base := basePISCOFINS(it)
 	b.contribPrevia("PIS", it.CodigoSituacaoTributariaPIS, base, it.AliquotaPIS, it.ValorPIS)
 	b.contribPrevia("COFINS", it.CodigoSituacaoTributariaCOFINS, base, it.AliquotaCOFINS, it.ValorCOFINS)
-	t.vPIS += it.ValorPIS
-	t.vCOFINS += it.ValorCOFINS
+	soma(&t.vPIS, it.ValorPIS)
+	soma(&t.vCOFINS, it.ValorCOFINS)
 	if g := it.UFDest; g != nil {
 		b.open("ICMSUFDest")
 		b.leaf("vBCUFDest", v2(g.Base))
@@ -341,8 +356,8 @@ func (b *xmlb) detPrevia(it NFEItem, t *totaisPrevia) {
 		b.leaf("vICMSUFRemet", v2(0))
 		b.close("ICMSUFDest")
 		t.temUFDest = true
-		t.vFCPUFDest += g.ValorFCP
-		t.vICMSUFDest += g.ValorDestino
+		soma(&t.vFCPUFDest, g.ValorFCP)
+		soma(&t.vICMSUFDest, g.ValorDestino)
 	}
 	if g := it.IBSCBS; g != nil {
 		t.temIBSCBS = true
@@ -369,11 +384,11 @@ func (b *xmlb) detPrevia(it NFEItem, t *totaisPrevia) {
 			b.leaf("vCBS", v2(g.ValorCBS))
 			b.close("gCBS")
 			b.close("gIBSCBS")
-			t.vBCIBSCBS += g.Base
-			t.vIBSUF += g.ValorIBSUF
-			t.vIBSMun += g.ValorIBSMun
-			t.vIBS += g.ValorIBS
-			t.vCBS += g.ValorCBS
+			soma(&t.vBCIBSCBS, g.Base)
+			soma(&t.vIBSUF, g.ValorIBSUF)
+			soma(&t.vIBSMun, g.ValorIBSMun)
+			soma(&t.vIBS, g.ValorIBS)
+			soma(&t.vCBS, g.ValorCBS)
 		}
 		b.close("IBSCBS")
 	}
@@ -387,10 +402,10 @@ func (b *xmlb) detPrevia(it NFEItem, t *totaisPrevia) {
 	}
 	b.raw("</det>")
 
-	t.vProd += it.ValorBruto
-	t.vFrete += it.ValorFrete
-	t.vSeg += it.ValorSeguro
-	t.vDesc += it.ValorDesconto
+	soma(&t.vProd, it.ValorBruto)
+	soma(&t.vFrete, it.ValorFrete)
+	soma(&t.vSeg, it.ValorSeguro)
+	soma(&t.vDesc, it.ValorDesconto)
 }
 
 // icmsPrevia escreve o grupo do ICMS pelo CST/CSOSN, na ordem do layout, com
@@ -436,15 +451,15 @@ func (b *xmlb) icmsPrevia(it NFEItem, t *totaisPrevia) {
 		b.leaf("vBCST", v2(deref(it.BaseCalculoICMSST)))
 		b.leaf("pICMSST", v4(deref(it.AliquotaICMSST)))
 		b.leaf("vICMSST", v2(*it.ValorICMSST))
-		t.vBCST += deref(it.BaseCalculoICMSST)
-		t.vST += *it.ValorICMSST
+		soma(&t.vBCST, deref(it.BaseCalculoICMSST))
+		soma(&t.vST, *it.ValorICMSST)
 	}
 	deson := func() {
 		if it.MotivoDesoneracao != "" && it.ValorICMSDesonerado > 0 {
 			b.leaf("vICMSDeson", v2(it.ValorICMSDesonerado))
 			b.leaf("motDesICMS", it.MotivoDesoneracao)
 			b.leaf("indDeduzDeson", "1")
-			t.vDeson += it.ValorICMSDesonerado
+			soma(&t.vDeson, it.ValorICMSDesonerado)
 		}
 	}
 	credito := func() {
@@ -508,8 +523,8 @@ func (b *xmlb) icmsPrevia(it NFEItem, t *totaisPrevia) {
 	b.close(grupo)
 	b.close("ICMS")
 	if cstComICMS[cst] {
-		t.vBC += it.ValorBaseCalculoICMS
-		t.vICMS += vICMS
+		soma(&t.vBC, it.ValorBaseCalculoICMS)
+		soma(&t.vICMS, vICMS)
 	}
 }
 

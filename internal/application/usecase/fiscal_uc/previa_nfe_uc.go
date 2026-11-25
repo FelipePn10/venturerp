@@ -105,8 +105,9 @@ func (uc *PreviaNFeUseCase) XML(ctx context.Context, id int64) (string, []byte, 
 	if err != nil {
 		return "", nil, err
 	}
-	// A série é a da nota; o número só existe depois da autorização (a Focus numera).
-	numero, serie := numeroDefinitivo(m.exit), strings.TrimSpace(m.exit.Serie)
+	// Série e número só existem depois da autorização (a Focus define): no
+	// rascunho a série gravada é valor de controle, como na prévia da tela.
+	numero, serie := numeroDefinitivo(m.exit), serieDefinitiva(m.exit)
 	nome := fmt.Sprintf("previa-nfe-%d.xml", m.exit.ID)
 	if numero > 0 {
 		nome = fmt.Sprintf("previa-nfe-%d-serie-%s.xml", numero, serie)

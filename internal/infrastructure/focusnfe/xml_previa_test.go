@@ -152,3 +152,15 @@ func TestXMLDaPrevia_TotaisComSTEDesoneracao(t *testing.T) {
 	confere(t, m, "NFe/infNFe/total/ICMSTot/vICMSDeson", "6.00")
 	confere(t, m, "NFe/infNFe/total/ICMSTot/vNF", "157.20")
 }
+
+// Totais em decimal: muitas linhas de centavos somam exato.
+func TestXMLDaPrevia_TotaisSemErroDeCentavo(t *testing.T) {
+	var itens []NFEItem
+	for i := 1; i <= 1000; i++ {
+		itens = append(itens, NFEItem{NumeroItem: i, ValorBruto: 0.1, CodigoSituacaoTributariaICMS: "00", ValorBaseCalculoICMS: 0.1, ValorICMS: 0.01, ValorIPI: 0.03, CodigoSituacaoTributariaIPI: "50"})
+	}
+	m := tags(t, XMLDaPrevia(NFEPayload{Items: itens}, DadosDaPrevia{}))
+	confere(t, m, "NFe/infNFe/total/ICMSTot/vProd", "100.00")
+	confere(t, m, "NFe/infNFe/total/ICMSTot/vICMS", "10.00")
+	confere(t, m, "NFe/infNFe/total/ICMSTot/vNF", "130.00")
+}
