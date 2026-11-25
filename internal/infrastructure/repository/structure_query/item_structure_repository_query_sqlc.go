@@ -94,15 +94,26 @@ func structureQueryRowsToEntities(rows []sqlc.GetDirectChildrenForMaskRow) []*st
 			// A consulta já trazia estes campos, mas o mapeamento os descartava:
 			// a estrutura era gravada com vigência, fórmula e alternativos e
 			// voltava zerada, então a tela nunca conseguia exibi-los de volta.
-			StartDate:          pgutil.FromPgDateToPtr(row.StartDate),
-			EndDate:            pgutil.FromPgDateToPtr(row.EndDate),
-			IsCoproduct:        row.IsCoproduct,
-			IsFixedQty:         row.IsFixedQty,
-			CustomerSupplied:   row.CustomerSupplied,
-			SubstituteGroup:    row.SubstituteGroup,
-			SubstitutePriority: row.SubstitutePriority,
-			QuantityRounding:   row.QuantityRounding,
-			QuantityScale:      row.QuantityScale,
+			StartDate:              pgutil.FromPgDateToPtr(row.StartDate),
+			EndDate:                pgutil.FromPgDateToPtr(row.EndDate),
+			IsCoproduct:            row.IsCoproduct,
+			IsFixedQty:             row.IsFixedQty,
+			CustomerSupplied:       row.CustomerSupplied,
+			SubstituteGroup:        row.SubstituteGroup,
+			SubstitutePriority:     row.SubstitutePriority,
+			QuantityRounding:       row.QuantityRounding,
+			QuantityScale:          row.QuantityScale,
+			StockUnitOfMeasurement: types.TypeUnitOfMeasurementItem(row.ChildStockUom),
+			QuantityStockUOM:       pgutil.FromPgNumericToDecimal(row.QuantityStockUom),
+			ConversionFactor:       pgutil.FromPgNumericToDecimal(row.ConversionFactor),
+			WarehouseCode:          row.WarehouseCode,
+			LineWarehouseCode:      row.LineWarehouseCode,
+			SetupLoss:              row.SetupLoss,
+			CostLossType:           row.CostLossType,
+			CostLoss:               row.CostLoss,
+			CostCenterCode:         row.CostCenterCode,
+			IsCriticalMPS:          row.IsCriticalMps,
+			GeneratesInspection:    row.GeneratesInspection,
 		}
 
 		if row.ParentMask.Valid {

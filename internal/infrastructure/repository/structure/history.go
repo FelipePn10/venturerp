@@ -57,6 +57,7 @@ func instantaneo(s *entity.ItemStructure) []byte {
 		"vigencia_fim":           s.EndDate,
 		"coproduto":              s.IsCoproduct,
 		"quantidade_por_ordem":   s.IsFixedQty,
+		"herda_mascara":          s.Inherit,
 		"grupo_alternativo":      s.SubstituteGroup,
 		"prioridade_alternativo": s.SubstitutePriority,
 		"almoxarifado":           s.WarehouseCode,
@@ -65,6 +66,8 @@ func instantaneo(s *entity.ItemStructure) []byte {
 		"critico_mps":            s.IsCriticalMPS,
 		"gera_inspecao":          s.GeneratesInspection,
 		"fornecido_pelo_cliente": s.CustomerSupplied,
+		"observacoes":            s.Notes,
+		"mascara_pai":            s.ParentMask,
 		"ativo":                  s.IsActive,
 	}
 	raw, err := json.Marshal(dados)

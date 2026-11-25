@@ -36,6 +36,10 @@ var rotulos = map[string]string{
 	"centro_custo":           "Centro de custo",
 	"critico_mps":            "Crítico para o plano mestre",
 	"gera_inspecao":          "Gera inspeção",
+	"fornecido_pelo_cliente": "Fornecido pelo cliente",
+	"herda_mascara":          "Herdar máscara do pai",
+	"observacoes":            "Observações",
+	"mascara_pai":            "Máscara do pai",
 	"ativo":                  "Ativo",
 }
 

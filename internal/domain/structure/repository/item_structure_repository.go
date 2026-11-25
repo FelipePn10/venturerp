@@ -46,7 +46,7 @@ type ItemStructureRepository interface {
 	HasCyclicReference(ctx context.Context, startCode, targetCode int64) (bool, error)
 
 	// SUPPORT (MASK RUNTIME)
-	SequenceExists(ctx context.Context, parentCode int64, sequence int) (bool, error)
+	SequenceExists(ctx context.Context, parentCode int64, sequence int, parentMask *string) (bool, error)
 
 	GetItemCodeAndDesc(ctx context.Context, itemCode int64) (int64, string, error)
 

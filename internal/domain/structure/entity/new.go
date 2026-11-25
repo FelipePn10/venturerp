@@ -68,8 +68,14 @@ func NewItemStructure(
 	if parentMask != nil && *parentMask == "" {
 		return nil, domainerr.NewValidation("parent_mask não pode ser uma string vazia; use nil para genérico")
 	}
-	if lossFormula != nil && *lossFormula == "" {
-		lossFormula = nil
+	lossFormula = normalizeFormula(lossFormula)
+	if lossFormula != nil {
+		if err := formula.Validate(*lossFormula); err != nil {
+			return nil, fmt.Errorf("fórmula de perda inválida: %w", err)
+		}
+	}
+	if startDate != nil && endDate != nil && startDate.After(*endDate) {
+		return nil, domainerr.NewValidation("o fim da vigência não pode ser anterior ao início")
 	}
 
 	return &ItemStructure{
@@ -162,8 +168,14 @@ func (s *ItemStructure) Update(
 	if sequence < 1 {
 		sequence = 10
 	}
-	if lossFormula != nil && *lossFormula == "" {
-		lossFormula = nil
+	lossFormula = normalizeFormula(lossFormula)
+	if lossFormula != nil {
+		if err := formula.Validate(*lossFormula); err != nil {
+			return fmt.Errorf("fórmula de perda inválida: %w", err)
+		}
+	}
+	if startDate != nil && endDate != nil && startDate.After(*endDate) {
+		return domainerr.NewValidation("o fim da vigência não pode ser anterior ao início")
 	}
 	s.Quantity = quantity
 	s.UnitOfMeasurement = uom

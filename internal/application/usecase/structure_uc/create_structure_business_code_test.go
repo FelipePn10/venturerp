@@ -20,6 +20,7 @@ import (
 type structureBusinessCodeAuth struct{ ports.AuthService }
 
 func (structureBusinessCodeAuth) CanCreateStructure(context.Context) bool { return true }
+func (structureBusinessCodeAuth) UpdateStructure(context.Context) bool    { return true }
 func (structureBusinessCodeAuth) UserID(context.Context) (uuid.UUID, error) {
 	return uuid.MustParse("11111111-1111-1111-1111-111111111111"), nil
 }
@@ -38,10 +39,12 @@ func (f structureBusinessCodeItems) FindItemByBusinessCode(_ context.Context, co
 
 type structureBusinessCodeRepo struct {
 	structrepo.ItemStructureRepository
-	created     *entity.ItemStructure
-	hasCycle    bool
-	cycleStart  int64
-	cycleTarget int64
+	created      *entity.ItemStructure
+	updated      *entity.ItemStructure
+	hasCycle     bool
+	cycleStart   int64
+	cycleTarget  int64
+	seqMasksSeen []*string
 }
 
 func (r *structureBusinessCodeRepo) ItemExists(context.Context, int64) (bool, error) {
@@ -52,12 +55,17 @@ func (r *structureBusinessCodeRepo) HasCyclicReference(_ context.Context, startC
 	r.cycleTarget = targetCode
 	return r.hasCycle, nil
 }
-func (r *structureBusinessCodeRepo) SequenceExists(context.Context, int64, int) (bool, error) {
+func (r *structureBusinessCodeRepo) SequenceExists(_ context.Context, _ int64, _ int, mask *string) (bool, error) {
+	r.seqMasksSeen = append(r.seqMasksSeen, mask)
 	return false, nil
 }
 func (r *structureBusinessCodeRepo) Create(_ context.Context, component *entity.ItemStructure) (*entity.ItemStructure, error) {
 	r.created = component
 	component.ID = 1
+	return component, nil
+}
+func (r *structureBusinessCodeRepo) Update(_ context.Context, component *entity.ItemStructure) (*entity.ItemStructure, error) {
+	r.updated = component
 	return component, nil
 }
 
@@ -132,5 +140,49 @@ func TestCreateStructureBlocksSelfReference(t *testing.T) {
 	}
 	if repo.cycleStart != 0 || repo.cycleTarget != 0 {
 		t.Fatal("autorreferência deveria ser bloqueada antes de consultar a árvore")
+	}
+}
+
+func TestUpdateStructurePreservesInheritAndPassesMaskToSequenceCheck(t *testing.T) {
+	items := structureBusinessCodeItems{items: map[itemvo.BusinessCode]*itementity.Item{
+		"RN-01001":   {Code: 101, BusinessCode: "RN-01001"},
+		"TP-01001-A": {Code: 202, BusinessCode: "TP-01001-A"},
+	}}
+	repo := &structureBusinessCodeRepo{}
+	mask := "1.94M#1.94M"
+
+	createUC := NewCreateStructureComponentUseCase(repo, structureBusinessCodeAuth{}, items)
+	if _, err := createUC.Execute(context.Background(), request.CreateStructureComponentDTO{
+		ParentCode:        "RN-01001",
+		ChildCode:         "TP-01001-A",
+		ParentMask:        &mask,
+		Quantity:          decimal.NewFromFloat(1),
+		UnitOfMeasurement: "UN",
+		Health:            "ATIVO",
+		Sequence:          10,
+		Inherit:           false,
+	}); err != nil {
+		t.Fatalf("criação com máscara falhou: %v", err)
+	}
+	if len(repo.seqMasksSeen) != 1 || repo.seqMasksSeen[0] == nil || *repo.seqMasksSeen[0] != mask {
+		t.Fatalf("SequenceExists deveria receber a máscara %q, recebeu: %+v", mask, repo.seqMasksSeen)
+	}
+
+	updateUC := NewUpdateStructureComponentUseCase(repo, structureBusinessCodeAuth{}, items)
+	updated, err := updateUC.Execute(context.Background(), request.UpdateStructureComponentDTO{
+		ParentCode:        "RN-01001",
+		ChildCode:         "TP-01001-A",
+		ParentMask:        &mask,
+		Quantity:          decimal.NewFromFloat(3),
+		UnitOfMeasurement: "UN",
+		Health:            "ATIVO",
+		Position:          10,
+		Inherit:           true,
+	})
+	if err != nil {
+		t.Fatalf("atualização falhou: %v", err)
+	}
+	if !updated.Inherit || repo.updated == nil || !repo.updated.Inherit {
+		t.Fatal("UpdateStructureComponentUseCase descartou o campo Inherit")
 	}
 }

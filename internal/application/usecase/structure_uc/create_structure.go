@@ -56,6 +56,9 @@ func (uc *CreateStructureComponentUseCase) Execute(
 	if dto.Sequence < 1 {
 		return nil, errorsuc.NewValidationError("a posição do componente é obrigatória e deve ser positiva")
 	}
+	if err := validarIndicadoresECustos(dto.IsCoproduct, dto.IsFixedQty, dto.CustomerSupplied, dto.SetupLoss, dto.CostLoss, dto.CostLossType); err != nil {
+		return nil, err
+	}
 	parentCode, err := resolveItemCode(ctx, uc.Items, dto.ParentCode)
 	if err != nil {
 		return nil, err
@@ -125,7 +128,7 @@ func (uc *CreateStructureComponentUseCase) Execute(
 			dto.ChildCode, dto.ParentCode, dto.ChildCode, dto.ParentCode))
 	}
 
-	exists, err := uc.Repo.SequenceExists(ctx, parentCode, dto.Sequence)
+	exists, err := uc.Repo.SequenceExists(ctx, parentCode, dto.Sequence, dto.ParentMask)
 	if err != nil {
 		return nil, err
 	}

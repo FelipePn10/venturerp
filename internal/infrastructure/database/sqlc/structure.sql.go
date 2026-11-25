@@ -236,7 +236,7 @@ SELECT
     s.id,
     s.parent_code,
     s.child_code,
-    i.pdm_description_technique AS child_description,
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS child_description,
     i.warehouse_unit_of_measurement AS child_stock_uom,
     s.parent_mask,
     s.quantity,
@@ -403,7 +403,7 @@ SELECT
     s.quantity_scale,
     s.warehouse_code, s.line_warehouse_code, s.setup_loss, s.cost_loss_type, s.cost_loss, s.cost_center_code, s.is_critical_mps, s.generates_inspection,
     s.quantity_stock_uom, s.conversion_factor, s.customer_supplied,
-    i.pdm_description_technique AS child_description,
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS child_description,
     i.warehouse_unit_of_measurement AS child_stock_uom
 FROM item_structures s
          JOIN items i ON i.code = s.child_code
@@ -610,7 +610,7 @@ func (q *Queries) GetGenericChildren(ctx context.Context, arg GetGenericChildren
 const getItemCodeAndDescription = `-- name: GetItemCodeAndDescription :one
 SELECT
     i.code::BIGINT AS code,
-    i.pdm_description_technique AS description
+    COALESCE(NULLIF(i.pdm_description_technique, ''), i.name, '')::text AS description
 FROM items i
 WHERE i.code = $1 AND i.enterprise_id = $2
     LIMIT 1
@@ -732,6 +732,7 @@ SELECT EXISTS (
     FROM item_structures
     WHERE parent_code = $1
       AND sequence    = $2
+      AND parent_mask IS NOT DISTINCT FROM $4::text
       AND is_active   = TRUE
       AND EXISTS (SELECT 1 FROM items pi WHERE pi.code = item_structures.parent_code AND pi.enterprise_id = $3)
 ) AS "exists"
@@ -741,10 +742,16 @@ type SequenceExistsParams struct {
 	ParentCode   int64
 	Sequence     int32
 	EnterpriseID int64
+	ParentMask   pgtype.Text
 }
 
 func (q *Queries) SequenceExists(ctx context.Context, arg SequenceExistsParams) (bool, error) {
-	row := q.db.QueryRow(ctx, sequenceExists, arg.ParentCode, arg.Sequence, arg.EnterpriseID)
+	row := q.db.QueryRow(ctx, sequenceExists,
+		arg.ParentCode,
+		arg.Sequence,
+		arg.EnterpriseID,
+		arg.ParentMask,
+	)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
@@ -780,6 +787,7 @@ SET
     quantity_stock_uom   = $28,
     conversion_factor    = $29,
     customer_supplied    = $31,
+    inherit              = $32,
     updated_at          = NOW()
 WHERE parent_code = $1
   AND child_code  = $2
@@ -824,6 +832,7 @@ type UpdateStructureComponentParams struct {
 	ConversionFactor    pgtype.Numeric
 	EnterpriseID        int64
 	CustomerSupplied    bool
+	Inherit             bool
 }
 
 func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStructureComponentParams) (ItemStructure, error) {
@@ -859,6 +868,7 @@ func (q *Queries) UpdateStructureComponent(ctx context.Context, arg UpdateStruct
 		arg.ConversionFactor,
 		arg.EnterpriseID,
 		arg.CustomerSupplied,
+		arg.Inherit,
 	)
 	var i ItemStructure
 	err := row.Scan(

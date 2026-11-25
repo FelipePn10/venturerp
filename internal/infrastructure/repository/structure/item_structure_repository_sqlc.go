@@ -125,6 +125,7 @@ func (r *ItemStructureRepositorySQLC) Update(
 		IsCriticalMps:       s.IsCriticalMPS,
 		GeneratesInspection: s.GeneratesInspection,
 		CustomerSupplied:    s.CustomerSupplied,
+		Inherit:             s.Inherit,
 		QuantityStockUom:    quantidadeDeEstoque(s),
 		ConversionFactor:    fatorDeConversao(s),
 	})
@@ -264,6 +265,7 @@ func (r *ItemStructureRepositorySQLC) SequenceExists(
 	ctx context.Context,
 	parentCode int64,
 	sequence int,
+	parentMask *string,
 ) (bool, error) {
 
 	empresa, err := tenant.ID(ctx)
@@ -274,6 +276,7 @@ func (r *ItemStructureRepositorySQLC) SequenceExists(
 		EnterpriseID: empresa,
 		ParentCode:   parentCode,
 		Sequence:     int32(sequence),
+		ParentMask:   stringPtrToPgText(parentMask),
 	})
 }
 
@@ -439,6 +442,14 @@ func mapDirectChildrenRows(rows []sqlc.GetAllDirectChildrenRow) []*entity.ItemSt
 			IsFixedQty:             row.IsFixedQty,
 			SubstituteGroup:        row.SubstituteGroup,
 			SubstitutePriority:     row.SubstitutePriority,
+			WarehouseCode:          row.WarehouseCode,
+			LineWarehouseCode:      row.LineWarehouseCode,
+			SetupLoss:              row.SetupLoss,
+			CostLossType:           row.CostLossType,
+			CostLoss:               row.CostLoss,
+			CostCenterCode:         row.CostCenterCode,
+			IsCriticalMPS:          row.IsCriticalMps,
+			GeneratesInspection:    row.GeneratesInspection,
 		}
 
 		if row.ParentMask.Valid {
@@ -497,6 +508,14 @@ func mapDirectChildrenWithMask(rows []sqlc.GetDirectChildrenForMaskRow) []*entit
 			IsFixedQty:             row.IsFixedQty,
 			SubstituteGroup:        row.SubstituteGroup,
 			SubstitutePriority:     row.SubstitutePriority,
+			WarehouseCode:          row.WarehouseCode,
+			LineWarehouseCode:      row.LineWarehouseCode,
+			SetupLoss:              row.SetupLoss,
+			CostLossType:           row.CostLossType,
+			CostLoss:               row.CostLoss,
+			CostCenterCode:         row.CostCenterCode,
+			IsCriticalMPS:          row.IsCriticalMps,
+			GeneratesInspection:    row.GeneratesInspection,
 		}
 
 		if row.ParentMask.Valid {
