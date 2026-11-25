@@ -6,6 +6,10 @@ pipeline de release.
 
 ## Unreleased
 
+## [v1.19.22] — 2026-11-25
+
+- feat(estrutura): validações completas de indicadores, vigência, histórico e herança de máscara (`49e3648b`)
+
 ### Novidades
 - feat(estrutura): validações completas de indicadores, vigência e fórmulas de perda na estrutura de produto,
   cobertura dos 28 campos com rótulos em português no histórico de alterações e fallback para `name` na descrição
