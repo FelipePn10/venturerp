@@ -13,4 +13,7 @@ type NFSeRepository interface {
 	UpdateStatus(ctx context.Context, id int64, status entity.NFSeStatus) (*entity.NFSe, error)
 	UpdateAuthorization(ctx context.Context, id int64, numeroNFSe, codigoVerificacao, url, focusRef string) (*entity.NFSe, error)
 	SaveFocusLog(ctx context.Context, endpoint, method, reqBody, respBody string, statusCode, durationMs int) error
+	// XML: a cópia guardada do XML autorizado ("" quando ainda não há).
+	XML(ctx context.Context, id int64) (string, error)
+	SaveXML(ctx context.Context, id int64, xml string) error
 }

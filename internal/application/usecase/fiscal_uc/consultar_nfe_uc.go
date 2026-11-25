@@ -126,6 +126,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 				if _, errSituacao := uc.Repo.UpdateExitAuthorization(ctx, exitID, resp.Chave(), resp.Protocolo, *exit.FocusRef, resp.PathXML, resp.PathDANFE); errSituacao != nil {
 					return nil, fmt.Errorf("gravando a autorização da NF-e: %w", errSituacao)
 				}
+				guardarXMLDaNota(ctx, uc.Repo, cli, exitID, resp.PathXML, resp.Chave())
 				switch {
 				case exit.DevolucaoVendaID != nil:
 					if uc.DevolucaoVenda != nil {
@@ -142,6 +143,7 @@ func (uc *ConsultarNFeUseCase) Execute(ctx context.Context, exitID int64) (*Cons
 				if _, errSituacao := uc.Repo.UpdateExitStatus(ctx, exitID, entity.ExitStatusCancelled); errSituacao != nil {
 					return nil, fmt.Errorf("gravando a situação cancelada da NF-e: %w", errSituacao)
 				}
+				guardarXMLDoCancelamento(ctx, uc.Repo, cli, exitID, resp.PathXMLCancel, resp.Chave())
 			}
 		case "rejeitado", "erro_autorizacao", "denegado", "denegada":
 			if exit.Status != entity.ExitStatusRejected {

@@ -170,3 +170,38 @@ func (r *NFSeRepositoryPG) SaveFocusLog(ctx context.Context, endpoint, method, r
 		endpoint, method, reqBody, respBody, statusCode, durationMs)
 	return err
 }
+
+func (r *NFSeRepositoryPG) XML(ctx context.Context, id int64) (string, error) {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return "", err
+	}
+	var xml string
+	err = r.pool.QueryRow(ctx,
+		`SELECT COALESCE(xml_content, '') FROM public.nfse WHERE id = $1 AND enterprise_id = $2`,
+		id, empresa).Scan(&xml)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", errorsuc.NewNotFoundError(fmt.Sprintf("NFS-e %d não encontrada", id))
+	}
+	if err != nil {
+		return "", fmt.Errorf("lendo o XML da NFS-e %d: %w", id, err)
+	}
+	return xml, nil
+}
+
+func (r *NFSeRepositoryPG) SaveXML(ctx context.Context, id int64, xml string) error {
+	empresa, err := tenant.ID(ctx)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE public.nfse SET xml_content = $1 WHERE id = $2 AND enterprise_id = $3`,
+		xml, id, empresa)
+	if err != nil {
+		return fmt.Errorf("gravando o XML da NFS-e %d: %w", id, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return errorsuc.NewNotFoundError(fmt.Sprintf("NFS-e %d não encontrada", id))
+	}
+	return nil
+}

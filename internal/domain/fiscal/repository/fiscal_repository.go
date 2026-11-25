@@ -35,6 +35,11 @@ type FiscalRepository interface {
 	ListExitsByStatus(ctx context.Context, status entity.FiscalExitStatus) ([]*entity.FiscalExit, error)
 	UpdateExitStatus(ctx context.Context, id int64, status entity.FiscalExitStatus) (*entity.FiscalExit, error)
 	UpdateExitAuthorization(ctx context.Context, id int64, chaveAcesso, protocolo, focusRef, xmlPath, danfePath string) (*entity.FiscalExit, error)
+	// ExitXML: as cópias guardadas do XML autorizado e do XML do cancelamento
+	// ("" quando ainda não há).
+	ExitXML(ctx context.Context, id int64) (autorizado, cancelamento string, err error)
+	SaveExitXML(ctx context.Context, id int64, xml string) error
+	SaveExitCancelXML(ctx context.Context, id int64, xml string) error
 	// UpdateExitNumbering grava o número e a série que a SEFAZ autorizou (a
 	// Focus numera a nota; o número do rascunho é provisório).
 	UpdateExitNumbering(ctx context.Context, id, numero int64, serie string) error

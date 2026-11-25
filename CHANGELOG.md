@@ -6,6 +6,12 @@ pipeline de release.
 
 ## Unreleased
 
+### Novidades
+- feat(fiscal): XML das notas emitidas disponível para conferir e repassar — NF-e e NFS-e autorizadas ou
+  canceladas mostram o XML com a chave de acesso e o protocolo (copiar e baixar). O ERP guarda a cópia do
+  XML autorizado e do cancelamento (migrações 511 e 512); uma rotina completa a cópia das notas antigas, e
+  o portal do cliente entrega o XML a partir dela.
+
 ## [v1.19.19] — 2026-11-23
 
 - fix(OF): situação da OF conferida antes das etapas e pendências (revisão) (`2e6afe84`)

@@ -40,6 +40,18 @@ func TestNFSeIsIsolatedByTenant(t *testing.T) {
 	if _, err := repo.UpdateAuthorization(b.Ctx, nota.ID, "1", "X", "u", "ref"); err == nil {
 		t.Fatal("empresa B gravou autorização na NFS-e da A")
 	}
+	if err := repo.SaveXML(a.Ctx, nota.ID, "<CompNfse>A</CompNfse>"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.XML(b.Ctx, nota.ID); err == nil {
+		t.Fatal("empresa B leu o XML da NFS-e da A")
+	}
+	if err := repo.SaveXML(b.Ctx, nota.ID, "<CompNfse>B</CompNfse>"); err == nil {
+		t.Fatal("empresa B gravou XML na NFS-e da A")
+	}
+	if x, err := repo.XML(a.Ctx, nota.ID); err != nil || x != "<CompNfse>A</CompNfse>" {
+		t.Fatalf("XML da A: %q %v", x, err)
+	}
 	got, err := repo.GetByID(a.Ctx, nota.ID)
 	if err != nil || got.Status != "RASCUNHO" {
 		t.Fatalf("a NFS-e da A mudou: %+v %v", got, err)

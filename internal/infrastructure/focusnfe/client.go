@@ -818,6 +818,41 @@ func (c *Client) DocumentURL(path string) string {
 	return origin + path
 }
 
+// BaixarArquivo baixa um arquivo da nota (XML, DANFE) pelo caminho que a
+// consulta devolve. O token só vai para a própria Focus: o caminho absoluto
+// pode apontar para o armazenamento externo dela (S3), que não deve recebê-lo.
+// Não passa pelo registro de comunicação: o corpo é o arquivo inteiro.
+func (c *Client) BaixarArquivo(ctx context.Context, path string) ([]byte, error) {
+	if c.configErr != nil {
+		return nil, c.configErr
+	}
+	url := c.DocumentURL(path)
+	if url == "" {
+		return nil, fmt.Errorf("caminho do arquivo vazio")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	if strings.HasPrefix(url, strings.TrimSuffix(c.baseURL, "/v2")+"/") {
+		req.SetBasicAuth(c.token, "")
+	}
+	resp, err := c.httpCli.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("http request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 20<<20))
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		corpo := strings.TrimSpace(string(body[:min(len(body), 300)]))
+		return nil, &HTTPError{StatusCode: resp.StatusCode, Corpo: corpo}
+	}
+	return body, nil
+}
+
 // ConsultarNFe returns current status of a NF-e.
 func (c *Client) ConsultarNFe(ctx context.Context, ref string) (*NFEResponse, error) {
 	body, statusCode, err := c.do(ctx, http.MethodGet, fmt.Sprintf("/nfe/%s", ref), nil)
